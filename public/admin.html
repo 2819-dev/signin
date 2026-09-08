@@ -73,6 +73,8 @@
       let firstLoad = true;
       let pollTimer = null;
       let audioCtx = null;
+      let lastRenderKey = "";
+      let renderPaused = false;
 
       function showToast(message) {
         toastEl.textContent = message;
@@ -147,10 +149,39 @@
           .replace(/'/g, "&#39;");
       }
 
-      function render(requests) {
+      function requestsKey(requests) {
+        return requests
+          .map((r) => `${r.id}:${r.status}:${r.resolvedAt || ""}:${r.declineReason || ""}`)
+          .join("|");
+      }
+
+      function isEditingDecline() {
+        const el = document.activeElement;
+        return Boolean(
+          el &&
+            listEl.contains(el) &&
+            (el.tagName === "TEXTAREA" || el.tagName === "INPUT")
+        );
+      }
+
+      function render(requests, { force = false } = {}) {
         const pending = requests.filter((r) => r.status === "pending");
         pendingCountEl.textContent = String(pending.length);
         pendingCountEl.classList.toggle("hidden", pending.length === 0);
+
+        const key = requestsKey(requests);
+        if (!force && key === lastRenderKey) {
+          return;
+        }
+
+        // Don't rebuild the list while typing a decline reason — that closes the keyboard.
+        if (!force && (renderPaused || isEditingDecline())) {
+          renderPaused = true;
+          return;
+        }
+
+        lastRenderKey = key;
+        renderPaused = false;
 
         if (!requests.length) {
           listEl.innerHTML = "";
@@ -243,7 +274,9 @@
           knownIds = new Set(requests.map((r) => r.id));
           firstLoad = false;
           render(requests);
-          connectionStatus.textContent = "Live · updates every few seconds";
+          connectionStatus.textContent = renderPaused
+            ? "Live · paused while you type"
+            : "Live · updates every few seconds";
         } catch (err) {
           if (err.message !== "Unauthorized") {
             connectionStatus.textContent = "Couldn’t refresh — retrying…";
@@ -275,6 +308,23 @@
         await refresh();
       }
 
+      listEl.addEventListener("focusin", (e) => {
+        if (e.target && (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT")) {
+          renderPaused = true;
+        }
+      });
+
+      listEl.addEventListener("focusout", () => {
+        // Wait a tick so tapping Cancel/Send inside the decline box doesn't flash-refresh mid-click.
+        setTimeout(() => {
+          if (!isEditingDecline()) {
+            renderPaused = false;
+            lastRenderKey = "";
+            refresh();
+          }
+        }, 0);
+      });
+
       listEl.addEventListener("click", async (e) => {
         const btn = e.target.closest("button[data-action]");
         if (!btn) return;
@@ -289,6 +339,7 @@
 
         if (action === "cancel-decline") {
           document.getElementById(`decline-${id}`)?.classList.add("hidden");
+          renderPaused = false;
           return;
         }
 
@@ -303,6 +354,7 @@
               btn.disabled = false;
               return;
             }
+            renderPaused = false;
             await decline(id, reason);
           }
         } catch (err) {

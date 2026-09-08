@@ -66,6 +66,10 @@
         <div class="status-icon ok" aria-hidden="true">✓</div>
         <h1>You may come in</h1>
         <p class="subtitle">You’re all set. Please enter.</p>
+        <p class="muted" id="admitted-reset-hint">Starting over in 5 seconds…</p>
+        <button class="btn btn-secondary" type="button" id="admitted-reset-btn" style="margin-top: 16px;">
+          Start over
+        </button>
       </section>
 
       <!-- Declined -->
@@ -73,7 +77,8 @@
         <div class="status-icon no" aria-hidden="true">✕</div>
         <h1>Not admitted</h1>
         <p class="subtitle" id="decline-text"></p>
-        <button class="btn btn-secondary" type="button" id="reset-btn">
+        <p class="muted" id="declined-reset-hint">Starting over in 5 seconds…</p>
+        <button class="btn btn-secondary" type="button" id="reset-btn" style="margin-top: 16px;">
           Start over
         </button>
       </section>
@@ -90,9 +95,13 @@
       const declineText = document.getElementById("decline-text");
       const waitingText = document.getElementById("waiting-text");
       const resetBtn = document.getElementById("reset-btn");
+      const admittedResetBtn = document.getElementById("admitted-reset-btn");
+      const admittedResetHint = document.getElementById("admitted-reset-hint");
+      const declinedResetHint = document.getElementById("declined-reset-hint");
 
       let pollTimer = null;
       let resetTimer = null;
+      let countdownTimer = null;
       let currentRequestId = null;
 
       function show(view) {
@@ -110,6 +119,10 @@
           clearTimeout(resetTimer);
           resetTimer = null;
         }
+        if (countdownTimer) {
+          clearInterval(countdownTimer);
+          countdownTimer = null;
+        }
       }
 
       function resetToForm() {
@@ -119,7 +132,28 @@
         formError.classList.add("hidden");
         submitBtn.disabled = false;
         show(formView);
-        document.getElementById("name").focus();
+        // Don't auto-focus on iPad — focusing can reopen/jank the keyboard between visitors.
+      }
+
+      function startAutoReset(hintEl) {
+        let remaining = 5;
+        const updateHint = () => {
+          hintEl.textContent =
+            remaining <= 1
+              ? "Starting over…"
+              : `Starting over in ${remaining} seconds…`;
+        };
+        updateHint();
+        countdownTimer = setInterval(() => {
+          remaining -= 1;
+          if (remaining <= 0) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+            return;
+          }
+          updateHint();
+        }, 1000);
+        resetTimer = setTimeout(resetToForm, 5000);
       }
 
       async function pollStatus() {
@@ -136,12 +170,13 @@
           if (req.status === "admitted") {
             clearTimers();
             show(admittedView);
-            resetTimer = setTimeout(resetToForm, 8000);
+            startAutoReset(admittedResetHint);
           } else if (req.status === "declined") {
             clearTimers();
             declineText.textContent =
               req.declineReason || "Your request was declined.";
             show(declinedView);
+            startAutoReset(declinedResetHint);
           }
         } catch (_) {
           // keep waiting; network may be temporarily unavailable
@@ -170,6 +205,10 @@
           currentRequestId = data.request.id;
           waitingText.textContent = `Thanks, ${data.request.name}. Please wait…`;
           show(waitingView);
+          // Blur so the iPad keyboard closes while waiting.
+          if (document.activeElement && document.activeElement.blur) {
+            document.activeElement.blur();
+          }
           pollTimer = setInterval(pollStatus, 2000);
           pollStatus();
         } catch (err) {
@@ -180,14 +219,10 @@
       });
 
       resetBtn.addEventListener("click", resetToForm);
+      admittedResetBtn.addEventListener("click", resetToForm);
 
-      // Soft kiosk helpers: keep focus useful and avoid accidental zoom gestures
+      // Soft kiosk helper: avoid accidental pinch-zoom gestures
       document.addEventListener("gesturestart", (e) => e.preventDefault());
-      window.addEventListener("pageshow", () => {
-        if (!currentRequestId) {
-          document.getElementById("name").focus();
-        }
-      });
     </script>
   </body>
 </html>
