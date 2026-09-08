@@ -56,7 +56,13 @@ exports.handler = async (event) => {
       }
 
       await ensureSettings(sql);
-      const current = await ensureSettings(sql);
+      const currentRows = await sql`
+        SELECT is_open, closed_title, closed_message, updated_at
+        FROM kiosk_settings
+        WHERE id = 1
+        LIMIT 1
+      `;
+      const current = mapSettings(currentRows[0]);
 
       const isOpen =
         typeof body.isOpen === "boolean" ? body.isOpen : current.isOpen;
