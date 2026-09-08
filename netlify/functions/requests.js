@@ -1,4 +1,5 @@
 const { getSql, json, requireAdmin, mapRow } = require("./lib/db");
+const { notifyAdmins } = require("./lib/push");
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
@@ -42,7 +43,20 @@ exports.handler = async (event) => {
         RETURNING id, name, reason, status, decline_reason, created_at, resolved_at
       `;
 
-      return json(201, { request: mapRow(rows[0]) });
+      const request = mapRow(rows[0]);
+
+      try {
+        await notifyAdmins({
+          title: "New visitor request",
+          body: `${request.name}: ${request.reason}`,
+          url: "/admin",
+          tag: request.id,
+        });
+      } catch (err) {
+        console.error("notifyAdmins failed", err);
+      }
+
+      return json(201, { request });
     }
 
     if (event.httpMethod === "GET") {

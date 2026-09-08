@@ -12,6 +12,7 @@
     <title>Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -48,6 +49,9 @@
           Enable alerts
         </button>
       </header>
+      <p class="muted" id="notify-hint" style="margin: -8px 0 16px; font-size: 0.85rem;">
+        On iPhone, open this from the Home Screen app for alerts while it’s closed.
+      </p>
 
       <section class="settings-card" id="kiosk-settings">
         <h2>Kiosk sign</h2>
@@ -458,6 +462,104 @@
         }
       });
 
+      function urlBase64ToUint8Array(base64String) {
+        const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+        const rawData = atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; i += 1) {
+          outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+      }
+
+      async function registerPushWorker() {
+        if (!("serviceWorker" in navigator)) {
+          throw new Error("Service workers not supported");
+        }
+        return navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      }
+
+      async function ensurePushSubscription() {
+        if (!("PushManager" in window) || !("Notification" in window)) {
+          throw new Error("Web Push not supported on this browser");
+        }
+        if (Notification.permission !== "granted") {
+          throw new Error("Notification permission not granted");
+        }
+        if (!secret) {
+          throw new Error("Unlock admin first");
+        }
+
+        await registerPushWorker();
+        const registration = await navigator.serviceWorker.ready;
+
+        const keyRes = await fetch("/api/push-public-key");
+        const keyData = await keyRes.json().catch(() => ({}));
+        if (!keyRes.ok || !keyData.publicKey) {
+          throw new Error(keyData.error || "Could not load push key");
+        }
+
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+          });
+        }
+
+        const res = await fetch("/api/push-subscribe", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify(subscription.toJSON()),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || "Could not save push subscription");
+        }
+
+        notifyBtn.textContent = "Alerts on";
+        return subscription;
+      }
+
+      async function enableAlerts() {
+        if (!("Notification" in window)) {
+          throw new Error("Notifications not supported");
+        }
+
+        let permission = Notification.permission;
+        if (permission === "default") {
+          permission = await Notification.requestPermission();
+        }
+        if (permission !== "granted") {
+          throw new Error("Alerts blocked");
+        }
+
+        await ensurePushSubscription();
+
+        // Local test ping so they know it worked
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          await reg.showNotification("Alerts enabled", {
+            body: "You’ll get notified about new visitor requests.",
+            tag: "alerts-enabled",
+            data: { url: "/admin" },
+          });
+        } catch (_) {}
+      }
+
+      notifyBtn.addEventListener("click", async () => {
+        notifyBtn.disabled = true;
+        try {
+          await enableAlerts();
+          showToast("Background alerts enabled");
+        } catch (err) {
+          showToast(err.message || "Could not enable alerts");
+        } finally {
+          notifyBtn.disabled = false;
+        }
+      });
+
       unlockForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         unlockError.classList.add("hidden");
@@ -473,6 +575,9 @@
           applySettingsToForm(settings);
           await refresh();
           pollTimer = setInterval(refresh, 3000);
+          if ("Notification" in window && Notification.permission === "granted") {
+            ensurePushSubscription().catch(() => {});
+          }
         } catch (err) {
           unlockError.textContent = err.message || "Could not unlock";
           unlockError.classList.remove("hidden");
@@ -509,20 +614,6 @@
         }
       });
 
-      notifyBtn.addEventListener("click", async () => {
-        if (!("Notification" in window)) {
-          showToast("Notifications not supported");
-          return;
-        }
-        const permission = await Notification.requestPermission();
-        if (permission === "granted") {
-          showToast("Alerts enabled");
-          notifyBtn.textContent = "Alerts on";
-        } else {
-          showToast("Alerts blocked");
-        }
-      });
-
       if (secret) {
         unlockView.classList.add("hidden");
         panelView.classList.remove("hidden");
@@ -530,6 +621,9 @@
           .then(([settings]) => {
             applySettingsToForm(settings);
             pollTimer = setInterval(refresh, 3000);
+            if ("Notification" in window && Notification.permission === "granted") {
+              ensurePushSubscription().catch(() => {});
+            }
           })
           .catch(() => {
             pollTimer = setInterval(refresh, 3000);

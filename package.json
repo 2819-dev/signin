@@ -8,6 +8,7 @@
     "build": "echo 'Static site — no build step'"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^0.10.4"
+    "@neondatabase/serverless": "^0.10.4",
+    "web-push": "^3.6.7"
   }
 }
