@@ -66,7 +66,7 @@
         <div class="status-icon ok" aria-hidden="true">✓</div>
         <h1>You may come in</h1>
         <p class="subtitle">You’re all set. Please enter.</p>
-        <p class="muted" id="admitted-reset-hint">Starting over in 5 seconds…</p>
+        <p class="muted" id="admitted-reset-hint">Starting over in 15 seconds…</p>
         <button class="btn btn-secondary" type="button" id="admitted-reset-btn" style="margin-top: 16px;">
           Start over
         </button>
@@ -77,7 +77,7 @@
         <div class="status-icon no" aria-hidden="true">✕</div>
         <h1>Not admitted</h1>
         <p class="subtitle" id="decline-text"></p>
-        <p class="muted" id="declined-reset-hint">Starting over in 5 seconds…</p>
+        <p class="muted" id="declined-reset-hint">Starting over in 15 seconds…</p>
         <button class="btn btn-secondary" type="button" id="reset-btn" style="margin-top: 16px;">
           Start over
         </button>
@@ -136,7 +136,7 @@
       }
 
       function startAutoReset(hintEl) {
-        let remaining = 5;
+        let remaining = 15;
         const updateHint = () => {
           hintEl.textContent =
             remaining <= 1
@@ -153,7 +153,7 @@
           }
           updateHint();
         }, 1000);
-        resetTimer = setTimeout(resetToForm, 5000);
+        resetTimer = setTimeout(resetToForm, 15000);
       }
 
       async function pollStatus() {
