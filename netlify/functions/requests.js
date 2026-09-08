@@ -19,6 +19,7 @@ exports.handler = async (event) => {
 
       const name = (body.name || "").trim();
       const reason = (body.reason || "").trim();
+      const urgent = Boolean(body.urgent);
 
       if (!name || name.length > 100) {
         return json(400, { error: "Name is required (max 100 characters)" });
@@ -33,21 +34,22 @@ exports.handler = async (event) => {
         WHERE id = 1
         LIMIT 1
       `;
-      if (settingsRows.length && settingsRows[0].is_open === false) {
+      const closed = settingsRows.length && settingsRows[0].is_open === false;
+      if (closed && !urgent) {
         return json(403, { error: "Not accepting visitors right now" });
       }
 
       const rows = await sql`
-        INSERT INTO visitor_requests (name, reason)
-        VALUES (${name}, ${reason})
-        RETURNING id, name, reason, status, decline_reason, created_at, resolved_at
+        INSERT INTO visitor_requests (name, reason, urgent)
+        VALUES (${name}, ${reason}, ${urgent})
+        RETURNING id, name, reason, status, decline_reason, urgent, created_at, resolved_at
       `;
 
       const request = mapRow(rows[0]);
 
       try {
         await notifyAdmins({
-          title: "New visitor request",
+          title: urgent ? "Urgent visitor request" : "New visitor request",
           body: `${request.name}: ${request.reason}`,
           url: "/admin",
           tag: request.id,
@@ -71,26 +73,26 @@ exports.handler = async (event) => {
       let rows;
       if (status === "pending") {
         rows = await sql`
-          SELECT id, name, reason, status, decline_reason, created_at, resolved_at
+          SELECT id, name, reason, status, decline_reason, urgent, created_at, resolved_at
           FROM visitor_requests
           WHERE status = 'pending'
-          ORDER BY created_at ASC
+          ORDER BY urgent DESC, created_at ASC
         `;
       } else if (status === "recent") {
         rows = await sql`
-          SELECT id, name, reason, status, decline_reason, created_at, resolved_at
+          SELECT id, name, reason, status, decline_reason, urgent, created_at, resolved_at
           FROM visitor_requests
           WHERE status = 'pending'
              OR (
                status IN ('admitted', 'declined')
                AND resolved_at > NOW() - INTERVAL '10 seconds'
              )
-          ORDER BY created_at DESC
+          ORDER BY urgent DESC, created_at DESC
           LIMIT 50
         `;
       } else {
         rows = await sql`
-          SELECT id, name, reason, status, decline_reason, created_at, resolved_at
+          SELECT id, name, reason, status, decline_reason, urgent, created_at, resolved_at
           FROM visitor_requests
           WHERE status = 'pending'
              OR (
@@ -99,6 +101,7 @@ exports.handler = async (event) => {
              )
           ORDER BY
             CASE WHEN status = 'pending' THEN 0 ELSE 1 END,
+            urgent DESC,
             created_at DESC
         `;
       }

@@ -228,11 +228,14 @@
         playChime();
         if (Notification.permission === "granted") {
           try {
-            const n = new Notification("New visitor request", {
-              body: `${req.name}: ${req.reason}`,
-              tag: req.id,
-              renotify: true,
-            });
+            const n = new Notification(
+              req.urgent ? "Urgent visitor request" : "New visitor request",
+              {
+                body: `${req.name}: ${req.reason}`,
+                tag: req.id,
+                renotify: true,
+              }
+            );
             n.onclick = () => {
               window.focus();
               n.close();
@@ -332,9 +335,10 @@
                 : `<p class="muted" style="margin:0;">Admitted</p>`;
 
             return `
-              <article class="request-card ${isPending ? "pending" : ""}" data-id="${escapeHtml(req.id)}">
+              <article class="request-card ${isPending ? "pending" : ""} ${req.urgent ? "urgent" : ""}" data-id="${escapeHtml(req.id)}">
                 <div class="request-meta">
                   <span class="pill ${pillClass}">${escapeHtml(req.status)}</span>
+                  ${req.urgent ? '<span class="pill pill-urgent">Urgent</span>' : ""}
                   <span>${escapeHtml(formatTime(req.createdAt))}</span>
                 </div>
                 <h2 class="request-name">${escapeHtml(req.name)}</h2>

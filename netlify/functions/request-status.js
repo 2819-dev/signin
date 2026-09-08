@@ -20,7 +20,7 @@ exports.handler = async (event) => {
 
     const sql = getSql();
     const rows = await sql`
-      SELECT id, name, reason, status, decline_reason, created_at, resolved_at
+      SELECT id, name, reason, status, decline_reason, urgent, created_at, resolved_at
       FROM visitor_requests
       WHERE id = ${id}
       LIMIT 1

@@ -47,6 +47,7 @@ function mapRow(row) {
     reason: row.reason,
     status: row.status,
     declineReason: row.decline_reason,
+    urgent: Boolean(row.urgent),
     createdAt: row.created_at,
     resolvedAt: row.resolved_at,
   };

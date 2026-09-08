@@ -52,8 +52,9 @@
 
       <!-- Form -->
       <section id="form-view" class="card">
-        <h1>Sign in</h1>
-        <p class="subtitle">Enter your name and why you want to come in.</p>
+        <p id="urgent-banner" class="urgent-banner hidden">Urgent sign in</p>
+        <h1 id="form-title">Sign in</h1>
+        <p class="subtitle" id="form-subtitle">Enter your name and why you want to come in.</p>
         <p id="form-error" class="error hidden"></p>
         <form id="signin-form" autocomplete="off">
           <div class="field">
@@ -81,6 +82,9 @@
           </div>
           <button class="btn btn-primary" type="submit" id="submit-btn">
             Request entry
+          </button>
+          <button class="btn btn-secondary hidden" type="button" id="cancel-urgent-btn" style="margin-top: 12px;">
+            Cancel
           </button>
         </form>
       </section>
@@ -119,6 +123,10 @@
       </section>
     </main>
 
+    <button type="button" id="urgent-btn" class="urgent-fab hidden">
+      Urgent sign in
+    </button>
+
     <script>
       const closedView = document.getElementById("closed-view");
       const formView = document.getElementById("form-view");
@@ -136,6 +144,11 @@
       const declinedResetHint = document.getElementById("declined-reset-hint");
       const closedTitleEl = document.getElementById("closed-title");
       const closedMessageEl = document.getElementById("closed-message");
+      const urgentBtn = document.getElementById("urgent-btn");
+      const urgentBanner = document.getElementById("urgent-banner");
+      const formTitle = document.getElementById("form-title");
+      const formSubtitle = document.getElementById("form-subtitle");
+      const cancelUrgentBtn = document.getElementById("cancel-urgent-btn");
 
       let pollTimer = null;
       let resetTimer = null;
@@ -143,6 +156,7 @@
       let kioskPollTimer = null;
       let currentRequestId = null;
       let isOpen = true;
+      let urgentMode = false;
       let activeView = "form";
 
       function show(view) {
@@ -159,6 +173,21 @@
         [closedView, formView, waitingView, admittedView, declinedView].forEach((el) => {
           el.classList.toggle("hidden", el !== view);
         });
+
+        urgentBtn.classList.toggle("hidden", activeView !== "closed");
+      }
+
+      function setUrgentMode(on) {
+        urgentMode = Boolean(on);
+        urgentBanner.classList.toggle("hidden", !urgentMode);
+        cancelUrgentBtn.classList.toggle("hidden", !urgentMode);
+        formTitle.textContent = urgentMode ? "Urgent sign in" : "Sign in";
+        formSubtitle.textContent = urgentMode
+          ? "This will still notify the admin even though the kiosk is closed."
+          : "Enter your name and why you want to come in.";
+        submitBtn.textContent = urgentMode ? "Send urgent request" : "Request entry";
+        submitBtn.classList.toggle("btn-danger", urgentMode);
+        submitBtn.classList.toggle("btn-primary", !urgentMode);
       }
 
       function clearTimers() {
@@ -188,6 +217,7 @@
         form.reset();
         formError.classList.add("hidden");
         submitBtn.disabled = false;
+        setUrgentMode(false);
         if (isOpen) {
           show(formView);
         } else {
@@ -258,8 +288,15 @@
           const wasOpen = isOpen;
           isOpen = settings.isOpen !== false;
 
-          // Don't interrupt an in-progress request decision flow.
-          if (currentRequestId || activeView === "waiting" || activeView === "admitted" || activeView === "declined") {
+          // Don't interrupt an in-progress request / urgent form.
+          if (
+            currentRequestId ||
+            urgentMode ||
+            activeView === "waiting" ||
+            activeView === "admitted" ||
+            activeView === "declined"
+          ) {
+            urgentBtn.classList.toggle("hidden", !(activeView === "closed" && !isOpen));
             return;
           }
 
@@ -271,6 +308,19 @@
         } catch (_) {}
       }
 
+      urgentBtn.addEventListener("click", () => {
+        setUrgentMode(true);
+        show(formView);
+      });
+
+      cancelUrgentBtn.addEventListener("click", () => {
+        setUrgentMode(false);
+        form.reset();
+        formError.classList.add("hidden");
+        submitBtn.disabled = false;
+        show(closedView);
+      });
+
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         formError.classList.add("hidden");
@@ -278,17 +328,19 @@
 
         const name = document.getElementById("name").value.trim();
         const reason = document.getElementById("reason").value.trim();
+        const sendingUrgent = urgentMode;
 
         try {
           const res = await fetch("/api/requests", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, reason }),
+            body: JSON.stringify({ name, reason, urgent: sendingUrgent }),
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
-            if (res.status === 403) {
+            if (res.status === 403 && !sendingUrgent) {
               isOpen = false;
+              setUrgentMode(false);
               applyClosedSign({
                 closedTitle: closedTitleEl.textContent,
                 closedMessage: data.error || closedMessageEl.textContent,
@@ -300,7 +352,10 @@
           }
 
           currentRequestId = data.request.id;
-          waitingText.textContent = `Thanks, ${data.request.name}. Please wait…`;
+          waitingText.textContent = sendingUrgent
+            ? `Urgent request sent, ${data.request.name}. Please wait…`
+            : `Thanks, ${data.request.name}. Please wait…`;
+          setUrgentMode(false);
           show(waitingView);
           if (document.activeElement && document.activeElement.blur) {
             document.activeElement.blur();

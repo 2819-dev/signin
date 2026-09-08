@@ -32,7 +32,7 @@ exports.handler = async (event) => {
           decline_reason = NULL,
           resolved_at = NOW()
       WHERE id = ${id} AND status = 'pending'
-      RETURNING id, name, reason, status, decline_reason, created_at, resolved_at
+      RETURNING id, name, reason, status, decline_reason, urgent, created_at, resolved_at
     `;
 
     if (!rows.length) {
