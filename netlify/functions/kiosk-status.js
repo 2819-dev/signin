@@ -2,6 +2,7 @@ const { getSql, json, requireAdmin } = require("./lib/db");
 
 const DEFAULTS = {
   isOpen: true,
+  urgentEnabled: true,
   closedTitle: "Closed",
   closedMessage: "Not accepting visitors right now.",
 };
@@ -10,6 +11,7 @@ function mapSettings(row) {
   if (!row) return { ...DEFAULTS };
   return {
     isOpen: Boolean(row.is_open),
+    urgentEnabled: row.urgent_enabled !== false,
     closedTitle: row.closed_title || DEFAULTS.closedTitle,
     closedMessage: row.closed_message || DEFAULTS.closedMessage,
     updatedAt: row.updated_at || null,
@@ -23,7 +25,7 @@ async function ensureSettings(sql) {
     ON CONFLICT (id) DO NOTHING
   `;
   const rows = await sql`
-    SELECT is_open, closed_title, closed_message, updated_at
+    SELECT is_open, urgent_enabled, closed_title, closed_message, updated_at
     FROM kiosk_settings
     WHERE id = 1
     LIMIT 1
@@ -57,7 +59,7 @@ exports.handler = async (event) => {
 
       await ensureSettings(sql);
       const currentRows = await sql`
-        SELECT is_open, closed_title, closed_message, updated_at
+        SELECT is_open, urgent_enabled, closed_title, closed_message, updated_at
         FROM kiosk_settings
         WHERE id = 1
         LIMIT 1
@@ -66,6 +68,10 @@ exports.handler = async (event) => {
 
       const isOpen =
         typeof body.isOpen === "boolean" ? body.isOpen : current.isOpen;
+      const urgentEnabled =
+        typeof body.urgentEnabled === "boolean"
+          ? body.urgentEnabled
+          : current.urgentEnabled;
       const closedTitle = (
         typeof body.closedTitle === "string"
           ? body.closedTitle
@@ -91,11 +97,12 @@ exports.handler = async (event) => {
       const rows = await sql`
         UPDATE kiosk_settings
         SET is_open = ${isOpen},
+            urgent_enabled = ${urgentEnabled},
             closed_title = ${closedTitle},
             closed_message = ${closedMessage},
             updated_at = NOW()
         WHERE id = 1
-        RETURNING is_open, closed_title, closed_message, updated_at
+        RETURNING is_open, urgent_enabled, closed_title, closed_message, updated_at
       `;
 
       return json(200, { settings: mapSettings(rows[0]) });

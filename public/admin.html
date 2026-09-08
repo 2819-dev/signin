@@ -66,6 +66,16 @@
             <span></span>
           </label>
         </div>
+        <div class="settings-row">
+          <div>
+            <strong id="urgent-label">Urgent button</strong>
+            <div class="muted" id="urgent-hint" style="font-size: 0.85rem;">Show corner urgent sign-in while closed</div>
+          </div>
+          <label class="toggle" aria-label="Urgent button">
+            <input type="checkbox" id="urgent-toggle" checked />
+            <span></span>
+          </label>
+        </div>
         <div id="closed-editor">
           <div class="field">
             <label for="closed-title">Closed title</label>
@@ -97,8 +107,11 @@
       const notifyBtn = document.getElementById("notify-btn");
       const toastEl = document.getElementById("toast");
       const isOpenToggle = document.getElementById("is-open-toggle");
+      const urgentToggle = document.getElementById("urgent-toggle");
       const openLabel = document.getElementById("open-label");
       const openHint = document.getElementById("open-hint");
+      const urgentLabel = document.getElementById("urgent-label");
+      const urgentHint = document.getElementById("urgent-hint");
       const closedTitleInput = document.getElementById("closed-title");
       const closedMessageInput = document.getElementById("closed-message");
       const saveClosedBtn = document.getElementById("save-closed-btn");
@@ -116,6 +129,7 @@
       let latestRequests = [];
       let currentSettings = {
         isOpen: true,
+        urgentEnabled: true,
         closedTitle: "Closed",
         closedMessage: "Not accepting visitors right now.",
       };
@@ -129,11 +143,13 @@
       function applySettingsToForm(settings) {
         currentSettings = {
           isOpen: settings.isOpen !== false,
+          urgentEnabled: settings.urgentEnabled !== false,
           closedTitle: settings.closedTitle || "Closed",
           closedMessage:
             settings.closedMessage || "Not accepting visitors right now.",
         };
         isOpenToggle.checked = currentSettings.isOpen;
+        urgentToggle.checked = currentSettings.urgentEnabled;
         closedTitleInput.value = currentSettings.closedTitle;
         closedMessageInput.value = currentSettings.closedMessage;
         openLabel.textContent = currentSettings.isOpen
@@ -142,6 +158,12 @@
         openHint.textContent = currentSettings.isOpen
           ? "Kiosk shows the sign-in form"
           : "Kiosk shows your closed sign";
+        urgentLabel.textContent = currentSettings.urgentEnabled
+          ? "Urgent button on"
+          : "Urgent button off";
+        urgentHint.textContent = currentSettings.urgentEnabled
+          ? "Show corner urgent sign-in while closed"
+          : "Hidden on the closed kiosk screen";
         closedEditor.style.opacity = currentSettings.isOpen ? "0.72" : "1";
       }
 
@@ -163,6 +185,10 @@
             typeof partial.isOpen === "boolean"
               ? partial.isOpen
               : currentSettings.isOpen,
+          urgentEnabled:
+            typeof partial.urgentEnabled === "boolean"
+              ? partial.urgentEnabled
+              : currentSettings.urgentEnabled,
           closedTitle:
             typeof partial.closedTitle === "string"
               ? partial.closedTitle
@@ -226,22 +252,54 @@
 
       function notifyNew(req) {
         playChime();
-        if (Notification.permission === "granted") {
-          try {
-            const n = new Notification(
-              req.urgent ? "Urgent visitor request" : "New visitor request",
-              {
-                body: `${req.name}: ${req.reason}`,
-                tag: req.id,
+        if (Notification.permission !== "granted") return;
+
+        const preview =
+          (req.reason || "").length > 120
+            ? `${req.reason.slice(0, 117)}…`
+            : req.reason || "";
+        const title = req.urgent ? "Urgent request" : "Visitor waiting";
+        const body = req.urgent
+          ? `${req.name} needs to come in now\n${preview}`
+          : `${req.name} wants to come in\n${preview}`;
+
+        // Prefer service worker notifications when available (nicer + action buttons).
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.ready
+            .then((reg) =>
+              reg.showNotification(title, {
+                body,
+                tag: `visitor-${req.id}`,
                 renotify: true,
-              }
-            );
-            n.onclick = () => {
-              window.focus();
-              n.close();
-            };
-          } catch (_) {}
+                requireInteraction: Boolean(req.urgent),
+                icon: "/apple-touch-icon.png",
+                badge: "/apple-touch-icon.png",
+                data: { url: "/admin", urgent: Boolean(req.urgent) },
+                actions: [
+                  { action: "open", title: req.urgent ? "Review now" : "Open" },
+                  { action: "dismiss", title: "Dismiss" },
+                ],
+              })
+            )
+            .catch(() => {
+              try {
+                new Notification(title, { body, tag: `visitor-${req.id}` });
+              } catch (_) {}
+            });
+          return;
         }
+
+        try {
+          const n = new Notification(title, {
+            body,
+            tag: `visitor-${req.id}`,
+            renotify: true,
+          });
+          n.onclick = () => {
+            window.focus();
+            n.close();
+          };
+        } catch (_) {}
       }
 
       function escapeHtml(str) {
@@ -578,10 +636,13 @@
         // Local test ping so they know it worked
         try {
           const reg = await navigator.serviceWorker.ready;
-          await reg.showNotification("Alerts enabled", {
-            body: "You’ll get notified about new visitor requests.",
+        await reg.showNotification("Alerts ready", {
+            body: "You’ll get a clear alert when someone wants to come in.",
             tag: "alerts-enabled",
             data: { url: "/admin" },
+            icon: "/apple-touch-icon.png",
+            badge: "/apple-touch-icon.png",
+            actions: [{ action: "open", title: "Open" }],
           });
         } catch (_) {}
       }
@@ -634,6 +695,20 @@
           showToast(err.message || "Could not update");
         } finally {
           isOpenToggle.disabled = false;
+        }
+      });
+
+      urgentToggle.addEventListener("change", async () => {
+        const next = urgentToggle.checked;
+        urgentToggle.disabled = true;
+        try {
+          await saveSettings({ urgentEnabled: next });
+          showToast(next ? "Urgent button enabled" : "Urgent button disabled");
+        } catch (err) {
+          urgentToggle.checked = !next;
+          showToast(err.message || "Could not update");
+        } finally {
+          urgentToggle.disabled = false;
         }
       });
 

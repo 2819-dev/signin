@@ -29,30 +29,47 @@ exports.handler = async (event) => {
       }
 
       const settingsRows = await sql`
-        SELECT is_open
+        SELECT is_open, urgent_enabled
         FROM kiosk_settings
         WHERE id = 1
         LIMIT 1
       `;
       const closed = settingsRows.length && settingsRows[0].is_open === false;
-      if (closed && !urgent) {
-        return json(403, { error: "Not accepting visitors right now" });
+      const urgentAllowed =
+        !settingsRows.length || settingsRows[0].urgent_enabled !== false;
+      const isUrgent = urgent && urgentAllowed;
+
+      if (closed && !isUrgent) {
+        return json(403, {
+          error: urgent
+            ? "Urgent sign in is turned off"
+            : "Not accepting visitors right now",
+        });
       }
 
       const rows = await sql`
         INSERT INTO visitor_requests (name, reason, urgent)
-        VALUES (${name}, ${reason}, ${urgent})
+        VALUES (${name}, ${reason}, ${isUrgent})
         RETURNING id, name, reason, status, decline_reason, urgent, created_at, resolved_at
       `;
 
       const request = mapRow(rows[0]);
 
       try {
+        const preview =
+          request.reason.length > 120
+            ? `${request.reason.slice(0, 117)}…`
+            : request.reason;
         await notifyAdmins({
-          title: urgent ? "Urgent visitor request" : "New visitor request",
-          body: `${request.name}: ${request.reason}`,
+          title: request.urgent ? "Urgent request" : "Visitor waiting",
+          body: request.urgent
+            ? `${request.name} needs to come in now\n${preview}`
+            : `${request.name} wants to come in\n${preview}`,
           url: "/admin",
-          tag: request.id,
+          tag: `visitor-${request.id}`,
+          urgent: request.urgent,
+          name: request.name,
+          reason: request.reason,
         });
       } catch (err) {
         console.error("notifyAdmins failed", err);

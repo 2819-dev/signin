@@ -7,12 +7,47 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+function buildNotificationOptions(data) {
+  const urgent = Boolean(data.urgent);
+  const body = data.body || "Someone wants to come in.";
+
+  return {
+    body,
+    tag: data.tag || "visitor-request",
+    renotify: true,
+    requireInteraction: urgent,
+    silent: false,
+    lang: "en",
+    icon: "/apple-touch-icon.png",
+    badge: "/apple-touch-icon.png",
+    vibrate: urgent ? [160, 70, 160, 70, 220] : [120, 60, 120],
+    timestamp: Date.now(),
+    data: {
+      url: data.url || "/admin",
+      urgent,
+      name: data.name || "",
+      reason: data.reason || "",
+    },
+    actions: [
+      {
+        action: "open",
+        title: urgent ? "Review now" : "Open",
+      },
+      {
+        action: "dismiss",
+        title: "Dismiss",
+      },
+    ],
+  };
+}
+
 self.addEventListener("push", (event) => {
   let data = {
-    title: "New visitor request",
-    body: "Someone wants to come in",
+    title: "Visitor waiting",
+    body: "Someone wants to come in.",
     url: "/admin",
     tag: "visitor-request",
+    urgent: false,
   };
 
   try {
@@ -21,21 +56,23 @@ self.addEventListener("push", (event) => {
     }
   } catch (_) {}
 
+  const title = data.title || (data.urgent ? "Urgent request" : "Visitor waiting");
+
   event.waitUntil(
-    self.registration.showNotification(data.title || "New visitor request", {
-      body: data.body || "",
-      tag: data.tag || "visitor-request",
-      renotify: true,
-      data: { url: data.url || "/admin" },
-      icon: "/apple-touch-icon.png",
-      badge: "/apple-touch-icon.png",
-    })
+    self.registration.showNotification(title, buildNotificationOptions(data))
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
+  const action = event.action;
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || "/admin";
+
+  if (action === "dismiss") {
+    return;
+  }
+
+  const targetUrl =
+    (event.notification.data && event.notification.data.url) || "/admin";
 
   event.waitUntil(
     (async () => {

@@ -156,8 +156,13 @@
       let kioskPollTimer = null;
       let currentRequestId = null;
       let isOpen = true;
+      let urgentEnabled = true;
       let urgentMode = false;
       let activeView = "form";
+
+      function canShowUrgentButton() {
+        return activeView === "closed" && !isOpen && urgentEnabled;
+      }
 
       function show(view) {
         activeView = view === formView
@@ -174,7 +179,7 @@
           el.classList.toggle("hidden", el !== view);
         });
 
-        urgentBtn.classList.toggle("hidden", activeView !== "closed");
+        urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
       }
 
       function setUrgentMode(on) {
