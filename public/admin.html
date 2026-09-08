@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Admin" />
-    <meta name="theme-color" content="#eef1f6" />
+    <meta name="theme-color" content="#eef3ff" />
     <meta name="color-scheme" content="light dark" />
     <title>Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -16,51 +16,59 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <div class="ambient" aria-hidden="true">
+      <span class="orb orb-a"></span>
+      <span class="orb orb-b"></span>
+      <span class="orb orb-c"></span>
+    </div>
+
     <!-- Unlock -->
     <main id="unlock-view" class="screen">
       <section class="card">
-        <p class="eyebrow">Secure access</p>
-        <h1>Admin</h1>
-        <p class="subtitle">Enter the admin secret to continue.</p>
+        <p class="eyebrow">Command center</p>
+        <h1>Admin access</h1>
+        <p class="subtitle">Enter your secret to manage live visitor requests in style.</p>
         <p id="unlock-error" class="error hidden"></p>
         <form id="unlock-form" autocomplete="off">
           <div class="field">
-            <label for="secret">Secret</label>
+            <label for="secret">Admin secret</label>
             <input
               id="secret"
               type="password"
               required
               autocomplete="current-password"
               enterkeyhint="go"
-              placeholder="Admin secret"
+              placeholder="Your secret key"
             />
           </div>
-          <button class="btn btn-primary" type="submit">Open panel</button>
+          <button class="btn btn-primary" type="submit">Open dashboard</button>
         </form>
       </section>
     </main>
 
     <!-- Panel -->
     <div id="panel-view" class="admin-shell hidden">
-      <header class="admin-header">
-        <div>
-          <p class="eyebrow">Live</p>
-          <h1>Requests <span id="pending-count" class="badge hidden">0</span></h1>
-          <p class="muted" id="connection-status">Connecting…</p>
-        </div>
-        <div class="admin-header-actions">
-          <button class="btn btn-secondary btn-compact" type="button" id="notify-btn">
-            Enable alerts
-          </button>
-        </div>
-      </header>
-      <p class="muted" id="notify-hint" style="margin: 0 0 18px; font-size: 0.85rem;">
-        On iPhone, open this from the Home Screen app for alerts while it’s closed.
-      </p>
+      <div class="admin-top">
+        <header class="admin-header">
+          <div>
+            <p class="eyebrow">Live lobby</p>
+            <h1>Requests <span id="pending-count" class="badge hidden">0</span></h1>
+            <p class="muted" id="connection-status">Connecting…</p>
+          </div>
+          <div class="admin-header-actions">
+            <button class="btn btn-secondary btn-compact" type="button" id="notify-btn">
+              Enable alerts
+            </button>
+          </div>
+        </header>
+        <p class="muted" id="notify-hint" style="margin: 8px 0 0; font-size: 0.85rem;">
+          On iPhone, use the Home Screen app for background alerts.
+        </p>
+      </div>
 
       <section class="settings-card" id="kiosk-settings">
-        <h2>Kiosk sign</h2>
-        <p class="muted" style="margin: 0;">Control whether visitors can request entry.</p>
+        <h2>Kiosk controls</h2>
+        <p class="muted" style="margin: 0 0 4px;">Shape the lobby experience in real time.</p>
         <div class="settings-row">
           <div>
             <strong id="open-label">Accepting visitors</strong>
@@ -104,9 +112,9 @@
         </div>
       </section>
 
-      <p class="section-label">Visitor requests</p>
+      <p class="section-label">Visitor queue</p>
       <div id="list" class="request-list"></div>
-      <div id="empty" class="empty hidden">No requests yet.</div>
+      <div id="empty" class="empty hidden">No visitors waiting. You’re all clear ✨</div>
     </div>
 
     <div id="toast" class="toast" role="status"></div>
@@ -166,7 +174,7 @@
         document.documentElement.setAttribute("data-theme", next);
         const meta = document.querySelector('meta[name="theme-color"]');
         if (meta) {
-          meta.setAttribute("content", next === "dark" ? "#0b1220" : "#eef1f6");
+          meta.setAttribute("content", next === "dark" ? "#12102a" : "#eef3ff");
         }
       }
 
@@ -380,6 +388,16 @@
         return Date.now() - resolvedMs < 10000;
       }
 
+      function initials(name) {
+        const parts = String(name || "")
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean);
+        if (!parts.length) return "?";
+        if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+
       function render(requests, { force = false } = {}) {
         const visible = requests.filter(isStillVisible);
         const pending = visible.filter((r) => r.status === "pending");
@@ -391,7 +409,6 @@
           return;
         }
 
-        // Don't rebuild the list while typing a decline reason — that closes the keyboard.
         if (!force && (renderPaused || isEditingDecline())) {
           renderPaused = true;
           return;
@@ -436,16 +453,21 @@
               `
               : req.status === "declined"
                 ? `<p class="muted" style="margin:0;">Declined: ${escapeHtml(req.declineReason || "")}</p>`
-                : `<p class="muted" style="margin:0;">Admitted</p>`;
+                : `<p class="muted" style="margin:0;">Admitted · nice work</p>`;
 
             return `
               <article class="request-card ${isPending ? "pending" : ""} ${req.urgent ? "urgent" : ""}" data-id="${escapeHtml(req.id)}">
-                <div class="request-meta">
-                  <span class="pill ${pillClass}">${escapeHtml(req.status)}</span>
-                  ${req.urgent ? '<span class="pill pill-urgent">Urgent</span>' : ""}
-                  <span>${escapeHtml(formatTime(req.createdAt))}</span>
+                <div class="request-top">
+                  <div class="avatar ${req.urgent ? "urgent" : ""}">${escapeHtml(initials(req.name))}</div>
+                  <div style="min-width:0;flex:1;">
+                    <div class="request-meta">
+                      <span class="pill ${pillClass}">${escapeHtml(req.status)}</span>
+                      ${req.urgent ? '<span class="pill pill-urgent">Urgent</span>' : ""}
+                      <span>${escapeHtml(formatTime(req.createdAt))}</span>
+                    </div>
+                    <h2 class="request-name">${escapeHtml(req.name)}</h2>
+                  </div>
                 </div>
-                <h2 class="request-name">${escapeHtml(req.name)}</h2>
                 <p class="request-reason">${escapeHtml(req.reason)}</p>
                 ${actions}
               </article>

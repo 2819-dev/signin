@@ -8,7 +8,7 @@
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="theme-color" content="#eef1f6" />
+    <meta name="theme-color" content="#eef3ff" />
     <meta name="color-scheme" content="light dark" />
     <title>Sign in</title>
     <link rel="stylesheet" href="/styles.css" />
@@ -19,151 +19,98 @@
       <span class="orb orb-b"></span>
       <span class="orb orb-c"></span>
     </div>
+    <div id="confetti" class="confetti hidden" aria-hidden="true"></div>
 
     <main class="kiosk-shell">
-      <!-- Closed -->
       <section id="closed-view" class="stage stage-status hidden">
         <div class="status-panel">
           <div class="status-icon closed" aria-hidden="true">
             <svg class="closed-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M20 28V22a12 12 0 0 1 24 0v6"
-                stroke="currentColor"
-                stroke-width="4.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-              <rect
-                x="14"
-                y="28"
-                width="36"
-                height="28"
-                rx="8"
-                stroke="currentColor"
-                stroke-width="4.5"
-              />
-              <circle cx="32" cy="40" r="3.5" fill="currentColor" />
-              <path
-                d="M32 43.5v5"
-                stroke="currentColor"
-                stroke-width="4.5"
-                stroke-linecap="round"
-              />
+              <path d="M20 28V22a12 12 0 0 1 24 0v6" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/>
+              <rect x="14" y="28" width="36" height="28" rx="8" stroke="currentColor" stroke-width="4.5"/>
+              <circle cx="32" cy="40" r="3.5" fill="currentColor"/>
+              <path d="M32 43.5v5" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/>
             </svg>
           </div>
-          <p class="eyebrow">Kiosk</p>
+          <p class="eyebrow">Paused for now</p>
           <h1 id="closed-title">Closed</h1>
-          <p class="subtitle" id="closed-message">
-            Not accepting visitors right now.
-          </p>
+          <p class="subtitle" id="closed-message">Not accepting visitors right now.</p>
         </div>
       </section>
 
-      <!-- Form -->
       <section id="form-view" class="stage stage-form">
         <aside class="hero-pane">
           <div class="hero-mark" aria-hidden="true">
             <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="18" y="14" width="44" height="52" rx="10" stroke="currentColor" stroke-width="5"/>
-              <path d="M40 20V60" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
-              <circle cx="52" cy="40" r="3.5" fill="currentColor"/>
+              <path d="M22 18h24c8 0 14 6 14 14v16c0 8-6 14-14 14H22c-4 0-8-4-8-8V26c0-4 4-8 8-8Z" stroke="currentColor" stroke-width="5"/>
+              <path d="M38 28v28" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+              <circle cx="50" cy="42" r="3.5" fill="currentColor"/>
             </svg>
           </div>
-          <p class="eyebrow" id="form-eyebrow">Welcome</p>
-          <h1 id="form-title">Sign in</h1>
+          <p class="eyebrow" id="form-eyebrow">Welcome in</p>
+          <h1 id="form-title">Let’s get you inside</h1>
           <p class="subtitle" id="form-subtitle">
-            Enter your name and why you want to come in.
+            Tell us who you are and why you’re here. Someone will review it live.
           </p>
-          <div class="hero-note">
-            Someone inside will review your request.
+          <div class="hero-note">Fast review · Friendly check-in · No account needed</div>
+          <div class="fun-pills">
+            <span class="fun-pill">✨ Premium lobby vibe</span>
+            <span class="fun-pill">⚡ Instant alerts</span>
+            <span class="fun-pill">🎯 Clear decisions</span>
           </div>
         </aside>
 
         <div class="form-pane">
-          <p id="urgent-banner" class="urgent-banner hidden">Urgent sign in</p>
+          <p id="urgent-banner" class="urgent-banner hidden">Urgent request</p>
           <p id="form-error" class="error hidden"></p>
           <form id="signin-form" autocomplete="off">
             <div class="field">
               <label for="name">Your name</label>
-              <input
-                id="name"
-                name="name"
-                type="text"
-                maxlength="100"
-                required
-                autocapitalize="words"
-                autocomplete="off"
-                enterkeyhint="next"
-                placeholder="First and last name"
-              />
+              <input id="name" name="name" type="text" maxlength="100" required autocapitalize="words" autocomplete="off" enterkeyhint="next" placeholder="First and last name" />
             </div>
             <div class="field">
               <label for="reason">Why do you want to come in?</label>
-              <textarea
-                id="reason"
-                name="reason"
-                maxlength="500"
-                required
-                autocomplete="off"
-                placeholder="A short reason helps with approval"
-              ></textarea>
+              <textarea id="reason" name="reason" maxlength="500" required autocomplete="off" placeholder="Keep it short and clear"></textarea>
             </div>
-            <button class="btn btn-primary" type="submit" id="submit-btn">
-              Request entry
-            </button>
-            <button class="btn btn-secondary hidden" type="button" id="cancel-urgent-btn">
-              Cancel
-            </button>
+            <button class="btn btn-primary" type="submit" id="submit-btn">Request entry</button>
+            <button class="btn btn-secondary hidden" type="button" id="cancel-urgent-btn">Cancel</button>
           </form>
         </div>
       </section>
 
-      <!-- Waiting -->
       <section id="waiting-view" class="stage stage-status hidden">
         <div class="status-panel">
-          <div class="status-icon waiting">
-            <div class="spinner" aria-hidden="true"></div>
-          </div>
-          <p class="eyebrow">Please wait</p>
-          <h1>Waiting</h1>
-          <p class="subtitle" id="waiting-text">
-            Your request was sent. Please wait…
-          </p>
+          <div class="status-icon waiting"><div class="spinner" aria-hidden="true"></div></div>
+          <p class="eyebrow">Hang tight</p>
+          <h1>We’re on it</h1>
+          <p class="subtitle" id="waiting-text">Your request was sent. Please wait…</p>
         </div>
       </section>
 
-      <!-- Admitted -->
       <section id="admitted-view" class="stage stage-status hidden">
         <div class="status-panel">
           <div class="status-icon ok" aria-hidden="true">✓</div>
-          <p class="eyebrow">Approved</p>
-          <h1>You may come in</h1>
-          <p class="subtitle">You’re all set. Please enter.</p>
+          <p class="eyebrow">You’re in</p>
+          <h1>Come on through</h1>
+          <p class="subtitle">All set — head inside.</p>
           <p class="hint-text" id="admitted-reset-hint">Starting over in 5 seconds…</p>
-          <button class="btn btn-secondary btn-inline" type="button" id="admitted-reset-btn">
-            Start over
-          </button>
+          <button class="btn btn-secondary btn-inline" type="button" id="admitted-reset-btn">Start over</button>
         </div>
       </section>
 
-      <!-- Declined -->
       <section id="declined-view" class="stage stage-status hidden">
         <div class="status-panel">
           <div class="status-icon no" aria-hidden="true">✕</div>
-          <p class="eyebrow">Not approved</p>
+          <p class="eyebrow">Not this time</p>
           <h1>Not admitted</h1>
           <p class="subtitle" id="decline-text"></p>
           <p class="hint-text" id="declined-reset-hint">Starting over in 15 seconds…</p>
-          <button class="btn btn-secondary btn-inline" type="button" id="reset-btn">
-            Start over
-          </button>
+          <button class="btn btn-secondary btn-inline" type="button" id="reset-btn">Start over</button>
         </div>
       </section>
     </main>
 
-    <button type="button" id="urgent-btn" class="urgent-fab hidden">
-      Urgent
-    </button>
+    <button type="button" id="urgent-btn" class="urgent-fab hidden">Urgent</button>
 
     <script>
       const closedView = document.getElementById("closed-view");
@@ -188,6 +135,7 @@
       const formSubtitle = document.getElementById("form-subtitle");
       const formEyebrow = document.getElementById("form-eyebrow");
       const cancelUrgentBtn = document.getElementById("cancel-urgent-btn");
+      const confettiEl = document.getElementById("confetti");
 
       let pollTimer = null;
       let resetTimer = null;
@@ -198,18 +146,12 @@
       let urgentEnabled = true;
       let urgentMode = false;
       let activeView = "form";
-      let currentTheme = "light";
 
       function applyTheme(theme) {
-        currentTheme = theme === "dark" ? "dark" : "light";
-        document.documentElement.setAttribute("data-theme", currentTheme);
+        const next = theme === "dark" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", next);
         const meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) {
-          meta.setAttribute(
-            "content",
-            currentTheme === "dark" ? "#0b1220" : "#eef1f6"
-          );
-        }
+        if (meta) meta.setAttribute("content", next === "dark" ? "#12102a" : "#eef3ff");
       }
 
       function canShowUrgentButton() {
@@ -218,21 +160,15 @@
       }
 
       function show(view) {
-        activeView = view === formView
-          ? "form"
-          : view === closedView
-            ? "closed"
-            : view === waitingView
-              ? "waiting"
-              : view === admittedView
-                ? "admitted"
-                : "declined";
+        activeView =
+          view === formView ? "form" :
+          view === closedView ? "closed" :
+          view === waitingView ? "waiting" :
+          view === admittedView ? "admitted" : "declined";
 
         [closedView, formView, waitingView, admittedView, declinedView].forEach((el) => {
           el.classList.toggle("hidden", el !== view);
         });
-
-        document.body.dataset.view = activeView;
         urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
       }
 
@@ -240,13 +176,13 @@
         urgentMode = Boolean(on);
         urgentBanner.classList.toggle("hidden", !urgentMode);
         cancelUrgentBtn.classList.toggle("hidden", !urgentMode);
-        formEyebrow.textContent = urgentMode ? "Priority" : "Welcome";
-        formTitle.textContent = urgentMode ? "Urgent sign in" : "Sign in";
+        formEyebrow.textContent = urgentMode ? "Priority lane" : "Welcome in";
+        formTitle.textContent = urgentMode ? "Urgent sign in" : "Let’s get you inside";
         formSubtitle.textContent = urgentMode
-          ? isOpen
-            ? "This will be marked as urgent for the admin."
-            : "This will still notify the admin even though the kiosk is closed."
-          : "Enter your name and why you want to come in.";
+          ? (isOpen
+              ? "This will be marked urgent so the admin sees it first."
+              : "Even while closed, this still notifies the admin right away.")
+          : "Tell us who you are and why you’re here. Someone will review it live.";
         submitBtn.textContent = urgentMode ? "Send urgent request" : "Request entry";
         submitBtn.classList.toggle("btn-danger", urgentMode);
         submitBtn.classList.toggle("btn-primary", !urgentMode);
@@ -255,24 +191,32 @@
       }
 
       function clearTimers() {
-        if (pollTimer) {
-          clearInterval(pollTimer);
-          pollTimer = null;
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        if (resetTimer) { clearTimeout(resetTimer); resetTimer = null; }
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+      }
+
+      function burstConfetti() {
+        confettiEl.innerHTML = "";
+        confettiEl.classList.remove("hidden");
+        const colors = ["#5b5cff", "#ff5ea8", "#38bdf8", "#22c55e", "#ff8a3d", "#a78bfa"];
+        for (let i = 0; i < 42; i += 1) {
+          const piece = document.createElement("i");
+          piece.style.left = `${Math.random() * 100}%`;
+          piece.style.background = colors[i % colors.length];
+          piece.style.animationDelay = `${Math.random() * 0.25}s`;
+          piece.style.transform = `rotate(${Math.random() * 180}deg)`;
+          confettiEl.appendChild(piece);
         }
-        if (resetTimer) {
-          clearTimeout(resetTimer);
-          resetTimer = null;
-        }
-        if (countdownTimer) {
-          clearInterval(countdownTimer);
-          countdownTimer = null;
-        }
+        setTimeout(() => {
+          confettiEl.classList.add("hidden");
+          confettiEl.innerHTML = "";
+        }, 1400);
       }
 
       function applyClosedSign(settings) {
         closedTitleEl.textContent = settings.closedTitle || "Closed";
-        closedMessageEl.textContent =
-          settings.closedMessage || "Not accepting visitors right now.";
+        closedMessageEl.textContent = settings.closedMessage || "Not accepting visitors right now.";
       }
 
       function goIdle() {
@@ -282,24 +226,14 @@
         formError.classList.add("hidden");
         submitBtn.disabled = false;
         setUrgentMode(false);
-        if (isOpen) {
-          show(formView);
-        } else {
-          show(closedView);
-        }
-      }
-
-      function resetToForm() {
-        goIdle();
+        if (isOpen) show(formView);
+        else show(closedView);
       }
 
       function startAutoReset(hintEl, seconds) {
         let remaining = seconds;
         const updateHint = () => {
-          hintEl.textContent =
-            remaining <= 1
-              ? "Starting over…"
-              : `Starting over in ${remaining} seconds…`;
+          hintEl.textContent = remaining <= 1 ? "Starting over…" : `Starting over in ${remaining} seconds…`;
         };
         updateHint();
         countdownTimer = setInterval(() => {
@@ -311,28 +245,25 @@
           }
           updateHint();
         }, 1000);
-        resetTimer = setTimeout(resetToForm, seconds * 1000);
+        resetTimer = setTimeout(goIdle, seconds * 1000);
       }
 
       async function pollRequestStatus() {
         if (!currentRequestId) return;
         try {
-          const res = await fetch(
-            `/api/request-status?id=${encodeURIComponent(currentRequestId)}`
-          );
+          const res = await fetch(`/api/request-status?id=${encodeURIComponent(currentRequestId)}`);
           if (!res.ok) return;
           const data = await res.json();
           const req = data.request;
           if (!req) return;
-
           if (req.status === "admitted") {
             clearTimers();
             show(admittedView);
+            burstConfetti();
             startAutoReset(admittedResetHint, 5);
           } else if (req.status === "declined") {
             clearTimers();
-            declineText.textContent =
-              req.declineReason || "Your request was declined.";
+            declineText.textContent = req.declineReason || "Your request was declined.";
             show(declinedView);
             startAutoReset(declinedResetHint, 15);
           }
@@ -346,30 +277,17 @@
           const data = await res.json();
           const settings = data.settings || {};
           applyClosedSign(settings);
-
           const wasOpen = isOpen;
           isOpen = settings.isOpen !== false;
           urgentEnabled = settings.urgentEnabled !== false;
           applyTheme(settings.theme);
-
-          if (
-            currentRequestId ||
-            urgentMode ||
-            activeView === "waiting" ||
-            activeView === "admitted" ||
-            activeView === "declined"
-          ) {
+          if (currentRequestId || urgentMode || ["waiting", "admitted", "declined"].includes(activeView)) {
             urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
             return;
           }
-
-          if (!isOpen) {
-            show(closedView);
-          } else if (!wasOpen || activeView === "closed") {
-            show(formView);
-          } else {
-            urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
-          }
+          if (!isOpen) show(closedView);
+          else if (!wasOpen || activeView === "closed") show(formView);
+          else urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
         } catch (_) {}
       }
 
@@ -384,22 +302,17 @@
         form.reset();
         formError.classList.add("hidden");
         submitBtn.disabled = false;
-        if (isOpen) {
-          show(formView);
-        } else {
-          show(closedView);
-        }
+        if (isOpen) show(formView);
+        else show(closedView);
       });
 
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         formError.classList.add("hidden");
         submitBtn.disabled = true;
-
         const name = document.getElementById("name").value.trim();
         const reason = document.getElementById("reason").value.trim();
         const sendingUrgent = urgentMode;
-
         try {
           const res = await fetch("/api/requests", {
             method: "POST",
@@ -420,16 +333,13 @@
             }
             throw new Error(data.error || "Could not send request");
           }
-
           currentRequestId = data.request.id;
           waitingText.textContent = sendingUrgent
-            ? `Urgent request sent, ${data.request.name}. Please wait…`
-            : `Thanks, ${data.request.name}. Please wait…`;
+            ? `Urgent request sent for ${data.request.name}. Hang tight…`
+            : `Thanks, ${data.request.name}. We’re reviewing it now…`;
           setUrgentMode(false);
           show(waitingView);
-          if (document.activeElement && document.activeElement.blur) {
-            document.activeElement.blur();
-          }
+          if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
           pollTimer = setInterval(pollRequestStatus, 2000);
           pollRequestStatus();
         } catch (err) {
@@ -439,10 +349,9 @@
         }
       });
 
-      resetBtn.addEventListener("click", resetToForm);
-      admittedResetBtn.addEventListener("click", resetToForm);
+      resetBtn.addEventListener("click", goIdle);
+      admittedResetBtn.addEventListener("click", goIdle);
       document.addEventListener("gesturestart", (e) => e.preventDefault());
-
       pollKioskStatus();
       kioskPollTimer = setInterval(pollKioskStatus, 4000);
     </script>
