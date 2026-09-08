@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Admin" />
-    <meta name="theme-color" content="#f5f5f7" />
+    <meta name="theme-color" content="#eef1f6" />
     <meta name="color-scheme" content="light only" />
     <title>Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -19,6 +19,7 @@
     <!-- Unlock -->
     <main id="unlock-view" class="screen">
       <section class="card">
+        <p class="eyebrow">Secure access</p>
         <h1>Admin</h1>
         <p class="subtitle">Enter the admin secret to continue.</p>
         <p id="unlock-error" class="error hidden"></p>
@@ -31,6 +32,7 @@
               required
               autocomplete="current-password"
               enterkeyhint="go"
+              placeholder="Admin secret"
             />
           </div>
           <button class="btn btn-primary" type="submit">Open panel</button>
@@ -42,20 +44,23 @@
     <div id="panel-view" class="admin-shell hidden">
       <header class="admin-header">
         <div>
+          <p class="eyebrow">Live</p>
           <h1>Requests <span id="pending-count" class="badge hidden">0</span></h1>
           <p class="muted" id="connection-status">Connecting…</p>
         </div>
-        <button class="btn btn-secondary" type="button" id="notify-btn" style="width: auto; padding: 10px 14px; font-size: 0.9rem;">
-          Enable alerts
-        </button>
+        <div class="admin-header-actions">
+          <button class="btn btn-secondary btn-compact" type="button" id="notify-btn">
+            Enable alerts
+          </button>
+        </div>
       </header>
-      <p class="muted" id="notify-hint" style="margin: -8px 0 16px; font-size: 0.85rem;">
+      <p class="muted" id="notify-hint" style="margin: 0 0 18px; font-size: 0.85rem;">
         On iPhone, open this from the Home Screen app for alerts while it’s closed.
       </p>
 
       <section class="settings-card" id="kiosk-settings">
         <h2>Kiosk sign</h2>
-        <p class="muted" style="margin: 0;">Turn this off when you’re not accepting anyone.</p>
+        <p class="muted" style="margin: 0;">Control whether visitors can request entry.</p>
         <div class="settings-row">
           <div>
             <strong id="open-label">Accepting visitors</strong>
@@ -89,6 +94,7 @@
         </div>
       </section>
 
+      <p class="section-label">Visitor requests</p>
       <div id="list" class="request-list"></div>
       <div id="empty" class="empty hidden">No requests yet.</div>
     </div>
