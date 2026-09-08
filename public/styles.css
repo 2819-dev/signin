@@ -29,6 +29,55 @@
   --radius-lg: 20px;
   --radius-md: 16px;
   --radius-sm: 12px;
+  --page-bg:
+    radial-gradient(1200px 600px at 10% -10%, #dbeafe 0%, transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, #fce7f3 0%, transparent 45%),
+    linear-gradient(180deg, #f7f8fb 0%, var(--bg) 100%);
+  --input-bg: rgba(255, 255, 255, 0.95);
+  --settings-row-bg: rgba(17, 24, 39, 0.03);
+  --secondary-btn-bg: rgba(17, 24, 39, 0.05);
+  --secondary-btn-bg-hover: rgba(17, 24, 39, 0.08);
+  --toast-bg: rgba(17, 24, 39, 0.92);
+  --empty-bg: rgba(255, 255, 255, 0.7);
+  --status-closed-bg: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  --status-closed-color: #64748b;
+  --theme-color: #eef1f6;
+}
+
+html[data-theme="dark"] {
+  --bg: #0b1220;
+  --bg-accent: #111827;
+  --surface: rgba(22, 30, 45, 0.92);
+  --surface-solid: #161e2d;
+  --ink: #f3f4f6;
+  --ink-soft: #cbd5e1;
+  --ink-faint: #94a3b8;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --blue: #4ea1ff;
+  --blue-deep: #82bfff;
+  --blue-soft: rgba(78, 161, 255, 0.16);
+  --green: #34d399;
+  --green-deep: #6ee7b7;
+  --green-soft: rgba(52, 211, 153, 0.14);
+  --red: #ff6b63;
+  --red-deep: #ff8f89;
+  --red-soft: rgba(255, 107, 99, 0.16);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --page-bg:
+    radial-gradient(1000px 560px at 8% -12%, rgba(37, 99, 235, 0.28) 0%, transparent 55%),
+    radial-gradient(800px 480px at 100% 0%, rgba(244, 63, 94, 0.16) 0%, transparent 48%),
+    linear-gradient(180deg, #0f172a 0%, var(--bg) 100%);
+  --input-bg: rgba(15, 23, 42, 0.85);
+  --settings-row-bg: rgba(255, 255, 255, 0.04);
+  --secondary-btn-bg: rgba(255, 255, 255, 0.08);
+  --secondary-btn-bg-hover: rgba(255, 255, 255, 0.12);
+  --toast-bg: rgba(2, 6, 23, 0.92);
+  --empty-bg: rgba(22, 30, 45, 0.72);
+  --status-closed-bg: linear-gradient(180deg, #1e293b 0%, #111827 100%);
+  --status-closed-color: #94a3b8;
+  --theme-color: #0b1220;
 }
 
 html,
@@ -40,12 +89,10 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
-  color-scheme: light only;
-  background:
-    radial-gradient(1200px 600px at 10% -10%, #dbeafe 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #fce7f3 0%, transparent 45%),
-    linear-gradient(180deg, #f7f8fb 0%, var(--bg) 100%);
+  color-scheme: light dark;
+  background: var(--page-bg);
   background-attachment: fixed;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 button,
@@ -132,7 +179,7 @@ textarea {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
   padding: 15px 16px;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--input-bg);
   color: var(--ink);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
@@ -149,7 +196,7 @@ input[type="password"]:focus,
 textarea:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.14);
-  background: #fff;
+  background: var(--surface-solid);
 }
 
 textarea {
@@ -215,13 +262,13 @@ textarea {
 }
 
 .btn-secondary {
-  background: rgba(17, 24, 39, 0.05);
+  background: var(--secondary-btn-bg);
   color: var(--ink);
   box-shadow: none;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(17, 24, 39, 0.08);
+  background: var(--secondary-btn-bg-hover);
 }
 
 .btn-row {
@@ -273,8 +320,8 @@ textarea {
 }
 
 .status-icon.closed {
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
-  color: #64748b;
+  background: var(--status-closed-bg);
+  color: var(--status-closed-color);
 }
 
 .closed-glyph {
@@ -303,9 +350,9 @@ textarea {
   padding: 12px 14px;
   border-radius: var(--radius-sm);
   background: var(--red-soft);
-  color: #b42318;
+  color: var(--red-deep);
   font-size: 0.95rem;
-  border: 1px solid rgba(255, 59, 48, 0.12);
+  border: 1px solid rgba(255, 59, 48, 0.18);
 }
 
 .muted {
@@ -452,7 +499,21 @@ textarea {
 .pill-declined,
 .pill-urgent {
   background: var(--red-soft);
-  color: #b42318;
+  color: var(--red-deep);
+}
+
+.urgent-banner {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 14px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--red-soft);
+  color: var(--red-deep);
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .decline-box {
@@ -465,8 +526,8 @@ textarea {
   text-align: center;
   padding: 52px 22px;
   color: var(--ink-faint);
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px dashed rgba(17, 24, 39, 0.14);
+  background: var(--empty-bg);
+  border: 1px dashed var(--line-strong);
   border-radius: var(--radius-lg);
 }
 
@@ -496,7 +557,7 @@ textarea {
   margin: 14px 0;
   padding: 12px 12px;
   border-radius: var(--radius-sm);
-  background: rgba(17, 24, 39, 0.03);
+  background: var(--settings-row-bg);
 }
 
 .toggle {
@@ -562,26 +623,12 @@ textarea {
   transform: scale(0.98);
 }
 
-.urgent-banner {
-  display: inline-flex;
-  align-items: center;
-  margin: 0 0 14px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: var(--red-soft);
-  color: #b42318;
-  font-size: 0.78rem;
-  font-weight: 750;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .toast {
   position: fixed;
   left: 50%;
   bottom: max(24px, env(safe-area-inset-bottom));
   transform: translateX(-50%) translateY(8px);
-  background: rgba(17, 24, 39, 0.92);
+  background: var(--toast-bg);
   color: #fff;
   padding: 12px 18px;
   border-radius: 999px;

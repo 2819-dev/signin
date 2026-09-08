@@ -3,15 +3,21 @@ const { getSql, json, requireAdmin } = require("./lib/db");
 const DEFAULTS = {
   isOpen: true,
   urgentEnabled: true,
+  theme: "light",
   closedTitle: "Closed",
   closedMessage: "Not accepting visitors right now.",
 };
+
+function normalizeTheme(value) {
+  return value === "dark" ? "dark" : "light";
+}
 
 function mapSettings(row) {
   if (!row) return { ...DEFAULTS };
   return {
     isOpen: Boolean(row.is_open),
     urgentEnabled: row.urgent_enabled !== false,
+    theme: normalizeTheme(row.theme),
     closedTitle: row.closed_title || DEFAULTS.closedTitle,
     closedMessage: row.closed_message || DEFAULTS.closedMessage,
     updatedAt: row.updated_at || null,
@@ -25,7 +31,7 @@ async function ensureSettings(sql) {
     ON CONFLICT (id) DO NOTHING
   `;
   const rows = await sql`
-    SELECT is_open, urgent_enabled, closed_title, closed_message, updated_at
+    SELECT is_open, urgent_enabled, theme, closed_title, closed_message, updated_at
     FROM kiosk_settings
     WHERE id = 1
     LIMIT 1
@@ -59,7 +65,7 @@ exports.handler = async (event) => {
 
       await ensureSettings(sql);
       const currentRows = await sql`
-        SELECT is_open, urgent_enabled, closed_title, closed_message, updated_at
+        SELECT is_open, urgent_enabled, theme, closed_title, closed_message, updated_at
         FROM kiosk_settings
         WHERE id = 1
         LIMIT 1
@@ -72,6 +78,9 @@ exports.handler = async (event) => {
         typeof body.urgentEnabled === "boolean"
           ? body.urgentEnabled
           : current.urgentEnabled;
+      const theme = normalizeTheme(
+        typeof body.theme === "string" ? body.theme : current.theme
+      );
       const closedTitle = (
         typeof body.closedTitle === "string"
           ? body.closedTitle
@@ -98,11 +107,12 @@ exports.handler = async (event) => {
         UPDATE kiosk_settings
         SET is_open = ${isOpen},
             urgent_enabled = ${urgentEnabled},
+            theme = ${theme},
             closed_title = ${closedTitle},
             closed_message = ${closedMessage},
             updated_at = NOW()
         WHERE id = 1
-        RETURNING is_open, urgent_enabled, closed_title, closed_message, updated_at
+        RETURNING is_open, urgent_enabled, theme, closed_title, closed_message, updated_at
       `;
 
       return json(200, { settings: mapSettings(rows[0]) });

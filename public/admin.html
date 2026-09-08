@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Admin" />
     <meta name="theme-color" content="#eef1f6" />
-    <meta name="color-scheme" content="light only" />
+    <meta name="color-scheme" content="light dark" />
     <title>Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png" />
@@ -81,6 +81,16 @@
             <span></span>
           </label>
         </div>
+        <div class="settings-row">
+          <div>
+            <strong id="theme-label">Dark mode</strong>
+            <div class="muted" id="theme-hint" style="font-size: 0.85rem;">Applies to admin and kiosk</div>
+          </div>
+          <label class="toggle" aria-label="Dark mode">
+            <input type="checkbox" id="theme-toggle" />
+            <span></span>
+          </label>
+        </div>
         <div id="closed-editor">
           <div class="field">
             <label for="closed-title">Closed title</label>
@@ -114,10 +124,13 @@
       const toastEl = document.getElementById("toast");
       const isOpenToggle = document.getElementById("is-open-toggle");
       const urgentToggle = document.getElementById("urgent-toggle");
+      const themeToggle = document.getElementById("theme-toggle");
       const openLabel = document.getElementById("open-label");
       const openHint = document.getElementById("open-hint");
       const urgentLabel = document.getElementById("urgent-label");
       const urgentHint = document.getElementById("urgent-hint");
+      const themeLabel = document.getElementById("theme-label");
+      const themeHint = document.getElementById("theme-hint");
       const closedTitleInput = document.getElementById("closed-title");
       const closedMessageInput = document.getElementById("closed-message");
       const saveClosedBtn = document.getElementById("save-closed-btn");
@@ -143,9 +156,19 @@
       let currentSettings = {
         isOpen: true,
         urgentEnabled: true,
+        theme: "light",
         closedTitle: "Closed",
         closedMessage: "Not accepting visitors right now.",
       };
+
+      function applyTheme(theme) {
+        const next = theme === "dark" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", next);
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+          meta.setAttribute("content", next === "dark" ? "#0b1220" : "#eef1f6");
+        }
+      }
 
       function showToast(message) {
         toastEl.textContent = message;
@@ -157,14 +180,17 @@
         currentSettings = {
           isOpen: settings.isOpen !== false,
           urgentEnabled: settings.urgentEnabled !== false,
+          theme: settings.theme === "dark" ? "dark" : "light",
           closedTitle: settings.closedTitle || "Closed",
           closedMessage:
             settings.closedMessage || "Not accepting visitors right now.",
         };
         isOpenToggle.checked = currentSettings.isOpen;
         urgentToggle.checked = currentSettings.urgentEnabled;
+        themeToggle.checked = currentSettings.theme === "dark";
         closedTitleInput.value = currentSettings.closedTitle;
         closedMessageInput.value = currentSettings.closedMessage;
+        applyTheme(currentSettings.theme);
         openLabel.textContent = currentSettings.isOpen
           ? "Accepting visitors"
           : "Closed — not accepting";
@@ -177,6 +203,9 @@
         urgentHint.textContent = currentSettings.urgentEnabled
           ? "Show corner urgent sign-in on the kiosk"
           : "Hidden on the kiosk";
+        themeLabel.textContent =
+          currentSettings.theme === "dark" ? "Dark mode on" : "Dark mode off";
+        themeHint.textContent = "Applies to admin and kiosk";
         closedEditor.style.opacity = currentSettings.isOpen ? "0.72" : "1";
       }
 
@@ -202,6 +231,10 @@
             typeof partial.urgentEnabled === "boolean"
               ? partial.urgentEnabled
               : currentSettings.urgentEnabled,
+          theme:
+            typeof partial.theme === "string"
+              ? partial.theme
+              : currentSettings.theme,
           closedTitle:
             typeof partial.closedTitle === "string"
               ? partial.closedTitle
@@ -727,6 +760,23 @@
         }
       });
 
+      themeToggle.addEventListener("change", async () => {
+        const nextTheme = themeToggle.checked ? "dark" : "light";
+        themeToggle.disabled = true;
+        // Apply immediately for snappy UI, then persist.
+        applyTheme(nextTheme);
+        try {
+          await saveSettings({ theme: nextTheme });
+          showToast(nextTheme === "dark" ? "Dark mode on" : "Light mode on");
+        } catch (err) {
+          themeToggle.checked = nextTheme !== "dark";
+          applyTheme(themeToggle.checked ? "dark" : "light");
+          showToast(err.message || "Could not update");
+        } finally {
+          themeToggle.disabled = false;
+        }
+      });
+
       saveClosedBtn.addEventListener("click", async () => {
         saveClosedBtn.disabled = true;
         try {
@@ -741,6 +791,14 @@
           saveClosedBtn.disabled = false;
         }
       });
+
+      // Apply theme even on unlock screen (public setting).
+      fetch("/api/kiosk-status")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.settings) applyTheme(data.settings.theme);
+        })
+        .catch(() => {});
 
       if (secret) {
         unlockView.classList.add("hidden");

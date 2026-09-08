@@ -44,3 +44,6 @@ ALTER TABLE visitor_requests
 
 ALTER TABLE kiosk_settings
   ADD COLUMN IF NOT EXISTS urgent_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE kiosk_settings
+  ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'light';
