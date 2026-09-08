@@ -16,32 +16,26 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="ambient" aria-hidden="true">
-      <span class="orb orb-a"></span>
-      <span class="orb orb-b"></span>
-      <span class="orb orb-c"></span>
-    </div>
-
     <!-- Unlock -->
     <main id="unlock-view" class="screen">
       <section class="card">
-        <p class="eyebrow">Command center</p>
-        <h1>Admin access</h1>
-        <p class="subtitle">Enter your secret to manage live visitor requests in style.</p>
+        <p class="eyebrow">Admin</p>
+        <h1>Sign in</h1>
+        <p class="subtitle">Enter the admin secret to continue.</p>
         <p id="unlock-error" class="error hidden"></p>
         <form id="unlock-form" autocomplete="off">
           <div class="field">
-            <label for="secret">Admin secret</label>
+            <label for="secret">Secret</label>
             <input
               id="secret"
               type="password"
               required
               autocomplete="current-password"
               enterkeyhint="go"
-              placeholder="Your secret key"
+              placeholder="Admin secret"
             />
           </div>
-          <button class="btn btn-primary" type="submit">Open dashboard</button>
+          <button class="btn btn-primary" type="submit">Continue</button>
         </form>
       </section>
     </main>
@@ -51,7 +45,7 @@
       <div class="admin-top">
         <header class="admin-header">
           <div>
-            <p class="eyebrow">Live lobby</p>
+            <p class="eyebrow">Live</p>
             <h1>Requests <span id="pending-count" class="badge hidden">0</span></h1>
             <p class="muted" id="connection-status">Connecting…</p>
           </div>
@@ -67,8 +61,8 @@
       </div>
 
       <section class="settings-card" id="kiosk-settings">
-        <h2>Kiosk controls</h2>
-        <p class="muted" style="margin: 0 0 4px;">Shape the lobby experience in real time.</p>
+        <h2>Kiosk</h2>
+        <p class="muted" style="margin: 0 0 4px;">Control the visitor sign-in screen.</p>
         <div class="settings-row">
           <div>
             <strong id="open-label">Accepting visitors</strong>
@@ -82,7 +76,7 @@
         <div class="settings-row">
           <div>
             <strong id="urgent-label">Urgent button</strong>
-            <div class="muted" id="urgent-hint" style="font-size: 0.85rem;">Show corner urgent sign-in on the kiosk</div>
+            <div class="muted" id="urgent-hint" style="font-size: 0.85rem;">Show urgent sign-in on the kiosk</div>
           </div>
           <label class="toggle" aria-label="Urgent button">
             <input type="checkbox" id="urgent-toggle" checked />
@@ -112,9 +106,9 @@
         </div>
       </section>
 
-      <p class="section-label">Visitor queue</p>
+      <p class="section-label">Queue</p>
       <div id="list" class="request-list"></div>
-      <div id="empty" class="empty hidden">No visitors waiting. You’re all clear ✨</div>
+      <div id="empty" class="empty hidden">No requests yet.</div>
     </div>
 
     <div id="toast" class="toast" role="status"></div>

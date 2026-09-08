@@ -8,19 +8,12 @@
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="theme-color" content="#eef3ff" />
+    <meta name="theme-color" content="#f4f4f2" />
     <meta name="color-scheme" content="light dark" />
     <title>Sign in</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body class="kiosk-body">
-    <div class="ambient" aria-hidden="true">
-      <span class="orb orb-a"></span>
-      <span class="orb orb-b"></span>
-      <span class="orb orb-c"></span>
-    </div>
-    <div id="confetti" class="confetti hidden" aria-hidden="true"></div>
-
     <main class="kiosk-shell">
       <section id="closed-view" class="stage stage-status hidden">
         <div class="status-panel">
@@ -32,7 +25,7 @@
               <path d="M32 43.5v5" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/>
             </svg>
           </div>
-          <p class="eyebrow">Paused for now</p>
+          <p class="eyebrow">Closed</p>
           <h1 id="closed-title">Closed</h1>
           <p class="subtitle" id="closed-message">Not accepting visitors right now.</p>
         </div>
@@ -42,29 +35,29 @@
         <aside class="hero-pane">
           <div class="hero-mark" aria-hidden="true">
             <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M22 18h24c8 0 14 6 14 14v16c0 8-6 14-14 14H22c-4 0-8-4-8-8V26c0-4 4-8 8-8Z" stroke="currentColor" stroke-width="5"/>
-              <path d="M38 28v28" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
-              <circle cx="50" cy="42" r="3.5" fill="currentColor"/>
+              <rect x="20" y="16" width="40" height="48" rx="8" stroke="currentColor" stroke-width="5"/>
+              <path d="M40 22V58" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+              <circle cx="50" cy="40" r="3.5" fill="currentColor"/>
             </svg>
           </div>
-          <p class="eyebrow" id="form-eyebrow">Welcome in</p>
-          <h1 id="form-title">Let’s get you inside</h1>
+          <p class="eyebrow" id="form-eyebrow">Visitor</p>
+          <h1 id="form-title">Sign in</h1>
           <p class="subtitle" id="form-subtitle">
-            Tell us who you are and why you’re here. Someone will review it live.
+            Enter your name and why you want to come in.
           </p>
         </aside>
 
         <div class="form-pane">
-          <p id="urgent-banner" class="urgent-banner hidden">Urgent request</p>
+          <p id="urgent-banner" class="urgent-banner hidden">Urgent</p>
           <p id="form-error" class="error hidden"></p>
           <form id="signin-form" autocomplete="off">
             <div class="field">
-              <label for="name">Your name</label>
-              <input id="name" name="name" type="text" maxlength="100" required autocapitalize="words" autocomplete="off" enterkeyhint="next" placeholder="First and last name" />
+              <label for="name">Name</label>
+              <input id="name" name="name" type="text" maxlength="100" required autocapitalize="words" autocomplete="off" enterkeyhint="next" placeholder="Your name" />
             </div>
             <div class="field">
-              <label for="reason">Why do you want to come in?</label>
-              <textarea id="reason" name="reason" maxlength="500" required autocomplete="off" placeholder="Keep it short and clear"></textarea>
+              <label for="reason">Reason</label>
+              <textarea id="reason" name="reason" maxlength="500" required autocomplete="off" placeholder="Why do you want to come in?"></textarea>
             </div>
             <button class="btn btn-primary" type="submit" id="submit-btn">Request entry</button>
             <button class="btn btn-secondary hidden" type="button" id="cancel-urgent-btn">Cancel</button>
@@ -75,8 +68,8 @@
       <section id="waiting-view" class="stage stage-status hidden">
         <div class="status-panel">
           <div class="status-icon waiting"><div class="spinner" aria-hidden="true"></div></div>
-          <p class="eyebrow">Hang tight</p>
-          <h1>We’re on it</h1>
+          <p class="eyebrow">Pending</p>
+          <h1>Waiting</h1>
           <p class="subtitle" id="waiting-text">Your request was sent. Please wait…</p>
         </div>
       </section>
@@ -84,9 +77,9 @@
       <section id="admitted-view" class="stage stage-status hidden">
         <div class="status-panel">
           <div class="status-icon ok" aria-hidden="true">✓</div>
-          <p class="eyebrow">You’re in</p>
-          <h1>Come on through</h1>
-          <p class="subtitle">All set — head inside.</p>
+          <p class="eyebrow">Approved</p>
+          <h1>You may come in</h1>
+          <p class="subtitle">Please enter.</p>
           <p class="hint-text" id="admitted-reset-hint">Starting over in 5 seconds…</p>
           <button class="btn btn-secondary btn-inline" type="button" id="admitted-reset-btn">Start over</button>
         </div>
@@ -95,7 +88,7 @@
       <section id="declined-view" class="stage stage-status hidden">
         <div class="status-panel">
           <div class="status-icon no" aria-hidden="true">✕</div>
-          <p class="eyebrow">Not this time</p>
+          <p class="eyebrow">Declined</p>
           <h1>Not admitted</h1>
           <p class="subtitle" id="decline-text"></p>
           <p class="hint-text" id="declined-reset-hint">Starting over in 15 seconds…</p>
@@ -129,7 +122,6 @@
       const formSubtitle = document.getElementById("form-subtitle");
       const formEyebrow = document.getElementById("form-eyebrow");
       const cancelUrgentBtn = document.getElementById("cancel-urgent-btn");
-      const confettiEl = document.getElementById("confetti");
 
       let pollTimer = null;
       let resetTimer = null;
@@ -145,7 +137,7 @@
         const next = theme === "dark" ? "dark" : "light";
         document.documentElement.setAttribute("data-theme", next);
         const meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute("content", next === "dark" ? "#12102a" : "#eef3ff");
+        if (meta) meta.setAttribute("content", next === "dark" ? "#0e0e0e" : "#f4f4f2");
       }
 
       function canShowUrgentButton() {
@@ -170,13 +162,13 @@
         urgentMode = Boolean(on);
         urgentBanner.classList.toggle("hidden", !urgentMode);
         cancelUrgentBtn.classList.toggle("hidden", !urgentMode);
-        formEyebrow.textContent = urgentMode ? "Priority lane" : "Welcome in";
-        formTitle.textContent = urgentMode ? "Urgent sign in" : "Let’s get you inside";
+        formEyebrow.textContent = urgentMode ? "Urgent" : "Visitor";
+        formTitle.textContent = urgentMode ? "Urgent sign in" : "Sign in";
         formSubtitle.textContent = urgentMode
           ? (isOpen
-              ? "This will be marked urgent so the admin sees it first."
-              : "Even while closed, this still notifies the admin right away.")
-          : "Tell us who you are and why you’re here. Someone will review it live.";
+              ? "This request will be marked urgent."
+              : "This will notify the admin even while closed.")
+          : "Enter your name and why you want to come in.";
         submitBtn.textContent = urgentMode ? "Send urgent request" : "Request entry";
         submitBtn.classList.toggle("btn-danger", urgentMode);
         submitBtn.classList.toggle("btn-primary", !urgentMode);
@@ -188,24 +180,6 @@
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         if (resetTimer) { clearTimeout(resetTimer); resetTimer = null; }
         if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
-      }
-
-      function burstConfetti() {
-        confettiEl.innerHTML = "";
-        confettiEl.classList.remove("hidden");
-        const colors = ["#5b5cff", "#ff5ea8", "#38bdf8", "#22c55e", "#ff8a3d", "#a78bfa"];
-        for (let i = 0; i < 42; i += 1) {
-          const piece = document.createElement("i");
-          piece.style.left = `${Math.random() * 100}%`;
-          piece.style.background = colors[i % colors.length];
-          piece.style.animationDelay = `${Math.random() * 0.25}s`;
-          piece.style.transform = `rotate(${Math.random() * 180}deg)`;
-          confettiEl.appendChild(piece);
-        }
-        setTimeout(() => {
-          confettiEl.classList.add("hidden");
-          confettiEl.innerHTML = "";
-        }, 1400);
       }
 
       function applyClosedSign(settings) {
@@ -253,7 +227,6 @@
           if (req.status === "admitted") {
             clearTimers();
             show(admittedView);
-            burstConfetti();
             startAutoReset(admittedResetHint, 5);
           } else if (req.status === "declined") {
             clearTimers();
@@ -328,9 +301,7 @@
             throw new Error(data.error || "Could not send request");
           }
           currentRequestId = data.request.id;
-          waitingText.textContent = sendingUrgent
-            ? `Urgent request sent for ${data.request.name}. Hang tight…`
-            : `Thanks, ${data.request.name}. We’re reviewing it now…`;
+          waitingText.textContent = `Thanks, ${data.request.name}. Please wait…`;
           setUrgentMode(false);
           show(waitingView);
           if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
