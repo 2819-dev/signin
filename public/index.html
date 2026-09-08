@@ -101,7 +101,7 @@
         <div class="status-icon ok" aria-hidden="true">✓</div>
         <h1>You may come in</h1>
         <p class="subtitle">You’re all set. Please enter.</p>
-        <p class="muted" id="admitted-reset-hint">Starting over in 15 seconds…</p>
+        <p class="muted" id="admitted-reset-hint">Starting over in 5 seconds…</p>
         <button class="btn btn-secondary" type="button" id="admitted-reset-btn" style="margin-top: 16px;">
           Start over
         </button>
@@ -199,8 +199,8 @@
         goIdle();
       }
 
-      function startAutoReset(hintEl) {
-        let remaining = 15;
+      function startAutoReset(hintEl, seconds) {
+        let remaining = seconds;
         const updateHint = () => {
           hintEl.textContent =
             remaining <= 1
@@ -217,7 +217,7 @@
           }
           updateHint();
         }, 1000);
-        resetTimer = setTimeout(resetToForm, 15000);
+        resetTimer = setTimeout(resetToForm, seconds * 1000);
       }
 
       async function pollRequestStatus() {
@@ -234,13 +234,13 @@
           if (req.status === "admitted") {
             clearTimers();
             show(admittedView);
-            startAutoReset(admittedResetHint);
+            startAutoReset(admittedResetHint, 5);
           } else if (req.status === "declined") {
             clearTimers();
             declineText.textContent =
               req.declineReason || "Your request was declined.";
             show(declinedView);
-            startAutoReset(declinedResetHint);
+            startAutoReset(declinedResetHint, 15);
           }
         } catch (_) {
           // keep waiting; network may be temporarily unavailable
