@@ -161,7 +161,8 @@
       let activeView = "form";
 
       function canShowUrgentButton() {
-        return activeView === "closed" && !isOpen && urgentEnabled;
+        if (!urgentEnabled || urgentMode || currentRequestId) return false;
+        return activeView === "closed" || activeView === "form";
       }
 
       function show(view) {
@@ -188,11 +189,14 @@
         cancelUrgentBtn.classList.toggle("hidden", !urgentMode);
         formTitle.textContent = urgentMode ? "Urgent sign in" : "Sign in";
         formSubtitle.textContent = urgentMode
-          ? "This will still notify the admin even though the kiosk is closed."
+          ? isOpen
+            ? "This will be marked as urgent for the admin."
+            : "This will still notify the admin even though the kiosk is closed."
           : "Enter your name and why you want to come in.";
         submitBtn.textContent = urgentMode ? "Send urgent request" : "Request entry";
         submitBtn.classList.toggle("btn-danger", urgentMode);
         submitBtn.classList.toggle("btn-primary", !urgentMode);
+        urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
       }
 
       function clearTimers() {
@@ -292,6 +296,7 @@
 
           const wasOpen = isOpen;
           isOpen = settings.isOpen !== false;
+          urgentEnabled = settings.urgentEnabled !== false;
 
           // Don't interrupt an in-progress request / urgent form.
           if (
@@ -301,7 +306,7 @@
             activeView === "admitted" ||
             activeView === "declined"
           ) {
-            urgentBtn.classList.toggle("hidden", !(activeView === "closed" && !isOpen));
+            urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
             return;
           }
 
@@ -309,6 +314,8 @@
             show(closedView);
           } else if (!wasOpen || activeView === "closed") {
             show(formView);
+          } else {
+            urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
           }
         } catch (_) {}
       }
@@ -316,6 +323,7 @@
       urgentBtn.addEventListener("click", () => {
         setUrgentMode(true);
         show(formView);
+        urgentBtn.classList.add("hidden");
       });
 
       cancelUrgentBtn.addEventListener("click", () => {

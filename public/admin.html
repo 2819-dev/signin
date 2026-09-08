@@ -69,7 +69,7 @@
         <div class="settings-row">
           <div>
             <strong id="urgent-label">Urgent button</strong>
-            <div class="muted" id="urgent-hint" style="font-size: 0.85rem;">Show corner urgent sign-in while closed</div>
+            <div class="muted" id="urgent-hint" style="font-size: 0.85rem;">Show corner urgent sign-in on the kiosk</div>
           </div>
           <label class="toggle" aria-label="Urgent button">
             <input type="checkbox" id="urgent-toggle" checked />
@@ -162,8 +162,8 @@
           ? "Urgent button on"
           : "Urgent button off";
         urgentHint.textContent = currentSettings.urgentEnabled
-          ? "Show corner urgent sign-in while closed"
-          : "Hidden on the closed kiosk screen";
+          ? "Show corner urgent sign-in on the kiosk"
+          : "Hidden on the kiosk";
         closedEditor.style.opacity = currentSettings.isOpen ? "0.72" : "1";
       }
 
