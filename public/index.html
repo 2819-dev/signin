@@ -8,7 +8,7 @@
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="theme-color" content="#f4efe6" />
+    <meta name="theme-color" content="#f5f1ea" />
     <meta name="color-scheme" content="light dark" />
     <title>Sign in</title>
     <link rel="stylesheet" href="/styles.css" />
@@ -41,22 +41,14 @@
           </div>
           <p class="eyebrow">Closed</p>
           <h1 id="closed-title">Closed</h1>
-          <div class="ornament" aria-hidden="true"><span></span></div>
           <p class="subtitle" id="closed-message">Not accepting visitors right now.</p>
         </div>
       </section>
 
       <section id="form-view" class="stage stage-form">
         <aside class="hero-pane">
-          <div class="hero-mark" aria-hidden="true">
-            <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="40" cy="40" r="22" stroke="currentColor" stroke-width="3.5"/>
-              <path d="M40 24v32M28 40h24" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
-            </svg>
-          </div>
           <p class="eyebrow" id="form-eyebrow">Visitor</p>
           <h1 id="form-title">Welcome</h1>
-          <div class="ornament" aria-hidden="true"><span></span></div>
           <p class="subtitle" id="form-subtitle">
             Enter your name and why you’d like to come in.
           </p>
@@ -84,8 +76,7 @@
         <div class="status-panel">
           <div class="status-icon waiting"><div class="spinner" aria-hidden="true"></div></div>
           <p class="eyebrow">Pending</p>
-          <h1>One moment</h1>
-          <div class="ornament" aria-hidden="true"><span></span></div>
+          <h1>Waiting</h1>
           <p class="subtitle" id="waiting-text">Your request was sent. Please wait…</p>
         </div>
       </section>
@@ -95,7 +86,6 @@
           <div class="status-icon ok" aria-hidden="true">✓</div>
           <p class="eyebrow">Approved</p>
           <h1>You may come in</h1>
-          <div class="ornament" aria-hidden="true"><span></span></div>
           <p class="subtitle">Please enter.</p>
           <p class="hint-text" id="admitted-reset-hint">Starting over in 5 seconds…</p>
           <button class="btn btn-secondary btn-inline" type="button" id="admitted-reset-btn">Start over</button>
@@ -107,7 +97,6 @@
           <div class="status-icon no" aria-hidden="true">✕</div>
           <p class="eyebrow">Declined</p>
           <h1>Not admitted</h1>
-          <div class="ornament" aria-hidden="true"><span></span></div>
           <p class="subtitle" id="decline-text"></p>
           <p class="hint-text" id="declined-reset-hint">Starting over in 15 seconds…</p>
           <button class="btn btn-secondary btn-inline" type="button" id="reset-btn">Start over</button>
@@ -155,7 +144,7 @@
         const next = theme === "dark" ? "dark" : "light";
         document.documentElement.setAttribute("data-theme", next);
         const meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute("content", next === "dark" ? "#12100e" : "#f4efe6");
+        if (meta) meta.setAttribute("content", next === "dark" ? "#121110" : "#f5f1ea");
       }
 
       function canShowUrgentButton() {
