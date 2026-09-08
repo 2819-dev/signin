@@ -80,6 +80,11 @@ exports.handler = async (event) => {
         rows = await sql`
           SELECT id, name, reason, status, decline_reason, created_at, resolved_at
           FROM visitor_requests
+          WHERE status = 'pending'
+             OR (
+               status IN ('admitted', 'declined')
+               AND resolved_at > NOW() - INTERVAL '10 seconds'
+             )
           ORDER BY created_at DESC
           LIMIT 50
         `;
@@ -88,7 +93,10 @@ exports.handler = async (event) => {
           SELECT id, name, reason, status, decline_reason, created_at, resolved_at
           FROM visitor_requests
           WHERE status = 'pending'
-             OR created_at > NOW() - INTERVAL '24 hours'
+             OR (
+               status IN ('admitted', 'declined')
+               AND resolved_at > NOW() - INTERVAL '10 seconds'
+             )
           ORDER BY
             CASE WHEN status = 'pending' THEN 0 ELSE 1 END,
             created_at DESC

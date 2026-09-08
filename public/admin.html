@@ -112,6 +112,8 @@
       let audioCtx = null;
       let lastRenderKey = "";
       let renderPaused = false;
+      let historyCleanupTimer = null;
+      let latestRequests = [];
       let currentSettings = {
         isOpen: true,
         closedTitle: "Closed",
@@ -263,12 +265,21 @@
         );
       }
 
+      function isStillVisible(req) {
+        if (req.status === "pending") return true;
+        if (!req.resolvedAt) return false;
+        const resolvedMs = new Date(req.resolvedAt).getTime();
+        if (Number.isNaN(resolvedMs)) return false;
+        return Date.now() - resolvedMs < 10000;
+      }
+
       function render(requests, { force = false } = {}) {
-        const pending = requests.filter((r) => r.status === "pending");
+        const visible = requests.filter(isStillVisible);
+        const pending = visible.filter((r) => r.status === "pending");
         pendingCountEl.textContent = String(pending.length);
         pendingCountEl.classList.toggle("hidden", pending.length === 0);
 
-        const key = requestsKey(requests);
+        const key = requestsKey(visible);
         if (!force && key === lastRenderKey) {
           return;
         }
@@ -282,14 +293,14 @@
         lastRenderKey = key;
         renderPaused = false;
 
-        if (!requests.length) {
+        if (!visible.length) {
           listEl.innerHTML = "";
           emptyEl.classList.remove("hidden");
           return;
         }
 
         emptyEl.classList.add("hidden");
-        listEl.innerHTML = requests
+        listEl.innerHTML = visible
           .map((req) => {
             const isPending = req.status === "pending";
             const pillClass =
@@ -356,10 +367,32 @@
         return res.json();
       }
 
+      function scheduleHistoryCleanup(requests) {
+        if (historyCleanupTimer) {
+          clearTimeout(historyCleanupTimer);
+          historyCleanupTimer = null;
+        }
+
+        const soonestExpiry = requests
+          .filter((r) => r.status !== "pending" && r.resolvedAt)
+          .map((r) => new Date(r.resolvedAt).getTime() + 10000 - Date.now())
+          .filter((ms) => ms > 0)
+          .sort((a, b) => a - b)[0];
+
+        if (typeof soonestExpiry === "number") {
+          historyCleanupTimer = setTimeout(() => {
+            lastRenderKey = "";
+            render(latestRequests, { force: !isEditingDecline() });
+            scheduleHistoryCleanup(latestRequests);
+          }, soonestExpiry + 25);
+        }
+      }
+
       async function refresh() {
         try {
           const data = await fetchRequests();
           const requests = data.requests || [];
+          latestRequests = requests;
           const pending = requests.filter((r) => r.status === "pending");
 
           if (!firstLoad) {
@@ -373,6 +406,7 @@
           knownIds = new Set(requests.map((r) => r.id));
           firstLoad = false;
           render(requests);
+          scheduleHistoryCleanup(requests);
           connectionStatus.textContent = renderPaused
             ? "Live · paused while you type"
             : "Live · updates every few seconds";
