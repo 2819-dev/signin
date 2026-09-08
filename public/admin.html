@@ -49,6 +49,32 @@
         </button>
       </header>
 
+      <section class="settings-card" id="kiosk-settings">
+        <h2>Kiosk sign</h2>
+        <p class="muted" style="margin: 0;">Turn this off when you’re not accepting anyone.</p>
+        <div class="settings-row">
+          <div>
+            <strong id="open-label">Accepting visitors</strong>
+            <div class="muted" id="open-hint" style="font-size: 0.85rem;">Kiosk shows the sign-in form</div>
+          </div>
+          <label class="toggle" aria-label="Accepting visitors">
+            <input type="checkbox" id="is-open-toggle" checked />
+            <span></span>
+          </label>
+        </div>
+        <div id="closed-editor">
+          <div class="field">
+            <label for="closed-title">Closed title</label>
+            <input id="closed-title" type="text" maxlength="80" value="Closed" />
+          </div>
+          <div class="field">
+            <label for="closed-message">Closed message</label>
+            <textarea id="closed-message" maxlength="500">Not accepting visitors right now.</textarea>
+          </div>
+          <button class="btn btn-secondary" type="button" id="save-closed-btn">Save closed sign</button>
+        </div>
+      </section>
+
       <div id="list" class="request-list"></div>
       <div id="empty" class="empty hidden">No requests yet.</div>
     </div>
@@ -66,6 +92,13 @@
       const connectionStatus = document.getElementById("connection-status");
       const notifyBtn = document.getElementById("notify-btn");
       const toastEl = document.getElementById("toast");
+      const isOpenToggle = document.getElementById("is-open-toggle");
+      const openLabel = document.getElementById("open-label");
+      const openHint = document.getElementById("open-hint");
+      const closedTitleInput = document.getElementById("closed-title");
+      const closedMessageInput = document.getElementById("closed-message");
+      const saveClosedBtn = document.getElementById("save-closed-btn");
+      const closedEditor = document.getElementById("closed-editor");
 
       const STORAGE_KEY = "visitor_admin_secret";
       let secret = sessionStorage.getItem(STORAGE_KEY) || "";
@@ -75,11 +108,73 @@
       let audioCtx = null;
       let lastRenderKey = "";
       let renderPaused = false;
+      let currentSettings = {
+        isOpen: true,
+        closedTitle: "Closed",
+        closedMessage: "Not accepting visitors right now.",
+      };
 
       function showToast(message) {
         toastEl.textContent = message;
         toastEl.classList.add("show");
         setTimeout(() => toastEl.classList.remove("show"), 2200);
+      }
+
+      function applySettingsToForm(settings) {
+        currentSettings = {
+          isOpen: settings.isOpen !== false,
+          closedTitle: settings.closedTitle || "Closed",
+          closedMessage:
+            settings.closedMessage || "Not accepting visitors right now.",
+        };
+        isOpenToggle.checked = currentSettings.isOpen;
+        closedTitleInput.value = currentSettings.closedTitle;
+        closedMessageInput.value = currentSettings.closedMessage;
+        openLabel.textContent = currentSettings.isOpen
+          ? "Accepting visitors"
+          : "Closed — not accepting";
+        openHint.textContent = currentSettings.isOpen
+          ? "Kiosk shows the sign-in form"
+          : "Kiosk shows your closed sign";
+        closedEditor.style.opacity = currentSettings.isOpen ? "0.72" : "1";
+      }
+
+      async function fetchSettings() {
+        const res = await fetch("/api/kiosk-status", {
+          headers: adminHeaders(),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to load kiosk settings");
+        }
+        const data = await res.json();
+        return data.settings || {};
+      }
+
+      async function saveSettings(partial) {
+        const payload = {
+          isOpen:
+            typeof partial.isOpen === "boolean"
+              ? partial.isOpen
+              : currentSettings.isOpen,
+          closedTitle:
+            typeof partial.closedTitle === "string"
+              ? partial.closedTitle
+              : closedTitleInput.value,
+          closedMessage:
+            typeof partial.closedMessage === "string"
+              ? partial.closedMessage
+              : closedMessageInput.value,
+        };
+        const res = await fetch("/api/kiosk-status", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not save settings");
+        applySettingsToForm(data.settings || payload);
+        return data.settings;
       }
 
       function adminHeaders() {
@@ -374,12 +469,43 @@
           panelView.classList.remove("hidden");
           firstLoad = true;
           knownIds = new Set();
+          const settings = await fetchSettings();
+          applySettingsToForm(settings);
           await refresh();
           pollTimer = setInterval(refresh, 3000);
         } catch (err) {
           unlockError.textContent = err.message || "Could not unlock";
           unlockError.classList.remove("hidden");
           secret = "";
+        }
+      });
+
+      isOpenToggle.addEventListener("change", async () => {
+        const nextOpen = isOpenToggle.checked;
+        isOpenToggle.disabled = true;
+        try {
+          await saveSettings({ isOpen: nextOpen });
+          showToast(nextOpen ? "Kiosk is open" : "Kiosk is closed");
+        } catch (err) {
+          isOpenToggle.checked = !nextOpen;
+          showToast(err.message || "Could not update");
+        } finally {
+          isOpenToggle.disabled = false;
+        }
+      });
+
+      saveClosedBtn.addEventListener("click", async () => {
+        saveClosedBtn.disabled = true;
+        try {
+          await saveSettings({
+            closedTitle: closedTitleInput.value.trim(),
+            closedMessage: closedMessageInput.value.trim(),
+          });
+          showToast("Closed sign saved");
+        } catch (err) {
+          showToast(err.message || "Could not save");
+        } finally {
+          saveClosedBtn.disabled = false;
         }
       });
 
@@ -400,9 +526,14 @@
       if (secret) {
         unlockView.classList.add("hidden");
         panelView.classList.remove("hidden");
-        refresh().then(() => {
-          pollTimer = setInterval(refresh, 3000);
-        });
+        Promise.all([fetchSettings(), refresh()])
+          .then(([settings]) => {
+            applySettingsToForm(settings);
+            pollTimer = setInterval(refresh, 3000);
+          })
+          .catch(() => {
+            pollTimer = setInterval(refresh, 3000);
+          });
       }
 
       if ("Notification" in window && Notification.permission === "granted") {
@@ -412,6 +543,9 @@
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && secret) {
           refresh();
+          fetchSettings()
+            .then(applySettingsToForm)
+            .catch(() => {});
         }
       });
     </script>

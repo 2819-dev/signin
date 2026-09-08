@@ -26,6 +26,16 @@ exports.handler = async (event) => {
         return json(400, { error: "Reason is required (max 500 characters)" });
       }
 
+      const settingsRows = await sql`
+        SELECT is_open
+        FROM kiosk_settings
+        WHERE id = 1
+        LIMIT 1
+      `;
+      if (settingsRows.length && settingsRows[0].is_open === false) {
+        return json(403, { error: "Not accepting visitors right now" });
+      }
+
       const rows = await sql`
         INSERT INTO visitor_requests (name, reason)
         VALUES (${name}, ${reason})

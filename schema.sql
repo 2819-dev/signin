@@ -16,3 +16,15 @@ CREATE INDEX IF NOT EXISTS visitor_requests_status_created_idx
 
 CREATE INDEX IF NOT EXISTS visitor_requests_created_idx
   ON visitor_requests (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS kiosk_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  is_open BOOLEAN NOT NULL DEFAULT TRUE,
+  closed_title TEXT NOT NULL DEFAULT 'Closed',
+  closed_message TEXT NOT NULL DEFAULT 'Not accepting visitors right now.',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO kiosk_settings (id)
+VALUES (1)
+ON CONFLICT (id) DO NOTHING;

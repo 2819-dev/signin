@@ -15,6 +15,15 @@
   </head>
   <body>
     <main class="screen">
+      <!-- Closed -->
+      <section id="closed-view" class="card center hidden">
+        <div class="status-icon closed" aria-hidden="true">CLOSED</div>
+        <h1 id="closed-title">Closed</h1>
+        <p class="subtitle" id="closed-message">
+          Not accepting visitors right now.
+        </p>
+      </section>
+
       <!-- Form -->
       <section id="form-view" class="card">
         <h1>Sign in</h1>
@@ -85,6 +94,7 @@
     </main>
 
     <script>
+      const closedView = document.getElementById("closed-view");
       const formView = document.getElementById("form-view");
       const waitingView = document.getElementById("waiting-view");
       const admittedView = document.getElementById("admitted-view");
@@ -98,14 +108,29 @@
       const admittedResetBtn = document.getElementById("admitted-reset-btn");
       const admittedResetHint = document.getElementById("admitted-reset-hint");
       const declinedResetHint = document.getElementById("declined-reset-hint");
+      const closedTitleEl = document.getElementById("closed-title");
+      const closedMessageEl = document.getElementById("closed-message");
 
       let pollTimer = null;
       let resetTimer = null;
       let countdownTimer = null;
+      let kioskPollTimer = null;
       let currentRequestId = null;
+      let isOpen = true;
+      let activeView = "form";
 
       function show(view) {
-        [formView, waitingView, admittedView, declinedView].forEach((el) => {
+        activeView = view === formView
+          ? "form"
+          : view === closedView
+            ? "closed"
+            : view === waitingView
+              ? "waiting"
+              : view === admittedView
+                ? "admitted"
+                : "declined";
+
+        [closedView, formView, waitingView, admittedView, declinedView].forEach((el) => {
           el.classList.toggle("hidden", el !== view);
         });
       }
@@ -125,14 +150,27 @@
         }
       }
 
-      function resetToForm() {
+      function applyClosedSign(settings) {
+        closedTitleEl.textContent = settings.closedTitle || "Closed";
+        closedMessageEl.textContent =
+          settings.closedMessage || "Not accepting visitors right now.";
+      }
+
+      function goIdle() {
         clearTimers();
         currentRequestId = null;
         form.reset();
         formError.classList.add("hidden");
         submitBtn.disabled = false;
-        show(formView);
-        // Don't auto-focus on iPad — focusing can reopen/jank the keyboard between visitors.
+        if (isOpen) {
+          show(formView);
+        } else {
+          show(closedView);
+        }
+      }
+
+      function resetToForm() {
+        goIdle();
       }
 
       function startAutoReset(hintEl) {
@@ -156,7 +194,7 @@
         resetTimer = setTimeout(resetToForm, 15000);
       }
 
-      async function pollStatus() {
+      async function pollRequestStatus() {
         if (!currentRequestId) return;
         try {
           const res = await fetch(
@@ -183,6 +221,30 @@
         }
       }
 
+      async function pollKioskStatus() {
+        try {
+          const res = await fetch("/api/kiosk-status");
+          if (!res.ok) return;
+          const data = await res.json();
+          const settings = data.settings || {};
+          applyClosedSign(settings);
+
+          const wasOpen = isOpen;
+          isOpen = settings.isOpen !== false;
+
+          // Don't interrupt an in-progress request decision flow.
+          if (currentRequestId || activeView === "waiting" || activeView === "admitted" || activeView === "declined") {
+            return;
+          }
+
+          if (!isOpen) {
+            show(closedView);
+          } else if (!wasOpen || activeView === "closed") {
+            show(formView);
+          }
+        } catch (_) {}
+      }
+
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         formError.classList.add("hidden");
@@ -199,18 +261,26 @@
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
+            if (res.status === 403) {
+              isOpen = false;
+              applyClosedSign({
+                closedTitle: closedTitleEl.textContent,
+                closedMessage: data.error || closedMessageEl.textContent,
+              });
+              show(closedView);
+              return;
+            }
             throw new Error(data.error || "Could not send request");
           }
 
           currentRequestId = data.request.id;
           waitingText.textContent = `Thanks, ${data.request.name}. Please wait…`;
           show(waitingView);
-          // Blur so the iPad keyboard closes while waiting.
           if (document.activeElement && document.activeElement.blur) {
             document.activeElement.blur();
           }
-          pollTimer = setInterval(pollStatus, 2000);
-          pollStatus();
+          pollTimer = setInterval(pollRequestStatus, 2000);
+          pollRequestStatus();
         } catch (err) {
           formError.textContent = err.message || "Something went wrong";
           formError.classList.remove("hidden");
@@ -221,8 +291,10 @@
       resetBtn.addEventListener("click", resetToForm);
       admittedResetBtn.addEventListener("click", resetToForm);
 
-      // Soft kiosk helper: avoid accidental pinch-zoom gestures
       document.addEventListener("gesturestart", (e) => e.preventDefault());
+
+      pollKioskStatus();
+      kioskPollTimer = setInterval(pollKioskStatus, 4000);
     </script>
   </body>
 </html>
