@@ -118,7 +118,14 @@
       const closedEditor = document.getElementById("closed-editor");
 
       const STORAGE_KEY = "visitor_admin_secret";
-      let secret = sessionStorage.getItem(STORAGE_KEY) || "";
+      let secret =
+        localStorage.getItem(STORAGE_KEY) ||
+        sessionStorage.getItem(STORAGE_KEY) ||
+        "";
+      if (secret && !localStorage.getItem(STORAGE_KEY)) {
+        localStorage.setItem(STORAGE_KEY, secret);
+        sessionStorage.removeItem(STORAGE_KEY);
+      }
       let knownIds = new Set();
       let firstLoad = true;
       let pollTimer = null;
@@ -413,6 +420,7 @@
           headers: adminHeaders(),
         });
         if (res.status === 401) {
+          localStorage.removeItem(STORAGE_KEY);
           sessionStorage.removeItem(STORAGE_KEY);
           secret = "";
           clearInterval(pollTimer);
@@ -665,7 +673,8 @@
         secret = document.getElementById("secret").value.trim();
         try {
           await fetchRequests();
-          sessionStorage.setItem(STORAGE_KEY, secret);
+          localStorage.setItem(STORAGE_KEY, secret);
+          sessionStorage.removeItem(STORAGE_KEY);
           unlockView.classList.add("hidden");
           panelView.classList.remove("hidden");
           firstLoad = true;

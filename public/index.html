@@ -331,7 +331,11 @@
         form.reset();
         formError.classList.add("hidden");
         submitBtn.disabled = false;
-        show(closedView);
+        if (isOpen) {
+          show(formView);
+        } else {
+          show(closedView);
+        }
       });
 
       form.addEventListener("submit", async (e) => {
