@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Admin" />
-    <meta name="theme-color" content="#efeae2" />
+    <meta name="theme-color" content="#ebe4d8" />
     <meta name="color-scheme" content="light dark" />
     <title>Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -16,12 +16,15 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <div class="ambient" aria-hidden="true">
+      <span></span><span></span><span></span>
+    </div>
     <!-- Unlock -->
     <main id="unlock-view" class="screen">
       <section class="card">
         <p class="eyebrow">Admin</p>
-        <h1>Sign in</h1>
-        <p class="subtitle">Enter the admin secret to continue.</p>
+        <h1>Welcome back</h1>
+        <p class="subtitle">Enter your secret to open the live request panel.</p>
         <p id="unlock-error" class="error hidden"></p>
         <form id="unlock-form" autocomplete="off">
           <div class="field">
@@ -168,7 +171,7 @@
         document.documentElement.setAttribute("data-theme", next);
         const meta = document.querySelector('meta[name="theme-color"]');
         if (meta) {
-          meta.setAttribute("content", next === "dark" ? "#0e0e0e" : "#f4f4f2");
+          meta.setAttribute("content", next === "dark" ? "#111218" : "#ebe4d8");
         }
       }
 

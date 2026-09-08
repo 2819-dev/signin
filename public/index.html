@@ -8,12 +8,15 @@
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="theme-color" content="#f4f4f2" />
+    <meta name="theme-color" content="#ebe4d8" />
     <meta name="color-scheme" content="light dark" />
     <title>Sign in</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body class="kiosk-body">
+    <div class="ambient" aria-hidden="true">
+      <span></span><span></span><span></span>
+    </div>
     <main class="kiosk-shell">
       <section id="closed-view" class="stage stage-status hidden">
         <div class="status-panel">
@@ -41,9 +44,9 @@
             </svg>
           </div>
           <p class="eyebrow" id="form-eyebrow">Visitor</p>
-          <h1 id="form-title">Sign in</h1>
+          <h1 id="form-title">Welcome</h1>
           <p class="subtitle" id="form-subtitle">
-            Enter your name and why you want to come in.
+            Enter your name and why you’d like to come in.
           </p>
         </aside>
 
@@ -59,7 +62,7 @@
               <label for="reason">Reason</label>
               <textarea id="reason" name="reason" maxlength="500" required autocomplete="off" placeholder="Why do you want to come in?"></textarea>
             </div>
-            <button class="btn btn-primary" type="submit" id="submit-btn">Request entry</button>
+            <button class="btn btn-primary" type="submit" id="submit-btn">Continue</button>
             <button class="btn btn-secondary hidden" type="button" id="cancel-urgent-btn">Cancel</button>
           </form>
         </div>
@@ -137,7 +140,7 @@
         const next = theme === "dark" ? "dark" : "light";
         document.documentElement.setAttribute("data-theme", next);
         const meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute("content", next === "dark" ? "#0e0e0e" : "#f4f4f2");
+        if (meta) meta.setAttribute("content", next === "dark" ? "#111218" : "#ebe4d8");
       }
 
       function canShowUrgentButton() {
@@ -163,13 +166,13 @@
         urgentBanner.classList.toggle("hidden", !urgentMode);
         cancelUrgentBtn.classList.toggle("hidden", !urgentMode);
         formEyebrow.textContent = urgentMode ? "Urgent" : "Visitor";
-        formTitle.textContent = urgentMode ? "Urgent sign in" : "Sign in";
+        formTitle.textContent = urgentMode ? "Urgent request" : "Welcome";
         formSubtitle.textContent = urgentMode
           ? (isOpen
               ? "This request will be marked urgent."
               : "This will notify the admin even while closed.")
-          : "Enter your name and why you want to come in.";
-        submitBtn.textContent = urgentMode ? "Send urgent request" : "Request entry";
+          : "Enter your name and why you’d like to come in.";
+        submitBtn.textContent = urgentMode ? "Send urgent request" : "Continue";
         submitBtn.classList.toggle("btn-danger", urgentMode);
         submitBtn.classList.toggle("btn-primary", !urgentMode);
         document.body.classList.toggle("urgent-active", urgentMode);
