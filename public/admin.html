@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Admin" />
-    <meta name="theme-color" content="#eef3ff" />
+    <meta name="theme-color" content="#efeae2" />
     <meta name="color-scheme" content="light dark" />
     <title>Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -168,7 +168,7 @@
         document.documentElement.setAttribute("data-theme", next);
         const meta = document.querySelector('meta[name="theme-color"]');
         if (meta) {
-          meta.setAttribute("content", next === "dark" ? "#12102a" : "#eef3ff");
+          meta.setAttribute("content", next === "dark" ? "#0e0e0e" : "#f4f4f2");
         }
       }
 
@@ -447,7 +447,7 @@
               `
               : req.status === "declined"
                 ? `<p class="muted" style="margin:0;">Declined: ${escapeHtml(req.declineReason || "")}</p>`
-                : `<p class="muted" style="margin:0;">Admitted · nice work</p>`;
+                : `<p class="muted" style="margin:0;">Admitted</p>`;
 
             return `
               <article class="request-card ${isPending ? "pending" : ""} ${req.urgent ? "urgent" : ""}" data-id="${escapeHtml(req.id)}">
