@@ -17,7 +17,33 @@
     <main class="screen">
       <!-- Closed -->
       <section id="closed-view" class="card center hidden">
-        <div class="status-icon closed" aria-hidden="true">CLOSED</div>
+        <div class="status-icon closed" aria-hidden="true">
+          <svg class="closed-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M20 28V22a12 12 0 0 1 24 0v6"
+              stroke="currentColor"
+              stroke-width="4.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <rect
+              x="14"
+              y="28"
+              width="36"
+              height="28"
+              rx="8"
+              stroke="currentColor"
+              stroke-width="4.5"
+            />
+            <circle cx="32" cy="40" r="3.5" fill="currentColor" />
+            <path
+              d="M32 43.5v5"
+              stroke="currentColor"
+              stroke-width="4.5"
+              stroke-linecap="round"
+            />
+          </svg>
+        </div>
         <h1 id="closed-title">Closed</h1>
         <p class="subtitle" id="closed-message">
           Not accepting visitors right now.
