@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#f5f5f7" />
+    <meta name="color-scheme" content="light only" />
+    <title>Admin</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Unlock -->
+    <main id="unlock-view" class="screen">
+      <section class="card">
+        <h1>Admin</h1>
+        <p class="subtitle">Enter the admin secret to continue.</p>
+        <p id="unlock-error" class="error hidden"></p>
+        <form id="unlock-form" autocomplete="off">
+          <div class="field">
+            <label for="secret">Secret</label>
+            <input
+              id="secret"
+              type="password"
+              required
+              autocomplete="current-password"
+              enterkeyhint="go"
+            />
+          </div>
+          <button class="btn btn-primary" type="submit">Open panel</button>
+        </form>
+      </section>
+    </main>
+
+    <!-- Panel -->
+    <div id="panel-view" class="admin-shell hidden">
+      <header class="admin-header">
+        <div>
+          <h1>Requests <span id="pending-count" class="badge hidden">0</span></h1>
+          <p class="muted" id="connection-status">Connecting…</p>
+        </div>
+        <button class="btn btn-secondary" type="button" id="notify-btn" style="width: auto; padding: 10px 14px; font-size: 0.9rem;">
+          Enable alerts
+        </button>
+      </header>
+
+      <div id="list" class="request-list"></div>
+      <div id="empty" class="empty hidden">No requests yet.</div>
+    </div>
+
+    <div id="toast" class="toast" role="status"></div>
+
+    <script>
+      const unlockView = document.getElementById("unlock-view");
+      const panelView = document.getElementById("panel-view");
+      const unlockForm = document.getElementById("unlock-form");
+      const unlockError = document.getElementById("unlock-error");
+      const listEl = document.getElementById("list");
+      const emptyEl = document.getElementById("empty");
+      const pendingCountEl = document.getElementById("pending-count");
+      const connectionStatus = document.getElementById("connection-status");
+      const notifyBtn = document.getElementById("notify-btn");
+      const toastEl = document.getElementById("toast");
+
+      const STORAGE_KEY = "visitor_admin_secret";
+      let secret = sessionStorage.getItem(STORAGE_KEY) || "";
+      let knownIds = new Set();
+      let firstLoad = true;
+      let pollTimer = null;
+      let audioCtx = null;
+
+      function showToast(message) {
+        toastEl.textContent = message;
+        toastEl.classList.add("show");
+        setTimeout(() => toastEl.classList.remove("show"), 2200);
+      }
+
+      function adminHeaders() {
+        return {
+          "Content-Type": "application/json",
+          "x-admin-secret": secret,
+        };
+      }
+
+      function formatTime(iso) {
+        try {
+          return new Date(iso).toLocaleString([], {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+        } catch {
+          return "";
+        }
+      }
+
+      function playChime() {
+        try {
+          if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          const now = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(880, now);
+          osc.frequency.exponentialRampToValueAtTime(1320, now + 0.12);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 0.4);
+        } catch (_) {}
+      }
+
+      function notifyNew(req) {
+        playChime();
+        if (Notification.permission === "granted") {
+          try {
+            const n = new Notification("New visitor request", {
+              body: `${req.name}: ${req.reason}`,
+              tag: req.id,
+              renotify: true,
+            });
+            n.onclick = () => {
+              window.focus();
+              n.close();
+            };
+          } catch (_) {}
+        }
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function render(requests) {
+        const pending = requests.filter((r) => r.status === "pending");
+        pendingCountEl.textContent = String(pending.length);
+        pendingCountEl.classList.toggle("hidden", pending.length === 0);
+
+        if (!requests.length) {
+          listEl.innerHTML = "";
+          emptyEl.classList.remove("hidden");
+          return;
+        }
+
+        emptyEl.classList.add("hidden");
+        listEl.innerHTML = requests
+          .map((req) => {
+            const isPending = req.status === "pending";
+            const pillClass =
+              req.status === "admitted"
+                ? "pill-admitted"
+                : req.status === "declined"
+                  ? "pill-declined"
+                  : "pill-pending";
+
+            const actions = isPending
+              ? `
+                <div class="btn-row">
+                  <button class="btn btn-success" data-action="admit" data-id="${escapeHtml(req.id)}">Admit</button>
+                  <button class="btn btn-danger" data-action="show-decline" data-id="${escapeHtml(req.id)}">Decline</button>
+                </div>
+                <div class="decline-box hidden" id="decline-${escapeHtml(req.id)}">
+                  <div class="field" style="margin-bottom: 10px;">
+                    <label for="reason-${escapeHtml(req.id)}">Decline reason</label>
+                    <textarea id="reason-${escapeHtml(req.id)}" maxlength="500" placeholder="Tell them why…"></textarea>
+                  </div>
+                  <div class="btn-row">
+                    <button class="btn btn-secondary" data-action="cancel-decline" data-id="${escapeHtml(req.id)}">Cancel</button>
+                    <button class="btn btn-danger" data-action="decline" data-id="${escapeHtml(req.id)}">Send decline</button>
+                  </div>
+                </div>
+              `
+              : req.status === "declined"
+                ? `<p class="muted" style="margin:0;">Declined: ${escapeHtml(req.declineReason || "")}</p>`
+                : `<p class="muted" style="margin:0;">Admitted</p>`;
+
+            return `
+              <article class="request-card ${isPending ? "pending" : ""}" data-id="${escapeHtml(req.id)}">
+                <div class="request-meta">
+                  <span class="pill ${pillClass}">${escapeHtml(req.status)}</span>
+                  <span>${escapeHtml(formatTime(req.createdAt))}</span>
+                </div>
+                <h2 class="request-name">${escapeHtml(req.name)}</h2>
+                <p class="request-reason">${escapeHtml(req.reason)}</p>
+                ${actions}
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      async function fetchRequests() {
+        const res = await fetch("/api/requests", {
+          headers: adminHeaders(),
+        });
+        if (res.status === 401) {
+          sessionStorage.removeItem(STORAGE_KEY);
+          secret = "";
+          clearInterval(pollTimer);
+          unlockView.classList.remove("hidden");
+          panelView.classList.add("hidden");
+          unlockError.textContent = "Invalid secret";
+          unlockError.classList.remove("hidden");
+          throw new Error("Unauthorized");
+        }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to load");
+        }
+        return res.json();
+      }
+
+      async function refresh() {
+        try {
+          const data = await fetchRequests();
+          const requests = data.requests || [];
+          const pending = requests.filter((r) => r.status === "pending");
+
+          if (!firstLoad) {
+            for (const req of pending) {
+              if (!knownIds.has(req.id)) {
+                notifyNew(req);
+              }
+            }
+          }
+
+          knownIds = new Set(requests.map((r) => r.id));
+          firstLoad = false;
+          render(requests);
+          connectionStatus.textContent = "Live · updates every few seconds";
+        } catch (err) {
+          if (err.message !== "Unauthorized") {
+            connectionStatus.textContent = "Couldn’t refresh — retrying…";
+          }
+        }
+      }
+
+      async function admit(id) {
+        const res = await fetch("/api/admit", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({ id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Admit failed");
+        showToast("Admitted");
+        await refresh();
+      }
+
+      async function decline(id, declineReason) {
+        const res = await fetch("/api/decline", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({ id, declineReason }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Decline failed");
+        showToast("Declined");
+        await refresh();
+      }
+
+      listEl.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+        const id = btn.getAttribute("data-id");
+        const action = btn.getAttribute("data-action");
+
+        if (action === "show-decline") {
+          document.getElementById(`decline-${id}`)?.classList.remove("hidden");
+          document.getElementById(`reason-${id}`)?.focus();
+          return;
+        }
+
+        if (action === "cancel-decline") {
+          document.getElementById(`decline-${id}`)?.classList.add("hidden");
+          return;
+        }
+
+        btn.disabled = true;
+        try {
+          if (action === "admit") {
+            await admit(id);
+          } else if (action === "decline") {
+            const reason = (document.getElementById(`reason-${id}`)?.value || "").trim();
+            if (!reason) {
+              showToast("Add a decline reason");
+              btn.disabled = false;
+              return;
+            }
+            await decline(id, reason);
+          }
+        } catch (err) {
+          showToast(err.message || "Something went wrong");
+          btn.disabled = false;
+        }
+      });
+
+      unlockForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        unlockError.classList.add("hidden");
+        secret = document.getElementById("secret").value.trim();
+        try {
+          await fetchRequests();
+          sessionStorage.setItem(STORAGE_KEY, secret);
+          unlockView.classList.add("hidden");
+          panelView.classList.remove("hidden");
+          firstLoad = true;
+          knownIds = new Set();
+          await refresh();
+          pollTimer = setInterval(refresh, 3000);
+        } catch (err) {
+          unlockError.textContent = err.message || "Could not unlock";
+          unlockError.classList.remove("hidden");
+          secret = "";
+        }
+      });
+
+      notifyBtn.addEventListener("click", async () => {
+        if (!("Notification" in window)) {
+          showToast("Notifications not supported");
+          return;
+        }
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          showToast("Alerts enabled");
+          notifyBtn.textContent = "Alerts on";
+        } else {
+          showToast("Alerts blocked");
+        }
+      });
+
+      if (secret) {
+        unlockView.classList.add("hidden");
+        panelView.classList.remove("hidden");
+        refresh().then(() => {
+          pollTimer = setInterval(refresh, 3000);
+        });
+      }
+
+      if ("Notification" in window && Notification.permission === "granted") {
+        notifyBtn.textContent = "Alerts on";
+      }
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && secret) {
+          refresh();
+        }
+      });
+    </script>
+  </body>
+</html>

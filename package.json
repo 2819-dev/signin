@@ -1,0 +1,13 @@
+{
+  "name": "visitor-signin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Simple iPad visitor check-in with phone admin admit/decline",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "echo 'Static site — no build step'"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}

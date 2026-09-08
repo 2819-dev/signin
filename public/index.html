@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#f5f5f7" />
+    <meta name="color-scheme" content="light only" />
+    <title>Sign in</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="screen">
+      <!-- Form -->
+      <section id="form-view" class="card">
+        <h1>Sign in</h1>
+        <p class="subtitle">Enter your name and why you want to come in.</p>
+        <p id="form-error" class="error hidden"></p>
+        <form id="signin-form" autocomplete="off">
+          <div class="field">
+            <label for="name">Your name</label>
+            <input
+              id="name"
+              name="name"
+              type="text"
+              maxlength="100"
+              required
+              autocapitalize="words"
+              autocomplete="off"
+              enterkeyhint="next"
+            />
+          </div>
+          <div class="field">
+            <label for="reason">Why do you want to come in?</label>
+            <textarea
+              id="reason"
+              name="reason"
+              maxlength="500"
+              required
+              autocomplete="off"
+            ></textarea>
+          </div>
+          <button class="btn btn-primary" type="submit" id="submit-btn">
+            Request entry
+          </button>
+        </form>
+      </section>
+
+      <!-- Waiting -->
+      <section id="waiting-view" class="card center hidden">
+        <div class="status-icon waiting">
+          <div class="spinner" aria-hidden="true"></div>
+        </div>
+        <h1>Waiting</h1>
+        <p class="subtitle" id="waiting-text">
+          Your request was sent. Please wait…
+        </p>
+      </section>
+
+      <!-- Admitted -->
+      <section id="admitted-view" class="card center hidden">
+        <div class="status-icon ok" aria-hidden="true">✓</div>
+        <h1>You may come in</h1>
+        <p class="subtitle">You’re all set. Please enter.</p>
+      </section>
+
+      <!-- Declined -->
+      <section id="declined-view" class="card center hidden">
+        <div class="status-icon no" aria-hidden="true">✕</div>
+        <h1>Not admitted</h1>
+        <p class="subtitle" id="decline-text"></p>
+        <button class="btn btn-secondary" type="button" id="reset-btn">
+          Start over
+        </button>
+      </section>
+    </main>
+
+    <script>
+      const formView = document.getElementById("form-view");
+      const waitingView = document.getElementById("waiting-view");
+      const admittedView = document.getElementById("admitted-view");
+      const declinedView = document.getElementById("declined-view");
+      const form = document.getElementById("signin-form");
+      const formError = document.getElementById("form-error");
+      const submitBtn = document.getElementById("submit-btn");
+      const declineText = document.getElementById("decline-text");
+      const waitingText = document.getElementById("waiting-text");
+      const resetBtn = document.getElementById("reset-btn");
+
+      let pollTimer = null;
+      let resetTimer = null;
+      let currentRequestId = null;
+
+      function show(view) {
+        [formView, waitingView, admittedView, declinedView].forEach((el) => {
+          el.classList.toggle("hidden", el !== view);
+        });
+      }
+
+      function clearTimers() {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+        if (resetTimer) {
+          clearTimeout(resetTimer);
+          resetTimer = null;
+        }
+      }
+
+      function resetToForm() {
+        clearTimers();
+        currentRequestId = null;
+        form.reset();
+        formError.classList.add("hidden");
+        submitBtn.disabled = false;
+        show(formView);
+        document.getElementById("name").focus();
+      }
+
+      async function pollStatus() {
+        if (!currentRequestId) return;
+        try {
+          const res = await fetch(
+            `/api/request-status?id=${encodeURIComponent(currentRequestId)}`
+          );
+          if (!res.ok) return;
+          const data = await res.json();
+          const req = data.request;
+          if (!req) return;
+
+          if (req.status === "admitted") {
+            clearTimers();
+            show(admittedView);
+            resetTimer = setTimeout(resetToForm, 8000);
+          } else if (req.status === "declined") {
+            clearTimers();
+            declineText.textContent =
+              req.declineReason || "Your request was declined.";
+            show(declinedView);
+          }
+        } catch (_) {
+          // keep waiting; network may be temporarily unavailable
+        }
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        formError.classList.add("hidden");
+        submitBtn.disabled = true;
+
+        const name = document.getElementById("name").value.trim();
+        const reason = document.getElementById("reason").value.trim();
+
+        try {
+          const res = await fetch("/api/requests", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, reason }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data.error || "Could not send request");
+          }
+
+          currentRequestId = data.request.id;
+          waitingText.textContent = `Thanks, ${data.request.name}. Please wait…`;
+          show(waitingView);
+          pollTimer = setInterval(pollStatus, 2000);
+          pollStatus();
+        } catch (err) {
+          formError.textContent = err.message || "Something went wrong";
+          formError.classList.remove("hidden");
+          submitBtn.disabled = false;
+        }
+      });
+
+      resetBtn.addEventListener("click", resetToForm);
+
+      // Soft kiosk helpers: keep focus useful and avoid accidental zoom gestures
+      document.addEventListener("gesturestart", (e) => e.preventDefault());
+      window.addEventListener("pageshow", () => {
+        if (!currentRequestId) {
+          document.getElementById("name").focus();
+        }
+      });
+    </script>
+  </body>
+</html>
