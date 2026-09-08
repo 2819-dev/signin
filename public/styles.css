@@ -443,7 +443,9 @@ html[data-theme="dark"] .btn-secondary {
 /* ===== Kiosk ===== */
 .kiosk-body {
   min-height: 100dvh;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .kiosk-shell {
@@ -452,6 +454,7 @@ html[data-theme="dark"] .btn-secondary {
   min-height: 100dvh;
   display: grid;
   place-items: center;
+  align-content: center;
   padding: max(22px, env(safe-area-inset-top)) 22px max(22px, env(safe-area-inset-bottom));
 }
 
@@ -514,45 +517,7 @@ html[data-theme="dark"] .btn-secondary {
 
 .hero-pane .subtitle {
   max-width: 30ch;
-  margin-bottom: 18px;
-}
-
-.hero-note {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  padding: 12px 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.45);
-  border: 1px solid var(--line);
-  color: var(--ink-soft);
-  font-weight: 650;
-  font-size: 0.95rem;
-}
-
-html[data-theme="dark"] .hero-note {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.fun-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 18px;
-}
-
-.fun-pill {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid var(--line);
-  font-size: 0.82rem;
-  font-weight: 750;
-  color: var(--ink-soft);
-}
-
-html[data-theme="dark"] .fun-pill {
-  background: rgba(255, 255, 255, 0.05);
+  margin-bottom: 0;
 }
 
 .form-pane {
@@ -1049,5 +1014,28 @@ html[data-theme="dark"] .pill-admitted {
   .stage-form,
   .status-panel {
     border-radius: 28px;
+  }
+
+  .kiosk-shell {
+    min-height: auto;
+    place-items: stretch;
+    align-content: start;
+    padding: 18px 16px calc(18px + 64px);
+  }
+
+  .stage {
+    width: 100%;
+  }
+
+  .hero-pane {
+    padding: 24px 20px 8px;
+  }
+
+  .form-pane {
+    padding: 12px 20px 24px;
+  }
+
+  .hero-pane h1 {
+    font-size: 2.1rem;
   }
 }
