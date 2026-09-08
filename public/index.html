@@ -13,125 +13,156 @@
     <title>Sign in</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
-    <main class="screen">
+  <body class="kiosk-body">
+    <div class="ambient" aria-hidden="true">
+      <span class="orb orb-a"></span>
+      <span class="orb orb-b"></span>
+      <span class="orb orb-c"></span>
+    </div>
+
+    <main class="kiosk-shell">
       <!-- Closed -->
-      <section id="closed-view" class="card center hidden">
-        <div class="status-icon closed" aria-hidden="true">
-          <svg class="closed-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M20 28V22a12 12 0 0 1 24 0v6"
-              stroke="currentColor"
-              stroke-width="4.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <rect
-              x="14"
-              y="28"
-              width="36"
-              height="28"
-              rx="8"
-              stroke="currentColor"
-              stroke-width="4.5"
-            />
-            <circle cx="32" cy="40" r="3.5" fill="currentColor" />
-            <path
-              d="M32 43.5v5"
-              stroke="currentColor"
-              stroke-width="4.5"
-              stroke-linecap="round"
-            />
-          </svg>
+      <section id="closed-view" class="stage stage-status hidden">
+        <div class="status-panel">
+          <div class="status-icon closed" aria-hidden="true">
+            <svg class="closed-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M20 28V22a12 12 0 0 1 24 0v6"
+                stroke="currentColor"
+                stroke-width="4.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <rect
+                x="14"
+                y="28"
+                width="36"
+                height="28"
+                rx="8"
+                stroke="currentColor"
+                stroke-width="4.5"
+              />
+              <circle cx="32" cy="40" r="3.5" fill="currentColor" />
+              <path
+                d="M32 43.5v5"
+                stroke="currentColor"
+                stroke-width="4.5"
+                stroke-linecap="round"
+              />
+            </svg>
+          </div>
+          <p class="eyebrow">Kiosk</p>
+          <h1 id="closed-title">Closed</h1>
+          <p class="subtitle" id="closed-message">
+            Not accepting visitors right now.
+          </p>
         </div>
-        <p class="eyebrow">Kiosk</p>
-        <h1 id="closed-title">Closed</h1>
-        <p class="subtitle" id="closed-message">
-          Not accepting visitors right now.
-        </p>
       </section>
 
       <!-- Form -->
-      <section id="form-view" class="card">
-        <p id="urgent-banner" class="urgent-banner hidden">Urgent sign in</p>
-        <p class="eyebrow" id="form-eyebrow">Welcome</p>
-        <h1 id="form-title">Sign in</h1>
-        <p class="subtitle" id="form-subtitle">Enter your name and why you want to come in.</p>
-        <p id="form-error" class="error hidden"></p>
-        <form id="signin-form" autocomplete="off">
-          <div class="field">
-            <label for="name">Your name</label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              maxlength="100"
-              required
-              autocapitalize="words"
-              autocomplete="off"
-              enterkeyhint="next"
-              placeholder="First and last name"
-            />
+      <section id="form-view" class="stage stage-form">
+        <aside class="hero-pane">
+          <div class="hero-mark" aria-hidden="true">
+            <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="18" y="14" width="44" height="52" rx="10" stroke="currentColor" stroke-width="5"/>
+              <path d="M40 20V60" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+              <circle cx="52" cy="40" r="3.5" fill="currentColor"/>
+            </svg>
           </div>
-          <div class="field">
-            <label for="reason">Why do you want to come in?</label>
-            <textarea
-              id="reason"
-              name="reason"
-              maxlength="500"
-              required
-              autocomplete="off"
-              placeholder="A short reason helps with approval"
-            ></textarea>
+          <p class="eyebrow" id="form-eyebrow">Welcome</p>
+          <h1 id="form-title">Sign in</h1>
+          <p class="subtitle" id="form-subtitle">
+            Enter your name and why you want to come in.
+          </p>
+          <div class="hero-note">
+            Someone inside will review your request.
           </div>
-          <button class="btn btn-primary" type="submit" id="submit-btn">
-            Request entry
-          </button>
-          <button class="btn btn-secondary hidden" type="button" id="cancel-urgent-btn" style="margin-top: 12px;">
-            Cancel
-          </button>
-        </form>
+        </aside>
+
+        <div class="form-pane">
+          <p id="urgent-banner" class="urgent-banner hidden">Urgent sign in</p>
+          <p id="form-error" class="error hidden"></p>
+          <form id="signin-form" autocomplete="off">
+            <div class="field">
+              <label for="name">Your name</label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                maxlength="100"
+                required
+                autocapitalize="words"
+                autocomplete="off"
+                enterkeyhint="next"
+                placeholder="First and last name"
+              />
+            </div>
+            <div class="field">
+              <label for="reason">Why do you want to come in?</label>
+              <textarea
+                id="reason"
+                name="reason"
+                maxlength="500"
+                required
+                autocomplete="off"
+                placeholder="A short reason helps with approval"
+              ></textarea>
+            </div>
+            <button class="btn btn-primary" type="submit" id="submit-btn">
+              Request entry
+            </button>
+            <button class="btn btn-secondary hidden" type="button" id="cancel-urgent-btn">
+              Cancel
+            </button>
+          </form>
+        </div>
       </section>
 
       <!-- Waiting -->
-      <section id="waiting-view" class="card center hidden">
-        <div class="status-icon waiting">
-          <div class="spinner" aria-hidden="true"></div>
+      <section id="waiting-view" class="stage stage-status hidden">
+        <div class="status-panel">
+          <div class="status-icon waiting">
+            <div class="spinner" aria-hidden="true"></div>
+          </div>
+          <p class="eyebrow">Please wait</p>
+          <h1>Waiting</h1>
+          <p class="subtitle" id="waiting-text">
+            Your request was sent. Please wait…
+          </p>
         </div>
-        <p class="eyebrow">Please wait</p>
-        <h1>Waiting</h1>
-        <p class="subtitle" id="waiting-text">
-          Your request was sent. Please wait…
-        </p>
       </section>
 
       <!-- Admitted -->
-      <section id="admitted-view" class="card center hidden">
-        <div class="status-icon ok" aria-hidden="true">✓</div>
-        <p class="eyebrow">Approved</p>
-        <h1>You may come in</h1>
-        <p class="subtitle">You’re all set. Please enter.</p>
-        <p class="hint-text" id="admitted-reset-hint">Starting over in 5 seconds…</p>
-        <button class="btn btn-secondary" type="button" id="admitted-reset-btn" style="margin-top: 18px;">
-          Start over
-        </button>
+      <section id="admitted-view" class="stage stage-status hidden">
+        <div class="status-panel">
+          <div class="status-icon ok" aria-hidden="true">✓</div>
+          <p class="eyebrow">Approved</p>
+          <h1>You may come in</h1>
+          <p class="subtitle">You’re all set. Please enter.</p>
+          <p class="hint-text" id="admitted-reset-hint">Starting over in 5 seconds…</p>
+          <button class="btn btn-secondary btn-inline" type="button" id="admitted-reset-btn">
+            Start over
+          </button>
+        </div>
       </section>
 
       <!-- Declined -->
-      <section id="declined-view" class="card center hidden">
-        <div class="status-icon no" aria-hidden="true">✕</div>
-        <p class="eyebrow">Not approved</p>
-        <h1>Not admitted</h1>
-        <p class="subtitle" id="decline-text"></p>
-        <p class="hint-text" id="declined-reset-hint">Starting over in 15 seconds…</p>
-        <button class="btn btn-secondary" type="button" id="reset-btn" style="margin-top: 18px;">
-          Start over
-        </button>
+      <section id="declined-view" class="stage stage-status hidden">
+        <div class="status-panel">
+          <div class="status-icon no" aria-hidden="true">✕</div>
+          <p class="eyebrow">Not approved</p>
+          <h1>Not admitted</h1>
+          <p class="subtitle" id="decline-text"></p>
+          <p class="hint-text" id="declined-reset-hint">Starting over in 15 seconds…</p>
+          <button class="btn btn-secondary btn-inline" type="button" id="reset-btn">
+            Start over
+          </button>
+        </div>
       </section>
     </main>
 
     <button type="button" id="urgent-btn" class="urgent-fab hidden">
-      Urgent sign in
+      Urgent
     </button>
 
     <script>
@@ -201,6 +232,7 @@
           el.classList.toggle("hidden", el !== view);
         });
 
+        document.body.dataset.view = activeView;
         urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
       }
 
@@ -218,6 +250,7 @@
         submitBtn.textContent = urgentMode ? "Send urgent request" : "Request entry";
         submitBtn.classList.toggle("btn-danger", urgentMode);
         submitBtn.classList.toggle("btn-primary", !urgentMode);
+        document.body.classList.toggle("urgent-active", urgentMode);
         urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
       }
 
@@ -303,9 +336,7 @@
             show(declinedView);
             startAutoReset(declinedResetHint, 15);
           }
-        } catch (_) {
-          // keep waiting; network may be temporarily unavailable
-        }
+        } catch (_) {}
       }
 
       async function pollKioskStatus() {
@@ -321,7 +352,6 @@
           urgentEnabled = settings.urgentEnabled !== false;
           applyTheme(settings.theme);
 
-          // Don't interrupt an in-progress request / urgent form.
           if (
             currentRequestId ||
             urgentMode ||
@@ -411,7 +441,6 @@
 
       resetBtn.addEventListener("click", resetToForm);
       admittedResetBtn.addEventListener("click", resetToForm);
-
       document.addEventListener("gesturestart", (e) => e.preventDefault());
 
       pollKioskStatus();
