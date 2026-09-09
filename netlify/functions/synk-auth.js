@@ -82,7 +82,10 @@ exports.handler = async (event) => {
 
     let matched = null;
     for (const row of rows) {
-      const dob = String(row.date_of_birth).slice(0, 10);
+      const dob =
+        row.date_of_birth instanceof Date
+          ? row.date_of_birth.toISOString().slice(0, 10)
+          : String(row.date_of_birth).slice(0, 10);
       if (dob !== dateOfBirth) continue;
       if (!verifySecret(secret, row.secret_hash)) continue;
       matched = row;

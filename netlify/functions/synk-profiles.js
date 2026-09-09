@@ -22,15 +22,23 @@ function normalizeDob(value) {
   return raw;
 }
 
+function toDobString(value) {
+  if (!value) return "";
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  const raw = String(value);
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : raw.slice(0, 10);
+}
+
 function mapProfile(row, { includeSecretHint = false } = {}) {
   if (!row) return null;
   const profile = {
     id: row.id,
     synkCode: row.synk_code,
     name: row.name,
-    dateOfBirth: row.date_of_birth
-      ? String(row.date_of_birth).slice(0, 10)
-      : "",
+    dateOfBirth: toDobString(row.date_of_birth),
     photoUrl: row.photo_url || "",
     enabled: row.enabled !== false,
     createdAt: row.created_at,
@@ -154,7 +162,7 @@ exports.handler = async (event) => {
       const dateOfBirth =
         typeof body.dateOfBirth === "string"
           ? normalizeDob(body.dateOfBirth)
-          : String(existing.date_of_birth).slice(0, 10);
+          : toDobString(existing.date_of_birth);
       const photoUrl =
         typeof body.photoUrl === "string"
           ? String(body.photoUrl).trim().slice(0, 500)

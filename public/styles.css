@@ -1001,7 +1001,7 @@ html[data-theme="dark"] .chat-bubble.mine {
 
 .more-options-panel {
   display: grid;
-  gap: 4px;
+  gap: 8px;
   padding: 12px;
   border-radius: 16px;
   border: 1px solid var(--line);
