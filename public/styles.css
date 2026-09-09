@@ -920,6 +920,7 @@ html[data-theme="dark"] .chat-bubble.mine {
   margin-bottom: 18px;
 }
 
+.display-screen.is-gallery .display-clock,
 .display-screen.is-image .display-clock,
 .display-screen.is-poster .display-clock {
   position: absolute;
@@ -945,6 +946,7 @@ html[data-theme="dark"] .chat-bubble.mine {
   line-height: 1;
 }
 
+.display-screen.is-gallery .display-clock-time,
 .display-screen.is-image .display-clock-time,
 .display-screen.is-poster .display-clock-time {
   font-size: 1.4rem;
@@ -957,6 +959,7 @@ html[data-theme="dark"] .chat-bubble.mine {
   font-size: clamp(1rem, 2.4vw, 1.35rem);
 }
 
+.display-screen.is-gallery .display-clock-date,
 .display-screen.is-image .display-clock-date,
 .display-screen.is-poster .display-clock-date {
   margin-top: 4px;
