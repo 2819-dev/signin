@@ -1,5 +1,5 @@
 const { getSql, json, requireAdmin } = require("./lib/db");
-const { hashSecret, generateSynkCode } = require("./lib/synk");
+const { hashSecret, generateSynkCode, ensureSynkCoreTables } = require("./lib/synk");
 
 function normalizeName(value) {
   return String(value || "")
@@ -66,26 +66,7 @@ function mapProfile(row, { includeSecretHint = false } = {}) {
 }
 
 async function ensureSynkTables(sql) {
-  await sql`
-    CREATE TABLE IF NOT EXISTS synk_profiles (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      synk_code TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      date_of_birth DATE NOT NULL,
-      secret_hash TEXT,
-      photo_url TEXT NOT NULL DEFAULT '',
-      descriptor JSONB,
-      policy TEXT NOT NULL DEFAULT 'pending',
-      enabled BOOLEAN NOT NULL DEFAULT TRUE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-  await sql`ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS descriptor JSONB`;
-  await sql`ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS policy TEXT NOT NULL DEFAULT 'pending'`;
-  await sql`ALTER TABLE synk_profiles ALTER COLUMN secret_hash DROP NOT NULL`;
-  await sql`CREATE INDEX IF NOT EXISTS synk_profiles_enabled_idx ON synk_profiles (enabled, updated_at DESC)`;
-  await sql`CREATE INDEX IF NOT EXISTS synk_profiles_code_idx ON synk_profiles (synk_code)`;
+  await ensureSynkCoreTables(sql);
 }
 
 async function uniqueSynkCode(sql) {

@@ -1245,15 +1245,25 @@
         synkError.classList.add("hidden");
         synkStatus.textContent = "Scanning…";
         try {
-          const descriptor = await window.KioskFace.descriptorFromVideo(synkVideo, {
+          const first = await window.KioskFace.descriptorFromVideo(synkVideo, {
             rotation: cameraRotation,
             tryAlternates: true,
           });
-          synkStatus.textContent = "Matching Synk member…";
+          synkStatus.textContent = "Confirming live match…";
+          await new Promise((r) => setTimeout(r, 380));
+          const second = await window.KioskFace.descriptorFromVideo(synkVideo, {
+            rotation: cameraRotation,
+            tryAlternates: true,
+          });
+          synkStatus.textContent = "Checking Synk registry…";
           const res = await fetch("/api/synk-auth", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ descriptor }),
+            body: JSON.stringify({
+              descriptors: [first, second],
+              appSlug: "visitor-signin",
+              intent: "visitor",
+            }),
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || "Could not verify Synk ID");
@@ -1291,6 +1301,8 @@
               synkCode: synkCodeInput.value.trim(),
               dateOfBirth: synkDobInput.value,
               secret: synkSecretInput.value,
+              appSlug: "visitor-signin",
+              intent: "visitor",
             }),
           });
           const data = await res.json().catch(() => ({}));

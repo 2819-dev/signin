@@ -397,7 +397,7 @@
             <div>
               <p class="eyebrow">Identity</p>
               <h1><span class="synk-mark" aria-hidden="true"><img src="/synk-logo.svg" alt="" /></span>Synk</h1>
-              <p class="muted">Members verify face-first at the tablet — like CLEAR.</p>
+              <p class="muted">Standalone identity for authorized humans — Visitor Sign-In is one connected app.</p>
             </div>
           </header>
         </div>
@@ -408,9 +408,10 @@
               <img src="/synk-logo.svg" alt="" />
             </div>
             <div>
-              <h2 style="margin:0 0 6px;">Enroll members</h2>
+              <h2 style="margin:0 0 6px;">Synk members</h2>
               <p class="muted" style="margin:0;">
-                Like CLEAR: capture identity once, then they verify face-first at the tablet and get cleared in.
+                Enroll once. Members verify face-first and receive a short-lived Synk pass any connected app can redeem.
+                <a href="/synk" target="_blank" rel="noopener">Open Synk verify</a>
               </p>
             </div>
           </div>
@@ -454,6 +455,34 @@
           <p class="section-label" style="margin-top:4px;">Members</p>
           <div id="synk-profiles" class="synk-profiles"></div>
           <p id="synk-profiles-empty" class="chat-empty-note">No Synk members yet.</p>
+        </section>
+
+        <section class="settings-card" id="synk-apps-settings">
+          <h2 style="margin:0 0 6px;">Connected apps</h2>
+          <p class="muted" style="margin:0 0 12px;">
+            Each app gets an API key to redeem Synk passes. Visitor Sign-In is built in.
+          </p>
+          <form id="synk-app-form" class="synk-enroll-form" autocomplete="off">
+            <div class="field">
+              <label for="synk-app-name">App name</label>
+              <input id="synk-app-name" type="text" maxlength="100" required placeholder="Door access, HQ app…" />
+            </div>
+            <div class="field">
+              <label for="synk-app-slug">Slug</label>
+              <input id="synk-app-slug" type="text" maxlength="60" placeholder="door-access" />
+            </div>
+            <button class="btn btn-secondary" type="submit" id="synk-app-btn">Add app</button>
+            <p id="synk-app-status" class="muted" style="margin:8px 0 0;font-size:0.85rem;"></p>
+          </form>
+          <div id="synk-apps" class="synk-apps" style="margin-top:14px;"></div>
+          <p id="synk-apps-empty" class="chat-empty-note">No apps yet.</p>
+        </section>
+
+        <section class="settings-card" id="synk-activity-settings">
+          <h2 style="margin:0 0 6px;">Recent Synk activity</h2>
+          <p class="muted" style="margin:0 0 12px;">Security audit of verifies, passes, and rate limits.</p>
+          <div id="synk-events" class="synk-events"></div>
+          <p id="synk-events-empty" class="chat-empty-note">No activity yet.</p>
         </section>
       </div>
 
@@ -574,6 +603,16 @@
       const synkProfilesEl = document.getElementById("synk-profiles");
       const synkProfilesEmpty = document.getElementById("synk-profiles-empty");
       let synkProfilesCache = [];
+      const synkAppForm = document.getElementById("synk-app-form");
+      const synkAppName = document.getElementById("synk-app-name");
+      const synkAppSlug = document.getElementById("synk-app-slug");
+      const synkAppBtn = document.getElementById("synk-app-btn");
+      const synkAppStatus = document.getElementById("synk-app-status");
+      const synkAppsEl = document.getElementById("synk-apps");
+      const synkAppsEmpty = document.getElementById("synk-apps-empty");
+      const synkEventsEl = document.getElementById("synk-events");
+      const synkEventsEmpty = document.getElementById("synk-events-empty");
+      let synkAppsCache = [];
 
       const STORAGE_KEY = "visitor_admin_secret";
       const PANE_KEY = "visitor_admin_pane";
@@ -1698,7 +1737,7 @@
           applySettingsToForm(settings);
           await refresh();
           refreshFaces().catch(() => {});
-          refreshSynkProfiles().catch(() => {});
+          refreshSynkHub().catch(() => {});
           pollTimer = setInterval(refresh, 3000);
           if ("Notification" in window && Notification.permission === "granted") {
             ensurePushSubscription().catch(() => {});
@@ -2264,6 +2303,78 @@
         }
       }
 
+      function renderSynkApps(apps) {
+        synkAppsCache = apps || [];
+        if (!synkAppsCache.length) {
+          synkAppsEl.innerHTML = "";
+          synkAppsEmpty.classList.remove("hidden");
+          return;
+        }
+        synkAppsEmpty.classList.add("hidden");
+        synkAppsEl.innerHTML = synkAppsCache
+          .map(
+            (app) => `
+            <article class="synk-app-card ${app.enabled ? "" : "disabled"}" data-synk-app-id="${escapeHtml(app.id)}">
+              <strong>${escapeHtml(app.name)}</strong>
+              <div class="muted" style="font-size:0.82rem;margin:4px 0 10px;">
+                <code>${escapeHtml(app.slug)}</code>
+                ${app.enabled ? "" : " · paused"}
+              </div>
+              <div class="synk-profile-actions">
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-app-action="rotate">
+                  Rotate API key
+                </button>
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-app-action="toggle">
+                  ${app.enabled ? "Pause" : "Enable"}
+                </button>
+                ${
+                  app.slug === "visitor-signin"
+                    ? ""
+                    : `<button class="btn btn-danger btn-compact" type="button" data-synk-app-action="delete">Remove</button>`
+                }
+              </div>
+            </article>
+          `
+          )
+          .join("");
+      }
+
+      function renderSynkEvents(events) {
+        if (!events || !events.length) {
+          synkEventsEl.innerHTML = "";
+          synkEventsEmpty.classList.remove("hidden");
+          return;
+        }
+        synkEventsEmpty.classList.add("hidden");
+        synkEventsEl.innerHTML = events
+          .map((ev) => {
+            const when = ev.createdAt ? formatTime(ev.createdAt) : "";
+            return `
+              <div class="synk-event-row">
+                <strong>${escapeHtml(ev.type || "event")}</strong>
+                <div class="muted">${escapeHtml(when)}${ev.appSlug ? ` · ${escapeHtml(ev.appSlug)}` : ""}${ev.detail ? ` · ${escapeHtml(ev.detail)}` : ""}</div>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      async function refreshSynkApps() {
+        try {
+          const res = await fetch("/api/synk-apps", { headers: adminHeaders() });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not load Synk apps");
+          renderSynkApps(data.apps || []);
+          renderSynkEvents(data.events || []);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      async function refreshSynkHub() {
+        await Promise.all([refreshSynkProfiles(), refreshSynkApps()]);
+      }
+
       async function optimizeSynkPhoto(file) {
         const type = (file.type || "").toLowerCase();
         if (!["image/jpeg", "image/png", "image/webp"].includes(type)) {
@@ -2458,6 +2569,113 @@
         }
       });
 
+      synkAppForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = synkAppName.value.trim();
+        const slug = synkAppSlug.value.trim();
+        if (!name) return;
+        synkAppBtn.disabled = true;
+        synkAppStatus.textContent = "Creating app…";
+        try {
+          const res = await fetch("/api/synk-apps", {
+            method: "POST",
+            headers: adminHeaders(),
+            body: JSON.stringify({ name, slug: slug || undefined }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not create app");
+          synkAppForm.reset();
+          synkAppStatus.textContent = data.apiKey
+            ? `Created. API key (copy now): ${data.apiKey}`
+            : "Created";
+          if (data.apiKey) {
+            try {
+              await navigator.clipboard.writeText(data.apiKey);
+              showToast("App created — API key copied");
+            } catch (_) {
+              showToast("App created — copy the API key shown below");
+            }
+          } else {
+            showToast("App created");
+          }
+          await refreshSynkApps();
+        } catch (err) {
+          synkAppStatus.textContent = err.message || "Could not create app";
+          showToast(err.message || "Could not create app");
+        } finally {
+          synkAppBtn.disabled = false;
+        }
+      });
+
+      synkAppsEl.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-synk-app-action]");
+        const card = e.target.closest("[data-synk-app-id]");
+        if (!btn || !card) return;
+        const id = card.getAttribute("data-synk-app-id");
+        const action = btn.getAttribute("data-synk-app-action");
+        const app = synkAppsCache.find((a) => a.id === id);
+        if (!app) return;
+
+        if (action === "rotate") {
+          if (!confirm(`Rotate API key for ${app.name}? The old key stops working.`)) return;
+          try {
+            const res = await fetch("/api/synk-apps", {
+              method: "POST",
+              headers: adminHeaders(),
+              body: JSON.stringify({ action: "rotate-key", id }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not rotate key");
+            synkAppStatus.textContent = data.apiKey
+              ? `New API key (copy now): ${data.apiKey}`
+              : "Key rotated";
+            if (data.apiKey) {
+              try {
+                await navigator.clipboard.writeText(data.apiKey);
+                showToast("New API key copied");
+              } catch (_) {
+                showToast("Key rotated — copy it from the status line");
+              }
+            }
+            await refreshSynkApps();
+          } catch (err) {
+            showToast(err.message || "Could not rotate key");
+          }
+        }
+
+        if (action === "toggle") {
+          try {
+            const res = await fetch("/api/synk-apps", {
+              method: "PATCH",
+              headers: adminHeaders(),
+              body: JSON.stringify({ id, enabled: !app.enabled }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not update app");
+            showToast(app.enabled ? "App paused" : "App enabled");
+            await refreshSynkApps();
+          } catch (err) {
+            showToast(err.message || "Could not update app");
+          }
+        }
+
+        if (action === "delete") {
+          if (!confirm(`Remove app ${app.name}?`)) return;
+          try {
+            const res = await fetch(`/api/synk-apps?id=${encodeURIComponent(id)}`, {
+              method: "DELETE",
+              headers: adminHeaders(),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not remove app");
+            showToast("App removed");
+            await refreshSynkApps();
+          } catch (err) {
+            showToast(err.message || "Could not remove app");
+          }
+        }
+      });
+
       chatCloseSessionBtn.addEventListener("click", async () => {
         if (!activeChatId) return;
         const currentlyClosed = chatCloseSessionBtn.dataset.status === "closed";
@@ -2545,7 +2763,7 @@
           .then(([settings]) => {
             applySettingsToForm(settings);
             refreshFaces().catch(() => {});
-            refreshSynkProfiles().catch(() => {});
+            refreshSynkHub().catch(() => {});
             pollTimer = setInterval(refresh, 3000);
             if ("Notification" in window && Notification.permission === "granted") {
               ensurePushSubscription().catch(() => {});

@@ -17,9 +17,19 @@
   status = 200
 
 [[redirects]]
+  from = "/synk"
+  to = "/synk.html"
+  status = 200
+
+[[redirects]]
   from = "/chat"
   to = "/chat.html"
   status = 200
+
+[[headers]]
+  for = "/synk.html"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
 
 [[headers]]
   for = "/*"

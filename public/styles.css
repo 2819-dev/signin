@@ -1340,6 +1340,94 @@ html[data-theme="dark"] .synk-code {
   border-style: dashed;
 }
 
+body.synk-product {
+  min-height: 100dvh;
+  color: #eef3ff;
+  background: #070b14;
+}
+
+body.synk-product .sand-waves path {
+  stroke: #2b6bff;
+}
+
+.synk-shell {
+  width: min(560px, 100%);
+  margin: 0 auto;
+  padding:
+    max(24px, env(safe-area-inset-top))
+    16px
+    calc(28px + env(safe-area-inset-bottom));
+  display: grid;
+  gap: 18px;
+}
+
+.synk-product-header {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 14px;
+  align-items: center;
+}
+
+.synk-product-header h1 {
+  margin: 0 0 6px;
+  font-size: 1.55rem;
+  letter-spacing: -0.02em;
+}
+
+.synk-product-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(122, 162, 255, 0.22);
+  color: #eef3ff;
+}
+
+.synk-product-card .muted,
+.synk-product-card .section-label,
+.synk-product .muted {
+  color: rgba(190, 205, 255, 0.72);
+}
+
+.synk-product-card label,
+.synk-product-card h2 {
+  color: #f4f7ff;
+}
+
+.synk-pass-box {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(43, 107, 255, 0.35);
+  background: rgba(43, 107, 255, 0.08);
+}
+
+.synk-apps,
+.synk-events {
+  display: grid;
+  gap: 10px;
+}
+
+.synk-app-card,
+.synk-event-row {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  background: var(--surface-solid);
+}
+
+.synk-app-card.disabled {
+  opacity: 0.62;
+}
+
+.synk-app-card code {
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.synk-event-row {
+  display: grid;
+  gap: 2px;
+  font-size: 0.86rem;
+}
+
 .display-live-pill {
   display: inline-flex;
   align-items: center;

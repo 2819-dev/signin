@@ -1,8 +1,16 @@
 const { getSql, json, mapRow } = require("./lib/db");
-const { verifySecret } = require("./lib/synk");
 const { notifyAdmins } = require("./lib/push");
+const {
+  verifySecret,
+  clientIp,
+  sleep,
+  ensureSynkCoreTables,
+  logSynkEvent,
+  assertNotRateLimited,
+  issuePass,
+} = require("./lib/synk");
 
-const MATCH_THRESHOLD = 0.55;
+const MATCH_THRESHOLD = 0.52;
 const POLICIES = new Set(["pending", "autofill", "auto_admit", "auto_deny"]);
 
 function normalizeLookup(value) {
@@ -53,39 +61,21 @@ function euclideanDistance(a, b) {
   return Math.sqrt(sum);
 }
 
-async function ensureSynkTables(sql) {
-  await sql`
-    CREATE TABLE IF NOT EXISTS synk_profiles (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      synk_code TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      date_of_birth DATE NOT NULL,
-      secret_hash TEXT,
-      photo_url TEXT NOT NULL DEFAULT '',
-      descriptor JSONB,
-      policy TEXT NOT NULL DEFAULT 'pending',
-      enabled BOOLEAN NOT NULL DEFAULT TRUE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-  await sql`ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS descriptor JSONB`;
-  await sql`ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS policy TEXT NOT NULL DEFAULT 'pending'`;
-  await sql`ALTER TABLE synk_profiles ALTER COLUMN secret_hash DROP NOT NULL`;
+function publicProfile(row) {
+  return {
+    id: row.id,
+    synkCode: row.synk_code,
+    name: row.name,
+    photoUrl: row.photo_url || "",
+    policy: normalizePolicy(row.policy),
+  };
 }
 
-async function resolveSynkMember(sql, matched) {
+async function applyVisitorIntent(sql, matched) {
   const policy = normalizePolicy(matched.policy);
-  const profile = {
-    id: matched.id,
-    synkCode: matched.synk_code,
-    name: matched.name,
-    photoUrl: matched.photo_url || "",
-    policy,
-  };
 
   if (policy === "autofill") {
-    return { ok: true, profile, request: null };
+    return { request: null, policy };
   }
 
   if (policy === "auto_admit") {
@@ -107,7 +97,7 @@ async function resolveSynkMember(sql, matched) {
     } catch (err) {
       console.error("synk admit notify failed", err.message || err);
     }
-    return { ok: true, profile, request };
+    return { request, policy };
   }
 
   if (policy === "auto_deny") {
@@ -129,10 +119,9 @@ async function resolveSynkMember(sql, matched) {
     } catch (err) {
       console.error("synk deny notify failed", err.message || err);
     }
-    return { ok: true, profile, request };
+    return { request, policy };
   }
 
-  // Default: pending — admin must accept or deny
   const inserted = await sql`
     INSERT INTO visitor_requests (name, reason, status, urgent)
     VALUES (${matched.name}, 'Synk ID', 'pending', FALSE)
@@ -151,7 +140,7 @@ async function resolveSynkMember(sql, matched) {
   } catch (err) {
     console.error("synk pending notify failed", err.message || err);
   }
-  return { ok: true, profile, request };
+  return { request, policy };
 }
 
 exports.handler = async (event) => {
@@ -163,6 +152,8 @@ exports.handler = async (event) => {
     return json(405, { error: "Method not allowed" });
   }
 
+  const ip = clientIp(event);
+
   try {
     let body;
     try {
@@ -172,10 +163,41 @@ exports.handler = async (event) => {
     }
 
     const sql = getSql();
-    await ensureSynkTables(sql);
+    await ensureSynkCoreTables(sql);
 
-    const descriptor = normalizeDescriptor(body.descriptor);
-    if (descriptor) {
+    if (!(await assertNotRateLimited(sql, ip))) {
+      await sleep(400);
+      return json(429, { error: "Too many Synk attempts. Wait a minute and try again." });
+    }
+
+    const appSlug = String(body.appSlug || body.app || "synk").trim().slice(0, 80) || "synk";
+    const intent = String(body.intent || "").trim().toLowerCase(); // visitor | identity
+    const descriptors = Array.isArray(body.descriptors)
+      ? body.descriptors.map(normalizeDescriptor).filter(Boolean)
+      : [];
+    const single = normalizeDescriptor(body.descriptor);
+    if (single) descriptors.unshift(single);
+
+    let matched = null;
+    let method = null;
+
+    if (descriptors.length) {
+      // Liveness-ish: if two frames provided, they must be consistent.
+      if (descriptors.length >= 2) {
+        const drift = euclideanDistance(descriptors[0], descriptors[1]);
+        if (!Number.isFinite(drift) || drift > 0.38) {
+          await logSynkEvent(sql, {
+            eventType: "verify_fail",
+            appSlug,
+            ip,
+            detail: "unstable biometrics",
+          });
+          await sleep(350);
+          return json(401, { error: "Could not verify Synk ID" });
+        }
+      }
+
+      const probe = descriptors[0];
       const rows = await sql`
         SELECT id, synk_code, name, photo_url, descriptor, policy, enabled
         FROM synk_profiles
@@ -187,7 +209,6 @@ exports.handler = async (event) => {
 
       let best = null;
       let bestDistance = Infinity;
-
       for (const row of rows) {
         let stored = row.descriptor;
         if (typeof stored === "string") {
@@ -198,63 +219,86 @@ exports.handler = async (event) => {
           }
         }
         if (!Array.isArray(stored)) continue;
-        const distance = euclideanDistance(descriptor, stored);
+        const distance = euclideanDistance(probe, stored);
         if (distance < bestDistance) {
           bestDistance = distance;
           best = row;
         }
       }
 
-      if (!best || bestDistance > MATCH_THRESHOLD) {
-        return json(401, {
-          error: "No Synk member matched. Try again or use your Synk code.",
-          distance: Number.isFinite(bestDistance) ? bestDistance : null,
-        });
+      if (best && bestDistance <= MATCH_THRESHOLD) {
+        matched = best;
+        method = "biometric";
+      }
+    } else {
+      const lookup = normalizeLookup(body.synkCode || body.synkId || body.name);
+      const secret = normalizeSecret(body.secret);
+      const dateOfBirth = normalizeDob(body.dateOfBirth);
+      if (!lookup || !secret || !dateOfBirth) {
+        await logSynkEvent(sql, { eventType: "verify_fail", appSlug, ip, detail: "missing backup fields" });
+        await sleep(250);
+        return json(400, { error: "Could not verify Synk ID" });
       }
 
-      return json(200, await resolveSynkMember(sql, best));
-    }
+      const codeLookup = lookup.toUpperCase();
+      const rows = await sql`
+        SELECT id, synk_code, name, date_of_birth, secret_hash, photo_url, policy, enabled
+        FROM synk_profiles
+        WHERE enabled = TRUE
+          AND secret_hash IS NOT NULL
+          AND (
+            UPPER(synk_code) = ${codeLookup}
+            OR LOWER(name) = ${lookup.toLowerCase()}
+          )
+        ORDER BY updated_at DESC
+        LIMIT 5
+      `;
 
-    const lookup = normalizeLookup(body.synkCode || body.synkId || body.name);
-    const secret = normalizeSecret(body.secret);
-    const dateOfBirth = normalizeDob(body.dateOfBirth);
-
-    if (!lookup) return json(400, { error: "Look at the camera, or enter your Synk ID" });
-    if (!secret) return json(400, { error: "Secret is required for code sign-in" });
-    if (!dateOfBirth) return json(400, { error: "Date of birth is required for code sign-in" });
-
-    const codeLookup = lookup.toUpperCase();
-    const rows = await sql`
-      SELECT id, synk_code, name, date_of_birth, secret_hash, photo_url, policy, enabled
-      FROM synk_profiles
-      WHERE enabled = TRUE
-        AND secret_hash IS NOT NULL
-        AND (
-          UPPER(synk_code) = ${codeLookup}
-          OR LOWER(name) = ${lookup.toLowerCase()}
-        )
-      ORDER BY updated_at DESC
-      LIMIT 5
-    `;
-
-    if (!rows.length) {
-      return json(401, { error: "Synk ID not recognized" });
-    }
-
-    let matched = null;
-    for (const row of rows) {
-      const dob = toDobString(row.date_of_birth);
-      if (dob !== dateOfBirth) continue;
-      if (!verifySecret(secret, row.secret_hash)) continue;
-      matched = row;
-      break;
+      for (const row of rows) {
+        if (toDobString(row.date_of_birth) !== dateOfBirth) continue;
+        if (!verifySecret(secret, row.secret_hash)) continue;
+        matched = row;
+        method = "backup";
+        break;
+      }
     }
 
     if (!matched) {
+      await logSynkEvent(sql, { eventType: "verify_fail", appSlug, ip, detail: method || "no match" });
+      await sleep(400);
       return json(401, { error: "Could not verify Synk ID" });
     }
 
-    return json(200, await resolveSynkMember(sql, matched));
+    const pass = await issuePass(sql, {
+      profileId: matched.id,
+      appSlug,
+      purpose: intent === "visitor" ? "visitor" : "identity",
+    });
+
+    await logSynkEvent(sql, {
+      eventType: "verify_ok",
+      profileId: matched.id,
+      appSlug,
+      ip,
+      detail: method || "ok",
+    });
+
+    const profile = publicProfile(matched);
+    let request = null;
+    if (intent === "visitor" || appSlug === "visitor-signin") {
+      const bridge = await applyVisitorIntent(sql, matched);
+      request = bridge.request;
+      profile.policy = bridge.policy;
+    }
+
+    return json(200, {
+      ok: true,
+      product: "synk",
+      method,
+      profile,
+      pass,
+      request,
+    });
   } catch (err) {
     console.error(err);
     return json(500, { error: "Server error" });

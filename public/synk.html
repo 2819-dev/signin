@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#0b1220" />
+    <meta name="color-scheme" content="dark" />
+    <title>Synk ID</title>
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/force-refresh.js" defer></script>
+    <script src="/face.js" defer></script>
+  </head>
+  <body class="synk-product">
+    <div class="sand-waves" aria-hidden="true">
+      <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+        <path d="M-80 110 C 140 70, 300 150, 500 118 S 880 60, 1100 112 S 1380 170, 1560 120" stroke-width="1.15" opacity="0.42"/>
+        <path d="M-80 280 C 160 235, 340 315, 560 275 S 940 220, 1160 280 S 1430 340, 1560 295" stroke-width="1.45" opacity="0.5"/>
+        <path d="M-80 520 C 180 470, 400 560, 640 515 S 1040 450, 1280 520 S 1480 590, 1560 540" stroke-width="1.35" opacity="0.4"/>
+      </svg>
+    </div>
+
+    <main class="synk-shell">
+      <header class="synk-product-header">
+        <div class="synk-hero-logo" aria-hidden="true">
+          <img src="/synk-logo.svg" alt="" />
+        </div>
+        <div>
+          <p class="eyebrow">Synk ID</p>
+          <h1>Identity for authorized humans</h1>
+          <p class="subtitle">
+            Face-first verification — enroll once, use across your apps.
+          </p>
+        </div>
+      </header>
+
+      <section class="settings-card synk-product-card">
+        <div id="synk-pod-view">
+          <p class="section-label">Verify</p>
+          <h2 style="margin:0 0 8px;">Look at the camera</h2>
+          <p class="muted" id="synk-pod-hint">Center your face. Synk checks a live match, then issues a pass.</p>
+          <div class="synk-pod-frame">
+            <video id="synk-video" class="face-video synk-video" playsinline muted autoplay></video>
+            <div class="synk-pod-ring" aria-hidden="true"></div>
+          </div>
+          <p id="synk-status" class="muted" style="margin:0;">Tap Verify to start</p>
+          <p id="synk-error" class="error hidden"></p>
+          <div class="btn-row" style="margin-top:12px;">
+            <button class="btn btn-secondary" type="button" id="synk-start-btn">Start camera</button>
+            <button class="btn btn-primary" type="button" id="synk-scan-btn" disabled>Verify</button>
+          </div>
+          <button class="btn btn-secondary btn-compact" type="button" id="synk-use-code-btn" style="margin-top:10px;width:100%;">
+            Use Synk code instead
+          </button>
+        </div>
+
+        <div id="synk-code-view" class="hidden">
+          <p class="section-label">Backup</p>
+          <h2 style="margin:0 0 8px;">Synk code sign-in</h2>
+          <form id="synk-signin-form" autocomplete="off">
+            <div class="field">
+              <label for="synk-code-input">Synk ID or name</label>
+              <input id="synk-code-input" type="text" maxlength="100" required placeholder="SK-XXXX-XXXX" />
+            </div>
+            <div class="field">
+              <label for="synk-dob-input">Date of birth</label>
+              <input id="synk-dob-input" type="date" required />
+            </div>
+            <div class="field">
+              <label for="synk-secret-input">Backup secret</label>
+              <input id="synk-secret-input" type="password" maxlength="200" required />
+            </div>
+            <p id="synk-code-error" class="error hidden"></p>
+            <div class="btn-row">
+              <button class="btn btn-secondary" type="button" id="synk-back-pod-btn">Back to camera</button>
+              <button class="btn btn-primary" type="submit">Verify</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="synk-success-view" class="hidden">
+          <p class="section-label">Cleared</p>
+          <h2 id="synk-success-title" style="margin:0 0 8px;">Verified</h2>
+          <p class="muted" id="synk-success-copy">Your Synk pass is ready for connected apps.</p>
+          <div class="synk-pass-box">
+            <div class="muted" style="font-size:0.78rem;">Member</div>
+            <strong id="synk-success-name">—</strong>
+            <div class="synk-code" id="synk-success-code" style="margin-top:8px;">—</div>
+            <div class="muted" style="margin-top:12px;font-size:0.82rem;">
+              Pass expires in <span id="synk-pass-ttl">120</span>s
+            </div>
+          </div>
+          <button class="btn btn-secondary" type="button" id="synk-again-btn" style="margin-top:14px;width:100%;">
+            Verify someone else
+          </button>
+        </div>
+      </section>
+
+      <p class="muted" style="text-align:center;font-size:0.82rem;margin:0;">
+        Synk is a standalone identity product. Visitor Sign-In is one connected app.
+      </p>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(location.search);
+      const appSlug = (params.get("app") || "synk").slice(0, 80);
+      const intent = (params.get("intent") || "identity").slice(0, 40);
+      const returnUrl = params.get("return") || "";
+
+      const podView = document.getElementById("synk-pod-view");
+      const codeView = document.getElementById("synk-code-view");
+      const successView = document.getElementById("synk-success-view");
+      const video = document.getElementById("synk-video");
+      const statusEl = document.getElementById("synk-status");
+      const hintEl = document.getElementById("synk-pod-hint");
+      const errorEl = document.getElementById("synk-error");
+      const startBtn = document.getElementById("synk-start-btn");
+      const scanBtn = document.getElementById("synk-scan-btn");
+      const useCodeBtn = document.getElementById("synk-use-code-btn");
+      const backPodBtn = document.getElementById("synk-back-pod-btn");
+      const form = document.getElementById("synk-signin-form");
+      const codeError = document.getElementById("synk-code-error");
+      const againBtn = document.getElementById("synk-again-btn");
+
+      let stream = null;
+      let busy = false;
+      let cameraRotation = 90;
+
+      async function loadRotation() {
+        try {
+          const res = await fetch("/api/kiosk-status");
+          const data = await res.json().catch(() => ({}));
+          const rot = Number(data.settings && data.settings.cameraRotation);
+          if ([0, 90, 180, 270].includes(rot)) cameraRotation = rot;
+        } catch (_) {}
+        if (window.KioskFace) window.KioskFace.setCameraRotation(cameraRotation);
+      }
+
+      function stopCamera() {
+        if (window.KioskFace) window.KioskFace.stopCamera(video);
+        stream = null;
+      }
+
+      function show(view) {
+        podView.classList.toggle("hidden", view !== "pod");
+        codeView.classList.toggle("hidden", view !== "code");
+        successView.classList.toggle("hidden", view !== "success");
+      }
+
+      async function startCamera() {
+        errorEl.classList.add("hidden");
+        if (!window.KioskFace) {
+          errorEl.textContent = "Camera library still loading";
+          errorEl.classList.remove("hidden");
+          return;
+        }
+        statusEl.textContent = "Starting camera…";
+        scanBtn.disabled = true;
+        try {
+          await window.KioskFace.ensureFaceApi();
+          stream = await window.KioskFace.startCamera(video, { rotation: cameraRotation });
+          statusEl.textContent = "Hold still, then tap Verify";
+          scanBtn.disabled = false;
+        } catch (err) {
+          errorEl.textContent = err.message || "Could not open camera";
+          errorEl.classList.remove("hidden");
+          statusEl.textContent = "Camera unavailable";
+        }
+      }
+
+      async function dualDescriptors() {
+        const a = await window.KioskFace.descriptorFromVideo(video, {
+          rotation: cameraRotation,
+          tryAlternates: true,
+        });
+        statusEl.textContent = "Confirming live match…";
+        await new Promise((r) => setTimeout(r, 380));
+        const b = await window.KioskFace.descriptorFromVideo(video, {
+          rotation: cameraRotation,
+          tryAlternates: true,
+        });
+        return [a, b];
+      }
+
+      function showSuccess(data) {
+        stopCamera();
+        document.getElementById("synk-success-name").textContent =
+          (data.profile && data.profile.name) || "Member";
+        document.getElementById("synk-success-code").textContent =
+          (data.profile && data.profile.synkCode) || "";
+        document.getElementById("synk-pass-ttl").textContent =
+          (data.pass && data.pass.ttlSeconds) || 120;
+        document.getElementById("synk-success-copy").textContent =
+          intent === "visitor"
+            ? "Visitor Sign-In received your Synk pass."
+            : "Your Synk pass is ready for connected apps.";
+        show("success");
+
+        if (returnUrl && data.pass && data.pass.token) {
+          try {
+            const url = new URL(returnUrl, location.origin);
+            url.searchParams.set("synk_pass", data.pass.token);
+            if (data.pass.assertion) url.searchParams.set("synk_assertion", data.pass.assertion);
+            setTimeout(() => {
+              location.href = url.toString();
+            }, 900);
+          } catch (_) {}
+        }
+      }
+
+      async function verifyPayload(payload) {
+        const res = await fetch("/api/synk-auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, appSlug, intent }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not verify Synk ID");
+        showSuccess(data);
+      }
+
+      startBtn.addEventListener("click", startCamera);
+      scanBtn.addEventListener("click", async () => {
+        if (busy || !stream) return;
+        busy = true;
+        scanBtn.disabled = true;
+        errorEl.classList.add("hidden");
+        statusEl.textContent = "Scanning…";
+        try {
+          const descriptors = await dualDescriptors();
+          statusEl.textContent = "Checking Synk registry…";
+          await verifyPayload({ descriptors });
+        } catch (err) {
+          errorEl.textContent = err.message || "Could not verify";
+          errorEl.classList.remove("hidden");
+          statusEl.textContent = "Try again";
+          scanBtn.disabled = false;
+        } finally {
+          busy = false;
+        }
+      });
+
+      useCodeBtn.addEventListener("click", () => {
+        stopCamera();
+        show("code");
+      });
+      backPodBtn.addEventListener("click", () => {
+        show("pod");
+        startCamera();
+      });
+      againBtn.addEventListener("click", () => {
+        show("pod");
+        startCamera();
+      });
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        codeError.classList.add("hidden");
+        try {
+          await verifyPayload({
+            synkCode: document.getElementById("synk-code-input").value.trim(),
+            dateOfBirth: document.getElementById("synk-dob-input").value,
+            secret: document.getElementById("synk-secret-input").value,
+          });
+        } catch (err) {
+          codeError.textContent = err.message || "Could not verify";
+          codeError.classList.remove("hidden");
+        }
+      });
+
+      loadRotation().then(() => {
+        if (params.get("autostart") === "1") startCamera();
+      });
+    </script>
+  </body>
+</html>
