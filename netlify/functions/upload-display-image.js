@@ -1,0 +1,70 @@
+const { getStore } = require("@netlify/blobs");
+const { json, requireAdmin } = require("./lib/db");
+
+const MAX_BYTES = 4.5 * 1024 * 1024;
+const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+exports.handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") {
+    return json(204, {});
+  }
+
+  if (event.httpMethod !== "POST") {
+    return json(405, { error: "Method not allowed" });
+  }
+
+  const auth = requireAdmin(event);
+  if (!auth.ok) return auth.response;
+
+  let body;
+  try {
+    body = JSON.parse(event.body || "{}");
+  } catch {
+    return json(400, { error: "Invalid JSON" });
+  }
+
+  const contentType = String(body.contentType || "").toLowerCase().split(";")[0].trim();
+  if (!ALLOWED.has(contentType)) {
+    return json(400, { error: "Use a JPG, PNG, WebP, or GIF" });
+  }
+
+  const raw = String(body.data || "");
+  const base64 = raw.includes(",") ? raw.split(",").pop() : raw;
+  if (!base64) {
+    return json(400, { error: "Missing image data" });
+  }
+
+  let buffer;
+  try {
+    buffer = Buffer.from(base64, "base64");
+  } catch {
+    return json(400, { error: "Could not read image data" });
+  }
+
+  if (!buffer.length) {
+    return json(400, { error: "Could not read image" });
+  }
+  if (buffer.length > MAX_BYTES) {
+    return json(400, { error: "Image too large (max about 4MB)" });
+  }
+
+  try {
+    const store = getStore("kiosk-media");
+    await store.set("display-image", buffer, {
+      metadata: {
+        contentType,
+        updatedAt: new Date().toISOString(),
+        fileName: String(body.fileName || "").slice(0, 120),
+      },
+    });
+
+    return json(200, {
+      url: `/api/display-image?v=${Date.now()}`,
+      contentType,
+      bytes: buffer.length,
+    });
+  } catch (err) {
+    console.error(err);
+    return json(500, { error: "Could not save image" });
+  }
+};

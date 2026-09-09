@@ -26,6 +26,9 @@ function normalizeDisplayMode(value) {
 function normalizeImageUrl(value) {
   const raw = String(value || "").trim().slice(0, 2000);
   if (!raw) return "";
+  if (raw.startsWith("/api/display-image")) {
+    return raw.slice(0, 200);
+  }
   try {
     const url = new URL(raw);
     if (url.protocol !== "http:" && url.protocol !== "https:") return "";

@@ -684,7 +684,95 @@ html[data-theme="dark"] .hero-pane {
   padding:
     max(16px, env(safe-area-inset-top))
     16px
-    max(32px, env(safe-area-inset-bottom));
+    calc(88px + env(safe-area-inset-bottom));
+}
+
+.admin-pane {
+  min-height: 0;
+}
+
+.admin-tabbar {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(100%, 740px);
+  z-index: 40;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--theme-color) 88%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid var(--line);
+}
+
+.admin-tab {
+  border: 1px solid var(--line-strong);
+  background: var(--surface-solid);
+  color: var(--ink-soft);
+  border-radius: 16px;
+  padding: 12px 10px;
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-tab.active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
+.display-upload-preview {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.display-upload-preview img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(15, 15, 15, 0.04);
+}
+
+.url-fallback {
+  margin-top: 12px;
+}
+
+.url-fallback summary {
+  cursor: pointer;
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.url-fallback input {
+  margin-top: 10px;
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: var(--input-bg);
+  color: var(--ink);
+}
+
+#display-image-file {
+  width: 100%;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  background: rgba(15, 15, 15, 0.02);
+  color: var(--ink);
+}
+
+html[data-theme="dark"] #display-image-file {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .admin-top {
@@ -961,7 +1049,7 @@ html[data-theme="dark"] .pill-pending {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: max(22px, env(safe-area-inset-bottom));
+  bottom: calc(78px + env(safe-area-inset-bottom));
   transform: translateX(-50%) translateY(8px);
   background: var(--ink);
   color: var(--bg);
@@ -1031,6 +1119,12 @@ html[data-theme="dark"] .pill-pending {
 
   .admin-shell {
     max-width: 840px;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .admin-tabbar {
+    width: min(100%, 840px);
     padding-left: 24px;
     padding-right: 24px;
   }

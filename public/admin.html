@@ -56,129 +56,167 @@
 
     <!-- Panel -->
     <div id="panel-view" class="admin-shell hidden">
-      <div class="admin-top">
-        <header class="admin-header">
-          <div>
-            <p class="eyebrow">Live</p>
-            <h1>Requests <span id="pending-count" class="badge hidden">0</span></h1>
-            <p class="muted" id="connection-status">Connecting…</p>
-          </div>
-          <div class="admin-header-actions">
-            <button class="btn btn-secondary btn-compact" type="button" id="notify-btn">
-              Enable alerts
-            </button>
-          </div>
-        </header>
-        <p class="muted" id="notify-hint" style="margin: 8px 0 0; font-size: 0.85rem;">
-          On iPhone, use the Home Screen app for background alerts.
-        </p>
+      <div id="pane-signin" class="admin-pane">
+        <div class="admin-top">
+          <header class="admin-header">
+            <div>
+              <p class="eyebrow">Live</p>
+              <h1>Requests <span id="pending-count" class="badge hidden">0</span></h1>
+              <p class="muted" id="connection-status">Connecting…</p>
+            </div>
+            <div class="admin-header-actions">
+              <button class="btn btn-secondary btn-compact" type="button" id="notify-btn">
+                Enable alerts
+              </button>
+            </div>
+          </header>
+          <p class="muted" id="notify-hint" style="margin: 8px 0 0; font-size: 0.85rem;">
+            On iPhone, use the Home Screen app for background alerts.
+          </p>
+        </div>
+
+        <p class="section-label">Queue</p>
+        <div id="list" class="request-list"></div>
+        <div id="empty" class="empty hidden">No requests yet.</div>
       </div>
 
-      <section class="settings-card" id="kiosk-settings">
-        <h2>Kiosk</h2>
-        <p class="muted" style="margin: 0 0 4px;">Control visitor access and basic options.</p>
-        <div class="settings-row">
-          <div>
-            <strong id="open-label">Accepting visitors</strong>
-            <div class="muted" id="open-hint" style="font-size: 0.85rem;">Kiosk shows the sign-in form</div>
-          </div>
-          <label class="toggle" aria-label="Accepting visitors">
-            <input type="checkbox" id="is-open-toggle" checked />
-            <span></span>
-          </label>
-        </div>
-        <div class="settings-row">
-          <div>
-            <strong id="urgent-label">Urgent button</strong>
-            <div class="muted" id="urgent-hint" style="font-size: 0.85rem;">Show urgent sign-in on the kiosk</div>
-          </div>
-          <label class="toggle" aria-label="Urgent button">
-            <input type="checkbox" id="urgent-toggle" checked />
-            <span></span>
-          </label>
-        </div>
-        <div class="settings-row">
-          <div>
-            <strong id="theme-label">Dark mode</strong>
-            <div class="muted" id="theme-hint" style="font-size: 0.85rem;">Applies to admin and kiosk</div>
-          </div>
-          <label class="toggle" aria-label="Dark mode">
-            <input type="checkbox" id="theme-toggle" />
-            <span></span>
-          </label>
-        </div>
-        <div id="closed-editor">
-          <div class="field">
-            <label for="closed-title">Closed title</label>
-            <input id="closed-title" type="text" maxlength="80" value="Closed" />
-          </div>
-          <div class="field">
-            <label for="closed-message">Closed message</label>
-            <textarea id="closed-message" maxlength="500">Not accepting visitors right now.</textarea>
-          </div>
-          <button class="btn btn-secondary" type="button" id="save-closed-btn">Save closed sign</button>
-        </div>
-      </section>
-
-      <section class="settings-card" id="display-settings">
-        <h2>Tablet display</h2>
-        <p class="muted" style="margin: 0 0 12px;">
-          Take over the kiosk screen with a custom message, image, poster, or clock.
-        </p>
-
-        <div class="mode-grid" id="display-mode-grid" role="radiogroup" aria-label="Display mode">
-          <button type="button" class="mode-chip active" data-mode="signin">Sign-in</button>
-          <button type="button" class="mode-chip" data-mode="message">Message</button>
-          <button type="button" class="mode-chip" data-mode="image">Image</button>
-          <button type="button" class="mode-chip" data-mode="poster">Poster</button>
-          <button type="button" class="mode-chip" data-mode="clock">Clock</button>
-        </div>
-        <input type="hidden" id="display-mode" value="signin" />
-
-        <div id="display-editor" class="display-editor hidden">
-          <div class="field" id="display-title-field">
-            <label for="display-title">Title</label>
-            <input id="display-title" type="text" maxlength="120" placeholder="What’s on the screen" />
-          </div>
-          <div class="field" id="display-message-field">
-            <label for="display-message">Message</label>
-            <textarea id="display-message" maxlength="1000" placeholder="Custom text for the tablet…"></textarea>
-          </div>
-          <div class="field" id="display-image-field">
-            <label for="display-image-url">Image URL</label>
-            <input
-              id="display-image-url"
-              type="url"
-              maxlength="2000"
-              placeholder="https://…"
-              inputmode="url"
-              autocomplete="off"
-            />
-            <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
-              Use a direct image link (https). The tablet will show it full-screen.
-            </p>
-          </div>
-          <div class="settings-row" id="display-clock-row">
+      <div id="pane-control" class="admin-pane hidden">
+        <div class="admin-top">
+          <header class="admin-header">
             <div>
-              <strong>Show clock</strong>
-              <div class="muted" style="font-size: 0.85rem;">Small live clock on the custom screen</div>
+              <p class="eyebrow">Tablet</p>
+              <h1>Control</h1>
+              <p class="muted">Manage access and what the kiosk shows.</p>
             </div>
-            <label class="toggle" aria-label="Show clock">
-              <input type="checkbox" id="display-show-clock" />
+          </header>
+        </div>
+
+        <section class="settings-card" id="kiosk-settings">
+          <h2>Kiosk</h2>
+          <p class="muted" style="margin: 0 0 4px;">Control visitor access and basic options.</p>
+          <div class="settings-row">
+            <div>
+              <strong id="open-label">Accepting visitors</strong>
+              <div class="muted" id="open-hint" style="font-size: 0.85rem;">Kiosk shows the sign-in form</div>
+            </div>
+            <label class="toggle" aria-label="Accepting visitors">
+              <input type="checkbox" id="is-open-toggle" checked />
               <span></span>
             </label>
           </div>
-          <button class="btn btn-primary" type="button" id="save-display-btn">Update tablet display</button>
-        </div>
+          <div class="settings-row">
+            <div>
+              <strong id="urgent-label">Urgent button</strong>
+              <div class="muted" id="urgent-hint" style="font-size: 0.85rem;">Show urgent sign-in on the kiosk</div>
+            </div>
+            <label class="toggle" aria-label="Urgent button">
+              <input type="checkbox" id="urgent-toggle" checked />
+              <span></span>
+            </label>
+          </div>
+          <div class="settings-row">
+            <div>
+              <strong id="theme-label">Dark mode</strong>
+              <div class="muted" id="theme-hint" style="font-size: 0.85rem;">Applies to admin and kiosk</div>
+            </div>
+            <label class="toggle" aria-label="Dark mode">
+              <input type="checkbox" id="theme-toggle" />
+              <span></span>
+            </label>
+          </div>
+          <div id="closed-editor">
+            <div class="field">
+              <label for="closed-title">Closed title</label>
+              <input id="closed-title" type="text" maxlength="80" value="Closed" />
+            </div>
+            <div class="field">
+              <label for="closed-message">Closed message</label>
+              <textarea id="closed-message" maxlength="500">Not accepting visitors right now.</textarea>
+            </div>
+            <button class="btn btn-secondary" type="button" id="save-closed-btn">Save closed sign</button>
+          </div>
+        </section>
 
-        <p class="muted" id="display-mode-hint" style="margin: 12px 0 0; font-size: 0.85rem;">
-          Sign-in mode uses the normal visitor flow.
-        </p>
-      </section>
+        <section class="settings-card" id="display-settings">
+          <h2>Tablet display</h2>
+          <p class="muted" style="margin: 0 0 12px;">
+            Take over the kiosk screen with a custom message, image, poster, or clock.
+          </p>
 
-      <p class="section-label">Queue</p>
-      <div id="list" class="request-list"></div>
-      <div id="empty" class="empty hidden">No requests yet.</div>
+          <div class="mode-grid" id="display-mode-grid" role="radiogroup" aria-label="Display mode">
+            <button type="button" class="mode-chip active" data-mode="signin">Sign-in</button>
+            <button type="button" class="mode-chip" data-mode="message">Message</button>
+            <button type="button" class="mode-chip" data-mode="image">Image</button>
+            <button type="button" class="mode-chip" data-mode="poster">Poster</button>
+            <button type="button" class="mode-chip" data-mode="clock">Clock</button>
+          </div>
+          <input type="hidden" id="display-mode" value="signin" />
+
+          <div id="display-editor" class="display-editor hidden">
+            <div class="field" id="display-title-field">
+              <label for="display-title">Title</label>
+              <input id="display-title" type="text" maxlength="120" placeholder="What’s on the screen" />
+            </div>
+            <div class="field" id="display-message-field">
+              <label for="display-message">Message</label>
+              <textarea id="display-message" maxlength="1000" placeholder="Custom text for the tablet…"></textarea>
+            </div>
+            <div class="field" id="display-image-field">
+              <label for="display-image-file">Photo or file</label>
+              <input
+                id="display-image-file"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+              />
+              <input type="hidden" id="display-image-url" value="" />
+              <div id="display-image-preview-wrap" class="display-upload-preview hidden">
+                <img id="display-image-preview" alt="Selected display image" />
+                <button class="btn btn-secondary btn-compact" type="button" id="clear-display-image-btn">
+                  Remove image
+                </button>
+              </div>
+              <p class="muted" id="display-image-status" style="margin: 8px 0 0; font-size: 0.82rem;">
+                Upload a JPG, PNG, WebP, or GIF from your phone.
+              </p>
+              <details class="url-fallback">
+                <summary>Or use an image link</summary>
+                <input
+                  id="display-image-url-input"
+                  type="url"
+                  maxlength="2000"
+                  placeholder="https://…"
+                  inputmode="url"
+                  autocomplete="off"
+                />
+              </details>
+            </div>
+            <div class="settings-row" id="display-clock-row">
+              <div>
+                <strong>Show clock</strong>
+                <div class="muted" style="font-size: 0.85rem;">Small live clock on the custom screen</div>
+              </div>
+              <label class="toggle" aria-label="Show clock">
+                <input type="checkbox" id="display-show-clock" />
+                <span></span>
+              </label>
+            </div>
+            <button class="btn btn-primary" type="button" id="save-display-btn">Update tablet display</button>
+          </div>
+
+          <p class="muted" id="display-mode-hint" style="margin: 12px 0 0; font-size: 0.85rem;">
+            Sign-in mode uses the normal visitor flow.
+          </p>
+        </section>
+      </div>
+
+      <nav class="admin-tabbar" aria-label="Admin sections">
+        <button type="button" class="admin-tab active" data-pane="signin" id="tab-signin">
+          <span class="admin-tab-label">Sign In</span>
+        </button>
+        <button type="button" class="admin-tab" data-pane="control" id="tab-control">
+          <span class="admin-tab-label">Control</span>
+        </button>
+      </nav>
     </div>
 
     <div id="toast" class="toast" role="status"></div>
@@ -186,6 +224,10 @@
     <script>
       const unlockView = document.getElementById("unlock-view");
       const panelView = document.getElementById("panel-view");
+      const paneSignin = document.getElementById("pane-signin");
+      const paneControl = document.getElementById("pane-control");
+      const tabSignin = document.getElementById("tab-signin");
+      const tabControl = document.getElementById("tab-control");
       const unlockForm = document.getElementById("unlock-form");
       const unlockError = document.getElementById("unlock-error");
       const listEl = document.getElementById("list");
@@ -213,6 +255,12 @@
       const displayTitleInput = document.getElementById("display-title");
       const displayMessageInput = document.getElementById("display-message");
       const displayImageInput = document.getElementById("display-image-url");
+      const displayImageUrlInput = document.getElementById("display-image-url-input");
+      const displayImageFile = document.getElementById("display-image-file");
+      const displayImagePreviewWrap = document.getElementById("display-image-preview-wrap");
+      const displayImagePreview = document.getElementById("display-image-preview");
+      const displayImageStatus = document.getElementById("display-image-status");
+      const clearDisplayImageBtn = document.getElementById("clear-display-image-btn");
       const displayShowClockToggle = document.getElementById("display-show-clock");
       const displayTitleField = document.getElementById("display-title-field");
       const displayMessageField = document.getElementById("display-message-field");
@@ -222,6 +270,7 @@
       const saveDisplayBtn = document.getElementById("save-display-btn");
 
       const STORAGE_KEY = "visitor_admin_secret";
+      const PANE_KEY = "visitor_admin_pane";
       let secret =
         localStorage.getItem(STORAGE_KEY) ||
         sessionStorage.getItem(STORAGE_KEY) ||
@@ -238,6 +287,7 @@
       let renderPaused = false;
       let historyCleanupTimer = null;
       let latestRequests = [];
+      let pendingUploadData = null;
       let currentSettings = {
         isOpen: true,
         urgentEnabled: true,
@@ -258,6 +308,114 @@
         poster: "Image with title and message overlaid.",
         clock: "Large live clock on the tablet.",
       };
+
+      function setAdminPane(pane) {
+        const next = pane === "control" ? "control" : "signin";
+        paneSignin.classList.toggle("hidden", next !== "signin");
+        paneControl.classList.toggle("hidden", next !== "control");
+        tabSignin.classList.toggle("active", next === "signin");
+        tabControl.classList.toggle("active", next === "control");
+        localStorage.setItem(PANE_KEY, next);
+        document.body.classList.toggle("admin-control", next === "control");
+      }
+
+      function syncImagePreview(url) {
+        const has = Boolean(url);
+        displayImagePreviewWrap.classList.toggle("hidden", !has);
+        if (has) {
+          displayImagePreview.src = url.startsWith("/api/")
+            ? `${url}${url.includes("?") ? "&" : "?"}preview=1`
+            : url;
+          displayImageStatus.textContent = url.startsWith("/api/display-image")
+            ? "Uploaded image ready for the tablet."
+            : "Image link ready for the tablet.";
+        } else {
+          displayImagePreview.removeAttribute("src");
+          displayImageStatus.textContent = "Upload a JPG, PNG, WebP, or GIF from your phone.";
+        }
+      }
+
+      function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("Could not read file"));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function loadImage(src) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("Could not load image"));
+          img.src = src;
+        });
+      }
+
+      async function optimizeImageFile(file) {
+        const type = (file.type || "").toLowerCase();
+        if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(type)) {
+          throw new Error("Use a JPG, PNG, WebP, or GIF");
+        }
+        if (file.size > 12 * 1024 * 1024) {
+          throw new Error("File is too large");
+        }
+
+        // Keep GIFs as-is (no canvas re-encode) if under upload limit.
+        if (type === "image/gif") {
+          if (file.size > 4.5 * 1024 * 1024) {
+            throw new Error("GIF is too large (max about 4MB)");
+          }
+          const dataUrl = await readFileAsDataUrl(file);
+          return { dataUrl, contentType: "image/gif", fileName: file.name || "image.gif" };
+        }
+
+        const original = await readFileAsDataUrl(file);
+        const img = await loadImage(original);
+        const maxSide = 1920;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const outputType = type === "image/png" ? "image/png" : "image/jpeg";
+        let quality = 0.86;
+        let dataUrl = canvas.toDataURL(outputType, quality);
+        while (dataUrl.length > 5.5 * 1024 * 1024 && quality > 0.5) {
+          quality -= 0.08;
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+        }
+        if (dataUrl.length > 6 * 1024 * 1024) {
+          throw new Error("Image is still too large after compression");
+        }
+
+        return {
+          dataUrl,
+          contentType: dataUrl.startsWith("data:image/png") ? "image/png" : "image/jpeg",
+          fileName: file.name || "image.jpg",
+        };
+      }
+
+      async function uploadDisplayImage(file) {
+        const optimized = await optimizeImageFile(file);
+        const res = await fetch("/api/upload-display-image", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({
+            data: optimized.dataUrl,
+            contentType: optimized.contentType,
+            fileName: optimized.fileName,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Upload failed");
+        return data.url;
+      }
 
       function applyTheme(theme) {
         const next = theme === "dark" ? "dark" : "light";
@@ -317,7 +475,13 @@
         displayTitleInput.value = currentSettings.displayTitle;
         displayMessageInput.value = currentSettings.displayMessage;
         displayImageInput.value = currentSettings.displayImageUrl;
+        displayImageUrlInput.value = currentSettings.displayImageUrl.startsWith("/api/display-image")
+          ? ""
+          : currentSettings.displayImageUrl;
         displayShowClockToggle.checked = currentSettings.displayShowClock;
+        pendingUploadData = null;
+        displayImageFile.value = "";
+        syncImagePreview(currentSettings.displayImageUrl);
         syncDisplayEditorUi(currentSettings.displayMode);
         applyTheme(currentSettings.theme);
         openLabel.textContent = currentSettings.isOpen
@@ -882,6 +1046,7 @@
           sessionStorage.removeItem(STORAGE_KEY);
           unlockView.classList.add("hidden");
           panelView.classList.remove("hidden");
+          setAdminPane(localStorage.getItem(PANE_KEY) || "signin");
           firstLoad = true;
           knownIds = new Set();
           const settings = await fetchSettings();
@@ -978,9 +1143,49 @@
         }
       });
 
+      displayImageFile.addEventListener("change", async () => {
+        const file = displayImageFile.files && displayImageFile.files[0];
+        if (!file) return;
+        displayImageStatus.textContent = "Uploading…";
+        displayImageFile.disabled = true;
+        try {
+          const url = await uploadDisplayImage(file);
+          displayImageInput.value = url;
+          displayImageUrlInput.value = "";
+          pendingUploadData = null;
+          syncImagePreview(url);
+          showToast("Photo uploaded");
+        } catch (err) {
+          displayImageStatus.textContent = err.message || "Upload failed";
+          showToast(err.message || "Upload failed");
+        } finally {
+          displayImageFile.disabled = false;
+        }
+      });
+
+      displayImageUrlInput.addEventListener("change", () => {
+        const url = displayImageUrlInput.value.trim();
+        displayImageInput.value = url;
+        syncImagePreview(url);
+      });
+
+      clearDisplayImageBtn.addEventListener("click", () => {
+        displayImageInput.value = "";
+        displayImageUrlInput.value = "";
+        displayImageFile.value = "";
+        pendingUploadData = null;
+        syncImagePreview("");
+      });
+
+      tabSignin.addEventListener("click", () => setAdminPane("signin"));
+      tabControl.addEventListener("click", () => setAdminPane("control"));
+
       saveDisplayBtn.addEventListener("click", async () => {
         saveDisplayBtn.disabled = true;
         try {
+          // Prefer explicit link field if filled; otherwise keep uploaded/hidden value.
+          const link = displayImageUrlInput.value.trim();
+          if (link) displayImageInput.value = link;
           await saveSettings({
             displayMode: displayModeInput.value,
             displayTitle: displayTitleInput.value.trim(),
@@ -1001,6 +1206,8 @@
         const next = displayShowClockToggle.checked;
         displayShowClockToggle.disabled = true;
         try {
+          const link = displayImageUrlInput.value.trim();
+          if (link) displayImageInput.value = link;
           await saveSettings({
             displayMode: displayModeInput.value,
             displayTitle: displayTitleInput.value.trim(),
@@ -1028,6 +1235,7 @@
       if (secret) {
         unlockView.classList.add("hidden");
         panelView.classList.remove("hidden");
+        setAdminPane(localStorage.getItem(PANE_KEY) || "signin");
         Promise.all([fetchSettings(), refresh()])
           .then(([settings]) => {
             applySettingsToForm(settings);
