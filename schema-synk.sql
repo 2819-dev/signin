@@ -20,4 +20,5 @@ CREATE INDEX IF NOT EXISTS synk_profiles_code_idx
   ON synk_profiles (synk_code);
 
 ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS descriptor JSONB;
+ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS policy TEXT NOT NULL DEFAULT 'pending';
 ALTER TABLE synk_profiles ALTER COLUMN secret_hash DROP NOT NULL;

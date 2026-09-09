@@ -122,6 +122,20 @@
               <span></span>
             </label>
           </div>
+          <div class="settings-row" style="align-items:flex-start;">
+            <div style="flex:1;min-width:0;">
+              <strong>Tablet camera angle</strong>
+              <div class="muted" style="font-size: 0.85rem;">
+                Landscape mounts put the camera on the side — rotate so Synk/Face match correctly.
+              </div>
+              <select id="camera-rotation" style="margin-top:10px;max-width:100%;">
+                <option value="90">Camera on left / rotate 90°</option>
+                <option value="270">Camera on right / rotate 270°</option>
+                <option value="0">Upright (no rotate)</option>
+                <option value="180">Upside down / rotate 180°</option>
+              </select>
+            </div>
+          </div>
           <div id="closed-editor">
             <div class="field">
               <label for="closed-title">Closed title</label>
@@ -411,6 +425,15 @@
               <input id="synk-enroll-dob" type="date" required />
             </div>
             <div class="field">
+              <label for="synk-enroll-policy">When verified</label>
+              <select id="synk-enroll-policy">
+                <option value="pending" selected>Needs accept / deny</option>
+                <option value="autofill">Auto-fill name only</option>
+                <option value="auto_admit">Auto-admit</option>
+                <option value="auto_deny">Auto-deny</option>
+              </select>
+            </div>
+            <div class="field">
               <label for="synk-enroll-file">Face biometrics photo</label>
               <input id="synk-enroll-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
               <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
@@ -473,6 +496,7 @@
       const urgentToggle = document.getElementById("urgent-toggle");
       const chatToggle = document.getElementById("chat-toggle");
       const themeToggle = document.getElementById("theme-toggle");
+      const cameraRotationSelect = document.getElementById("camera-rotation");
       const openLabel = document.getElementById("open-label");
       const openHint = document.getElementById("open-hint");
       const urgentLabel = document.getElementById("urgent-label");
@@ -542,6 +566,7 @@
       const synkEnrollForm = document.getElementById("synk-enroll-form");
       const synkEnrollName = document.getElementById("synk-enroll-name");
       const synkEnrollDob = document.getElementById("synk-enroll-dob");
+      const synkEnrollPolicy = document.getElementById("synk-enroll-policy");
       const synkEnrollSecret = document.getElementById("synk-enroll-secret");
       const synkEnrollFile = document.getElementById("synk-enroll-file");
       const synkEnrollBtn = document.getElementById("synk-enroll-btn");
@@ -621,6 +646,7 @@
         displayImageUrl: "",
         displayLink: "",
         displayShowClock: false,
+        cameraRotation: 90,
       };
 
       const DISPLAY_HINTS = {
@@ -899,11 +925,15 @@
           displayImageUrl: settings.displayImageUrl || "",
           displayLink: settings.displayLink || "",
           displayShowClock: Boolean(settings.displayShowClock),
+          cameraRotation: [0, 90, 180, 270].includes(Number(settings.cameraRotation))
+            ? Number(settings.cameraRotation)
+            : 90,
         };
         isOpenToggle.checked = currentSettings.isOpen;
         urgentToggle.checked = currentSettings.urgentEnabled;
         chatToggle.checked = currentSettings.chatEnabled;
         themeToggle.checked = currentSettings.theme === "dark";
+        cameraRotationSelect.value = String(currentSettings.cameraRotation);
         closedTitleInput.value = currentSettings.closedTitle;
         closedMessageInput.value = currentSettings.closedMessage;
         displayTitleInput.value = currentSettings.displayTitle;
@@ -1018,6 +1048,10 @@
             typeof partial.displayShowClock === "boolean"
               ? partial.displayShowClock
               : displayShowClockToggle.checked,
+          cameraRotation:
+            partial.cameraRotation != null
+              ? Number(partial.cameraRotation)
+              : Number(cameraRotationSelect.value || currentSettings.cameraRotation || 90),
         };
         const res = await fetch("/api/kiosk-status", {
           method: "POST",
@@ -1735,6 +1769,20 @@
         }
       });
 
+      cameraRotationSelect.addEventListener("change", async () => {
+        const next = Number(cameraRotationSelect.value);
+        cameraRotationSelect.disabled = true;
+        try {
+          await saveSettings({ cameraRotation: next });
+          showToast("Tablet camera angle saved");
+        } catch (err) {
+          cameraRotationSelect.value = String(currentSettings.cameraRotation || 90);
+          showToast(err.message || "Could not update");
+        } finally {
+          cameraRotationSelect.disabled = false;
+        }
+      });
+
       saveClosedBtn.addEventListener("click", async () => {
         saveClosedBtn.disabled = true;
         try {
@@ -2137,6 +2185,13 @@
         return `${m}/${d}/${y}`;
       }
 
+      function synkPolicyLabel(policy) {
+        if (policy === "auto_admit") return "Auto-admit";
+        if (policy === "auto_deny") return "Auto-deny";
+        if (policy === "autofill") return "Auto-fill name";
+        return "Needs accept / deny";
+      }
+
       function renderSynkProfiles(profiles) {
         synkProfilesCache = profiles || [];
         if (!synkProfilesCache.length) {
@@ -2159,11 +2214,21 @@
                     <div class="synk-code">${escapeHtml(profile.synkCode || "")}</div>
                     <div class="muted" style="font-size:0.82rem;margin-top:4px;">
                       DOB ${escapeHtml(formatDob(profile.dateOfBirth))}
+                      · ${escapeHtml(synkPolicyLabel(profile.policy))}
                       · ${profile.hasBiometrics ? "Face enrolled" : "Needs face photo"}
                       ${profile.hasSecret ? " · Backup secret" : ""}
                       ${profile.enabled ? "" : " · paused"}
                     </div>
                   </div>
+                  <label class="field" style="margin:0;">
+                    <span class="muted" style="font-size:0.78rem;">When verified</span>
+                    <select data-synk-action="policy">
+                      <option value="pending" ${profile.policy === "pending" || !profile.policy ? "selected" : ""}>Needs accept / deny</option>
+                      <option value="autofill" ${profile.policy === "autofill" ? "selected" : ""}>Auto-fill name only</option>
+                      <option value="auto_admit" ${profile.policy === "auto_admit" ? "selected" : ""}>Auto-admit</option>
+                      <option value="auto_deny" ${profile.policy === "auto_deny" ? "selected" : ""}>Auto-deny</option>
+                    </select>
+                  </label>
                   <label class="field" style="margin:0;">
                     <span class="muted" style="font-size:0.78rem;">Reset secret (optional)</span>
                     <input type="password" data-synk-action="secret" placeholder="New secret" maxlength="200" autocomplete="new-password" />
@@ -2257,6 +2322,7 @@
               name,
               dateOfBirth,
               secret: secret || undefined,
+              policy: synkEnrollPolicy.value || "pending",
               photoUrl: uploaded.url,
               descriptor,
             }),
@@ -2278,11 +2344,32 @@
       });
 
       synkProfilesEl.addEventListener("change", async (e) => {
-        const input = e.target.closest("[data-synk-action=\"photo\"]");
+        const policySelect = e.target.closest('[data-synk-action="policy"]');
+        const photoInput = e.target.closest('[data-synk-action="photo"]');
         const card = e.target.closest("[data-synk-id]");
-        if (!input || !card) return;
+        if (!card) return;
         const id = card.getAttribute("data-synk-id");
-        const file = input.files && input.files[0];
+
+        if (policySelect) {
+          try {
+            const res = await fetch("/api/synk-profiles", {
+              method: "PATCH",
+              headers: adminHeaders(),
+              body: JSON.stringify({ id, policy: policySelect.value }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not update policy");
+            showToast("Policy updated");
+            await refreshSynkProfiles();
+          } catch (err) {
+            showToast(err.message || "Could not update policy");
+            await refreshSynkProfiles();
+          }
+          return;
+        }
+
+        if (!photoInput) return;
+        const file = photoInput.files && photoInput.files[0];
         if (!file) return;
         try {
           showToast("Updating biometrics…");
@@ -2302,7 +2389,7 @@
         } catch (err) {
           showToast(err.message || "Could not update photo");
         } finally {
-          input.value = "";
+          photoInput.value = "";
         }
       });
 
@@ -2311,7 +2398,7 @@
         const card = e.target.closest("[data-synk-id]");
         if (!btn || !card) return;
         const action = btn.getAttribute("data-synk-action");
-        if (action === "photo" || action === "secret") return;
+        if (action === "photo" || action === "secret" || action === "policy") return;
         const id = card.getAttribute("data-synk-id");
         const profile = synkProfilesCache.find((p) => p.id === id);
         if (!profile) return;

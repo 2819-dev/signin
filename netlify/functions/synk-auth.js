@@ -3,6 +3,7 @@ const { verifySecret } = require("./lib/synk");
 const { notifyAdmins } = require("./lib/push");
 
 const MATCH_THRESHOLD = 0.55;
+const POLICIES = new Set(["pending", "autofill", "auto_admit", "auto_deny"]);
 
 function normalizeLookup(value) {
   return String(value || "")
@@ -29,6 +30,10 @@ function toDobString(value) {
   const raw = String(value);
   const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
   return match ? match[1] : raw.slice(0, 10);
+}
+
+function normalizePolicy(value) {
+  return POLICIES.has(value) ? value : "pending";
 }
 
 function normalizeDescriptor(value) {
@@ -58,52 +63,95 @@ async function ensureSynkTables(sql) {
       secret_hash TEXT,
       photo_url TEXT NOT NULL DEFAULT '',
       descriptor JSONB,
+      policy TEXT NOT NULL DEFAULT 'pending',
       enabled BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
   await sql`ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS descriptor JSONB`;
+  await sql`ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS policy TEXT NOT NULL DEFAULT 'pending'`;
   await sql`ALTER TABLE synk_profiles ALTER COLUMN secret_hash DROP NOT NULL`;
 }
 
-async function admitSynkMember(sql, matched) {
+async function resolveSynkMember(sql, matched) {
+  const policy = normalizePolicy(matched.policy);
+  const profile = {
+    id: matched.id,
+    synkCode: matched.synk_code,
+    name: matched.name,
+    photoUrl: matched.photo_url || "",
+    policy,
+  };
+
+  if (policy === "autofill") {
+    return { ok: true, profile, request: null };
+  }
+
+  if (policy === "auto_admit") {
+    const inserted = await sql`
+      INSERT INTO visitor_requests (name, reason, status, urgent, resolved_at)
+      VALUES (${matched.name}, 'Synk ID', 'admitted', FALSE, NOW())
+      RETURNING id, name, reason, status, decline_reason, urgent, created_at, resolved_at
+    `;
+    const request = mapRow(inserted[0]);
+    try {
+      await notifyAdmins({
+        title: "Synk ID auto-admit",
+        body: `${request.name} cleared with Synk ID`,
+        url: "/admin",
+        tag: `visitor-${request.id}`,
+        name: request.name,
+        reason: request.reason,
+      });
+    } catch (err) {
+      console.error("synk admit notify failed", err.message || err);
+    }
+    return { ok: true, profile, request };
+  }
+
+  if (policy === "auto_deny") {
+    const inserted = await sql`
+      INSERT INTO visitor_requests (name, reason, status, decline_reason, urgent, resolved_at)
+      VALUES (${matched.name}, 'Synk ID', 'declined', 'Access denied', FALSE, NOW())
+      RETURNING id, name, reason, status, decline_reason, urgent, created_at, resolved_at
+    `;
+    const request = mapRow(inserted[0]);
+    try {
+      await notifyAdmins({
+        title: "Synk ID auto-deny",
+        body: `${request.name} was denied by Synk policy`,
+        url: "/admin",
+        tag: `visitor-${request.id}`,
+        name: request.name,
+        reason: request.reason,
+      });
+    } catch (err) {
+      console.error("synk deny notify failed", err.message || err);
+    }
+    return { ok: true, profile, request };
+  }
+
+  // Default: pending — admin must accept or deny
   const inserted = await sql`
-    INSERT INTO visitor_requests (name, reason, status, urgent, resolved_at)
-    VALUES (
-      ${matched.name},
-      'Synk ID',
-      'admitted',
-      FALSE,
-      NOW()
-    )
+    INSERT INTO visitor_requests (name, reason, status, urgent)
+    VALUES (${matched.name}, 'Synk ID', 'pending', FALSE)
     RETURNING id, name, reason, status, decline_reason, urgent, created_at, resolved_at
   `;
   const request = mapRow(inserted[0]);
-
   try {
     await notifyAdmins({
-      title: "Synk ID verified",
-      body: `${request.name} cleared with Synk ID`,
+      title: "Synk ID request",
+      body: `${request.name} verified with Synk ID — needs approval`,
       url: "/admin",
       tag: `visitor-${request.id}`,
       name: request.name,
       reason: request.reason,
     });
   } catch (err) {
-    console.error("synk admit notify failed", err.message || err);
+    console.error("synk pending notify failed", err.message || err);
   }
-
-  return {
-    ok: true,
-    profile: {
-      id: matched.id,
-      synkCode: matched.synk_code,
-      name: matched.name,
-      photoUrl: matched.photo_url || "",
-    },
-    request,
-  };
+  return { ok: true, profile, request };
 }
 
 exports.handler = async (event) => {
@@ -129,7 +177,7 @@ exports.handler = async (event) => {
     const descriptor = normalizeDescriptor(body.descriptor);
     if (descriptor) {
       const rows = await sql`
-        SELECT id, synk_code, name, photo_url, descriptor, enabled
+        SELECT id, synk_code, name, photo_url, descriptor, policy, enabled
         FROM synk_profiles
         WHERE enabled = TRUE
           AND descriptor IS NOT NULL
@@ -164,10 +212,9 @@ exports.handler = async (event) => {
         });
       }
 
-      return json(200, await admitSynkMember(sql, best));
+      return json(200, await resolveSynkMember(sql, best));
     }
 
-    // Fallback: Synk code / name + DOB + secret (like showing ID if biometrics fail)
     const lookup = normalizeLookup(body.synkCode || body.synkId || body.name);
     const secret = normalizeSecret(body.secret);
     const dateOfBirth = normalizeDob(body.dateOfBirth);
@@ -178,7 +225,7 @@ exports.handler = async (event) => {
 
     const codeLookup = lookup.toUpperCase();
     const rows = await sql`
-      SELECT id, synk_code, name, date_of_birth, secret_hash, photo_url, enabled
+      SELECT id, synk_code, name, date_of_birth, secret_hash, photo_url, policy, enabled
       FROM synk_profiles
       WHERE enabled = TRUE
         AND secret_hash IS NOT NULL
@@ -207,7 +254,7 @@ exports.handler = async (event) => {
       return json(401, { error: "Could not verify Synk ID" });
     }
 
-    return json(200, await admitSynkMember(sql, matched));
+    return json(200, await resolveSynkMember(sql, matched));
   } catch (err) {
     console.error(err);
     return json(500, { error: "Server error" });

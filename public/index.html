@@ -353,6 +353,7 @@
       let isOpen = true;
       let urgentEnabled = true;
       let chatEnabled = true;
+      let cameraRotation = 90;
       let urgentMode = false;
       let activeView = "form";
       let displayMode = "signin";
@@ -870,6 +871,10 @@
           isOpen = settings.isOpen !== false;
           urgentEnabled = settings.urgentEnabled !== false;
           chatEnabled = settings.chatEnabled !== false;
+          cameraRotation = [0, 90, 180, 270].includes(Number(settings.cameraRotation))
+            ? Number(settings.cameraRotation)
+            : 90;
+          if (window.KioskFace) window.KioskFace.setCameraRotation(cameraRotation);
           displayMode = normalizeDisplayMode(settings.displayMode);
           applyTheme(settings.theme);
           syncChatFabVisibility();
@@ -987,7 +992,7 @@
         faceScanBtn.disabled = true;
         try {
           await window.KioskFace.ensureFaceApi();
-          faceStream = await window.KioskFace.startCamera(faceVideo);
+          faceStream = await window.KioskFace.startCamera(faceVideo, { rotation: cameraRotation });
           faceStatus.textContent = "Camera ready — tap Scan face";
           faceScanBtn.disabled = false;
         } catch (err) {
@@ -1004,8 +1009,10 @@
         faceError.classList.add("hidden");
         faceStatus.textContent = "Scanning…";
         try {
-          const frame = window.KioskFace.captureVideoFrame(faceVideo);
-          const descriptor = await window.KioskFace.descriptorFromImage(frame);
+          const descriptor = await window.KioskFace.descriptorFromVideo(faceVideo, {
+            rotation: cameraRotation,
+            tryAlternates: true,
+          });
           faceStatus.textContent = "Checking…";
           const res = await fetch("/api/face-match", {
             method: "POST",
@@ -1155,7 +1162,7 @@
         synkScanBtn.disabled = true;
         synkBusy = false;
         try {
-          synkStream = await window.KioskFace.startCamera(synkVideo);
+          synkStream = await window.KioskFace.startCamera(synkVideo, { rotation: cameraRotation });
           synkStatus.textContent = "Hold still — verifying…";
           synkScanBtn.disabled = false;
           synkAutoTimer = setTimeout(() => {
@@ -1168,18 +1175,62 @@
         }
       }
 
-      async function finishSynkAdmit(data) {
+      async function finishSynkResult(data) {
         const name = (data.profile && data.profile.name) || "Member";
+        const policy = (data.profile && data.profile.policy) || "pending";
         synkModal.classList.add("synk-verified");
-        synkPodHint.textContent = `Welcome, ${name}`;
-        synkStatus.textContent = "Verified — you’re cleared";
         stopSynkCamera();
+
+        if (policy === "autofill") {
+          synkPodHint.textContent = `Welcome, ${name}`;
+          synkStatus.textContent = "Name filled — continue on the form";
+          await new Promise((r) => setTimeout(r, 600));
+          closeSynkModal();
+          document.getElementById("name").value = name;
+          if (!document.getElementById("reason").value.trim()) {
+            document.getElementById("reason").value = "Synk ID member";
+          }
+          formError.classList.add("hidden");
+          return;
+        }
+
+        if (policy === "auto_admit" && data.request) {
+          synkPodHint.textContent = `Welcome, ${name}`;
+          synkStatus.textContent = "Verified — you’re cleared";
+          await new Promise((r) => setTimeout(r, 700));
+          closeSynkModal();
+          clearTimers();
+          currentRequestId = data.request.id;
+          show(admittedView);
+          startAutoReset(admittedResetHint, 5);
+          return;
+        }
+
+        if (policy === "auto_deny" && data.request) {
+          synkPodHint.textContent = name;
+          synkStatus.textContent = "Access denied";
+          await new Promise((r) => setTimeout(r, 700));
+          closeSynkModal();
+          clearTimers();
+          currentRequestId = data.request.id;
+          declineText.textContent = data.request.declineReason || "Access denied";
+          show(declinedView);
+          startAutoReset(declinedResetHint, 15);
+          return;
+        }
+
+        // Default: pending — wait for accept / deny
+        if (!data.request) throw new Error("Sign-in failed");
+        synkPodHint.textContent = `Welcome, ${name}`;
+        synkStatus.textContent = "Verified — waiting for approval";
         await new Promise((r) => setTimeout(r, 700));
         closeSynkModal();
         clearTimers();
         currentRequestId = data.request.id;
-        show(admittedView);
-        startAutoReset(admittedResetHint, 5);
+        waitingText.textContent = `Thanks, ${name}. Please wait…`;
+        show(waitingView);
+        pollTimer = setInterval(pollRequestStatus, 2000);
+        pollRequestStatus();
       }
 
       async function runSynkScan() {
@@ -1193,8 +1244,10 @@
         synkError.classList.add("hidden");
         synkStatus.textContent = "Scanning…";
         try {
-          const frame = window.KioskFace.captureVideoFrame(synkVideo);
-          const descriptor = await window.KioskFace.descriptorFromImage(frame);
+          const descriptor = await window.KioskFace.descriptorFromVideo(synkVideo, {
+            rotation: cameraRotation,
+            tryAlternates: true,
+          });
           synkStatus.textContent = "Matching Synk member…";
           const res = await fetch("/api/synk-auth", {
             method: "POST",
@@ -1203,8 +1256,7 @@
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || "Could not verify Synk ID");
-          if (!data.request) throw new Error("Sign-in failed");
-          await finishSynkAdmit(data);
+          await finishSynkResult(data);
         } catch (err) {
           synkError.textContent = err.message || "Could not verify";
           synkError.classList.remove("hidden");
@@ -1242,8 +1294,7 @@
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || "Could not verify Synk ID");
-          if (!data.request) throw new Error("Sign-in failed");
-          await finishSynkAdmit(data);
+          await finishSynkResult(data);
         } catch (err) {
           synkCodeError.textContent = err.message || "Could not verify Synk ID";
           synkCodeError.classList.remove("hidden");

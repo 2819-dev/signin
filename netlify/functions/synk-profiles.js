@@ -39,6 +39,12 @@ function normalizeDescriptor(value) {
   return nums;
 }
 
+const POLICIES = new Set(["pending", "autofill", "auto_admit", "auto_deny"]);
+
+function normalizePolicy(value) {
+  return POLICIES.has(value) ? value : "pending";
+}
+
 function mapProfile(row, { includeSecretHint = false } = {}) {
   if (!row) return null;
   const profile = {
@@ -47,6 +53,7 @@ function mapProfile(row, { includeSecretHint = false } = {}) {
     name: row.name,
     dateOfBirth: toDobString(row.date_of_birth),
     photoUrl: row.photo_url || "",
+    policy: normalizePolicy(row.policy),
     enabled: row.enabled !== false,
     hasBiometrics: row.descriptor != null,
     createdAt: row.created_at,
@@ -68,12 +75,14 @@ async function ensureSynkTables(sql) {
       secret_hash TEXT,
       photo_url TEXT NOT NULL DEFAULT '',
       descriptor JSONB,
+      policy TEXT NOT NULL DEFAULT 'pending',
       enabled BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
   await sql`ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS descriptor JSONB`;
+  await sql`ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS policy TEXT NOT NULL DEFAULT 'pending'`;
   await sql`ALTER TABLE synk_profiles ALTER COLUMN secret_hash DROP NOT NULL`;
   await sql`CREATE INDEX IF NOT EXISTS synk_profiles_enabled_idx ON synk_profiles (enabled, updated_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS synk_profiles_code_idx ON synk_profiles (synk_code)`;
@@ -102,7 +111,7 @@ exports.handler = async (event) => {
       if (!auth.ok) return auth.response;
 
       const rows = await sql`
-        SELECT id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, enabled, created_at, updated_at
+        SELECT id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, policy, enabled, created_at, updated_at
         FROM synk_profiles
         ORDER BY updated_at DESC
         LIMIT 200
@@ -128,6 +137,7 @@ exports.handler = async (event) => {
       const dateOfBirth = normalizeDob(body.dateOfBirth);
       const photoUrl = String(body.photoUrl || "").trim().slice(0, 500);
       const descriptor = normalizeDescriptor(body.descriptor);
+      const policy = normalizePolicy(body.policy);
       const enabled = body.enabled !== false;
 
       if (!name) return json(400, { error: "Name is required" });
@@ -140,7 +150,7 @@ exports.handler = async (event) => {
       const secretHash = secret ? hashSecret(secret) : null;
 
       const rows = await sql`
-        INSERT INTO synk_profiles (synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, enabled)
+        INSERT INTO synk_profiles (synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, policy, enabled)
         VALUES (
           ${synkCode},
           ${name},
@@ -148,9 +158,10 @@ exports.handler = async (event) => {
           ${secretHash},
           ${photoUrl},
           ${JSON.stringify(descriptor)}::jsonb,
+          ${policy},
           ${enabled}
         )
-        RETURNING id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, enabled, created_at, updated_at
+        RETURNING id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, policy, enabled, created_at, updated_at
       `;
       return json(201, { profile: mapProfile(rows[0], { includeSecretHint: true }) });
     }
@@ -170,7 +181,7 @@ exports.handler = async (event) => {
       if (!id) return json(400, { error: "id is required" });
 
       const existingRows = await sql`
-        SELECT id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, enabled, created_at, updated_at
+        SELECT id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, policy, enabled, created_at, updated_at
         FROM synk_profiles
         WHERE id = ${id}
         LIMIT 1
@@ -190,6 +201,8 @@ exports.handler = async (event) => {
           : existing.photo_url || "";
       const enabled =
         typeof body.enabled === "boolean" ? body.enabled : existing.enabled !== false;
+      const policy =
+        typeof body.policy === "string" ? normalizePolicy(body.policy) : normalizePolicy(existing.policy);
 
       let secretHash = existing.secret_hash;
       if (typeof body.secret === "string" && body.secret.trim()) {
@@ -219,11 +232,12 @@ exports.handler = async (event) => {
                   date_of_birth = ${dateOfBirth}::date,
                   photo_url = ${photoUrl},
                   enabled = ${enabled},
+                  policy = ${policy},
                   secret_hash = ${secretHash},
                   descriptor = ${descriptorJson}::jsonb,
                   updated_at = NOW()
               WHERE id = ${id}
-              RETURNING id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, enabled, created_at, updated_at
+              RETURNING id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, policy, enabled, created_at, updated_at
             `
           : await sql`
               UPDATE synk_profiles
@@ -231,10 +245,11 @@ exports.handler = async (event) => {
                   date_of_birth = ${dateOfBirth}::date,
                   photo_url = ${photoUrl},
                   enabled = ${enabled},
+                  policy = ${policy},
                   secret_hash = ${secretHash},
                   updated_at = NOW()
               WHERE id = ${id}
-              RETURNING id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, enabled, created_at, updated_at
+              RETURNING id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, policy, enabled, created_at, updated_at
             `;
 
       return json(200, { profile: mapProfile(rows[0], { includeSecretHint: true }) });
