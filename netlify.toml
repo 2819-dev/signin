@@ -60,6 +60,11 @@
     Cache-Control = "no-cache, must-revalidate, max-age=0"
 
 [[headers]]
+  for = "/face.js"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate, max-age=0"
+
+[[headers]]
   for = "/sw.js"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate, max-age=0"

@@ -20,6 +20,7 @@
     <link rel="icon" type="image/png" href="/apple-touch-icon.png" />
     <link rel="stylesheet" href="/styles.css" />
     <script src="/force-refresh.js" defer></script>
+    <script src="/face.js" defer></script>
   </head>
   <body class="kiosk-body">
         <div class="sand-waves" aria-hidden="true">
@@ -103,6 +104,18 @@
             <button class="btn btn-primary" type="submit" id="submit-btn">Continue</button>
             <button class="btn btn-secondary hidden" type="button" id="cancel-urgent-btn">Cancel</button>
           </form>
+
+          <div id="more-options" class="more-options">
+            <button class="btn btn-secondary" type="button" id="more-options-btn">More options</button>
+            <div id="more-options-panel" class="more-options-panel hidden">
+              <button class="btn btn-secondary" type="button" id="face-signin-btn">
+                Sign in with Face
+              </button>
+              <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
+                Uses the camera to recognize enrolled people. Not Apple Face ID.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -140,6 +153,24 @@
 
     <button type="button" id="urgent-btn" class="urgent-fab hidden">Urgent</button>
     <button type="button" id="chat-fab" class="chat-fab" aria-label="Open live chat">Chat</button>
+
+    <div id="face-modal" class="face-modal hidden" role="dialog" aria-modal="true" aria-labelledby="face-modal-title">
+      <div class="face-modal-card">
+        <button type="button" class="chat-modal-close" id="face-close-btn" aria-label="Close">✕</button>
+        <p class="eyebrow">Face sign-in</p>
+        <h2 id="face-modal-title">Look at the camera</h2>
+        <p class="subtitle" id="face-modal-hint">Hold still for a moment.</p>
+        <div class="face-video-wrap">
+          <video id="face-video" class="face-video" playsinline muted autoplay></video>
+        </div>
+        <p id="face-status" class="muted" style="margin: 0; font-size: 0.88rem;">Starting camera…</p>
+        <p id="face-error" class="error hidden"></p>
+        <div class="btn-row" style="margin-top: 4px;">
+          <button class="btn btn-secondary" type="button" id="face-cancel-btn">Cancel</button>
+          <button class="btn btn-primary" type="button" id="face-scan-btn">Scan face</button>
+        </div>
+      </div>
+    </div>
 
     <div id="chat-modal" class="chat-modal hidden" role="dialog" aria-modal="true" aria-labelledby="chat-modal-title">
       <div class="chat-modal-card">
@@ -852,6 +883,136 @@
 
       resetBtn.addEventListener("click", goIdle);
       admittedResetBtn.addEventListener("click", goIdle);
+
+      // Face sign-in (camera recognition — not Apple Face ID)
+      const moreOptionsBtn = document.getElementById("more-options-btn");
+      const moreOptionsPanel = document.getElementById("more-options-panel");
+      const faceSigninBtn = document.getElementById("face-signin-btn");
+      const faceModal = document.getElementById("face-modal");
+      const faceCloseBtn = document.getElementById("face-close-btn");
+      const faceCancelBtn = document.getElementById("face-cancel-btn");
+      const faceScanBtn = document.getElementById("face-scan-btn");
+      const faceVideo = document.getElementById("face-video");
+      const faceStatus = document.getElementById("face-status");
+      const faceError = document.getElementById("face-error");
+      const faceModalHint = document.getElementById("face-modal-hint");
+      let faceStream = null;
+      let faceBusy = false;
+
+      function closeFaceModal() {
+        faceModal.classList.add("hidden");
+        faceBusy = false;
+        faceScanBtn.disabled = false;
+        faceError.classList.add("hidden");
+        if (window.KioskFace) window.KioskFace.stopCamera(faceVideo);
+        faceStream = null;
+        faceStatus.textContent = "Camera stopped";
+      }
+
+      async function openFaceModal() {
+        if (!window.KioskFace) {
+          formError.textContent = "Face sign-in is still loading. Try again in a moment.";
+          formError.classList.remove("hidden");
+          return;
+        }
+        faceModal.classList.remove("hidden");
+        faceError.classList.add("hidden");
+        faceStatus.textContent = "Starting camera…";
+        faceModalHint.textContent = "Hold still for a moment.";
+        faceScanBtn.disabled = true;
+        try {
+          await window.KioskFace.ensureFaceApi();
+          faceStream = await window.KioskFace.startCamera(faceVideo);
+          faceStatus.textContent = "Camera ready — tap Scan face";
+          faceScanBtn.disabled = false;
+        } catch (err) {
+          faceError.textContent = err.message || "Could not open camera";
+          faceError.classList.remove("hidden");
+          faceStatus.textContent = "Camera unavailable";
+        }
+      }
+
+      async function runFaceScan() {
+        if (faceBusy || !window.KioskFace) return;
+        faceBusy = true;
+        faceScanBtn.disabled = true;
+        faceError.classList.add("hidden");
+        faceStatus.textContent = "Scanning…";
+        try {
+          const frame = window.KioskFace.captureVideoFrame(faceVideo);
+          const descriptor = await window.KioskFace.descriptorFromImage(frame);
+          faceStatus.textContent = "Checking…";
+          const res = await fetch("/api/face-match", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ descriptor }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Face check failed");
+
+          if (!data.match) {
+            throw new Error("No match found. You can sign in with your name instead.");
+          }
+
+          const policy = data.match.policy;
+          const name = data.match.name;
+
+          if (policy === "autofill") {
+            document.getElementById("name").value = name;
+            if (!document.getElementById("reason").value.trim()) {
+              document.getElementById("reason").value = "Recognized visitor";
+            }
+            closeFaceModal();
+            formError.classList.add("hidden");
+            faceModalHint.textContent = `Welcome back, ${name}`;
+            return;
+          }
+
+          if (policy === "auto_admit" && data.request) {
+            closeFaceModal();
+            clearTimers();
+            currentRequestId = data.request.id;
+            show(admittedView);
+            startAutoReset(admittedResetHint, 5);
+            return;
+          }
+
+          if (policy === "auto_deny" && data.request) {
+            closeFaceModal();
+            clearTimers();
+            currentRequestId = data.request.id;
+            declineText.textContent = data.request.declineReason || "Access denied";
+            show(declinedView);
+            startAutoReset(declinedResetHint, 15);
+            return;
+          }
+
+          document.getElementById("name").value = name;
+          closeFaceModal();
+        } catch (err) {
+          faceError.textContent = err.message || "Could not scan face";
+          faceError.classList.remove("hidden");
+          faceStatus.textContent = "Try again";
+          faceScanBtn.disabled = false;
+          faceBusy = false;
+          return;
+        }
+        faceBusy = false;
+        faceScanBtn.disabled = false;
+      }
+
+      moreOptionsBtn.addEventListener("click", () => {
+        const open = moreOptionsPanel.classList.toggle("hidden") === false;
+        moreOptionsBtn.textContent = open ? "Hide options" : "More options";
+      });
+      faceSigninBtn.addEventListener("click", openFaceModal);
+      faceCloseBtn.addEventListener("click", closeFaceModal);
+      faceCancelBtn.addEventListener("click", closeFaceModal);
+      faceScanBtn.addEventListener("click", runFaceScan);
+      faceModal.addEventListener("click", (e) => {
+        if (e.target === faceModal) closeFaceModal();
+      });
+
       const blockGesture = (e) => e.preventDefault();
       document.addEventListener("gesturestart", blockGesture, { passive: false });
       document.addEventListener("gesturechange", blockGesture, { passive: false });
