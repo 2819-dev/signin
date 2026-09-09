@@ -997,7 +997,7 @@
           await window.KioskFace.ensureFaceApi();
           faceStream = await window.KioskFace.startCamera(faceVideo, { side: cameraSide });
           faceStatus.textContent = "Camera ready — tap Scan face";
-          faceModalHint.textContent = "Keep looking at the screen.";
+          faceModalHint.textContent = "Look at the screen — stay in the center.";
           faceScanBtn.disabled = false;
         } catch (err) {
           faceError.textContent = err.message || "Could not open camera";
@@ -1159,7 +1159,7 @@
         showSynkPod();
         synkError.classList.add("hidden");
         synkStatus.textContent = "Starting camera…";
-        synkPodHint.textContent = "Keep looking at the screen — put your face in the ring.";
+        synkPodHint.textContent = "Look at the screen center — keep your face in the ring.";
         synkScanBtn.disabled = true;
         synkBusy = false;
         try {

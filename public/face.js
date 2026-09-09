@@ -7,8 +7,8 @@
 
   let loading = null;
   let ready = false;
-  // Where the physical camera sits on a landscape-mounted iPad.
-  // Used to offset the on-screen guide — preview stays upright (never sideways).
+  // Physical camera edge on a landscape-mounted iPad.
+  // We digitally reframe so standing at screen-center looks camera-centered.
   let cameraSide = "left";
 
   function loadScript(src) {
@@ -68,7 +68,6 @@
   function normalizeCameraSide(value) {
     const v = String(value || "").toLowerCase();
     if (v === "right" || v === "center" || v === "left") return v;
-    // Legacy rotation values from the old sideways-preview setting
     if (v === "270" || v === "180") return "right";
     if (v === "90") return "left";
     if (v === "0") return "center";
@@ -84,7 +83,6 @@
     return cameraSide;
   }
 
-  // Back-compat aliases (rotation must never twist the preview again)
   function setCameraRotation(value) {
     return setCameraSide(value);
   }
@@ -97,13 +95,25 @@
     return 0;
   }
 
+  // Zoom + pan so a person standing at screen center lands in the middle of the view.
+  // panRawX shifts the crop in the unmirrored camera buffer.
+  // Left-edge camera: screen-centered subject sits toward the right of the raw frame.
+  function reframeParams(side = cameraSide) {
+    const resolved = normalizeCameraSide(side);
+    if (resolved === "left") return { zoom: 1.42, panRawX: 0.18 };
+    if (resolved === "right") return { zoom: 1.42, panRawX: -0.18 };
+    return { zoom: 1.08, panRawX: 0 };
+  }
+
   function applyPreviewTransform(videoEl) {
     if (!videoEl) return;
-    // Always upright + mirrored selfie view. Side-camera mounts are handled by
-    // offsetting the guide ring, not by rotating the person sideways.
+    const { zoom, panRawX } = reframeParams(cameraSide);
     videoEl.dataset.cameraSide = cameraSide;
     videoEl.dataset.cameraRotation = "0";
-    videoEl.style.transform = "scaleX(-1)";
+    // Mirror for selfie feel. Pan is flipped vs raw because of scaleX(-1).
+    const panCss = (-panRawX * 100).toFixed(2);
+    videoEl.style.transformOrigin = "center center";
+    videoEl.style.transform = `scaleX(-1) scale(${zoom}) translateX(${panCss}%)`;
   }
 
   function applyPreviewRotation(videoEl) {
@@ -116,8 +126,9 @@
     target.querySelectorAll(".synk-pod-frame, .face-video-wrap").forEach((el) => {
       el.dataset.cameraSide = resolved;
     });
+    // Ring stays centered — framing is done by reframing the video, not moving the guide.
     target.querySelectorAll(".synk-pod-ring, .face-guide-ring").forEach((el) => {
-      el.dataset.cameraSide = resolved;
+      el.dataset.cameraSide = "center";
     });
   }
 
@@ -150,7 +161,10 @@
     });
     videoEl.srcObject = stream;
     applyPreviewTransform(videoEl);
-    applyCameraGuide(videoEl.closest(".synk-pod-frame, .face-video-wrap, .face-modal-card, .synk-modal-card, body") || document);
+    applyCameraGuide(
+      videoEl.closest(".synk-pod-frame, .face-video-wrap, .face-modal-card, .synk-modal-card, body") ||
+        document
+    );
     await videoEl.play();
     return stream;
   }
@@ -168,12 +182,19 @@
   function captureVideoFrame(videoEl) {
     const width = videoEl.videoWidth || 640;
     const height = videoEl.videoHeight || 480;
+    const { zoom, panRawX } = reframeParams(cameraSide);
+    const cropW = Math.max(1, width / zoom);
+    const cropH = Math.max(1, height / zoom);
+    const cx = width * (0.5 + panRawX);
+    const cy = height * 0.5;
+    const sx = Math.max(0, Math.min(width - cropW, cx - cropW / 2));
+    const sy = Math.max(0, Math.min(height - cropH, cy - cropH / 2));
+
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = Math.round(cropW);
+    canvas.height = Math.round(cropH);
     const ctx = canvas.getContext("2d");
-    // Raw camera buffer (CSS mirror is display-only)
-    ctx.drawImage(videoEl, 0, 0, width, height);
+    ctx.drawImage(videoEl, sx, sy, cropW, cropH, 0, 0, canvas.width, canvas.height);
     return canvas;
   }
 
@@ -193,7 +214,7 @@
     getCameraSide,
     applyCameraGuide,
     applyPreviewTransform,
-    // legacy names kept so older callers don't break
+    reframeParams,
     setCameraRotation,
     getCameraRotation,
     applyPreviewRotation,

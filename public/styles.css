@@ -1326,22 +1326,6 @@ html[data-theme="dark"] .synk-code {
   transform: translate(-50%, -50%);
 }
 
-/* Mirrored preview: physical left-edge camera → face sits toward preview-left when the person stays screen-centered */
-.synk-pod-ring[data-camera-side="left"],
-.synk-pod-frame[data-camera-side="left"] .synk-pod-ring {
-  left: 34%;
-}
-
-.synk-pod-ring[data-camera-side="right"],
-.synk-pod-frame[data-camera-side="right"] .synk-pod-ring {
-  left: 66%;
-}
-
-.synk-pod-ring[data-camera-side="center"],
-.synk-pod-frame[data-camera-side="center"] .synk-pod-ring {
-  left: 50%;
-}
-
 .synk-modal-card.synk-verified .synk-pod-ring,
 .face-modal.synk-verified .synk-pod-ring {
   border-color: #2b6bff;
