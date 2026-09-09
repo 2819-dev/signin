@@ -1,4 +1,4 @@
-const { getSql, json, requireAdmin } = require("./lib/db");
+const { getSql, json, requireSynkAdmin } = require("./lib/db");
 const { hashSecret, generateSynkCode, ensureSynkCoreTables } = require("./lib/synk");
 
 function normalizeName(value) {
@@ -88,7 +88,7 @@ exports.handler = async (event) => {
     await ensureSynkTables(sql);
 
     if (event.httpMethod === "GET") {
-      const auth = requireAdmin(event);
+      const auth = requireSynkAdmin(event);
       if (!auth.ok) return auth.response;
 
       const rows = await sql`
@@ -103,7 +103,7 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === "POST") {
-      const auth = requireAdmin(event);
+      const auth = requireSynkAdmin(event);
       if (!auth.ok) return auth.response;
 
       let body;
@@ -148,7 +148,7 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === "PATCH") {
-      const auth = requireAdmin(event);
+      const auth = requireSynkAdmin(event);
       if (!auth.ok) return auth.response;
 
       let body;
@@ -237,7 +237,7 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === "DELETE") {
-      const auth = requireAdmin(event);
+      const auth = requireSynkAdmin(event);
       if (!auth.ok) return auth.response;
 
       const id =

@@ -40,6 +40,32 @@ function requireAdmin(event) {
   return { ok: true };
 }
 
+function requireSynkAdmin(event) {
+  const expected = process.env.SYNK_ADMIN_SECRET;
+  if (!expected) {
+    return {
+      ok: false,
+      response: json(500, { error: "SYNK_ADMIN_SECRET is not configured" }),
+    };
+  }
+
+  const headers = event.headers || {};
+  const header =
+    headers["x-synk-admin-secret"] || headers["X-Synk-Admin-Secret"] || "";
+  const querySecret =
+    event.queryStringParameters && event.queryStringParameters.secret
+      ? event.queryStringParameters.secret
+      : null;
+  const provided = header || querySecret;
+
+  // Synk Admin uses SYNK_ADMIN_SECRET only (not visitor ADMIN_SECRET).
+  if (!provided || provided !== expected) {
+    return { ok: false, response: json(401, { error: "Unauthorized" }) };
+  }
+
+  return { ok: true };
+}
+
 function mapRow(row) {
   return {
     id: row.id,
@@ -53,4 +79,4 @@ function mapRow(row) {
   };
 }
 
-module.exports = { getSql, json, requireAdmin, mapRow };
+module.exports = { getSql, json, requireAdmin, requireSynkAdmin, mapRow };

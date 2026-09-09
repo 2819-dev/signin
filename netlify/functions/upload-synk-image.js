@@ -1,5 +1,5 @@
 const { getStore, connectLambda } = require("@netlify/blobs");
-const { json, requireAdmin } = require("./lib/db");
+const { json, requireSynkAdmin } = require("./lib/db");
 const { randomUUID } = require("crypto");
 
 const MAX_BYTES = 3.5 * 1024 * 1024;
@@ -14,7 +14,7 @@ exports.handler = async (event) => {
     return json(405, { error: "Method not allowed" });
   }
 
-  const auth = requireAdmin(event);
+  const auth = requireSynkAdmin(event);
   if (!auth.ok) return auth.response;
 
   let body;

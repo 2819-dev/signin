@@ -188,6 +188,8 @@
           <h2>Face sign-in</h2>
           <p class="muted" style="margin: 0 0 12px;">
             Enroll people the kiosk can recognize. Choose auto-fill name, auto-admit, or auto-deny.
+            Synk ID members are managed separately in
+            <a href="/synk-admin" target="_blank" rel="noopener">Synk Admin</a>.
           </p>
 
           <form id="face-enroll-form" class="face-enroll-form" autocomplete="off">
@@ -390,110 +392,9 @@
         </section>
       </div>
 
-      <div id="pane-synk" class="admin-pane hidden">
-        <div class="admin-top">
-          <header class="admin-header">
-            <div>
-              <p class="eyebrow">Identity</p>
-              <h1><span class="synk-mark" aria-hidden="true"><img src="/synk-logo.svg" alt="" /></span>Synk</h1>
-              <p class="muted">Standalone identity for authorized humans — Visitor Sign-In is one connected app.</p>
-            </div>
-          </header>
-        </div>
-
-        <section class="settings-card" id="synk-settings">
-          <div class="synk-hero">
-            <div class="synk-hero-logo" aria-hidden="true">
-              <img src="/synk-logo.svg" alt="" />
-            </div>
-            <div>
-              <h2 style="margin:0 0 6px;">Synk members</h2>
-              <p class="muted" style="margin:0;">
-                Enroll once. Members verify face-first and receive a short-lived Synk pass any connected app can redeem.
-                <a href="/synk" target="_blank" rel="noopener">Open Synk verify</a>
-              </p>
-            </div>
-          </div>
-
-          <form id="synk-enroll-form" class="synk-enroll-form" autocomplete="off" style="margin-top:16px;">
-            <div class="field">
-              <label for="synk-enroll-name">Legal name</label>
-              <input id="synk-enroll-name" type="text" maxlength="100" required placeholder="Full name" />
-            </div>
-            <div class="field">
-              <label for="synk-enroll-dob">Date of birth</label>
-              <input id="synk-enroll-dob" type="date" required />
-            </div>
-            <div class="field">
-              <label for="synk-enroll-policy">When verified</label>
-              <select id="synk-enroll-policy">
-                <option value="pending" selected>Needs accept / deny</option>
-                <option value="autofill">Auto-fill name only</option>
-                <option value="auto_admit">Auto-admit</option>
-                <option value="auto_deny">Auto-deny</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="synk-enroll-file">Face biometrics photo</label>
-              <input id="synk-enroll-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
-              <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
-                Clear front-facing photo — this is what the kiosk matches.
-              </p>
-            </div>
-            <div class="field">
-              <label for="synk-enroll-secret">Backup secret <span class="muted">(optional)</span></label>
-              <input id="synk-enroll-secret" type="password" maxlength="200" placeholder="Only if camera fails" autocomplete="new-password" />
-              <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
-                Optional fallback with Synk code + DOB if face verify fails.
-              </p>
-            </div>
-            <button class="btn btn-primary" type="submit" id="synk-enroll-btn">Enroll Synk member</button>
-            <p id="synk-enroll-status" class="muted" style="margin: 8px 0 0; font-size: 0.85rem;"></p>
-          </form>
-
-          <p class="section-label" style="margin-top:4px;">Members</p>
-          <div id="synk-profiles" class="synk-profiles"></div>
-          <p id="synk-profiles-empty" class="chat-empty-note">No Synk members yet.</p>
-        </section>
-
-        <section class="settings-card" id="synk-apps-settings">
-          <h2 style="margin:0 0 6px;">Connected apps</h2>
-          <p class="muted" style="margin:0 0 12px;">
-            Each app gets an API key to redeem Synk passes. Visitor Sign-In is built in.
-          </p>
-          <form id="synk-app-form" class="synk-enroll-form" autocomplete="off">
-            <div class="field">
-              <label for="synk-app-name">App name</label>
-              <input id="synk-app-name" type="text" maxlength="100" required placeholder="Door access, HQ app…" />
-            </div>
-            <div class="field">
-              <label for="synk-app-slug">Slug</label>
-              <input id="synk-app-slug" type="text" maxlength="60" placeholder="door-access" />
-            </div>
-            <button class="btn btn-secondary" type="submit" id="synk-app-btn">Add app</button>
-            <p id="synk-app-status" class="muted" style="margin:8px 0 0;font-size:0.85rem;"></p>
-          </form>
-          <div id="synk-apps" class="synk-apps" style="margin-top:14px;"></div>
-          <p id="synk-apps-empty" class="chat-empty-note">No apps yet.</p>
-        </section>
-
-        <section class="settings-card" id="synk-activity-settings">
-          <h2 style="margin:0 0 6px;">Recent Synk activity</h2>
-          <p class="muted" style="margin:0 0 12px;">Security audit of verifies, passes, and rate limits.</p>
-          <div id="synk-events" class="synk-events"></div>
-          <p id="synk-events-empty" class="chat-empty-note">No activity yet.</p>
-        </section>
-      </div>
-
       <nav class="admin-tabbar" aria-label="Admin sections">
         <button type="button" class="admin-tab active" data-pane="signin" id="tab-signin">
           <span class="admin-tab-label">Sign In</span>
-        </button>
-        <button type="button" class="admin-tab" data-pane="synk" id="tab-synk">
-          <span class="admin-tab-label admin-tab-synk">
-            <span class="synk-mark" aria-hidden="true"><img src="/synk-logo.svg" alt="" /></span>
-            Synk
-          </span>
         </button>
         <button type="button" class="admin-tab" data-pane="control" id="tab-control">
           <span class="admin-tab-label">Control</span>
@@ -508,10 +409,8 @@
       const panelView = document.getElementById("panel-view");
       const paneSignin = document.getElementById("pane-signin");
       const paneControl = document.getElementById("pane-control");
-      const paneSynk = document.getElementById("pane-synk");
       const tabSignin = document.getElementById("tab-signin");
       const tabControl = document.getElementById("tab-control");
-      const tabSynk = document.getElementById("tab-synk");
       const unlockForm = document.getElementById("unlock-form");
       const unlockError = document.getElementById("unlock-error");
       const listEl = document.getElementById("list");
@@ -590,28 +489,6 @@
       const faceProfilesEl = document.getElementById("face-profiles");
       const faceProfilesEmpty = document.getElementById("face-profiles-empty");
       let faceProfilesCache = [];
-
-      const synkEnrollForm = document.getElementById("synk-enroll-form");
-      const synkEnrollName = document.getElementById("synk-enroll-name");
-      const synkEnrollDob = document.getElementById("synk-enroll-dob");
-      const synkEnrollPolicy = document.getElementById("synk-enroll-policy");
-      const synkEnrollSecret = document.getElementById("synk-enroll-secret");
-      const synkEnrollFile = document.getElementById("synk-enroll-file");
-      const synkEnrollBtn = document.getElementById("synk-enroll-btn");
-      const synkEnrollStatus = document.getElementById("synk-enroll-status");
-      const synkProfilesEl = document.getElementById("synk-profiles");
-      const synkProfilesEmpty = document.getElementById("synk-profiles-empty");
-      let synkProfilesCache = [];
-      const synkAppForm = document.getElementById("synk-app-form");
-      const synkAppName = document.getElementById("synk-app-name");
-      const synkAppSlug = document.getElementById("synk-app-slug");
-      const synkAppBtn = document.getElementById("synk-app-btn");
-      const synkAppStatus = document.getElementById("synk-app-status");
-      const synkAppsEl = document.getElementById("synk-apps");
-      const synkAppsEmpty = document.getElementById("synk-apps-empty");
-      const synkEventsEl = document.getElementById("synk-events");
-      const synkEventsEmpty = document.getElementById("synk-events-empty");
-      let synkAppsCache = [];
 
       const STORAGE_KEY = "visitor_admin_secret";
       const PANE_KEY = "visitor_admin_pane";
@@ -727,13 +604,11 @@
       }
 
       function setAdminPane(pane) {
-        const next = pane === "control" ? "control" : pane === "synk" ? "synk" : "signin";
+        const next = pane === "control" ? "control" : "signin";
         paneSignin.classList.toggle("hidden", next !== "signin");
         paneControl.classList.toggle("hidden", next !== "control");
-        paneSynk.classList.toggle("hidden", next !== "synk");
         tabSignin.classList.toggle("active", next === "signin");
         tabControl.classList.toggle("active", next === "control");
-        tabSynk.classList.toggle("active", next === "synk");
         localStorage.setItem(PANE_KEY, next);
         document.body.classList.toggle("admin-control", next === "control");
       }
@@ -1725,7 +1600,7 @@
           sessionStorage.removeItem(STORAGE_KEY);
           unlockView.classList.add("hidden");
           panelView.classList.remove("hidden");
-          setAdminPane(localStorage.getItem(PANE_KEY) || "signin");
+          setAdminPane((() => { const p = localStorage.getItem(PANE_KEY); return p === "control" ? "control" : "signin"; })());
           firstLoad = true;
           knownIds = new Set();
           chatFirstLoad = true;
@@ -1736,7 +1611,6 @@
           applySettingsToForm(settings);
           await refresh();
           refreshFaces().catch(() => {});
-          refreshSynkHub().catch(() => {});
           pollTimer = setInterval(refresh, 3000);
           if ("Notification" in window && Notification.permission === "granted") {
             ensurePushSubscription().catch(() => {});
@@ -1935,7 +1809,6 @@
       });
 
       tabSignin.addEventListener("click", () => setAdminPane("signin"));
-      tabSynk.addEventListener("click", () => setAdminPane("synk"));
       tabControl.addEventListener("click", () => setAdminPane("control"));
 
       chatInboxEl.addEventListener("click", async (e) => {
@@ -2216,465 +2089,6 @@
         }
       });
 
-      function formatDob(value) {
-        const raw = String(value || "").slice(0, 10);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw || "—";
-        const [y, m, d] = raw.split("-");
-        return `${m}/${d}/${y}`;
-      }
-
-      function synkPolicyLabel(policy) {
-        if (policy === "auto_admit") return "Auto-admit";
-        if (policy === "auto_deny") return "Auto-deny";
-        if (policy === "autofill") return "Auto-fill name";
-        return "Needs accept / deny";
-      }
-
-      function renderSynkProfiles(profiles) {
-        synkProfilesCache = profiles || [];
-        if (!synkProfilesCache.length) {
-          synkProfilesEl.innerHTML = "";
-          synkProfilesEmpty.classList.remove("hidden");
-          return;
-        }
-        synkProfilesEmpty.classList.add("hidden");
-        synkProfilesEl.innerHTML = synkProfilesCache
-          .map((profile) => {
-            const photo = profile.photoUrl
-              ? `<img src="${escapeHtml(profile.photoUrl)}" alt="" />`
-              : `<img alt="" style="background:#ddd" />`;
-            return `
-              <article class="synk-profile-card ${profile.enabled ? "" : "disabled"}" data-synk-id="${escapeHtml(profile.id)}">
-                ${photo}
-                <div class="synk-profile-meta">
-                  <div>
-                    <strong>${escapeHtml(profile.name)}</strong>
-                    <div class="synk-code">${escapeHtml(profile.synkCode || "")}</div>
-                    <div class="muted" style="font-size:0.82rem;margin-top:4px;">
-                      DOB ${escapeHtml(formatDob(profile.dateOfBirth))}
-                      · ${escapeHtml(synkPolicyLabel(profile.policy))}
-                      · ${profile.hasBiometrics ? "Face enrolled" : "Needs face photo"}
-                      ${profile.hasSecret ? " · Backup secret" : ""}
-                      ${profile.enabled ? "" : " · paused"}
-                    </div>
-                  </div>
-                  <label class="field" style="margin:0;">
-                    <span class="muted" style="font-size:0.78rem;">When verified</span>
-                    <select data-synk-action="policy">
-                      <option value="pending" ${profile.policy === "pending" || !profile.policy ? "selected" : ""}>Needs accept / deny</option>
-                      <option value="autofill" ${profile.policy === "autofill" ? "selected" : ""}>Auto-fill name only</option>
-                      <option value="auto_admit" ${profile.policy === "auto_admit" ? "selected" : ""}>Auto-admit</option>
-                      <option value="auto_deny" ${profile.policy === "auto_deny" ? "selected" : ""}>Auto-deny</option>
-                    </select>
-                  </label>
-                  <label class="field" style="margin:0;">
-                    <span class="muted" style="font-size:0.78rem;">Reset secret (optional)</span>
-                    <input type="password" data-synk-action="secret" placeholder="New secret" maxlength="200" autocomplete="new-password" />
-                  </label>
-                  <div class="synk-profile-actions">
-                    <label class="btn btn-secondary btn-compact" style="cursor:pointer;">
-                      Update face
-                      <input type="file" accept="image/jpeg,image/png,image/webp" data-synk-action="photo" hidden />
-                    </label>
-                    <button class="btn btn-secondary btn-compact" type="button" data-synk-action="save-secret">
-                      Save secret
-                    </button>
-                    <button class="btn btn-secondary btn-compact" type="button" data-synk-action="toggle">
-                      ${profile.enabled ? "Pause" : "Enable"}
-                    </button>
-                    <button class="btn btn-danger btn-compact" type="button" data-synk-action="delete">Remove</button>
-                  </div>
-                </div>
-              </article>
-            `;
-          })
-          .join("");
-      }
-
-      async function refreshSynkProfiles() {
-        try {
-          const res = await fetch("/api/synk-profiles", { headers: adminHeaders() });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not load Synk IDs");
-          renderSynkProfiles(data.profiles || []);
-        } catch (err) {
-          console.error(err);
-        }
-      }
-
-      function renderSynkApps(apps) {
-        synkAppsCache = apps || [];
-        if (!synkAppsCache.length) {
-          synkAppsEl.innerHTML = "";
-          synkAppsEmpty.classList.remove("hidden");
-          return;
-        }
-        synkAppsEmpty.classList.add("hidden");
-        synkAppsEl.innerHTML = synkAppsCache
-          .map(
-            (app) => `
-            <article class="synk-app-card ${app.enabled ? "" : "disabled"}" data-synk-app-id="${escapeHtml(app.id)}">
-              <strong>${escapeHtml(app.name)}</strong>
-              <div class="muted" style="font-size:0.82rem;margin:4px 0 10px;">
-                <code>${escapeHtml(app.slug)}</code>
-                ${app.enabled ? "" : " · paused"}
-              </div>
-              <div class="synk-profile-actions">
-                <button class="btn btn-secondary btn-compact" type="button" data-synk-app-action="rotate">
-                  Rotate API key
-                </button>
-                <button class="btn btn-secondary btn-compact" type="button" data-synk-app-action="toggle">
-                  ${app.enabled ? "Pause" : "Enable"}
-                </button>
-                ${
-                  app.slug === "visitor-signin"
-                    ? ""
-                    : `<button class="btn btn-danger btn-compact" type="button" data-synk-app-action="delete">Remove</button>`
-                }
-              </div>
-            </article>
-          `
-          )
-          .join("");
-      }
-
-      function renderSynkEvents(events) {
-        if (!events || !events.length) {
-          synkEventsEl.innerHTML = "";
-          synkEventsEmpty.classList.remove("hidden");
-          return;
-        }
-        synkEventsEmpty.classList.add("hidden");
-        synkEventsEl.innerHTML = events
-          .map((ev) => {
-            const when = ev.createdAt ? formatTime(ev.createdAt) : "";
-            return `
-              <div class="synk-event-row">
-                <strong>${escapeHtml(ev.type || "event")}</strong>
-                <div class="muted">${escapeHtml(when)}${ev.appSlug ? ` · ${escapeHtml(ev.appSlug)}` : ""}${ev.detail ? ` · ${escapeHtml(ev.detail)}` : ""}</div>
-              </div>
-            `;
-          })
-          .join("");
-      }
-
-      async function refreshSynkApps() {
-        try {
-          const res = await fetch("/api/synk-apps", { headers: adminHeaders() });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not load Synk apps");
-          renderSynkApps(data.apps || []);
-          renderSynkEvents(data.events || []);
-        } catch (err) {
-          console.error(err);
-        }
-      }
-
-      async function refreshSynkHub() {
-        await Promise.all([refreshSynkProfiles(), refreshSynkApps()]);
-      }
-
-      async function optimizeSynkPhoto(file) {
-        const type = (file.type || "").toLowerCase();
-        if (!["image/jpeg", "image/png", "image/webp"].includes(type)) {
-          throw new Error("Use a JPG, PNG, or WebP");
-        }
-        const original = await fileToDataUrl(file);
-        const img = await loadImage(original);
-        const maxSide = 960;
-        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-        const width = Math.max(1, Math.round(img.width * scale));
-        const height = Math.max(1, Math.round(img.height * scale));
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
-        return { dataUrl, contentType: "image/jpeg", canvas, fileName: file.name || "synk.jpg" };
-      }
-
-      async function uploadSynkPhoto(file) {
-        const optimized = await optimizeSynkPhoto(file);
-        const res = await fetch("/api/upload-synk-image", {
-          method: "POST",
-          headers: adminHeaders(),
-          body: JSON.stringify({
-            data: optimized.dataUrl,
-            contentType: optimized.contentType,
-            fileName: optimized.fileName,
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "Upload failed");
-        return { ...data, canvas: optimized.canvas };
-      }
-
-      synkEnrollForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const name = synkEnrollName.value.trim();
-        const dateOfBirth = synkEnrollDob.value;
-        const secret = synkEnrollSecret.value.trim();
-        const file = synkEnrollFile.files && synkEnrollFile.files[0];
-        if (!name || !dateOfBirth || !file) return;
-
-        synkEnrollBtn.disabled = true;
-        synkEnrollStatus.textContent = "Reading face biometrics…";
-        try {
-          if (!window.KioskFace) throw new Error("Face library still loading — wait a second");
-          await window.KioskFace.ensureFaceApi();
-          const uploaded = await uploadSynkPhoto(file);
-          const descriptor = await window.KioskFace.descriptorFromImage(uploaded.canvas);
-          synkEnrollStatus.textContent = "Creating Synk member…";
-          const res = await fetch("/api/synk-profiles", {
-            method: "POST",
-            headers: adminHeaders(),
-            body: JSON.stringify({
-              name,
-              dateOfBirth,
-              secret: secret || undefined,
-              policy: synkEnrollPolicy.value || "pending",
-              photoUrl: uploaded.url,
-              descriptor,
-            }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not enroll Synk member");
-          synkEnrollForm.reset();
-          synkEnrollStatus.textContent = data.profile
-            ? `Enrolled ${data.profile.synkCode}`
-            : "Enrolled";
-          showToast(data.profile ? `Synk member ${data.profile.synkCode}` : "Synk member enrolled");
-          await refreshSynkProfiles();
-        } catch (err) {
-          synkEnrollStatus.textContent = err.message || "Could not enroll";
-          showToast(err.message || "Could not enroll Synk member");
-        } finally {
-          synkEnrollBtn.disabled = false;
-        }
-      });
-
-      synkProfilesEl.addEventListener("change", async (e) => {
-        const policySelect = e.target.closest('[data-synk-action="policy"]');
-        const photoInput = e.target.closest('[data-synk-action="photo"]');
-        const card = e.target.closest("[data-synk-id]");
-        if (!card) return;
-        const id = card.getAttribute("data-synk-id");
-
-        if (policySelect) {
-          try {
-            const res = await fetch("/api/synk-profiles", {
-              method: "PATCH",
-              headers: adminHeaders(),
-              body: JSON.stringify({ id, policy: policySelect.value }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not update policy");
-            showToast("Policy updated");
-            await refreshSynkProfiles();
-          } catch (err) {
-            showToast(err.message || "Could not update policy");
-            await refreshSynkProfiles();
-          }
-          return;
-        }
-
-        if (!photoInput) return;
-        const file = photoInput.files && photoInput.files[0];
-        if (!file) return;
-        try {
-          showToast("Updating biometrics…");
-          if (!window.KioskFace) throw new Error("Face library still loading");
-          await window.KioskFace.ensureFaceApi();
-          const uploaded = await uploadSynkPhoto(file);
-          const descriptor = await window.KioskFace.descriptorFromImage(uploaded.canvas);
-          const res = await fetch("/api/synk-profiles", {
-            method: "PATCH",
-            headers: adminHeaders(),
-            body: JSON.stringify({ id, photoUrl: uploaded.url, descriptor }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not update photo");
-          showToast("Biometrics updated");
-          await refreshSynkProfiles();
-        } catch (err) {
-          showToast(err.message || "Could not update photo");
-        } finally {
-          photoInput.value = "";
-        }
-      });
-
-      synkProfilesEl.addEventListener("click", async (e) => {
-        const btn = e.target.closest("[data-synk-action]");
-        const card = e.target.closest("[data-synk-id]");
-        if (!btn || !card) return;
-        const action = btn.getAttribute("data-synk-action");
-        if (action === "photo" || action === "secret" || action === "policy") return;
-        const id = card.getAttribute("data-synk-id");
-        const profile = synkProfilesCache.find((p) => p.id === id);
-        if (!profile) return;
-
-        if (action === "save-secret") {
-          const secretInput = card.querySelector('[data-synk-action="secret"]');
-          const secret = secretInput ? secretInput.value.trim() : "";
-          if (!secret) {
-            showToast("Enter a new secret first");
-            return;
-          }
-          try {
-            const res = await fetch("/api/synk-profiles", {
-              method: "PATCH",
-              headers: adminHeaders(),
-              body: JSON.stringify({ id, secret }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not update secret");
-            if (secretInput) secretInput.value = "";
-            showToast("Secret updated");
-          } catch (err) {
-            showToast(err.message || "Could not update secret");
-          }
-        }
-
-        if (action === "toggle") {
-          try {
-            const res = await fetch("/api/synk-profiles", {
-              method: "PATCH",
-              headers: adminHeaders(),
-              body: JSON.stringify({ id, enabled: !profile.enabled }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not update");
-            showToast(profile.enabled ? "Paused" : "Enabled");
-            await refreshSynkProfiles();
-          } catch (err) {
-            showToast(err.message || "Could not update");
-          }
-        }
-
-        if (action === "delete") {
-          if (!confirm(`Remove Synk ID for ${profile.name}?`)) return;
-          try {
-            const res = await fetch(`/api/synk-profiles?id=${encodeURIComponent(id)}`, {
-              method: "DELETE",
-              headers: adminHeaders(),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not remove");
-            showToast("Removed");
-            await refreshSynkProfiles();
-          } catch (err) {
-            showToast(err.message || "Could not remove");
-          }
-        }
-      });
-
-      synkAppForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const name = synkAppName.value.trim();
-        const slug = synkAppSlug.value.trim();
-        if (!name) return;
-        synkAppBtn.disabled = true;
-        synkAppStatus.textContent = "Creating app…";
-        try {
-          const res = await fetch("/api/synk-apps", {
-            method: "POST",
-            headers: adminHeaders(),
-            body: JSON.stringify({ name, slug: slug || undefined }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not create app");
-          synkAppForm.reset();
-          synkAppStatus.textContent = data.apiKey
-            ? `Created. API key (copy now): ${data.apiKey}`
-            : "Created";
-          if (data.apiKey) {
-            try {
-              await navigator.clipboard.writeText(data.apiKey);
-              showToast("App created — API key copied");
-            } catch (_) {
-              showToast("App created — copy the API key shown below");
-            }
-          } else {
-            showToast("App created");
-          }
-          await refreshSynkApps();
-        } catch (err) {
-          synkAppStatus.textContent = err.message || "Could not create app";
-          showToast(err.message || "Could not create app");
-        } finally {
-          synkAppBtn.disabled = false;
-        }
-      });
-
-      synkAppsEl.addEventListener("click", async (e) => {
-        const btn = e.target.closest("[data-synk-app-action]");
-        const card = e.target.closest("[data-synk-app-id]");
-        if (!btn || !card) return;
-        const id = card.getAttribute("data-synk-app-id");
-        const action = btn.getAttribute("data-synk-app-action");
-        const app = synkAppsCache.find((a) => a.id === id);
-        if (!app) return;
-
-        if (action === "rotate") {
-          if (!confirm(`Rotate API key for ${app.name}? The old key stops working.`)) return;
-          try {
-            const res = await fetch("/api/synk-apps", {
-              method: "POST",
-              headers: adminHeaders(),
-              body: JSON.stringify({ action: "rotate-key", id }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not rotate key");
-            synkAppStatus.textContent = data.apiKey
-              ? `New API key (copy now): ${data.apiKey}`
-              : "Key rotated";
-            if (data.apiKey) {
-              try {
-                await navigator.clipboard.writeText(data.apiKey);
-                showToast("New API key copied");
-              } catch (_) {
-                showToast("Key rotated — copy it from the status line");
-              }
-            }
-            await refreshSynkApps();
-          } catch (err) {
-            showToast(err.message || "Could not rotate key");
-          }
-        }
-
-        if (action === "toggle") {
-          try {
-            const res = await fetch("/api/synk-apps", {
-              method: "PATCH",
-              headers: adminHeaders(),
-              body: JSON.stringify({ id, enabled: !app.enabled }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not update app");
-            showToast(app.enabled ? "App paused" : "App enabled");
-            await refreshSynkApps();
-          } catch (err) {
-            showToast(err.message || "Could not update app");
-          }
-        }
-
-        if (action === "delete") {
-          if (!confirm(`Remove app ${app.name}?`)) return;
-          try {
-            const res = await fetch(`/api/synk-apps?id=${encodeURIComponent(id)}`, {
-              method: "DELETE",
-              headers: adminHeaders(),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not remove app");
-            showToast("App removed");
-            await refreshSynkApps();
-          } catch (err) {
-            showToast(err.message || "Could not remove app");
-          }
-        }
-      });
-
       chatCloseSessionBtn.addEventListener("click", async () => {
         if (!activeChatId) return;
         const currentlyClosed = chatCloseSessionBtn.dataset.status === "closed";
@@ -2757,13 +2171,12 @@
       if (secret) {
         unlockView.classList.add("hidden");
         panelView.classList.remove("hidden");
-        setAdminPane(localStorage.getItem(PANE_KEY) || "signin");
+        setAdminPane((() => { const p = localStorage.getItem(PANE_KEY); return p === "control" ? "control" : "signin"; })());
         Promise.all([fetchSettings(), refresh()])
           .then(([settings]) => {
             applySettingsToForm(settings);
             refreshFaces().catch(() => {});
-            refreshSynkHub().catch(() => {});
-            pollTimer = setInterval(refresh, 3000);
+              pollTimer = setInterval(refresh, 3000);
             if ("Notification" in window && Notification.permission === "granted") {
               ensurePushSubscription().catch(() => {});
             }

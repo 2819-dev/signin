@@ -1,4 +1,4 @@
-const { getSql, json, requireAdmin } = require("./lib/db");
+const { getSql, json, requireSynkAdmin } = require("./lib/db");
 const {
   ensureSynkCoreTables,
   generateApiKey,
@@ -38,7 +38,7 @@ exports.handler = async (event) => {
     return json(204, {});
   }
 
-  const auth = requireAdmin(event);
+  const auth = requireSynkAdmin(event);
   if (!auth.ok) return auth.response;
 
   try {
@@ -56,7 +56,7 @@ exports.handler = async (event) => {
         SELECT id, event_type, synk_profile_id, app_slug, ip, detail, created_at
         FROM synk_events
         ORDER BY created_at DESC
-        LIMIT 40
+        LIMIT 80
       `;
       return json(200, {
         apps: rows.map(mapApp),

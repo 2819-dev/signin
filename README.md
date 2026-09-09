@@ -10,6 +10,8 @@ Visitors enter their **name** and **why they want to come in**. You get the requ
 |-----|--------|--------------|
 | `/` | iPad (kiosk) | Sign-in form → waits → shows admitted / declined |
 | `/admin` | Phone | Live request list, admit / decline, browser alerts |
+| `/synk` | Any | Public Synk ID face verify |
+| `/synk-admin` | Phone / desktop | Synk Admin — members, apps, activity (own secret) |
 
 ## Stack
 
@@ -34,6 +36,7 @@ Visitors enter their **name** and **why they want to come in**. You get the requ
 |----------|--------|
 | `DATABASE_URL` | Your Neon connection string |
 | `ADMIN_SECRET` | A long random string only you know |
+| `SYNK_ADMIN_SECRET` | A **different** long random string for Synk Admin |
 
 3. Deploy. Publish directory is `public`; functions are in `netlify/functions`.
 

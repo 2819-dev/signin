@@ -1807,13 +1807,71 @@ body.mode-blackout .sand-waves path {
   width: min(100%, 740px);
   z-index: 40;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--theme-color) 88%, transparent);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border-top: 1px solid var(--line);
+}
+
+.synk-admin-tabbar {
+  width: min(100%, 920px);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.synk-admin-shell {
+  width: min(100%, 920px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.synk-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (min-width: 720px) {
+  .synk-stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.synk-stat-card {
+  border: 1px solid var(--line);
+  background: var(--surface-solid);
+  border-radius: 18px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.synk-stat-card strong {
+  font-size: 1.55rem;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.synk-link-list {
+  display: grid;
+  gap: 10px;
+}
+
+.synk-link-list a {
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--surface-solid);
+}
+
+.synk-admin .admin-tab {
+  font-size: 0.78rem;
+  padding: 11px 6px;
 }
 
 .admin-tab {
