@@ -4,8 +4,9 @@
   "private": true,
   "description": "Simple iPad visitor check-in with phone admin admit/decline",
   "scripts": {
-    "dev": "netlify dev",
-    "build": "echo 'Static site — no build step'"
+    "prebuild": "node scripts/write-version.js",
+    "dev": "node scripts/write-version.js && netlify dev",
+    "build": "node scripts/write-version.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",

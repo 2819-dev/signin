@@ -1,14 +1,14 @@
 {
-  "name": "Admin",
-  "short_name": "Admin",
-  "description": "Visitor sign-in admin",
-  "start_url": "/admin",
+  "name": "Sign in",
+  "short_name": "Sign in",
+  "description": "Visitor sign-in kiosk",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "fullscreen"],
+  "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
-  "orientation": "portrait",
   "lang": "en",
   "icons": [
     {
