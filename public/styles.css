@@ -149,6 +149,7 @@ input[type="text"],
 input[type="password"],
 input[type="url"],
 input[type="datetime-local"],
+input[type="date"],
 select,
 textarea {
   width: 100%;
@@ -1148,6 +1149,148 @@ html[data-theme="dark"] .admin-shell input[type="file"] {
   opacity: 0.62;
 }
 
+.synk-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.35em;
+  height: 1.35em;
+  vertical-align: -0.22em;
+  margin-right: 0.28em;
+}
+
+.synk-mark img,
+.synk-mark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.admin-tab-synk {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.admin-tab-synk .synk-mark {
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+}
+
+.synk-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.synk-hero-logo {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(43, 107, 255, 0.08);
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(43, 107, 255, 0.18);
+}
+
+.synk-hero-logo img {
+  width: 42px;
+  height: 42px;
+}
+
+.synk-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  color: #2b6bff;
+  font-weight: 700;
+}
+
+html[data-theme="dark"] .synk-code {
+  color: #7aa2ff;
+}
+
+.synk-enroll-form {
+  display: grid;
+  gap: 0;
+  margin: 0 0 18px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.synk-enroll-form .field {
+  margin-bottom: 14px;
+}
+
+.synk-profiles {
+  display: grid;
+  gap: 12px;
+}
+
+.synk-profile-card {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface-solid);
+}
+
+.synk-profile-card img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 14px;
+  background: #ddd;
+}
+
+.synk-profile-meta {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.synk-profile-meta strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.synk-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.synk-profile-actions .btn {
+  width: auto;
+}
+
+.synk-profile-card.disabled {
+  opacity: 0.62;
+}
+
+.synk-signin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.synk-signin-btn .synk-mark {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+}
+
+.synk-modal-card .synk-hero {
+  margin-bottom: 8px;
+}
+
 .display-live-pill {
   display: inline-flex;
   align-items: center;
@@ -1529,7 +1672,7 @@ body.mode-blackout .sand-waves path {
   width: min(100%, 740px);
   z-index: 40;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--theme-color) 88%, transparent);

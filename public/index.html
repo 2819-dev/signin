@@ -108,11 +108,15 @@
           <div id="more-options" class="more-options">
             <button class="btn btn-secondary" type="button" id="more-options-btn">More options</button>
             <div id="more-options-panel" class="more-options-panel hidden">
+              <button class="btn btn-secondary synk-signin-btn" type="button" id="synk-signin-btn">
+                <span class="synk-mark" aria-hidden="true"><img src="/synk-logo.svg" alt="" /></span>
+                Sign in with Synk ID
+              </button>
               <button class="btn btn-secondary" type="button" id="face-signin-btn">
                 Sign in with Face
               </button>
               <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
-                Uses the camera to recognize enrolled people. Not Apple Face ID.
+                Synk ID is for authorized humans. Face uses the camera for enrolled people.
               </p>
             </div>
           </div>
@@ -169,6 +173,41 @@
           <button class="btn btn-secondary" type="button" id="face-cancel-btn">Cancel</button>
           <button class="btn btn-primary" type="button" id="face-scan-btn">Scan face</button>
         </div>
+      </div>
+    </div>
+
+    <div id="synk-modal" class="face-modal hidden" role="dialog" aria-modal="true" aria-labelledby="synk-modal-title">
+      <div class="face-modal-card synk-modal-card">
+        <button type="button" class="chat-modal-close" id="synk-close-btn" aria-label="Close">✕</button>
+        <div class="synk-hero">
+          <div class="synk-hero-logo" aria-hidden="true">
+            <img src="/synk-logo.svg" alt="" />
+          </div>
+          <div>
+            <p class="eyebrow">Synk ID</p>
+            <h2 id="synk-modal-title" style="margin:0;">Authorized sign-in</h2>
+          </div>
+        </div>
+        <p class="subtitle" style="margin-top:0;">Enter your Synk ID, date of birth, and secret.</p>
+        <form id="synk-signin-form" autocomplete="off">
+          <div class="field">
+            <label for="synk-code-input">Synk ID or name</label>
+            <input id="synk-code-input" type="text" maxlength="100" required placeholder="SK-XXXX-XXXX or name" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="synk-dob-input">Date of birth</label>
+            <input id="synk-dob-input" type="date" required />
+          </div>
+          <div class="field">
+            <label for="synk-secret-input">Secret</label>
+            <input id="synk-secret-input" type="password" maxlength="200" required placeholder="Your secret" autocomplete="off" />
+          </div>
+          <p id="synk-error" class="error hidden"></p>
+          <div class="btn-row" style="margin-top: 4px;">
+            <button class="btn btn-secondary" type="button" id="synk-cancel-btn">Cancel</button>
+            <button class="btn btn-primary" type="submit" id="synk-submit-btn">Sign in</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -1011,6 +1050,67 @@
       faceScanBtn.addEventListener("click", runFaceScan);
       faceModal.addEventListener("click", (e) => {
         if (e.target === faceModal) closeFaceModal();
+      });
+
+      // Synk ID sign-in
+      const synkSigninBtn = document.getElementById("synk-signin-btn");
+      const synkModal = document.getElementById("synk-modal");
+      const synkCloseBtn = document.getElementById("synk-close-btn");
+      const synkCancelBtn = document.getElementById("synk-cancel-btn");
+      const synkSigninForm = document.getElementById("synk-signin-form");
+      const synkCodeInput = document.getElementById("synk-code-input");
+      const synkDobInput = document.getElementById("synk-dob-input");
+      const synkSecretInput = document.getElementById("synk-secret-input");
+      const synkSubmitBtn = document.getElementById("synk-submit-btn");
+      const synkError = document.getElementById("synk-error");
+
+      function closeSynkModal() {
+        synkModal.classList.add("hidden");
+        synkError.classList.add("hidden");
+        synkSigninForm.reset();
+        synkSubmitBtn.disabled = false;
+      }
+
+      function openSynkModal() {
+        synkModal.classList.remove("hidden");
+        synkError.classList.add("hidden");
+        setTimeout(() => synkCodeInput.focus(), 50);
+      }
+
+      synkSigninBtn.addEventListener("click", openSynkModal);
+      synkCloseBtn.addEventListener("click", closeSynkModal);
+      synkCancelBtn.addEventListener("click", closeSynkModal);
+      synkModal.addEventListener("click", (e) => {
+        if (e.target === synkModal) closeSynkModal();
+      });
+      synkSigninForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        synkError.classList.add("hidden");
+        synkSubmitBtn.disabled = true;
+        try {
+          const res = await fetch("/api/synk-auth", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              synkCode: synkCodeInput.value.trim(),
+              dateOfBirth: synkDobInput.value,
+              secret: synkSecretInput.value,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not verify Synk ID");
+          if (!data.request) throw new Error("Sign-in failed");
+
+          closeSynkModal();
+          clearTimers();
+          currentRequestId = data.request.id;
+          show(admittedView);
+          startAutoReset(admittedResetHint, 5);
+        } catch (err) {
+          synkError.textContent = err.message || "Could not verify Synk ID";
+          synkError.classList.remove("hidden");
+          synkSubmitBtn.disabled = false;
+        }
       });
 
       const blockGesture = (e) => e.preventDefault();

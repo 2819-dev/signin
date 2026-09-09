@@ -377,9 +377,70 @@
         </section>
       </div>
 
+      <div id="pane-synk" class="admin-pane hidden">
+        <div class="admin-top">
+          <header class="admin-header">
+            <div>
+              <p class="eyebrow">Identity</p>
+              <h1><span class="synk-mark" aria-hidden="true"><img src="/synk-logo.svg" alt="" /></span>Synk</h1>
+              <p class="muted">Authorized humans for this kiosk and your other apps.</p>
+            </div>
+          </header>
+        </div>
+
+        <section class="settings-card" id="synk-settings">
+          <div class="synk-hero">
+            <div class="synk-hero-logo" aria-hidden="true">
+              <img src="/synk-logo.svg" alt="" />
+            </div>
+            <div>
+              <h2 style="margin:0 0 6px;">Person Synk ID</h2>
+              <p class="muted" style="margin:0;">
+                Clear identity for authorized people: name, photo, secret, and date of birth.
+                Sign-in with Synk ID auto-admits them at the tablet.
+              </p>
+            </div>
+          </div>
+
+          <form id="synk-enroll-form" class="synk-enroll-form" autocomplete="off" style="margin-top:16px;">
+            <div class="field">
+              <label for="synk-enroll-name">Name</label>
+              <input id="synk-enroll-name" type="text" maxlength="100" required placeholder="Full name" />
+            </div>
+            <div class="field">
+              <label for="synk-enroll-dob">Date of birth</label>
+              <input id="synk-enroll-dob" type="date" required />
+            </div>
+            <div class="field">
+              <label for="synk-enroll-secret">Secret</label>
+              <input id="synk-enroll-secret" type="password" maxlength="200" required placeholder="Personal secret" autocomplete="new-password" />
+              <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
+                They enter this with their Synk ID at the kiosk. Min 4 characters.
+              </p>
+            </div>
+            <div class="field">
+              <label for="synk-enroll-file">Picture</label>
+              <input id="synk-enroll-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
+            </div>
+            <button class="btn btn-primary" type="submit" id="synk-enroll-btn">Create Synk ID</button>
+            <p id="synk-enroll-status" class="muted" style="margin: 8px 0 0; font-size: 0.85rem;"></p>
+          </form>
+
+          <p class="section-label" style="margin-top:4px;">People</p>
+          <div id="synk-profiles" class="synk-profiles"></div>
+          <p id="synk-profiles-empty" class="chat-empty-note">No Synk IDs yet.</p>
+        </section>
+      </div>
+
       <nav class="admin-tabbar" aria-label="Admin sections">
         <button type="button" class="admin-tab active" data-pane="signin" id="tab-signin">
           <span class="admin-tab-label">Sign In</span>
+        </button>
+        <button type="button" class="admin-tab" data-pane="synk" id="tab-synk">
+          <span class="admin-tab-label admin-tab-synk">
+            <span class="synk-mark" aria-hidden="true"><img src="/synk-logo.svg" alt="" /></span>
+            Synk
+          </span>
         </button>
         <button type="button" class="admin-tab" data-pane="control" id="tab-control">
           <span class="admin-tab-label">Control</span>
@@ -394,8 +455,10 @@
       const panelView = document.getElementById("panel-view");
       const paneSignin = document.getElementById("pane-signin");
       const paneControl = document.getElementById("pane-control");
+      const paneSynk = document.getElementById("pane-synk");
       const tabSignin = document.getElementById("tab-signin");
       const tabControl = document.getElementById("tab-control");
+      const tabSynk = document.getElementById("tab-synk");
       const unlockForm = document.getElementById("unlock-form");
       const unlockError = document.getElementById("unlock-error");
       const listEl = document.getElementById("list");
@@ -473,6 +536,17 @@
       const faceProfilesEl = document.getElementById("face-profiles");
       const faceProfilesEmpty = document.getElementById("face-profiles-empty");
       let faceProfilesCache = [];
+
+      const synkEnrollForm = document.getElementById("synk-enroll-form");
+      const synkEnrollName = document.getElementById("synk-enroll-name");
+      const synkEnrollDob = document.getElementById("synk-enroll-dob");
+      const synkEnrollSecret = document.getElementById("synk-enroll-secret");
+      const synkEnrollFile = document.getElementById("synk-enroll-file");
+      const synkEnrollBtn = document.getElementById("synk-enroll-btn");
+      const synkEnrollStatus = document.getElementById("synk-enroll-status");
+      const synkProfilesEl = document.getElementById("synk-profiles");
+      const synkProfilesEmpty = document.getElementById("synk-profiles-empty");
+      let synkProfilesCache = [];
 
       const STORAGE_KEY = "visitor_admin_secret";
       const PANE_KEY = "visitor_admin_pane";
@@ -587,11 +661,13 @@
       }
 
       function setAdminPane(pane) {
-        const next = pane === "control" ? "control" : "signin";
+        const next = pane === "control" ? "control" : pane === "synk" ? "synk" : "signin";
         paneSignin.classList.toggle("hidden", next !== "signin");
         paneControl.classList.toggle("hidden", next !== "control");
+        paneSynk.classList.toggle("hidden", next !== "synk");
         tabSignin.classList.toggle("active", next === "signin");
         tabControl.classList.toggle("active", next === "control");
+        tabSynk.classList.toggle("active", next === "synk");
         localStorage.setItem(PANE_KEY, next);
         document.body.classList.toggle("admin-control", next === "control");
       }
@@ -1586,6 +1662,7 @@
           applySettingsToForm(settings);
           await refresh();
           refreshFaces().catch(() => {});
+          refreshSynkProfiles().catch(() => {});
           pollTimer = setInterval(refresh, 3000);
           if ("Notification" in window && Notification.permission === "granted") {
             ensurePushSubscription().catch(() => {});
@@ -1770,6 +1847,7 @@
       });
 
       tabSignin.addEventListener("click", () => setAdminPane("signin"));
+      tabSynk.addEventListener("click", () => setAdminPane("synk"));
       tabControl.addEventListener("click", () => setAdminPane("control"));
 
       chatInboxEl.addEventListener("click", async (e) => {
@@ -2050,6 +2128,236 @@
         }
       });
 
+      function formatDob(value) {
+        const raw = String(value || "").slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw || "—";
+        const [y, m, d] = raw.split("-");
+        return `${m}/${d}/${y}`;
+      }
+
+      function renderSynkProfiles(profiles) {
+        synkProfilesCache = profiles || [];
+        if (!synkProfilesCache.length) {
+          synkProfilesEl.innerHTML = "";
+          synkProfilesEmpty.classList.remove("hidden");
+          return;
+        }
+        synkProfilesEmpty.classList.add("hidden");
+        synkProfilesEl.innerHTML = synkProfilesCache
+          .map((profile) => {
+            const photo = profile.photoUrl
+              ? `<img src="${escapeHtml(profile.photoUrl)}" alt="" />`
+              : `<img alt="" style="background:#ddd" />`;
+            return `
+              <article class="synk-profile-card ${profile.enabled ? "" : "disabled"}" data-synk-id="${escapeHtml(profile.id)}">
+                ${photo}
+                <div class="synk-profile-meta">
+                  <div>
+                    <strong>${escapeHtml(profile.name)}</strong>
+                    <div class="synk-code">${escapeHtml(profile.synkCode || "")}</div>
+                    <div class="muted" style="font-size:0.82rem;margin-top:4px;">
+                      DOB ${escapeHtml(formatDob(profile.dateOfBirth))}${profile.enabled ? "" : " · paused"}
+                    </div>
+                  </div>
+                  <label class="field" style="margin:0;">
+                    <span class="muted" style="font-size:0.78rem;">Reset secret (optional)</span>
+                    <input type="password" data-synk-action="secret" placeholder="New secret" maxlength="200" autocomplete="new-password" />
+                  </label>
+                  <div class="synk-profile-actions">
+                    <label class="btn btn-secondary btn-compact" style="cursor:pointer;">
+                      Change photo
+                      <input type="file" accept="image/jpeg,image/png,image/webp" data-synk-action="photo" hidden />
+                    </label>
+                    <button class="btn btn-secondary btn-compact" type="button" data-synk-action="save-secret">
+                      Save secret
+                    </button>
+                    <button class="btn btn-secondary btn-compact" type="button" data-synk-action="toggle">
+                      ${profile.enabled ? "Pause" : "Enable"}
+                    </button>
+                    <button class="btn btn-danger btn-compact" type="button" data-synk-action="delete">Remove</button>
+                  </div>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      async function refreshSynkProfiles() {
+        try {
+          const res = await fetch("/api/synk-profiles", { headers: adminHeaders() });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not load Synk IDs");
+          renderSynkProfiles(data.profiles || []);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      async function optimizeSynkPhoto(file) {
+        const type = (file.type || "").toLowerCase();
+        if (!["image/jpeg", "image/png", "image/webp"].includes(type)) {
+          throw new Error("Use a JPG, PNG, or WebP");
+        }
+        const original = await fileToDataUrl(file);
+        const img = await loadImage(original);
+        const maxSide = 960;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+        return { dataUrl, contentType: "image/jpeg", fileName: file.name || "synk.jpg" };
+      }
+
+      async function uploadSynkPhoto(file) {
+        const optimized = await optimizeSynkPhoto(file);
+        const res = await fetch("/api/upload-synk-image", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({
+            data: optimized.dataUrl,
+            contentType: optimized.contentType,
+            fileName: optimized.fileName,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Upload failed");
+        return data;
+      }
+
+      synkEnrollForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = synkEnrollName.value.trim();
+        const dateOfBirth = synkEnrollDob.value;
+        const secret = synkEnrollSecret.value;
+        const file = synkEnrollFile.files && synkEnrollFile.files[0];
+        if (!name || !dateOfBirth || !secret || !file) return;
+
+        synkEnrollBtn.disabled = true;
+        synkEnrollStatus.textContent = "Creating Synk ID…";
+        try {
+          const uploaded = await uploadSynkPhoto(file);
+          const res = await fetch("/api/synk-profiles", {
+            method: "POST",
+            headers: adminHeaders(),
+            body: JSON.stringify({
+              name,
+              dateOfBirth,
+              secret,
+              photoUrl: uploaded.url,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not create Synk ID");
+          synkEnrollForm.reset();
+          synkEnrollStatus.textContent = data.profile
+            ? `Created ${data.profile.synkCode}`
+            : "Created";
+          showToast(data.profile ? `Synk ID ${data.profile.synkCode}` : "Synk ID created");
+          await refreshSynkProfiles();
+        } catch (err) {
+          synkEnrollStatus.textContent = err.message || "Could not create";
+          showToast(err.message || "Could not create Synk ID");
+        } finally {
+          synkEnrollBtn.disabled = false;
+        }
+      });
+
+      synkProfilesEl.addEventListener("change", async (e) => {
+        const input = e.target.closest("[data-synk-action=\"photo\"]");
+        const card = e.target.closest("[data-synk-id]");
+        if (!input || !card) return;
+        const id = card.getAttribute("data-synk-id");
+        const file = input.files && input.files[0];
+        if (!file) return;
+        try {
+          showToast("Updating photo…");
+          const uploaded = await uploadSynkPhoto(file);
+          const res = await fetch("/api/synk-profiles", {
+            method: "PATCH",
+            headers: adminHeaders(),
+            body: JSON.stringify({ id, photoUrl: uploaded.url }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not update photo");
+          showToast("Photo updated");
+          await refreshSynkProfiles();
+        } catch (err) {
+          showToast(err.message || "Could not update photo");
+        } finally {
+          input.value = "";
+        }
+      });
+
+      synkProfilesEl.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-synk-action]");
+        const card = e.target.closest("[data-synk-id]");
+        if (!btn || !card) return;
+        const action = btn.getAttribute("data-synk-action");
+        if (action === "photo" || action === "secret") return;
+        const id = card.getAttribute("data-synk-id");
+        const profile = synkProfilesCache.find((p) => p.id === id);
+        if (!profile) return;
+
+        if (action === "save-secret") {
+          const secretInput = card.querySelector('[data-synk-action="secret"]');
+          const secret = secretInput ? secretInput.value.trim() : "";
+          if (!secret) {
+            showToast("Enter a new secret first");
+            return;
+          }
+          try {
+            const res = await fetch("/api/synk-profiles", {
+              method: "PATCH",
+              headers: adminHeaders(),
+              body: JSON.stringify({ id, secret }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not update secret");
+            if (secretInput) secretInput.value = "";
+            showToast("Secret updated");
+          } catch (err) {
+            showToast(err.message || "Could not update secret");
+          }
+        }
+
+        if (action === "toggle") {
+          try {
+            const res = await fetch("/api/synk-profiles", {
+              method: "PATCH",
+              headers: adminHeaders(),
+              body: JSON.stringify({ id, enabled: !profile.enabled }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not update");
+            showToast(profile.enabled ? "Paused" : "Enabled");
+            await refreshSynkProfiles();
+          } catch (err) {
+            showToast(err.message || "Could not update");
+          }
+        }
+
+        if (action === "delete") {
+          if (!confirm(`Remove Synk ID for ${profile.name}?`)) return;
+          try {
+            const res = await fetch(`/api/synk-profiles?id=${encodeURIComponent(id)}`, {
+              method: "DELETE",
+              headers: adminHeaders(),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not remove");
+            showToast("Removed");
+            await refreshSynkProfiles();
+          } catch (err) {
+            showToast(err.message || "Could not remove");
+          }
+        }
+      });
+
       chatCloseSessionBtn.addEventListener("click", async () => {
         if (!activeChatId) return;
         const currentlyClosed = chatCloseSessionBtn.dataset.status === "closed";
@@ -2137,6 +2445,7 @@
           .then(([settings]) => {
             applySettingsToForm(settings);
             refreshFaces().catch(() => {});
+            refreshSynkProfiles().catch(() => {});
             pollTimer = setInterval(refresh, 3000);
             if ("Notification" in window && Notification.permission === "granted") {
               ensurePushSubscription().catch(() => {});

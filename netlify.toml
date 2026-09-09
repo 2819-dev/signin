@@ -65,6 +65,11 @@
     Cache-Control = "no-cache, must-revalidate, max-age=0"
 
 [[headers]]
+  for = "/synk-logo.svg"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate, max-age=0"
+
+[[headers]]
   for = "/sw.js"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate, max-age=0"
