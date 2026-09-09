@@ -1162,6 +1162,7 @@
         synkScanBtn.disabled = true;
         synkBusy = false;
         try {
+          await window.KioskFace.ensureFaceApi();
           synkStream = await window.KioskFace.startCamera(synkVideo, { rotation: cameraRotation });
           synkStatus.textContent = "Hold still — verifying…";
           synkScanBtn.disabled = false;
