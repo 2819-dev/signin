@@ -61,4 +61,7 @@ ALTER TABLE kiosk_settings
   ADD COLUMN IF NOT EXISTS display_image_url TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE kiosk_settings
+  ADD COLUMN IF NOT EXISTS display_link TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE kiosk_settings
   ADD COLUMN IF NOT EXISTS display_show_clock BOOLEAN NOT NULL DEFAULT FALSE;

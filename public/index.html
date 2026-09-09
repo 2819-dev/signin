@@ -52,10 +52,19 @@
             <div class="display-clock-date" id="display-clock-date"></div>
           </div>
           <img id="display-image" class="display-image hidden" alt="" />
+          <div class="display-media hidden" id="display-media">
+            <img id="display-qr" class="display-qr hidden" alt="QR code" />
+            <video id="display-video" class="display-video hidden" playsinline autoplay muted loop controls></video>
+            <iframe id="display-video-frame" class="display-video-frame hidden" title="Video" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+          </div>
           <div class="display-copy" id="display-copy">
             <p class="eyebrow" id="display-eyebrow">Now showing</p>
             <h1 id="display-title">Welcome</h1>
+            <div class="display-countdown hidden" id="display-countdown">
+              <div class="display-countdown-value" id="display-countdown-value">00:00:00</div>
+            </div>
             <p class="subtitle" id="display-message"></p>
+            <ul class="display-list hidden" id="display-list"></ul>
           </div>
         </div>
       </section>
@@ -129,10 +138,17 @@
       const displayClockTime = document.getElementById("display-clock-time");
       const displayClockDate = document.getElementById("display-clock-date");
       const displayImage = document.getElementById("display-image");
+      const displayMedia = document.getElementById("display-media");
+      const displayQr = document.getElementById("display-qr");
+      const displayVideo = document.getElementById("display-video");
+      const displayVideoFrame = document.getElementById("display-video-frame");
       const displayCopy = document.getElementById("display-copy");
       const displayEyebrow = document.getElementById("display-eyebrow");
       const displayTitle = document.getElementById("display-title");
       const displayMessage = document.getElementById("display-message");
+      const displayCountdown = document.getElementById("display-countdown");
+      const displayCountdownValue = document.getElementById("display-countdown-value");
+      const displayList = document.getElementById("display-list");
       const formView = document.getElementById("form-view");
       const waitingView = document.getElementById("waiting-view");
       const admittedView = document.getElementById("admitted-view");
@@ -160,6 +176,7 @@
       let countdownTimer = null;
       let kioskPollTimer = null;
       let clockTimer = null;
+      let eventCountdownTimer = null;
       let currentRequestId = null;
       let isOpen = true;
       let urgentEnabled = true;
@@ -170,13 +187,46 @@
         displayTitle: "",
         displayMessage: "",
         displayImageUrl: "",
+        displayLink: "",
         displayShowClock: false,
       };
+      const DISPLAY_MODES = [
+        "signin", "message", "image", "poster", "clock",
+        "countdown", "qr", "video", "list", "blackout",
+      ];
 
       function normalizeDisplayMode(value) {
-        return ["signin", "message", "image", "poster", "clock"].includes(value)
-          ? value
-          : "signin";
+        return DISPLAY_MODES.includes(value) ? value : "signin";
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function youtubeEmbedUrl(url) {
+        try {
+          const parsed = new URL(url);
+          const host = parsed.hostname.replace(/^www\./, "");
+          if (host === "youtu.be") {
+            const id = parsed.pathname.slice(1);
+            return id ? `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}` : "";
+          }
+          if (host === "youtube.com" || host === "m.youtube.com") {
+            const id = parsed.searchParams.get("v");
+            if (id) return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}`;
+            const parts = parsed.pathname.split("/");
+            const embedIdx = parts.indexOf("embed");
+            if (embedIdx >= 0 && parts[embedIdx + 1]) {
+              const id2 = parts[embedIdx + 1];
+              return `https://www.youtube.com/embed/${id2}?autoplay=1&mute=1&loop=1&playlist=${id2}`;
+            }
+          }
+        } catch (_) {}
+        return "";
       }
 
       function applyTheme(theme) {
@@ -203,8 +253,8 @@
           el.classList.toggle("hidden", el !== view);
         });
         urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
-        if (activeView === "display") startClock();
-        else stopClock();
+        if (activeView === "display") startDisplayTimers();
+        else stopDisplayTimers();
       }
 
       function updateClock() {
@@ -220,16 +270,62 @@
         });
       }
 
-      function startClock() {
-        updateClock();
-        if (clockTimer) return;
-        clockTimer = setInterval(updateClock, 1000);
+      function formatCountdown(ms) {
+        if (ms <= 0) return "00:00:00";
+        const total = Math.floor(ms / 1000);
+        const days = Math.floor(total / 86400);
+        const hours = Math.floor((total % 86400) / 3600);
+        const minutes = Math.floor((total % 3600) / 60);
+        const seconds = total % 60;
+        const pad = (n) => String(n).padStart(2, "0");
+        if (days > 0) return `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
       }
 
-      function stopClock() {
-        if (!clockTimer) return;
-        clearInterval(clockTimer);
-        clockTimer = null;
+      function updateEventCountdown() {
+        const target = new Date(displaySettings.displayLink).getTime();
+        if (Number.isNaN(target)) {
+          displayCountdownValue.textContent = "--:--:--";
+          return;
+        }
+        displayCountdownValue.textContent = formatCountdown(target - Date.now());
+      }
+
+      function startDisplayTimers() {
+        const needsClock =
+          displayMode === "clock" ||
+          (displaySettings.displayShowClock && displayMode !== "blackout");
+        if (needsClock) {
+          updateClock();
+          if (!clockTimer) clockTimer = setInterval(updateClock, 1000);
+        } else if (clockTimer) {
+          clearInterval(clockTimer);
+          clockTimer = null;
+        }
+
+        if (displayMode === "countdown") {
+          updateEventCountdown();
+          if (!eventCountdownTimer) {
+            eventCountdownTimer = setInterval(updateEventCountdown, 1000);
+          }
+        } else if (eventCountdownTimer) {
+          clearInterval(eventCountdownTimer);
+          eventCountdownTimer = null;
+        }
+      }
+
+      function stopDisplayTimers() {
+        if (clockTimer) {
+          clearInterval(clockTimer);
+          clockTimer = null;
+        }
+        if (eventCountdownTimer) {
+          clearInterval(eventCountdownTimer);
+          eventCountdownTimer = null;
+        }
+        displayVideo.pause();
+        displayVideo.removeAttribute("src");
+        displayVideoFrame.removeAttribute("src");
       }
 
       function applyDisplayContent(settings) {
@@ -237,6 +333,7 @@
           displayTitle: settings.displayTitle || "",
           displayMessage: settings.displayMessage || "",
           displayImageUrl: settings.displayImageUrl || "",
+          displayLink: settings.displayLink || "",
           displayShowClock: Boolean(settings.displayShowClock),
         };
         displayMode = normalizeDisplayMode(settings.displayMode);
@@ -245,28 +342,95 @@
         const title = displaySettings.displayTitle;
         const message = displaySettings.displayMessage;
         const imageUrl = displaySettings.displayImageUrl;
-        const showClock = mode === "clock" || displaySettings.displayShowClock;
+        const link = displaySettings.displayLink;
+        const showClock =
+          mode === "clock" ||
+          (displaySettings.displayShowClock &&
+            !["blackout", "countdown"].includes(mode));
 
-        displayScreen.classList.toggle("is-image", mode === "image");
-        displayScreen.classList.toggle("is-poster", mode === "poster");
-        displayScreen.classList.toggle("is-message", mode === "message");
-        displayScreen.classList.toggle("is-clock", mode === "clock");
+        [
+          "is-image", "is-poster", "is-message", "is-clock",
+          "is-countdown", "is-qr", "is-video", "is-list", "is-blackout",
+        ].forEach((cls) => displayScreen.classList.remove(cls));
+        if (mode !== "signin") displayScreen.classList.add(`is-${mode}`);
 
         displayClock.classList.toggle("hidden", !showClock);
-        displayCopy.classList.toggle("hidden", mode === "image" || mode === "clock");
         displayImage.classList.toggle("hidden", !(mode === "image" || mode === "poster") || !imageUrl);
+        displayCountdown.classList.toggle("hidden", mode !== "countdown");
+        displayList.classList.toggle("hidden", mode !== "list");
+        displayMedia.classList.toggle("hidden", !(mode === "qr" || mode === "video"));
+        displayQr.classList.toggle("hidden", mode !== "qr" || !link);
+        displayCopy.classList.toggle(
+          "hidden",
+          mode === "image" || mode === "clock" || mode === "blackout" || mode === "video"
+        );
 
-        if (mode === "clock") {
+        const yt = mode === "video" ? youtubeEmbedUrl(link) : "";
+        if (mode === "video" && yt) {
+          displayVideo.classList.add("hidden");
+          displayVideoFrame.classList.remove("hidden");
+          if (displayVideoFrame.getAttribute("src") !== yt) {
+            displayVideoFrame.setAttribute("src", yt);
+          }
+          displayVideo.pause();
+          displayVideo.removeAttribute("src");
+        } else if (mode === "video" && link) {
+          displayVideoFrame.classList.add("hidden");
+          displayVideoFrame.removeAttribute("src");
+          displayVideo.classList.remove("hidden");
+          if (displayVideo.getAttribute("src") !== link) {
+            displayVideo.setAttribute("src", link);
+            displayVideo.play().catch(() => {});
+          }
+        } else {
+          displayVideo.classList.add("hidden");
+          displayVideoFrame.classList.add("hidden");
+          displayVideo.pause();
+          displayVideo.removeAttribute("src");
+          displayVideoFrame.removeAttribute("src");
+        }
+
+        if (mode === "qr" && link) {
+          const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=420x420&margin=8&data=${encodeURIComponent(link)}`;
+          if (displayQr.getAttribute("src") !== qrSrc) displayQr.setAttribute("src", qrSrc);
+        } else {
+          displayQr.removeAttribute("src");
+        }
+
+        if (mode === "list") {
+          const items = message.split("\n").map((line) => line.trim()).filter(Boolean);
+          displayList.innerHTML = items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+          displayMessage.classList.add("hidden");
+        } else {
+          displayList.innerHTML = "";
+          displayMessage.textContent = message;
+          displayMessage.classList.toggle("hidden", !message || mode === "clock" || mode === "blackout");
+        }
+
+        if (mode === "clock" || mode === "blackout") {
           displayEyebrow.textContent = "";
           displayTitle.textContent = "";
-          displayMessage.textContent = "";
+        } else if (mode === "countdown") {
+          displayEyebrow.textContent = "Countdown";
+          displayTitle.textContent = title || "Coming up";
+        } else if (mode === "qr") {
+          displayEyebrow.textContent = "Scan";
+          displayTitle.textContent = title || "Scan to open";
+        } else if (mode === "list") {
+          displayEyebrow.textContent = "List";
+          displayTitle.textContent = title || "Notes";
         } else {
           displayEyebrow.textContent = mode === "poster" ? "Now showing" : "Notice";
           displayTitle.textContent = title || (mode === "message" ? "Hello" : "");
-          displayMessage.textContent = message;
-          displayMessage.classList.toggle("hidden", !message);
-          displayTitle.classList.toggle("hidden", !title && mode !== "message");
         }
+        displayTitle.classList.toggle(
+          "hidden",
+          !displayTitle.textContent || mode === "image" || mode === "clock" || mode === "blackout" || mode === "video"
+        );
+        displayEyebrow.classList.toggle(
+          "hidden",
+          !displayEyebrow.textContent || mode === "image" || mode === "clock" || mode === "blackout" || mode === "video"
+        );
 
         if ((mode === "image" || mode === "poster") && imageUrl) {
           if (displayImage.getAttribute("src") !== imageUrl) {
@@ -275,6 +439,8 @@
         } else {
           displayImage.removeAttribute("src");
         }
+
+        if (activeView === "display") startDisplayTimers();
       }
 
       function setUrgentMode(on) {

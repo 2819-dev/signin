@@ -75,25 +75,9 @@
           </p>
         </div>
 
-        <p class="section-label">Queue</p>
-        <div id="list" class="request-list"></div>
-        <div id="empty" class="empty hidden">No requests yet.</div>
-      </div>
-
-      <div id="pane-control" class="admin-pane hidden">
-        <div class="admin-top">
-          <header class="admin-header">
-            <div>
-              <p class="eyebrow">Tablet</p>
-              <h1>Control</h1>
-              <p class="muted">Manage access and what the kiosk shows.</p>
-            </div>
-          </header>
-        </div>
-
         <section class="settings-card" id="kiosk-settings">
-          <h2>Kiosk</h2>
-          <p class="muted" style="margin: 0 0 4px;">Control visitor access and basic options.</p>
+          <h2>Sign-in</h2>
+          <p class="muted" style="margin: 0 0 4px;">The normal visitor check-in flow on the tablet.</p>
           <div class="settings-row">
             <div>
               <strong id="open-label">Accepting visitors</strong>
@@ -137,18 +121,42 @@
           </div>
         </section>
 
+        <p class="section-label">Queue</p>
+        <div id="list" class="request-list"></div>
+        <div id="empty" class="empty hidden">No requests yet.</div>
+      </div>
+
+      <div id="pane-control" class="admin-pane hidden">
+        <div class="admin-top">
+          <header class="admin-header">
+            <div>
+              <p class="eyebrow">Tablet</p>
+              <h1>Control</h1>
+              <p class="muted">Switch the tablet into other display modes.</p>
+            </div>
+          </header>
+        </div>
+
         <section class="settings-card" id="display-settings">
-          <h2>Tablet display</h2>
+          <h2>Display mode</h2>
           <p class="muted" style="margin: 0 0 12px;">
-            Take over the kiosk screen with a custom message, image, poster, or clock.
+            Choose what the tablet shows instead of the normal sign-in screen.
           </p>
 
-          <div class="mode-grid" id="display-mode-grid" role="radiogroup" aria-label="Display mode">
-            <button type="button" class="mode-chip active" data-mode="signin">Sign-in</button>
+          <button class="btn btn-secondary" type="button" id="exit-display-btn">
+            Back to sign-in screen
+          </button>
+
+          <div class="mode-grid mode-grid-wide" id="display-mode-grid" role="radiogroup" aria-label="Display mode">
             <button type="button" class="mode-chip" data-mode="message">Message</button>
             <button type="button" class="mode-chip" data-mode="image">Image</button>
             <button type="button" class="mode-chip" data-mode="poster">Poster</button>
             <button type="button" class="mode-chip" data-mode="clock">Clock</button>
+            <button type="button" class="mode-chip" data-mode="countdown">Countdown</button>
+            <button type="button" class="mode-chip" data-mode="qr">QR code</button>
+            <button type="button" class="mode-chip" data-mode="video">Video</button>
+            <button type="button" class="mode-chip" data-mode="list">List</button>
+            <button type="button" class="mode-chip" data-mode="blackout">Blackout</button>
           </div>
           <input type="hidden" id="display-mode" value="signin" />
 
@@ -158,8 +166,17 @@
               <input id="display-title" type="text" maxlength="120" placeholder="What’s on the screen" />
             </div>
             <div class="field" id="display-message-field">
-              <label for="display-message">Message</label>
+              <label for="display-message" id="display-message-label">Message</label>
               <textarea id="display-message" maxlength="1000" placeholder="Custom text for the tablet…"></textarea>
+            </div>
+            <div class="field" id="display-link-field">
+              <label for="display-link" id="display-link-label">Link</label>
+              <input id="display-link" type="text" maxlength="2000" placeholder="https://…" autocomplete="off" />
+              <p class="muted" id="display-link-hint" style="margin: 8px 0 0; font-size: 0.82rem;"></p>
+            </div>
+            <div class="field" id="display-countdown-field">
+              <label for="display-countdown">Countdown to</label>
+              <input id="display-countdown" type="datetime-local" />
             </div>
             <div class="field" id="display-image-field">
               <label for="display-image-file">Photo or file</label>
@@ -204,7 +221,7 @@
           </div>
 
           <p class="muted" id="display-mode-hint" style="margin: 12px 0 0; font-size: 0.85rem;">
-            Sign-in mode uses the normal visitor flow.
+            Pick a mode to take over the tablet screen.
           </p>
         </section>
       </div>
@@ -254,6 +271,13 @@
       const displayEditor = document.getElementById("display-editor");
       const displayTitleInput = document.getElementById("display-title");
       const displayMessageInput = document.getElementById("display-message");
+      const displayMessageLabel = document.getElementById("display-message-label");
+      const displayLinkInput = document.getElementById("display-link");
+      const displayLinkLabel = document.getElementById("display-link-label");
+      const displayLinkHint = document.getElementById("display-link-hint");
+      const displayLinkField = document.getElementById("display-link-field");
+      const displayCountdownInput = document.getElementById("display-countdown");
+      const displayCountdownField = document.getElementById("display-countdown-field");
       const displayImageInput = document.getElementById("display-image-url");
       const displayImageUrlInput = document.getElementById("display-image-url-input");
       const displayImageFile = document.getElementById("display-image-file");
@@ -268,9 +292,22 @@
       const displayClockRow = document.getElementById("display-clock-row");
       const displayModeHint = document.getElementById("display-mode-hint");
       const saveDisplayBtn = document.getElementById("save-display-btn");
+      const exitDisplayBtn = document.getElementById("exit-display-btn");
 
       const STORAGE_KEY = "visitor_admin_secret";
       const PANE_KEY = "visitor_admin_pane";
+      const DISPLAY_MODES = [
+        "signin",
+        "message",
+        "image",
+        "poster",
+        "clock",
+        "countdown",
+        "qr",
+        "video",
+        "list",
+        "blackout",
+      ];
       let secret =
         localStorage.getItem(STORAGE_KEY) ||
         sessionStorage.getItem(STORAGE_KEY) ||
@@ -298,15 +335,21 @@
         displayTitle: "",
         displayMessage: "",
         displayImageUrl: "",
+        displayLink: "",
         displayShowClock: false,
       };
 
       const DISPLAY_HINTS = {
-        signin: "Sign-in mode uses the normal visitor flow.",
-        message: "Shows your custom title and message on the tablet.",
-        image: "Fills the tablet with your image.",
-        poster: "Image with title and message overlaid.",
-        clock: "Large live clock on the tablet.",
+        signin: "Tablet is using the normal visitor sign-in screen.",
+        message: "Custom title and message on the tablet.",
+        image: "Full-screen photo on the tablet.",
+        poster: "Photo with title and message overlaid.",
+        clock: "Large live clock.",
+        countdown: "Live countdown to a date and time.",
+        qr: "Big QR code for a link.",
+        video: "Loops a video on the tablet.",
+        list: "Bullet list from each line of your message.",
+        blackout: "Blank black screen.",
       };
 
       function setAdminPane(pane) {
@@ -433,9 +476,29 @@
       }
 
       function normalizeDisplayMode(value) {
-        return ["signin", "message", "image", "poster", "clock"].includes(value)
-          ? value
-          : "signin";
+        return DISPLAY_MODES.includes(value) ? value : "signin";
+      }
+
+      function toDatetimeLocalValue(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "";
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+
+      function fromDatetimeLocalValue(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "";
+        return date.toISOString();
+      }
+
+      function getDisplayLinkForSave(mode) {
+        if (mode === "countdown") {
+          return fromDatetimeLocalValue(displayCountdownInput.value);
+        }
+        return displayLinkInput.value.trim();
       }
 
       function syncDisplayEditorUi(mode) {
@@ -446,10 +509,46 @@
         });
         const custom = next !== "signin";
         displayEditor.classList.toggle("hidden", !custom);
-        displayTitleField.classList.toggle("hidden", next === "image" || next === "clock");
-        displayMessageField.classList.toggle("hidden", next === "image" || next === "clock");
-        displayImageField.classList.toggle("hidden", next === "message" || next === "clock");
-        displayClockRow.classList.toggle("hidden", next === "clock" || next === "signin");
+        exitDisplayBtn.classList.toggle("hidden", !custom);
+        exitDisplayBtn.textContent = custom
+          ? "Back to sign-in screen"
+          : "Using sign-in screen";
+
+        const showTitle = ["message", "poster", "countdown", "qr", "video", "list"].includes(next);
+        const showMessage = ["message", "poster", "list", "qr", "countdown"].includes(next);
+        const showImage = ["image", "poster"].includes(next);
+        const showLink = ["qr", "video"].includes(next);
+        const showCountdown = next === "countdown";
+        const showClockToggle = ["message", "image", "poster", "qr", "list", "video"].includes(next);
+
+        displayTitleField.classList.toggle("hidden", !showTitle);
+        displayMessageField.classList.toggle("hidden", !showMessage);
+        displayImageField.classList.toggle("hidden", !showImage);
+        displayLinkField.classList.toggle("hidden", !showLink);
+        displayCountdownField.classList.toggle("hidden", !showCountdown);
+        displayClockRow.classList.toggle("hidden", !showClockToggle);
+
+        displayMessageLabel.textContent =
+          next === "list" ? "List items (one per line)" :
+          next === "qr" ? "Caption" :
+          next === "countdown" ? "Note" :
+          "Message";
+        displayMessageInput.placeholder =
+          next === "list" ? "First item\nSecond item\nThird item" :
+          "Custom text for the tablet…";
+
+        if (next === "qr") {
+          displayLinkLabel.textContent = "QR link";
+          displayLinkInput.type = "url";
+          displayLinkInput.placeholder = "https://…";
+          displayLinkHint.textContent = "Visitors can scan this on the tablet.";
+        } else if (next === "video") {
+          displayLinkLabel.textContent = "Video link";
+          displayLinkInput.type = "url";
+          displayLinkInput.placeholder = "https://…mp4 or YouTube link";
+          displayLinkHint.textContent = "Direct video file or YouTube URL.";
+        }
+
         displayModeHint.textContent = DISPLAY_HINTS[next] || DISPLAY_HINTS.signin;
       }
 
@@ -465,6 +564,7 @@
           displayTitle: settings.displayTitle || "",
           displayMessage: settings.displayMessage || "",
           displayImageUrl: settings.displayImageUrl || "",
+          displayLink: settings.displayLink || "",
           displayShowClock: Boolean(settings.displayShowClock),
         };
         isOpenToggle.checked = currentSettings.isOpen;
@@ -474,6 +574,12 @@
         closedMessageInput.value = currentSettings.closedMessage;
         displayTitleInput.value = currentSettings.displayTitle;
         displayMessageInput.value = currentSettings.displayMessage;
+        displayLinkInput.value =
+          currentSettings.displayMode === "countdown" ? "" : currentSettings.displayLink;
+        displayCountdownInput.value =
+          currentSettings.displayMode === "countdown"
+            ? toDatetimeLocalValue(currentSettings.displayLink)
+            : "";
         displayImageInput.value = currentSettings.displayImageUrl;
         displayImageUrlInput.value = currentSettings.displayImageUrl.startsWith("/api/display-image")
           ? ""
@@ -489,7 +595,7 @@
           : "Closed — not accepting";
         openHint.textContent =
           currentSettings.displayMode !== "signin"
-            ? "Access control still applies if someone uses urgent sign-in"
+            ? "Tablet is in a Control mode; urgent can still break in"
             : currentSettings.isOpen
               ? "Kiosk shows the sign-in form"
               : "Kiosk shows your closed sign";
@@ -555,6 +661,14 @@
             typeof partial.displayImageUrl === "string"
               ? partial.displayImageUrl
               : displayImageInput.value,
+          displayLink:
+            typeof partial.displayLink === "string"
+              ? partial.displayLink
+              : getDisplayLinkForSave(
+                  typeof partial.displayMode === "string"
+                    ? partial.displayMode
+                    : displayModeInput.value || currentSettings.displayMode
+                ),
           displayShowClock:
             typeof partial.displayShowClock === "boolean"
               ? partial.displayShowClock
@@ -1129,17 +1243,31 @@
         const nextMode = normalizeDisplayMode(btn.getAttribute("data-mode"));
         syncDisplayEditorUi(nextMode);
 
-        if (nextMode === "signin") {
+        // Modes with no required fields can apply immediately.
+        if (nextMode === "clock" || nextMode === "blackout") {
           saveDisplayBtn.disabled = true;
           try {
-            await saveSettings({ displayMode: "signin" });
-            showToast("Tablet back on sign-in");
+            await saveSettings({ displayMode: nextMode });
+            showToast(nextMode === "clock" ? "Clock mode on" : "Blackout on");
           } catch (err) {
             syncDisplayEditorUi(currentSettings.displayMode);
             showToast(err.message || "Could not update");
           } finally {
             saveDisplayBtn.disabled = false;
           }
+        }
+      });
+
+      exitDisplayBtn.addEventListener("click", async () => {
+        exitDisplayBtn.disabled = true;
+        try {
+          await saveSettings({ displayMode: "signin" });
+          showToast("Tablet back on sign-in");
+        } catch (err) {
+          syncDisplayEditorUi(currentSettings.displayMode);
+          showToast(err.message || "Could not update");
+        } finally {
+          exitDisplayBtn.disabled = false;
         }
       });
 
@@ -1183,14 +1311,15 @@
       saveDisplayBtn.addEventListener("click", async () => {
         saveDisplayBtn.disabled = true;
         try {
-          // Prefer explicit link field if filled; otherwise keep uploaded/hidden value.
-          const link = displayImageUrlInput.value.trim();
-          if (link) displayImageInput.value = link;
+          const imageLink = displayImageUrlInput.value.trim();
+          if (imageLink) displayImageInput.value = imageLink;
+          const mode = displayModeInput.value;
           await saveSettings({
-            displayMode: displayModeInput.value,
+            displayMode: mode,
             displayTitle: displayTitleInput.value.trim(),
             displayMessage: displayMessageInput.value.trim(),
             displayImageUrl: displayImageInput.value.trim(),
+            displayLink: getDisplayLinkForSave(mode),
             displayShowClock: displayShowClockToggle.checked,
           });
           showToast("Tablet display updated");
@@ -1206,13 +1335,15 @@
         const next = displayShowClockToggle.checked;
         displayShowClockToggle.disabled = true;
         try {
-          const link = displayImageUrlInput.value.trim();
-          if (link) displayImageInput.value = link;
+          const imageLink = displayImageUrlInput.value.trim();
+          if (imageLink) displayImageInput.value = imageLink;
+          const mode = displayModeInput.value;
           await saveSettings({
-            displayMode: displayModeInput.value,
+            displayMode: mode,
             displayTitle: displayTitleInput.value.trim(),
             displayMessage: displayMessageInput.value.trim(),
             displayImageUrl: displayImageInput.value.trim(),
+            displayLink: getDisplayLinkForSave(mode),
             displayShowClock: next,
           });
           showToast(next ? "Clock shown" : "Clock hidden");

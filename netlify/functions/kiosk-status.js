@@ -10,10 +10,22 @@ const DEFAULTS = {
   displayTitle: "",
   displayMessage: "",
   displayImageUrl: "",
+  displayLink: "",
   displayShowClock: false,
 };
 
-const DISPLAY_MODES = new Set(["signin", "message", "image", "poster", "clock"]);
+const DISPLAY_MODES = new Set([
+  "signin",
+  "message",
+  "image",
+  "poster",
+  "clock",
+  "countdown",
+  "qr",
+  "video",
+  "list",
+  "blackout",
+]);
 
 function normalizeTheme(value) {
   return value === "dark" ? "dark" : "light";
@@ -38,6 +50,10 @@ function normalizeImageUrl(value) {
   }
 }
 
+function normalizeLink(value) {
+  return String(value || "").trim().slice(0, 2000);
+}
+
 function mapSettings(row) {
   if (!row) return { ...DEFAULTS };
   return {
@@ -50,16 +66,11 @@ function mapSettings(row) {
     displayTitle: row.display_title || "",
     displayMessage: row.display_message || "",
     displayImageUrl: row.display_image_url || "",
+    displayLink: row.display_link || "",
     displayShowClock: Boolean(row.display_show_clock),
     updatedAt: row.updated_at || null,
   };
 }
-
-const SETTINGS_SELECT = `
-  is_open, urgent_enabled, theme, closed_title, closed_message,
-  display_mode, display_title, display_message, display_image_url, display_show_clock,
-  updated_at
-`;
 
 async function ensureSettings(sql) {
   await sql`
@@ -67,16 +78,16 @@ async function ensureSettings(sql) {
     VALUES (1)
     ON CONFLICT (id) DO NOTHING
   `;
-  // Keep older databases working even if schema.sql ALTERs weren't run yet.
   await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_mode TEXT NOT NULL DEFAULT 'signin'`;
   await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_title TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_message TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_image_url TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_link TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_show_clock BOOLEAN NOT NULL DEFAULT FALSE`;
 
   const rows = await sql`
     SELECT is_open, urgent_enabled, theme, closed_title, closed_message,
-           display_mode, display_title, display_message, display_image_url, display_show_clock,
+           display_mode, display_title, display_message, display_image_url, display_link, display_show_clock,
            updated_at
     FROM kiosk_settings
     WHERE id = 1
@@ -112,7 +123,7 @@ exports.handler = async (event) => {
       await ensureSettings(sql);
       const currentRows = await sql`
         SELECT is_open, urgent_enabled, theme, closed_title, closed_message,
-               display_mode, display_title, display_message, display_image_url, display_show_clock,
+               display_mode, display_title, display_message, display_image_url, display_link, display_show_clock,
                updated_at
         FROM kiosk_settings
         WHERE id = 1
@@ -166,6 +177,9 @@ exports.handler = async (event) => {
           ? body.displayImageUrl
           : current.displayImageUrl
       );
+      const displayLink = normalizeLink(
+        typeof body.displayLink === "string" ? body.displayLink : current.displayLink
+      );
       const displayShowClock =
         typeof body.displayShowClock === "boolean"
           ? body.displayShowClock
@@ -181,17 +195,32 @@ exports.handler = async (event) => {
         (displayMode === "image" || displayMode === "poster") &&
         !displayImageUrl
       ) {
-        return json(400, { error: "Image URL is required for this display mode" });
+        return json(400, { error: "Add a photo for this display mode" });
       }
-      if (displayMode === "message" && !displayTitle && !displayMessage) {
-        return json(400, { error: "Add a title or message for message mode" });
+      if (
+        (displayMode === "message" || displayMode === "list") &&
+        !displayTitle &&
+        !displayMessage
+      ) {
+        return json(400, { error: "Add a title or message" });
+      }
+      if (displayMode === "qr" && !displayLink) {
+        return json(400, { error: "Add a link for the QR code" });
+      }
+      if (displayMode === "video" && !displayLink) {
+        return json(400, { error: "Add a video link" });
+      }
+      if (displayMode === "countdown" && !displayLink) {
+        return json(400, { error: "Pick a countdown date and time" });
       }
       if (
         typeof body.displayImageUrl === "string" &&
         body.displayImageUrl.trim() &&
         !displayImageUrl
       ) {
-        return json(400, { error: "Image URL must start with http:// or https://" });
+        return json(400, {
+          error: "Image URL must start with http://, https://, or be an uploaded image",
+        });
       }
 
       const rows = await sql`
@@ -205,11 +234,12 @@ exports.handler = async (event) => {
             display_title = ${displayTitle},
             display_message = ${displayMessage},
             display_image_url = ${displayImageUrl},
+            display_link = ${displayLink},
             display_show_clock = ${displayShowClock},
             updated_at = NOW()
         WHERE id = 1
         RETURNING is_open, urgent_enabled, theme, closed_title, closed_message,
-                  display_mode, display_title, display_message, display_image_url, display_show_clock,
+                  display_mode, display_title, display_message, display_image_url, display_link, display_show_clock,
                   updated_at
       `;
 

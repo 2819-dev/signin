@@ -650,7 +650,101 @@ html[data-theme="dark"] .hero-pane {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin-bottom: 14px;
+  margin: 14px 0;
+}
+
+.mode-grid-wide {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#exit-display-btn {
+  margin-bottom: 4px;
+}
+
+.display-media {
+  position: relative;
+  z-index: 2;
+  width: min(100%, 520px);
+  display: grid;
+  place-items: center;
+  gap: 16px;
+}
+
+.display-qr {
+  width: min(70vw, 320px);
+  height: min(70vw, 320px);
+  border-radius: 24px;
+  background: #fff;
+  padding: 14px;
+  box-shadow: var(--shadow-soft);
+}
+
+.display-video,
+.display-video-frame {
+  width: min(100%, 900px);
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 18px;
+  background: #000;
+  max-height: 70dvh;
+}
+
+.display-screen.is-video {
+  padding: 24px;
+  background: #000;
+}
+
+.display-screen.is-blackout {
+  background: #000;
+  border-color: #000;
+  min-height: min(78dvh, 820px);
+}
+
+.display-countdown-value {
+  margin: 8px 0 18px;
+  font-size: clamp(2.4rem, 8vw, 5.5rem);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.display-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  text-align: left;
+  width: min(100%, 560px);
+}
+
+.display-list li {
+  position: relative;
+  padding: 12px 12px 12px 28px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  line-height: 1.45;
+}
+
+.display-list li:first-child {
+  border-top: none;
+}
+
+.display-list li::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 1.15em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.display-screen.is-qr .display-copy,
+.display-screen.is-countdown .display-copy,
+.display-screen.is-list .display-copy {
+  display: grid;
+  place-items: center;
 }
 
 .mode-chip {
@@ -1115,6 +1209,10 @@ html[data-theme="dark"] .pill-pending {
 
   .mode-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .mode-grid-wide {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .admin-shell {
