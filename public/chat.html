@@ -29,15 +29,35 @@
       <header class="chat-page-header">
         <div>
           <p class="eyebrow">Live chat</p>
-          <h1>Message us</h1>
+          <h1 id="chat-heading">Message us</h1>
         </div>
         <p class="muted" id="chat-status">Connecting…</p>
       </header>
 
       <p id="chat-error" class="error hidden"></p>
-      <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
 
-      <form id="chat-form" class="chat-composer" autocomplete="off">
+      <section id="chat-name-panel" class="chat-name-panel hidden">
+        <p class="subtitle" style="margin:0 0 12px;">Enter your name to start messaging.</p>
+        <form id="phone-chat-name-form" class="chat-name-form" autocomplete="off">
+          <div class="field">
+            <label for="phone-chat-name-input">Name</label>
+            <input
+              id="phone-chat-name-input"
+              type="text"
+              maxlength="80"
+              required
+              autocomplete="name"
+              enterkeyhint="go"
+              placeholder="Your name"
+            />
+          </div>
+          <button class="btn btn-primary" type="submit">Continue</button>
+        </form>
+      </section>
+
+      <div id="chat-messages" class="chat-messages hidden" aria-live="polite"></div>
+
+      <form id="chat-form" class="chat-composer hidden" autocomplete="off">
         <input
           id="chat-input"
           type="text"
@@ -59,8 +79,13 @@
       const sendBtn = document.getElementById("chat-send");
       const statusEl = document.getElementById("chat-status");
       const errorEl = document.getElementById("chat-error");
+      const namePanel = document.getElementById("chat-name-panel");
+      const nameForm = document.getElementById("phone-chat-name-form");
+      const nameInput = document.getElementById("phone-chat-name-input");
+      const headingEl = document.getElementById("chat-heading");
       let lastKey = "";
       let closed = false;
+      let visitorName = "";
 
       function applyTheme(theme) {
         document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
@@ -72,6 +97,21 @@
           .replace(/</g, "&lt;")
           .replace(/>/g, "&gt;")
           .replace(/"/g, "&quot;");
+      }
+
+      function showNamedChat() {
+        namePanel.classList.add("hidden");
+        messagesEl.classList.remove("hidden");
+        form.classList.toggle("hidden", closed);
+        headingEl.textContent = visitorName ? `Hi, ${visitorName}` : "Message us";
+      }
+
+      function showNameGate() {
+        namePanel.classList.remove("hidden");
+        messagesEl.classList.add("hidden");
+        form.classList.add("hidden");
+        statusEl.textContent = "Name needed";
+        setTimeout(() => nameInput.focus(), 50);
       }
 
       function renderMessages(messages) {
@@ -94,7 +134,9 @@
           errorEl.textContent = "Missing chat link. Scan the QR on the tablet again.";
           errorEl.classList.remove("hidden");
           statusEl.textContent = "Unavailable";
+          namePanel.classList.add("hidden");
           form.classList.add("hidden");
+          messagesEl.classList.add("hidden");
           return;
         }
         try {
@@ -102,9 +144,14 @@
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || "Could not load chat");
           closed = data.session && data.session.status === "closed";
+          visitorName = (data.session && data.session.visitorName) || "";
           statusEl.textContent = closed ? "Closed" : "Live";
-          renderMessages(data.messages || []);
-          form.classList.toggle("hidden", closed);
+          if (!visitorName) {
+            showNameGate();
+          } else {
+            showNamedChat();
+            renderMessages(data.messages || []);
+          }
           errorEl.classList.add("hidden");
         } catch (err) {
           errorEl.textContent = err.message || "Could not load chat";
@@ -112,10 +159,34 @@
         }
       }
 
+      nameForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = nameInput.value.trim();
+        if (!name || !sessionId) return;
+        const btn = nameForm.querySelector("button[type='submit']");
+        btn.disabled = true;
+        try {
+          const res = await fetch("/api/chat-session", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: sessionId, name }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not save name");
+          visitorName = (data.session && data.session.visitorName) || name;
+          await loadChat();
+        } catch (err) {
+          errorEl.textContent = err.message || "Could not save name";
+          errorEl.classList.remove("hidden");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const body = input.value.trim();
-        if (!body || closed) return;
+        if (!body || closed || !visitorName) return;
         sendBtn.disabled = true;
         try {
           const res = await fetch("/api/chat-message", {

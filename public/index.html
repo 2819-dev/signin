@@ -143,9 +143,31 @@
       <div class="chat-modal-card">
         <button type="button" class="chat-modal-close" id="chat-close-btn" aria-label="Close chat">✕</button>
 
-        <div id="chat-gate" class="chat-gate">
+        <div id="chat-name-gate" class="chat-gate">
           <p class="eyebrow">Live chat</p>
-          <h2 id="chat-modal-title">Message us</h2>
+          <h2 id="chat-modal-title">What’s your name?</h2>
+          <p class="subtitle">Enter your name to start messaging.</p>
+          <form id="chat-name-form" class="chat-name-form" autocomplete="off">
+            <div class="field" style="width:100%;text-align:left;">
+              <label for="chat-name-input">Name</label>
+              <input
+                id="chat-name-input"
+                type="text"
+                maxlength="80"
+                required
+                autocomplete="name"
+                enterkeyhint="go"
+                placeholder="Your name"
+              />
+            </div>
+            <button class="btn btn-primary" type="submit" id="chat-name-submit">Continue</button>
+          </form>
+          <p class="error hidden" id="chat-name-error" style="margin:0;"></p>
+        </div>
+
+        <div id="chat-gate" class="chat-gate hidden">
+          <p class="eyebrow">Live chat</p>
+          <h2>Message us</h2>
           <p class="subtitle">
             It’s easier to use your phone to message. Scan the QR code, or continue here on the tablet.
           </p>
@@ -158,7 +180,7 @@
 
         <div id="chat-panel" class="chat-panel hidden">
           <p class="eyebrow">Live chat</p>
-          <h2>Chat</h2>
+          <h2 id="kiosk-chat-title">Chat</h2>
           <div id="kiosk-chat-messages" class="chat-messages" aria-live="polite"></div>
           <form id="kiosk-chat-form" class="chat-composer" autocomplete="off">
             <input
@@ -683,17 +705,24 @@
       const chatFab = document.getElementById("chat-fab");
       const chatModal = document.getElementById("chat-modal");
       const chatCloseBtn = document.getElementById("chat-close-btn");
+      const chatNameGate = document.getElementById("chat-name-gate");
+      const chatNameForm = document.getElementById("chat-name-form");
+      const chatNameInput = document.getElementById("chat-name-input");
+      const chatNameError = document.getElementById("chat-name-error");
       const chatGate = document.getElementById("chat-gate");
       const chatPanel = document.getElementById("chat-panel");
       const chatContinueBtn = document.getElementById("chat-continue-btn");
       const chatBackGateBtn = document.getElementById("chat-back-gate-btn");
       const chatGateQr = document.getElementById("chat-gate-qr");
       const chatGateLink = document.getElementById("chat-gate-link");
+      const kioskChatTitle = document.getElementById("kiosk-chat-title");
       const kioskChatMessages = document.getElementById("kiosk-chat-messages");
       const kioskChatForm = document.getElementById("kiosk-chat-form");
       const kioskChatInput = document.getElementById("kiosk-chat-input");
       const CHAT_SESSION_KEY = "kiosk_chat_session_id";
+      const CHAT_NAME_KEY = "kiosk_chat_visitor_name";
       let chatSessionId = sessionStorage.getItem(CHAT_SESSION_KEY) || "";
+      let chatVisitorName = sessionStorage.getItem(CHAT_NAME_KEY) || "";
       let chatPollTimer = null;
       let chatLastKey = "";
 
@@ -709,10 +738,26 @@
         return `${window.location.origin}/chat?id=${encodeURIComponent(id)}`;
       }
 
+      function showChatStep(step) {
+        chatNameGate.classList.toggle("hidden", step !== "name");
+        chatGate.classList.toggle("hidden", step !== "qr");
+        chatPanel.classList.toggle("hidden", step !== "chat");
+      }
+
       function updateChatQr(id) {
         const url = chatUrlForSession(id);
         chatGateLink.textContent = url;
         chatGateQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=10&data=${encodeURIComponent(url)}`;
+      }
+
+      function setChatIdentity(session) {
+        if (!session) return;
+        chatSessionId = session.id;
+        chatVisitorName = session.visitorName || chatVisitorName || "";
+        sessionStorage.setItem(CHAT_SESSION_KEY, chatSessionId);
+        if (chatVisitorName) sessionStorage.setItem(CHAT_NAME_KEY, chatVisitorName);
+        kioskChatTitle.textContent = chatVisitorName ? `Chat · ${chatVisitorName}` : "Chat";
+        updateChatQr(chatSessionId);
       }
 
       function renderKioskChat(messages) {
@@ -730,24 +775,32 @@
         kioskChatMessages.scrollTop = kioskChatMessages.scrollHeight;
       }
 
-      async function ensureChatSession() {
+      async function ensureChatSession(name) {
         if (chatSessionId) {
           const res = await fetch(`/api/chat-session?id=${encodeURIComponent(chatSessionId)}`);
           if (res.ok) {
             const data = await res.json();
-            if (data.session && data.session.status !== "closed") {
-              updateChatQr(chatSessionId);
+            if (data.session && data.session.status !== "closed" && data.session.visitorName) {
+              setChatIdentity(data.session);
               return data;
             }
           }
+          chatSessionId = "";
+          sessionStorage.removeItem(CHAT_SESSION_KEY);
         }
 
-        const res = await fetch("/api/chat-session", { method: "POST" });
+        const visitorName = String(name || chatVisitorName || "").trim();
+        if (!visitorName) throw new Error("Name is required");
+
+        const res = await fetch("/api/chat-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: visitorName }),
+        });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Could not start chat");
-        chatSessionId = data.session.id;
-        sessionStorage.setItem(CHAT_SESSION_KEY, chatSessionId);
-        updateChatQr(chatSessionId);
+        setChatIdentity(data.session);
+        if (data.messages) renderKioskChat(data.messages);
         return data;
       }
 
@@ -759,17 +812,31 @@
           const res = await fetch(`/api/chat-session?id=${encodeURIComponent(chatSessionId)}`);
           if (!res.ok) return;
           const data = await res.json();
+          if (data.session) setChatIdentity(data.session);
           renderKioskChat(data.messages || []);
         } catch (_) {}
       }
 
       function openChatModal() {
         chatModal.classList.remove("hidden");
-        chatGate.classList.remove("hidden");
-        chatPanel.classList.add("hidden");
-        ensureChatSession().catch((err) => {
-          chatGateLink.textContent = err.message || "Could not start chat";
-        });
+        chatNameError.classList.add("hidden");
+        if (chatSessionId && chatVisitorName) {
+          showChatStep("qr");
+          ensureChatSession(chatVisitorName)
+            .then(() => showChatStep("qr"))
+            .catch(() => {
+              chatSessionId = "";
+              chatVisitorName = "";
+              sessionStorage.removeItem(CHAT_SESSION_KEY);
+              sessionStorage.removeItem(CHAT_NAME_KEY);
+              showChatStep("name");
+              setTimeout(() => chatNameInput.focus(), 50);
+            });
+        } else {
+          showChatStep("name");
+          chatNameInput.value = chatVisitorName || "";
+          setTimeout(() => chatNameInput.focus(), 50);
+        }
       }
 
       function closeChatModal() {
@@ -781,8 +848,7 @@
       }
 
       function showKioskChatPanel() {
-        chatGate.classList.add("hidden");
-        chatPanel.classList.remove("hidden");
+        showChatStep("chat");
         pollKioskChat();
         if (!chatPollTimer) chatPollTimer = setInterval(pollKioskChat, 2500);
         setTimeout(() => kioskChatInput.focus(), 50);
@@ -793,17 +859,41 @@
       chatModal.addEventListener("click", (e) => {
         if (e.target === chatModal) closeChatModal();
       });
+
+      chatNameForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        chatNameError.classList.add("hidden");
+        const name = chatNameInput.value.trim();
+        if (!name) {
+          chatNameError.textContent = "Please enter your name";
+          chatNameError.classList.remove("hidden");
+          return;
+        }
+        const btn = document.getElementById("chat-name-submit");
+        btn.disabled = true;
+        try {
+          chatVisitorName = name;
+          sessionStorage.setItem(CHAT_NAME_KEY, name);
+          await ensureChatSession(name);
+          showChatStep("qr");
+        } catch (err) {
+          chatNameError.textContent = err.message || "Could not start chat";
+          chatNameError.classList.remove("hidden");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
       chatContinueBtn.addEventListener("click", async () => {
         try {
-          await ensureChatSession();
+          await ensureChatSession(chatVisitorName);
           showKioskChatPanel();
         } catch (err) {
           chatGateLink.textContent = err.message || "Could not open chat";
         }
       });
       chatBackGateBtn.addEventListener("click", () => {
-        chatPanel.classList.add("hidden");
-        chatGate.classList.remove("hidden");
+        showChatStep("qr");
         if (chatPollTimer) {
           clearInterval(chatPollTimer);
           chatPollTimer = null;

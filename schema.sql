@@ -70,14 +70,19 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   status TEXT NOT NULL DEFAULT 'open'
     CHECK (status IN ('open', 'closed')),
+  visitor_name TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  last_visitor_message_at TIMESTAMPTZ
+  last_visitor_message_at TIMESTAMPTZ,
+  closed_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS chat_sessions_status_updated_idx
   ON chat_sessions (status, last_message_at DESC);
+
+CREATE INDEX IF NOT EXISTS chat_sessions_closed_at_idx
+  ON chat_sessions (status, closed_at);
 
 CREATE TABLE IF NOT EXISTS chat_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -89,3 +94,9 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 
 CREATE INDEX IF NOT EXISTS chat_messages_session_created_idx
   ON chat_messages (session_id, created_at ASC);
+
+ALTER TABLE chat_sessions
+  ADD COLUMN IF NOT EXISTS visitor_name TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE chat_sessions
+  ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;

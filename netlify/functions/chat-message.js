@@ -17,10 +17,12 @@ async function ensureChatTables(sql) {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       status TEXT NOT NULL DEFAULT 'open'
         CHECK (status IN ('open', 'closed')),
+      visitor_name TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      last_visitor_message_at TIMESTAMPTZ
+      last_visitor_message_at TIMESTAMPTZ,
+      closed_at TIMESTAMPTZ
     )
   `;
   await sql`
@@ -32,7 +34,10 @@ async function ensureChatTables(sql) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS visitor_name TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ`;
   await sql`CREATE INDEX IF NOT EXISTS chat_sessions_status_updated_idx ON chat_sessions (status, last_message_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS chat_sessions_closed_at_idx ON chat_sessions (status, closed_at)`;
   await sql`CREATE INDEX IF NOT EXISTS chat_messages_session_created_idx ON chat_messages (session_id, created_at ASC)`;
 }
 
@@ -68,7 +73,7 @@ exports.handler = async (event) => {
     const sql = getSql();
     await ensureChatTables(sql);
     const sessions = await sql`
-      SELECT id, status
+      SELECT id, status, visitor_name
       FROM chat_sessions
       WHERE id = ${sessionId}
       LIMIT 1
@@ -76,6 +81,9 @@ exports.handler = async (event) => {
     if (!sessions[0]) return json(404, { error: "Chat not found" });
     if (sessions[0].status === "closed" && sender === "visitor") {
       return json(403, { error: "This chat is closed" });
+    }
+    if (sender === "visitor" && !(sessions[0].visitor_name || "").trim()) {
+      return json(400, { error: "Enter your name before messaging" });
     }
 
     const rows = await sql`
@@ -90,7 +98,8 @@ exports.handler = async (event) => {
         SET updated_at = NOW(),
             last_message_at = NOW(),
             last_visitor_message_at = NOW(),
-            status = 'open'
+            status = 'open',
+            closed_at = NULL
         WHERE id = ${sessionId}
       `;
     } else {
@@ -98,15 +107,17 @@ exports.handler = async (event) => {
         UPDATE chat_sessions
         SET updated_at = NOW(),
             last_message_at = NOW(),
-            status = 'open'
+            status = 'open',
+            closed_at = NULL
         WHERE id = ${sessionId}
       `;
     }
 
     if (sender === "visitor") {
+      const visitorName = String(sessions[0].visitor_name || "").trim();
       try {
         await notifyAdmins({
-          title: "New chat message",
+          title: visitorName ? `Chat from ${visitorName}` : "New chat message",
           body: text.length > 120 ? `${text.slice(0, 117)}…` : text,
           url: "/admin",
           tag: `chat-${sessionId}`,

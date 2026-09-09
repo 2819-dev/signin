@@ -795,6 +795,28 @@ html[data-theme="dark"] .chat-bubble.mine {
   max-height: 36vh;
 }
 
+.chat-name-form {
+  width: 100%;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.chat-name-panel {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.chat-session-name {
+  display: block;
+  margin: 0 0 0.15rem;
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+.chat-gate .field {
+  margin: 0;
+}
+
 .chat-empty-note {
   margin: 0;
   color: var(--muted);

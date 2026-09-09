@@ -991,6 +991,15 @@
         }
       }
 
+      function minutesUntilChatDelete(session) {
+        if (!session || session.status !== "closed") return null;
+        const closedAt = session.closedAt || session.updatedAt;
+        if (!closedAt) return null;
+        const remainingMs = new Date(closedAt).getTime() + 5 * 60 * 1000 - Date.now();
+        if (remainingMs <= 0) return 0;
+        return Math.ceil(remainingMs / 60000);
+      }
+
       function renderChatInbox(sessions) {
         const openSessions = sessions.filter((s) => s.status === "open");
         chatCountEl.textContent = String(openSessions.length);
@@ -1005,14 +1014,25 @@
         chatEmptyEl.classList.add("hidden");
         chatInboxEl.innerHTML = sessions
           .map((session) => {
+            const name = session.visitorName || "Visitor";
             const preview = session.lastBody || "New chat";
             const active = session.id === activeChatId ? "active" : "";
+            const deleteMins = minutesUntilChatDelete(session);
+            const statusLabel =
+              session.status === "open"
+                ? "Open"
+                : deleteMins == null
+                  ? "Closed"
+                  : deleteMins <= 0
+                    ? "Deleting…"
+                    : `Closed · deletes in ${deleteMins}m`;
             return `
               <button type="button" class="chat-session-card ${active}" data-chat-id="${escapeHtml(session.id)}">
                 <div class="chat-session-top">
-                  <span>${session.status === "open" ? "Open" : "Closed"} · ${escapeHtml(formatTime(session.lastMessageAt || session.createdAt))}</span>
+                  <span>${escapeHtml(statusLabel)} · ${escapeHtml(formatTime(session.lastMessageAt || session.createdAt))}</span>
                   <span>${Number(session.visitorCount || 0)} visitor msg${Number(session.visitorCount || 0) === 1 ? "" : "s"}</span>
                 </div>
+                <strong class="chat-session-name">${escapeHtml(name)}</strong>
                 <p class="chat-session-preview">${escapeHtml(preview)}</p>
               </button>
             `;
@@ -1044,13 +1064,27 @@
           headers: adminHeaders(),
         });
         const data = await res.json().catch(() => ({}));
+        if (res.status === 404) {
+          activeChatId = "";
+          chatThreadEl.classList.add("hidden");
+          chatMessagesKey = "";
+          return;
+        }
         if (!res.ok) throw new Error(data.error || "Could not load chat");
         chatThreadEl.classList.remove("hidden");
-        chatThreadTitle.textContent = "Visitor chat";
-        chatThreadStatus.textContent =
-          data.session && data.session.status === "closed"
-            ? "Closed"
-            : "Live · reply below";
+        const name = (data.session && data.session.visitorName) || "Visitor";
+        chatThreadTitle.textContent = name;
+        const deleteMins = minutesUntilChatDelete(data.session);
+        if (data.session && data.session.status === "closed") {
+          chatThreadStatus.textContent =
+            deleteMins == null
+              ? "Closed"
+              : deleteMins <= 0
+                ? "Closed · deleting soon"
+                : `Closed · auto-deletes in ${deleteMins} min`;
+        } else {
+          chatThreadStatus.textContent = "Live · reply below";
+        }
         adminChatForm.classList.toggle("hidden", data.session && data.session.status === "closed");
         chatCloseSessionBtn.textContent =
           data.session && data.session.status === "closed" ? "Reopen chat" : "Close chat";
@@ -1091,9 +1125,12 @@
 
           if (activeChatId) {
             if (!sessions.some((s) => s.id === activeChatId)) {
-              // Still allow loading a recently selected chat even if filtered out.
+              activeChatId = "";
+              chatThreadEl.classList.add("hidden");
+              chatMessagesKey = "";
+            } else {
+              await loadActiveChat();
             }
-            await loadActiveChat();
           }
         } catch (err) {
           // Keep request polling healthy even if chat fails.
