@@ -353,7 +353,7 @@
       let isOpen = true;
       let urgentEnabled = true;
       let chatEnabled = true;
-      let cameraRotation = 90;
+      let cameraSide = "left";
       let urgentMode = false;
       let activeView = "form";
       let displayMode = "signin";
@@ -871,10 +871,13 @@
           isOpen = settings.isOpen !== false;
           urgentEnabled = settings.urgentEnabled !== false;
           chatEnabled = settings.chatEnabled !== false;
-          cameraRotation = [0, 90, 180, 270].includes(Number(settings.cameraRotation))
-            ? Number(settings.cameraRotation)
-            : 90;
-          if (window.KioskFace) window.KioskFace.setCameraRotation(cameraRotation);
+          cameraSide = ["left", "right", "center"].includes(String(settings.cameraSide || "").toLowerCase())
+            ? String(settings.cameraSide).toLowerCase()
+            : "left";
+          if (window.KioskFace) {
+            window.KioskFace.setCameraSide(cameraSide);
+            window.KioskFace.applyCameraGuide(document);
+          }
           displayMode = normalizeDisplayMode(settings.displayMode);
           applyTheme(settings.theme);
           syncChatFabVisibility();
@@ -992,8 +995,9 @@
         faceScanBtn.disabled = true;
         try {
           await window.KioskFace.ensureFaceApi();
-          faceStream = await window.KioskFace.startCamera(faceVideo, { rotation: cameraRotation });
+          faceStream = await window.KioskFace.startCamera(faceVideo, { side: cameraSide });
           faceStatus.textContent = "Camera ready — tap Scan face";
+          faceModalHint.textContent = "Keep looking at the screen.";
           faceScanBtn.disabled = false;
         } catch (err) {
           faceError.textContent = err.message || "Could not open camera";
@@ -1009,10 +1013,7 @@
         faceError.classList.add("hidden");
         faceStatus.textContent = "Scanning…";
         try {
-          const descriptor = await window.KioskFace.descriptorFromVideo(faceVideo, {
-            rotation: cameraRotation,
-            tryAlternates: true,
-          });
+          const descriptor = await window.KioskFace.descriptorFromVideo(faceVideo);
           faceStatus.textContent = "Checking…";
           const res = await fetch("/api/face-match", {
             method: "POST",
@@ -1158,12 +1159,12 @@
         showSynkPod();
         synkError.classList.add("hidden");
         synkStatus.textContent = "Starting camera…";
-        synkPodHint.textContent = "Center your face in the ring.";
+        synkPodHint.textContent = "Keep looking at the screen — put your face in the ring.";
         synkScanBtn.disabled = true;
         synkBusy = false;
         try {
           await window.KioskFace.ensureFaceApi();
-          synkStream = await window.KioskFace.startCamera(synkVideo, { rotation: cameraRotation });
+          synkStream = await window.KioskFace.startCamera(synkVideo, { side: cameraSide });
           synkStatus.textContent = "Hold still — verifying…";
           synkScanBtn.disabled = false;
           synkAutoTimer = setTimeout(() => {
@@ -1245,16 +1246,10 @@
         synkError.classList.add("hidden");
         synkStatus.textContent = "Scanning…";
         try {
-          const first = await window.KioskFace.descriptorFromVideo(synkVideo, {
-            rotation: cameraRotation,
-            tryAlternates: true,
-          });
+          const first = await window.KioskFace.descriptorFromVideo(synkVideo);
           synkStatus.textContent = "Confirming live match…";
           await new Promise((r) => setTimeout(r, 380));
-          const second = await window.KioskFace.descriptorFromVideo(synkVideo, {
-            rotation: cameraRotation,
-            tryAlternates: true,
-          });
+          const second = await window.KioskFace.descriptorFromVideo(synkVideo);
           synkStatus.textContent = "Checking Synk registry…";
           const res = await fetch("/api/synk-auth", {
             method: "POST",

@@ -1042,6 +1042,7 @@ html[data-theme="dark"] .face-modal-card {
 }
 
 .face-video-wrap {
+  position: relative;
   overflow: hidden;
   border-radius: 1rem;
   border: 1px solid var(--line);
@@ -1054,13 +1055,6 @@ html[data-theme="dark"] .face-modal-card {
   height: 100%;
   object-fit: cover;
   transform: scaleX(-1);
-}
-
-.face-video[data-camera-rotation="90"],
-.face-video[data-camera-rotation="270"],
-.synk-video[data-camera-rotation="90"],
-.synk-video[data-camera-rotation="270"] {
-  /* JS also bumps scale so the rotated frame still fills the crop */
 }
 
 .face-enroll-form {
@@ -1320,12 +1314,32 @@ html[data-theme="dark"] .synk-code {
 .synk-pod-ring {
   pointer-events: none;
   position: absolute;
-  inset: 12% 16%;
+  width: 58%;
+  aspect-ratio: 1;
+  top: 50%;
+  left: 50%;
   border-radius: 50%;
   border: 2px solid rgba(43, 107, 255, 0.85);
   box-shadow:
     0 0 0 999px rgba(8, 12, 24, 0.35),
     inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  transform: translate(-50%, -50%);
+}
+
+/* Mirrored preview: physical left-edge camera → face sits toward preview-left when the person stays screen-centered */
+.synk-pod-ring[data-camera-side="left"],
+.synk-pod-frame[data-camera-side="left"] .synk-pod-ring {
+  left: 34%;
+}
+
+.synk-pod-ring[data-camera-side="right"],
+.synk-pod-frame[data-camera-side="right"] .synk-pod-ring {
+  left: 66%;
+}
+
+.synk-pod-ring[data-camera-side="center"],
+.synk-pod-frame[data-camera-side="center"] .synk-pod-ring {
+  left: 50%;
 }
 
 .synk-modal-card.synk-verified .synk-pod-ring,

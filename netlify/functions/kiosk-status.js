@@ -13,7 +13,7 @@ const DEFAULTS = {
   displayImageUrl: "",
   displayLink: "",
   displayShowClock: false,
-  cameraRotation: 90,
+  cameraSide: "left",
 };
 
 const DISPLAY_MODES = new Set([
@@ -61,10 +61,14 @@ function normalizeLink(value) {
   return String(value || "").trim().slice(0, 2000);
 }
 
-function normalizeCameraRotation(value) {
+function normalizeCameraSide(value) {
+  const v = String(value || "").toLowerCase();
+  if (v === "left" || v === "right" || v === "center") return v;
+  // Migrate old rotation setting that made previews sideways
   const n = Number(value);
-  if (n === 0 || n === 90 || n === 180 || n === 270) return n;
-  return 90;
+  if (n === 270 || n === 180) return "right";
+  if (n === 0) return "center";
+  return "left";
 }
 
 function mapSettings(row) {
@@ -82,7 +86,7 @@ function mapSettings(row) {
     displayImageUrl: row.display_image_url || "",
     displayLink: row.display_link || "",
     displayShowClock: Boolean(row.display_show_clock),
-    cameraRotation: normalizeCameraRotation(row.camera_rotation),
+    cameraSide: normalizeCameraSide(row.camera_side || row.camera_rotation),
     updatedAt: row.updated_at || null,
   };
 }
@@ -100,12 +104,13 @@ async function ensureSettings(sql) {
   await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_link TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_show_clock BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS chat_enabled BOOLEAN NOT NULL DEFAULT TRUE`;
-  await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS camera_rotation INTEGER NOT NULL DEFAULT 90`;
+  await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS camera_rotation INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS camera_side TEXT NOT NULL DEFAULT 'left'`;
 
   const rows = await sql`
     SELECT is_open, urgent_enabled, chat_enabled, theme, closed_title, closed_message,
            display_mode, display_title, display_message, display_image_url, display_link, display_show_clock,
-           camera_rotation, updated_at
+           camera_rotation, camera_side, updated_at
     FROM kiosk_settings
     WHERE id = 1
     LIMIT 1
@@ -141,7 +146,7 @@ exports.handler = async (event) => {
       const currentRows = await sql`
         SELECT is_open, urgent_enabled, chat_enabled, theme, closed_title, closed_message,
                display_mode, display_title, display_message, display_image_url, display_link, display_show_clock,
-               camera_rotation, updated_at
+               camera_rotation, camera_side, updated_at
         FROM kiosk_settings
         WHERE id = 1
         LIMIT 1
@@ -205,8 +210,12 @@ exports.handler = async (event) => {
         typeof body.displayShowClock === "boolean"
           ? body.displayShowClock
           : current.displayShowClock;
-      const cameraRotation = normalizeCameraRotation(
-        body.cameraRotation != null ? body.cameraRotation : current.cameraRotation
+      const cameraSide = normalizeCameraSide(
+        body.cameraSide != null
+          ? body.cameraSide
+          : body.cameraRotation != null
+            ? body.cameraRotation
+            : current.cameraSide
       );
 
       if (!closedTitle) {
@@ -279,12 +288,13 @@ exports.handler = async (event) => {
             display_image_url = ${displayImageUrl},
             display_link = ${displayLink},
             display_show_clock = ${displayShowClock},
-            camera_rotation = ${cameraRotation},
+            camera_side = ${cameraSide},
+            camera_rotation = 0,
             updated_at = NOW()
         WHERE id = 1
         RETURNING is_open, urgent_enabled, chat_enabled, theme, closed_title, closed_message,
                   display_mode, display_title, display_message, display_image_url, display_link, display_show_clock,
-                  camera_rotation, updated_at
+                  camera_rotation, camera_side, updated_at
       `;
 
       return json(200, { settings: mapSettings(rows[0]) });

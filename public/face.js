@@ -7,7 +7,9 @@
 
   let loading = null;
   let ready = false;
-  let cameraRotation = 90; // landscape iPad mounts usually put the camera on the side
+  // Where the physical camera sits on a landscape-mounted iPad.
+  // Used to offset the on-screen guide — preview stays upright (never sideways).
+  let cameraSide = "left";
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -63,27 +65,60 @@
     });
   }
 
-  function normalizeRotation(value) {
-    const n = Number(value);
-    if (n === 0 || n === 90 || n === 180 || n === 270) return n;
-    return 90;
+  function normalizeCameraSide(value) {
+    const v = String(value || "").toLowerCase();
+    if (v === "right" || v === "center" || v === "left") return v;
+    // Legacy rotation values from the old sideways-preview setting
+    if (v === "270" || v === "180") return "right";
+    if (v === "90") return "left";
+    if (v === "0") return "center";
+    return "left";
   }
 
+  function setCameraSide(value) {
+    cameraSide = normalizeCameraSide(value);
+    return cameraSide;
+  }
+
+  function getCameraSide() {
+    return cameraSide;
+  }
+
+  // Back-compat aliases (rotation must never twist the preview again)
   function setCameraRotation(value) {
-    cameraRotation = normalizeRotation(value);
-    return cameraRotation;
+    return setCameraSide(value);
   }
 
   function getCameraRotation() {
-    return cameraRotation;
+    return 0;
   }
 
-  function applyPreviewRotation(videoEl, rotation = cameraRotation) {
+  function normalizeRotation() {
+    return 0;
+  }
+
+  function applyPreviewTransform(videoEl) {
     if (!videoEl) return;
-    const deg = normalizeRotation(rotation);
-    videoEl.dataset.cameraRotation = String(deg);
-    const fill = deg === 90 || deg === 270 ? " scale(1.34)" : "";
-    videoEl.style.transform = `rotate(${deg}deg) scaleX(-1)${fill}`;
+    // Always upright + mirrored selfie view. Side-camera mounts are handled by
+    // offsetting the guide ring, not by rotating the person sideways.
+    videoEl.dataset.cameraSide = cameraSide;
+    videoEl.dataset.cameraRotation = "0";
+    videoEl.style.transform = "scaleX(-1)";
+  }
+
+  function applyPreviewRotation(videoEl) {
+    applyPreviewTransform(videoEl);
+  }
+
+  function applyCameraGuide(rootEl, side = cameraSide) {
+    const target = rootEl || document;
+    const resolved = normalizeCameraSide(side);
+    target.querySelectorAll(".synk-pod-frame, .face-video-wrap").forEach((el) => {
+      el.dataset.cameraSide = resolved;
+    });
+    target.querySelectorAll(".synk-pod-ring, .face-guide-ring").forEach((el) => {
+      el.dataset.cameraSide = resolved;
+    });
   }
 
   async function descriptorFromImage(input) {
@@ -94,16 +129,17 @@
       .withFaceDescriptor();
 
     if (!detection || !detection.descriptor) {
-      throw new Error("No clear face found. Try better lighting and face the camera.");
+      throw new Error("No clear face found. Keep looking at the screen and stay in the ring.");
     }
     return Array.from(detection.descriptor);
   }
 
-  async function startCamera(videoEl, { facingMode = "user", rotation } = {}) {
+  async function startCamera(videoEl, { facingMode = "user", side, rotation } = {}) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error("Camera is not available in this browser");
     }
-    if (rotation != null) setCameraRotation(rotation);
+    if (side != null) setCameraSide(side);
+    else if (rotation != null) setCameraSide(rotation);
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
@@ -113,7 +149,8 @@
       },
     });
     videoEl.srcObject = stream;
-    applyPreviewRotation(videoEl, cameraRotation);
+    applyPreviewTransform(videoEl);
+    applyCameraGuide(videoEl.closest(".synk-pod-frame, .face-video-wrap, .face-modal-card, .synk-modal-card, body") || document);
     await videoEl.play();
     return stream;
   }
@@ -128,55 +165,21 @@
     }
   }
 
-  function captureVideoFrame(videoEl, { rotation = cameraRotation } = {}) {
-    const deg = normalizeRotation(rotation);
+  function captureVideoFrame(videoEl) {
     const width = videoEl.videoWidth || 640;
     const height = videoEl.videoHeight || 480;
     const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext("2d");
-
-    // CSS mirroring is display-only; drawImage uses the raw camera buffer.
-    // Rotate that buffer so faces are upright for matching on side-mounted iPads.
-    if (deg === 90 || deg === 270) {
-      canvas.width = height;
-      canvas.height = width;
-    } else {
-      canvas.width = width;
-      canvas.height = height;
-    }
-
-    ctx.save();
-    if (deg === 90) {
-      ctx.translate(canvas.width, 0);
-      ctx.rotate(Math.PI / 2);
-    } else if (deg === 180) {
-      ctx.translate(canvas.width, canvas.height);
-      ctx.rotate(Math.PI);
-    } else if (deg === 270) {
-      ctx.translate(0, canvas.height);
-      ctx.rotate(-Math.PI / 2);
-    }
+    // Raw camera buffer (CSS mirror is display-only)
     ctx.drawImage(videoEl, 0, 0, width, height);
-    ctx.restore();
     return canvas;
   }
 
-  async function descriptorFromVideo(videoEl, { rotation = cameraRotation, tryAlternates = true } = {}) {
-    const preferred = normalizeRotation(rotation);
-    const order = tryAlternates
-      ? [preferred, 0, 90, 270, 180].filter((v, i, arr) => arr.indexOf(v) === i)
-      : [preferred];
-
-    let lastError = null;
-    for (const deg of order) {
-      try {
-        const frame = captureVideoFrame(videoEl, { rotation: deg });
-        return await descriptorFromImage(frame);
-      } catch (err) {
-        lastError = err;
-      }
-    }
-    throw lastError || new Error("No clear face found. Try better lighting and face the camera.");
+  async function descriptorFromVideo(videoEl) {
+    const frame = captureVideoFrame(videoEl);
+    return descriptorFromImage(frame);
   }
 
   global.KioskFace = {
@@ -186,9 +189,15 @@
     startCamera,
     stopCamera,
     captureVideoFrame,
+    setCameraSide,
+    getCameraSide,
+    applyCameraGuide,
+    applyPreviewTransform,
+    // legacy names kept so older callers don't break
     setCameraRotation,
     getCameraRotation,
     applyPreviewRotation,
     normalizeRotation,
+    normalizeCameraSide,
   };
 })(window);

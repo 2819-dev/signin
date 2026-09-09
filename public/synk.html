@@ -40,7 +40,7 @@
         <div id="synk-pod-view">
           <p class="section-label">Verify</p>
           <h2 style="margin:0 0 8px;">Look at the camera</h2>
-          <p class="muted" id="synk-pod-hint">Center your face. Synk checks a live match, then issues a pass.</p>
+          <p class="muted" id="synk-pod-hint">Keep looking at the screen — put your face in the ring.</p>
           <div class="synk-pod-frame">
             <video id="synk-video" class="face-video synk-video" playsinline muted autoplay></video>
             <div class="synk-pod-ring" aria-hidden="true"></div>
@@ -126,16 +126,19 @@
 
       let stream = null;
       let busy = false;
-      let cameraRotation = 90;
+      let cameraSide = "left";
 
-      async function loadRotation() {
+      async function loadCameraSide() {
         try {
           const res = await fetch("/api/kiosk-status");
           const data = await res.json().catch(() => ({}));
-          const rot = Number(data.settings && data.settings.cameraRotation);
-          if ([0, 90, 180, 270].includes(rot)) cameraRotation = rot;
+          const side = String((data.settings && data.settings.cameraSide) || "").toLowerCase();
+          if (["left", "right", "center"].includes(side)) cameraSide = side;
         } catch (_) {}
-        if (window.KioskFace) window.KioskFace.setCameraRotation(cameraRotation);
+        if (window.KioskFace) {
+          window.KioskFace.setCameraSide(cameraSide);
+          window.KioskFace.applyCameraGuide(document);
+        }
       }
 
       function stopCamera() {
@@ -160,7 +163,7 @@
         scanBtn.disabled = true;
         try {
           await window.KioskFace.ensureFaceApi();
-          stream = await window.KioskFace.startCamera(video, { rotation: cameraRotation });
+          stream = await window.KioskFace.startCamera(video, { side: cameraSide });
           statusEl.textContent = "Hold still, then tap Verify";
           scanBtn.disabled = false;
         } catch (err) {
@@ -171,16 +174,10 @@
       }
 
       async function dualDescriptors() {
-        const a = await window.KioskFace.descriptorFromVideo(video, {
-          rotation: cameraRotation,
-          tryAlternates: true,
-        });
+        const a = await window.KioskFace.descriptorFromVideo(video);
         statusEl.textContent = "Confirming live match…";
         await new Promise((r) => setTimeout(r, 380));
-        const b = await window.KioskFace.descriptorFromVideo(video, {
-          rotation: cameraRotation,
-          tryAlternates: true,
-        });
+        const b = await window.KioskFace.descriptorFromVideo(video);
         return [a, b];
       }
 
@@ -270,7 +267,7 @@
         }
       });
 
-      loadRotation().then(() => {
+      loadCameraSide().then(() => {
         if (params.get("autostart") === "1") startCamera();
       });
     </script>

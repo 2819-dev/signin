@@ -124,15 +124,14 @@
           </div>
           <div class="settings-row" style="align-items:flex-start;">
             <div style="flex:1;min-width:0;">
-              <strong>Tablet camera angle</strong>
+              <strong>Tablet camera side</strong>
               <div class="muted" style="font-size: 0.85rem;">
-                Landscape mounts put the camera on the side — rotate so Synk/Face match correctly.
+                Landscape mounts put the camera on an edge. We’ll keep the preview upright and shift the face ring toward that camera so people can stay centered on the screen.
               </div>
-              <select id="camera-rotation" style="margin-top:10px;max-width:100%;">
-                <option value="90">Camera on left / rotate 90°</option>
-                <option value="270">Camera on right / rotate 270°</option>
-                <option value="0">Upright (no rotate)</option>
-                <option value="180">Upside down / rotate 180°</option>
+              <select id="camera-side" style="margin-top:10px;max-width:100%;">
+                <option value="left">Camera on left edge</option>
+                <option value="right">Camera on right edge</option>
+                <option value="center">Camera centered / portrait</option>
               </select>
             </div>
           </div>
@@ -525,7 +524,7 @@
       const urgentToggle = document.getElementById("urgent-toggle");
       const chatToggle = document.getElementById("chat-toggle");
       const themeToggle = document.getElementById("theme-toggle");
-      const cameraRotationSelect = document.getElementById("camera-rotation");
+      const cameraSideSelect = document.getElementById("camera-side");
       const openLabel = document.getElementById("open-label");
       const openHint = document.getElementById("open-hint");
       const urgentLabel = document.getElementById("urgent-label");
@@ -685,7 +684,7 @@
         displayImageUrl: "",
         displayLink: "",
         displayShowClock: false,
-        cameraRotation: 90,
+        cameraSide: "left",
       };
 
       const DISPLAY_HINTS = {
@@ -964,15 +963,15 @@
           displayImageUrl: settings.displayImageUrl || "",
           displayLink: settings.displayLink || "",
           displayShowClock: Boolean(settings.displayShowClock),
-          cameraRotation: [0, 90, 180, 270].includes(Number(settings.cameraRotation))
-            ? Number(settings.cameraRotation)
-            : 90,
+          cameraSide: ["left", "right", "center"].includes(String(settings.cameraSide || "").toLowerCase())
+            ? String(settings.cameraSide).toLowerCase()
+            : "left",
         };
         isOpenToggle.checked = currentSettings.isOpen;
         urgentToggle.checked = currentSettings.urgentEnabled;
         chatToggle.checked = currentSettings.chatEnabled;
         themeToggle.checked = currentSettings.theme === "dark";
-        cameraRotationSelect.value = String(currentSettings.cameraRotation);
+        cameraSideSelect.value = currentSettings.cameraSide;
         closedTitleInput.value = currentSettings.closedTitle;
         closedMessageInput.value = currentSettings.closedMessage;
         displayTitleInput.value = currentSettings.displayTitle;
@@ -1087,10 +1086,10 @@
             typeof partial.displayShowClock === "boolean"
               ? partial.displayShowClock
               : displayShowClockToggle.checked,
-          cameraRotation:
-            partial.cameraRotation != null
-              ? Number(partial.cameraRotation)
-              : Number(cameraRotationSelect.value || currentSettings.cameraRotation || 90),
+          cameraSide:
+            partial.cameraSide != null
+              ? String(partial.cameraSide)
+              : cameraSideSelect.value || currentSettings.cameraSide || "left",
         };
         const res = await fetch("/api/kiosk-status", {
           method: "POST",
@@ -1808,17 +1807,17 @@
         }
       });
 
-      cameraRotationSelect.addEventListener("change", async () => {
-        const next = Number(cameraRotationSelect.value);
-        cameraRotationSelect.disabled = true;
+      cameraSideSelect.addEventListener("change", async () => {
+        const next = cameraSideSelect.value;
+        cameraSideSelect.disabled = true;
         try {
-          await saveSettings({ cameraRotation: next });
-          showToast("Tablet camera angle saved");
+          await saveSettings({ cameraSide: next });
+          showToast("Tablet camera side saved");
         } catch (err) {
-          cameraRotationSelect.value = String(currentSettings.cameraRotation || 90);
+          cameraSideSelect.value = currentSettings.cameraSide || "left";
           showToast(err.message || "Could not update");
         } finally {
-          cameraRotationSelect.disabled = false;
+          cameraSideSelect.disabled = false;
         }
       });
 
