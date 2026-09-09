@@ -1291,6 +1291,48 @@ html[data-theme="dark"] .synk-code {
   margin-bottom: 8px;
 }
 
+.synk-pod-frame {
+  position: relative;
+  width: min(100%, 320px);
+  margin: 8px auto 14px;
+  aspect-ratio: 3 / 4;
+  border-radius: 28px;
+  overflow: hidden;
+  background: #0b1220;
+  border: 1px solid rgba(43, 107, 255, 0.28);
+  box-shadow: 0 0 0 4px rgba(43, 107, 255, 0.08);
+}
+
+.synk-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.synk-pod-ring {
+  pointer-events: none;
+  position: absolute;
+  inset: 12% 16%;
+  border-radius: 50%;
+  border: 2px solid rgba(43, 107, 255, 0.85);
+  box-shadow:
+    0 0 0 999px rgba(8, 12, 24, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.synk-modal-card.synk-verified .synk-pod-ring,
+.face-modal.synk-verified .synk-pod-ring {
+  border-color: #2b6bff;
+  box-shadow:
+    0 0 0 999px rgba(8, 12, 24, 0.45),
+    0 0 0 6px rgba(43, 107, 255, 0.25);
+}
+
+#synk-use-code-btn {
+  border-style: dashed;
+}
+
 .display-live-pill {
   display: inline-flex;
   align-items: center;

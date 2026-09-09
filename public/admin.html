@@ -383,7 +383,7 @@
             <div>
               <p class="eyebrow">Identity</p>
               <h1><span class="synk-mark" aria-hidden="true"><img src="/synk-logo.svg" alt="" /></span>Synk</h1>
-              <p class="muted">Authorized humans for this kiosk and your other apps.</p>
+              <p class="muted">Members verify face-first at the tablet — like CLEAR.</p>
             </div>
           </header>
         </div>
@@ -394,17 +394,16 @@
               <img src="/synk-logo.svg" alt="" />
             </div>
             <div>
-              <h2 style="margin:0 0 6px;">Person Synk ID</h2>
+              <h2 style="margin:0 0 6px;">Enroll members</h2>
               <p class="muted" style="margin:0;">
-                Clear identity for authorized people: name, photo, secret, and date of birth.
-                Sign-in with Synk ID auto-admits them at the tablet.
+                Like CLEAR: capture identity once, then they verify face-first at the tablet and get cleared in.
               </p>
             </div>
           </div>
 
           <form id="synk-enroll-form" class="synk-enroll-form" autocomplete="off" style="margin-top:16px;">
             <div class="field">
-              <label for="synk-enroll-name">Name</label>
+              <label for="synk-enroll-name">Legal name</label>
               <input id="synk-enroll-name" type="text" maxlength="100" required placeholder="Full name" />
             </div>
             <div class="field">
@@ -412,23 +411,26 @@
               <input id="synk-enroll-dob" type="date" required />
             </div>
             <div class="field">
-              <label for="synk-enroll-secret">Secret</label>
-              <input id="synk-enroll-secret" type="password" maxlength="200" required placeholder="Personal secret" autocomplete="new-password" />
+              <label for="synk-enroll-file">Face biometrics photo</label>
+              <input id="synk-enroll-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
               <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
-                They enter this with their Synk ID at the kiosk. Min 4 characters.
+                Clear front-facing photo — this is what the kiosk matches.
               </p>
             </div>
             <div class="field">
-              <label for="synk-enroll-file">Picture</label>
-              <input id="synk-enroll-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
+              <label for="synk-enroll-secret">Backup secret <span class="muted">(optional)</span></label>
+              <input id="synk-enroll-secret" type="password" maxlength="200" placeholder="Only if camera fails" autocomplete="new-password" />
+              <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
+                Optional fallback with Synk code + DOB if face verify fails.
+              </p>
             </div>
-            <button class="btn btn-primary" type="submit" id="synk-enroll-btn">Create Synk ID</button>
+            <button class="btn btn-primary" type="submit" id="synk-enroll-btn">Enroll Synk member</button>
             <p id="synk-enroll-status" class="muted" style="margin: 8px 0 0; font-size: 0.85rem;"></p>
           </form>
 
-          <p class="section-label" style="margin-top:4px;">People</p>
+          <p class="section-label" style="margin-top:4px;">Members</p>
           <div id="synk-profiles" class="synk-profiles"></div>
-          <p id="synk-profiles-empty" class="chat-empty-note">No Synk IDs yet.</p>
+          <p id="synk-profiles-empty" class="chat-empty-note">No Synk members yet.</p>
         </section>
       </div>
 
@@ -2156,7 +2158,10 @@
                     <strong>${escapeHtml(profile.name)}</strong>
                     <div class="synk-code">${escapeHtml(profile.synkCode || "")}</div>
                     <div class="muted" style="font-size:0.82rem;margin-top:4px;">
-                      DOB ${escapeHtml(formatDob(profile.dateOfBirth))}${profile.enabled ? "" : " · paused"}
+                      DOB ${escapeHtml(formatDob(profile.dateOfBirth))}
+                      · ${profile.hasBiometrics ? "Face enrolled" : "Needs face photo"}
+                      ${profile.hasSecret ? " · Backup secret" : ""}
+                      ${profile.enabled ? "" : " · paused"}
                     </div>
                   </div>
                   <label class="field" style="margin:0;">
@@ -2165,7 +2170,7 @@
                   </label>
                   <div class="synk-profile-actions">
                     <label class="btn btn-secondary btn-compact" style="cursor:pointer;">
-                      Change photo
+                      Update face
                       <input type="file" accept="image/jpeg,image/png,image/webp" data-synk-action="photo" hidden />
                     </label>
                     <button class="btn btn-secondary btn-compact" type="button" data-synk-action="save-secret">
@@ -2210,7 +2215,7 @@
         canvas.height = height;
         canvas.getContext("2d").drawImage(img, 0, 0, width, height);
         const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
-        return { dataUrl, contentType: "image/jpeg", fileName: file.name || "synk.jpg" };
+        return { dataUrl, contentType: "image/jpeg", canvas, fileName: file.name || "synk.jpg" };
       }
 
       async function uploadSynkPhoto(file) {
@@ -2226,42 +2231,47 @@
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Upload failed");
-        return data;
+        return { ...data, canvas: optimized.canvas };
       }
 
       synkEnrollForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const name = synkEnrollName.value.trim();
         const dateOfBirth = synkEnrollDob.value;
-        const secret = synkEnrollSecret.value;
+        const secret = synkEnrollSecret.value.trim();
         const file = synkEnrollFile.files && synkEnrollFile.files[0];
-        if (!name || !dateOfBirth || !secret || !file) return;
+        if (!name || !dateOfBirth || !file) return;
 
         synkEnrollBtn.disabled = true;
-        synkEnrollStatus.textContent = "Creating Synk ID…";
+        synkEnrollStatus.textContent = "Reading face biometrics…";
         try {
+          if (!window.KioskFace) throw new Error("Face library still loading — wait a second");
+          await window.KioskFace.ensureFaceApi();
           const uploaded = await uploadSynkPhoto(file);
+          const descriptor = await window.KioskFace.descriptorFromImage(uploaded.canvas);
+          synkEnrollStatus.textContent = "Creating Synk member…";
           const res = await fetch("/api/synk-profiles", {
             method: "POST",
             headers: adminHeaders(),
             body: JSON.stringify({
               name,
               dateOfBirth,
-              secret,
+              secret: secret || undefined,
               photoUrl: uploaded.url,
+              descriptor,
             }),
           });
           const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not create Synk ID");
+          if (!res.ok) throw new Error(data.error || "Could not enroll Synk member");
           synkEnrollForm.reset();
           synkEnrollStatus.textContent = data.profile
-            ? `Created ${data.profile.synkCode}`
-            : "Created";
-          showToast(data.profile ? `Synk ID ${data.profile.synkCode}` : "Synk ID created");
+            ? `Enrolled ${data.profile.synkCode}`
+            : "Enrolled";
+          showToast(data.profile ? `Synk member ${data.profile.synkCode}` : "Synk member enrolled");
           await refreshSynkProfiles();
         } catch (err) {
-          synkEnrollStatus.textContent = err.message || "Could not create";
-          showToast(err.message || "Could not create Synk ID");
+          synkEnrollStatus.textContent = err.message || "Could not enroll";
+          showToast(err.message || "Could not enroll Synk member");
         } finally {
           synkEnrollBtn.disabled = false;
         }
@@ -2275,16 +2285,19 @@
         const file = input.files && input.files[0];
         if (!file) return;
         try {
-          showToast("Updating photo…");
+          showToast("Updating biometrics…");
+          if (!window.KioskFace) throw new Error("Face library still loading");
+          await window.KioskFace.ensureFaceApi();
           const uploaded = await uploadSynkPhoto(file);
+          const descriptor = await window.KioskFace.descriptorFromImage(uploaded.canvas);
           const res = await fetch("/api/synk-profiles", {
             method: "PATCH",
             headers: adminHeaders(),
-            body: JSON.stringify({ id, photoUrl: uploaded.url }),
+            body: JSON.stringify({ id, photoUrl: uploaded.url, descriptor }),
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || "Could not update photo");
-          showToast("Photo updated");
+          showToast("Biometrics updated");
           await refreshSynkProfiles();
         } catch (err) {
           showToast(err.message || "Could not update photo");
