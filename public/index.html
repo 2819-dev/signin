@@ -65,6 +65,7 @@
             <video id="display-video" class="display-video hidden" playsinline autoplay muted loop controls></video>
             <iframe id="display-video-frame" class="display-video-frame hidden" title="Video" allow="autoplay; encrypted-media" allowfullscreen></iframe>
           </div>
+          <iframe id="display-embed" class="display-embed hidden" title="Embedded page" loading="lazy" referrerpolicy="no-referrer"></iframe>
           <div class="display-copy" id="display-copy">
             <p class="eyebrow" id="display-eyebrow">Now showing</p>
             <h1 id="display-title">Welcome</h1>
@@ -73,6 +74,7 @@
             </div>
             <p class="subtitle" id="display-message"></p>
             <ul class="display-list hidden" id="display-list"></ul>
+            <div class="display-gallery-dots hidden" id="display-gallery-dots" aria-hidden="true"></div>
           </div>
         </div>
       </section>
@@ -210,6 +212,7 @@
       const displayQr = document.getElementById("display-qr");
       const displayVideo = document.getElementById("display-video");
       const displayVideoFrame = document.getElementById("display-video-frame");
+      const displayEmbed = document.getElementById("display-embed");
       const displayCopy = document.getElementById("display-copy");
       const displayEyebrow = document.getElementById("display-eyebrow");
       const displayTitle = document.getElementById("display-title");
@@ -217,6 +220,8 @@
       const displayCountdown = document.getElementById("display-countdown");
       const displayCountdownValue = document.getElementById("display-countdown-value");
       const displayList = document.getElementById("display-list");
+      const displayGalleryDots = document.getElementById("display-gallery-dots");
+      const chatFab = document.getElementById("chat-fab");
       const formView = document.getElementById("form-view");
       const waitingView = document.getElementById("waiting-view");
       const admittedView = document.getElementById("admitted-view");
@@ -245,6 +250,9 @@
       let kioskPollTimer = null;
       let clockTimer = null;
       let eventCountdownTimer = null;
+      let galleryTimer = null;
+      let galleryIndex = 0;
+      let galleryUrls = [];
       let currentRequestId = null;
       let isOpen = true;
       let urgentEnabled = true;
@@ -259,8 +267,21 @@
         displayShowClock: false,
       };
       const DISPLAY_MODES = [
-        "signin", "message", "image", "poster", "clock",
-        "countdown", "qr", "video", "list", "blackout",
+        "signin",
+        "welcome",
+        "message",
+        "status",
+        "schedule",
+        "list",
+        "image",
+        "poster",
+        "gallery",
+        "clock",
+        "countdown",
+        "qr",
+        "video",
+        "embed",
+        "blackout",
       ];
 
       function normalizeDisplayMode(value) {
@@ -321,6 +342,10 @@
           el.classList.toggle("hidden", el !== view);
         });
         urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
+        chatFab.classList.toggle(
+          "display-hidden",
+          activeView === "display" && displayMode === "blackout"
+        );
         if (activeView === "display") startDisplayTimers();
         else stopDisplayTimers();
       }
@@ -362,7 +387,8 @@
       function startDisplayTimers() {
         const needsClock =
           displayMode === "clock" ||
-          (displaySettings.displayShowClock && displayMode !== "blackout");
+          (displaySettings.displayShowClock &&
+            !["blackout", "countdown", "embed"].includes(displayMode));
         if (needsClock) {
           updateClock();
           if (!clockTimer) clockTimer = setInterval(updateClock, 1000);
@@ -380,6 +406,18 @@
           clearInterval(eventCountdownTimer);
           eventCountdownTimer = null;
         }
+
+        if (displayMode === "gallery" && galleryUrls.length > 1) {
+          if (!galleryTimer) {
+            galleryTimer = setInterval(() => {
+              galleryIndex = (galleryIndex + 1) % galleryUrls.length;
+              showGalleryFrame();
+            }, 8000);
+          }
+        } else if (galleryTimer) {
+          clearInterval(galleryTimer);
+          galleryTimer = null;
+        }
       }
 
       function stopDisplayTimers() {
@@ -391,9 +429,53 @@
           clearInterval(eventCountdownTimer);
           eventCountdownTimer = null;
         }
+        if (galleryTimer) {
+          clearInterval(galleryTimer);
+          galleryTimer = null;
+        }
         displayVideo.pause();
         displayVideo.removeAttribute("src");
         displayVideoFrame.removeAttribute("src");
+        displayEmbed.removeAttribute("src");
+      }
+
+      function parseGalleryUrls(settings) {
+        const urls = [];
+        const push = (value) => {
+          const url = String(value || "").trim();
+          if (!url) return;
+          if (!(url.startsWith("/api/display-image") || /^https?:\/\//i.test(url))) return;
+          if (!urls.includes(url)) urls.push(url);
+        };
+        push(settings.displayImageUrl);
+        String(settings.displayMessage || "")
+          .split("\n")
+          .forEach(push);
+        return urls;
+      }
+
+      function showGalleryFrame() {
+        if (!galleryUrls.length) {
+          displayImage.removeAttribute("src");
+          displayImage.classList.add("hidden");
+          displayGalleryDots.classList.add("hidden");
+          displayGalleryDots.innerHTML = "";
+          return;
+        }
+        const url = galleryUrls[galleryIndex % galleryUrls.length];
+        displayImage.classList.remove("hidden");
+        if (displayImage.getAttribute("src") !== url) {
+          displayImage.setAttribute("src", url);
+        }
+        if (galleryUrls.length > 1) {
+          displayGalleryDots.classList.remove("hidden");
+          displayGalleryDots.innerHTML = galleryUrls
+            .map((_, i) => `<span class="${i === galleryIndex % galleryUrls.length ? "active" : ""}"></span>`)
+            .join("");
+        } else {
+          displayGalleryDots.classList.add("hidden");
+          displayGalleryDots.innerHTML = "";
+        }
       }
 
       function applyDisplayContent(settings) {
@@ -414,24 +496,46 @@
         const showClock =
           mode === "clock" ||
           (displaySettings.displayShowClock &&
-            !["blackout", "countdown"].includes(mode));
+            !["blackout", "countdown", "gallery", "embed"].includes(mode));
 
         [
-          "is-image", "is-poster", "is-message", "is-clock",
-          "is-countdown", "is-qr", "is-video", "is-list", "is-blackout",
+          "is-image", "is-poster", "is-message", "is-welcome", "is-status",
+          "is-schedule", "is-clock", "is-countdown", "is-qr", "is-video",
+          "is-list", "is-gallery", "is-embed", "is-blackout",
         ].forEach((cls) => displayScreen.classList.remove(cls));
         if (mode !== "signin") displayScreen.classList.add(`is-${mode}`);
 
+        galleryUrls = mode === "gallery" ? parseGalleryUrls(displaySettings) : [];
+        galleryIndex = 0;
+
         displayClock.classList.toggle("hidden", !showClock);
-        displayImage.classList.toggle("hidden", !(mode === "image" || mode === "poster") || !imageUrl);
+        const showStillImage =
+          ((mode === "image" || mode === "poster") && Boolean(imageUrl)) ||
+          (mode === "gallery" && galleryUrls.length > 0);
+        displayImage.classList.toggle("hidden", !showStillImage);
+        if (mode === "gallery") {
+          showGalleryFrame();
+        } else {
+          displayGalleryDots.classList.add("hidden");
+          displayGalleryDots.innerHTML = "";
+        }
+
         displayCountdown.classList.toggle("hidden", mode !== "countdown");
-        displayList.classList.toggle("hidden", mode !== "list");
+        displayList.classList.toggle("hidden", !(mode === "list" || mode === "schedule"));
         displayMedia.classList.toggle("hidden", !(mode === "qr" || mode === "video"));
         displayQr.classList.toggle("hidden", mode !== "qr" || !link);
+        displayEmbed.classList.toggle("hidden", mode !== "embed" || !link);
         displayCopy.classList.toggle(
           "hidden",
-          mode === "image" || mode === "clock" || mode === "blackout" || mode === "video"
+          mode === "image" ||
+            mode === "clock" ||
+            mode === "blackout" ||
+            mode === "gallery" ||
+            mode === "embed" ||
+            (mode === "video" && !title && !message)
         );
+
+        chatFab.classList.toggle("display-hidden", mode === "blackout" && activeView === "display");
 
         const yt = mode === "video" ? youtubeEmbedUrl(link) : "";
         if (mode === "video" && yt) {
@@ -458,6 +562,14 @@
           displayVideoFrame.removeAttribute("src");
         }
 
+        if (mode === "embed" && link) {
+          if (displayEmbed.getAttribute("src") !== link) {
+            displayEmbed.setAttribute("src", link);
+          }
+        } else {
+          displayEmbed.removeAttribute("src");
+        }
+
         if (mode === "qr" && link) {
           const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=420x420&margin=8&data=${encodeURIComponent(link)}`;
           if (displayQr.getAttribute("src") !== qrSrc) displayQr.setAttribute("src", qrSrc);
@@ -465,17 +577,27 @@
           displayQr.removeAttribute("src");
         }
 
-        if (mode === "list") {
+        if (mode === "list" || mode === "schedule") {
           const items = message.split("\n").map((line) => line.trim()).filter(Boolean);
           displayList.innerHTML = items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+          displayMessage.classList.add("hidden");
+        } else if (mode === "gallery") {
+          displayList.innerHTML = "";
           displayMessage.classList.add("hidden");
         } else {
           displayList.innerHTML = "";
           displayMessage.textContent = message;
-          displayMessage.classList.toggle("hidden", !message || mode === "clock" || mode === "blackout");
+          displayMessage.classList.toggle(
+            "hidden",
+            !message ||
+              mode === "clock" ||
+              mode === "blackout" ||
+              mode === "image" ||
+              mode === "embed"
+          );
         }
 
-        if (mode === "clock" || mode === "blackout") {
+        if (mode === "clock" || mode === "blackout" || mode === "gallery" || mode === "embed") {
           displayEyebrow.textContent = "";
           displayTitle.textContent = "";
         } else if (mode === "countdown") {
@@ -487,28 +609,57 @@
         } else if (mode === "list") {
           displayEyebrow.textContent = "List";
           displayTitle.textContent = title || "Notes";
+        } else if (mode === "schedule") {
+          displayEyebrow.textContent = "Schedule";
+          displayTitle.textContent = title || "Today";
+        } else if (mode === "welcome") {
+          displayEyebrow.textContent = "Welcome";
+          displayTitle.textContent = title || "Hello";
+        } else if (mode === "status") {
+          displayEyebrow.textContent = "Status";
+          displayTitle.textContent = title || "Update";
+        } else if (mode === "video") {
+          displayEyebrow.textContent = title ? "Now playing" : "";
+          displayTitle.textContent = title || "";
         } else {
           displayEyebrow.textContent = mode === "poster" ? "Now showing" : "Notice";
           displayTitle.textContent = title || (mode === "message" ? "Hello" : "");
         }
+
         displayTitle.classList.toggle(
           "hidden",
-          !displayTitle.textContent || mode === "image" || mode === "clock" || mode === "blackout" || mode === "video"
+          !displayTitle.textContent ||
+            mode === "image" ||
+            mode === "clock" ||
+            mode === "blackout" ||
+            mode === "gallery" ||
+            mode === "embed"
         );
         displayEyebrow.classList.toggle(
           "hidden",
-          !displayEyebrow.textContent || mode === "image" || mode === "clock" || mode === "blackout" || mode === "video"
+          !displayEyebrow.textContent ||
+            mode === "image" ||
+            mode === "clock" ||
+            mode === "blackout" ||
+            mode === "gallery" ||
+            mode === "embed"
         );
 
         if ((mode === "image" || mode === "poster") && imageUrl) {
           if (displayImage.getAttribute("src") !== imageUrl) {
             displayImage.setAttribute("src", imageUrl);
           }
-        } else {
+        } else if (mode !== "gallery") {
           displayImage.removeAttribute("src");
         }
 
-        if (activeView === "display") startDisplayTimers();
+        // Keep chat available except during blackout takeover.
+        if (activeView === "display") {
+          chatFab.classList.toggle("display-hidden", mode === "blackout");
+          startDisplayTimers();
+        } else {
+          chatFab.classList.remove("display-hidden");
+        }
       }
 
       function setUrgentMode(on) {
@@ -702,7 +853,6 @@
       kioskPollTimer = setInterval(pollKioskStatus, 4000);
 
       // Live chat
-      const chatFab = document.getElementById("chat-fab");
       const chatModal = document.getElementById("chat-modal");
       const chatCloseBtn = document.getElementById("chat-close-btn");
       const chatNameGate = document.getElementById("chat-name-gate");

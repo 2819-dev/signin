@@ -166,42 +166,112 @@
             <div>
               <p class="eyebrow">Tablet</p>
               <h1>Control</h1>
-              <p class="muted">Switch the tablet into other display modes.</p>
+              <p class="muted">Take over the iPad with a custom screen.</p>
             </div>
           </header>
+          <div id="display-live-pill" class="display-live-pill">
+            <span class="display-live-dot" aria-hidden="true"></span>
+            <span id="display-live-label">On tablet: Sign-in</span>
+          </div>
         </div>
 
         <section class="settings-card" id="display-settings">
-          <h2>Display mode</h2>
+          <h2>Choose a mode</h2>
           <p class="muted" style="margin: 0 0 12px;">
-            Choose what the tablet shows instead of the normal sign-in screen.
+            Pick what the tablet shows. Modes with settings need “Show on tablet” to apply.
           </p>
 
-          <button class="btn btn-secondary" type="button" id="exit-display-btn">
-            Back to sign-in screen
-          </button>
+          <div class="mode-grid mode-grid-cards" id="display-mode-grid" role="radiogroup" aria-label="Display mode">
+            <button type="button" class="mode-chip" data-mode="signin">
+              <span class="mode-chip-label">Sign-in</span>
+              <span class="mode-chip-desc">Normal visitor form</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="welcome">
+              <span class="mode-chip-label">Welcome</span>
+              <span class="mode-chip-desc">Friendly greeting</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="message">
+              <span class="mode-chip-label">Message</span>
+              <span class="mode-chip-desc">Title + text</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="status">
+              <span class="mode-chip-label">Status</span>
+              <span class="mode-chip-desc">Big status board</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="schedule">
+              <span class="mode-chip-label">Schedule</span>
+              <span class="mode-chip-desc">Agenda list</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="list">
+              <span class="mode-chip-label">List</span>
+              <span class="mode-chip-desc">Simple bullets</span>
+            </button>
 
-          <div class="mode-grid mode-grid-wide" id="display-mode-grid" role="radiogroup" aria-label="Display mode">
-            <button type="button" class="mode-chip" data-mode="message">Message</button>
-            <button type="button" class="mode-chip" data-mode="image">Image</button>
-            <button type="button" class="mode-chip" data-mode="poster">Poster</button>
-            <button type="button" class="mode-chip" data-mode="clock">Clock</button>
-            <button type="button" class="mode-chip" data-mode="countdown">Countdown</button>
-            <button type="button" class="mode-chip" data-mode="qr">QR code</button>
-            <button type="button" class="mode-chip" data-mode="video">Video</button>
-            <button type="button" class="mode-chip" data-mode="list">List</button>
-            <button type="button" class="mode-chip" data-mode="blackout">Blackout</button>
+            <button type="button" class="mode-chip" data-mode="image">
+              <span class="mode-chip-label">Image</span>
+              <span class="mode-chip-desc">Full-screen photo</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="poster">
+              <span class="mode-chip-label">Poster</span>
+              <span class="mode-chip-desc">Photo + caption</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="gallery">
+              <span class="mode-chip-label">Gallery</span>
+              <span class="mode-chip-desc">Photo slideshow</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="video">
+              <span class="mode-chip-label">Video</span>
+              <span class="mode-chip-desc">Loop a clip</span>
+            </button>
+
+            <button type="button" class="mode-chip" data-mode="clock">
+              <span class="mode-chip-label">Clock</span>
+              <span class="mode-chip-desc">Large live time</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="countdown">
+              <span class="mode-chip-label">Countdown</span>
+              <span class="mode-chip-desc">Timer to an event</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="qr">
+              <span class="mode-chip-label">QR code</span>
+              <span class="mode-chip-desc">Scanable link</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="embed">
+              <span class="mode-chip-label">Web page</span>
+              <span class="mode-chip-desc">Embed a URL</span>
+            </button>
+            <button type="button" class="mode-chip" data-mode="blackout">
+              <span class="mode-chip-label">Blackout</span>
+              <span class="mode-chip-desc">Blank black screen</span>
+            </button>
           </div>
           <input type="hidden" id="display-mode" value="signin" />
 
           <div id="display-editor" class="display-editor hidden">
+            <div class="display-editor-head">
+              <div>
+                <p class="eyebrow" style="margin-bottom:6px;">Edit mode</p>
+                <h3 id="display-editor-title" style="margin:0;font-size:1.1rem;">Message</h3>
+              </div>
+              <button class="btn btn-secondary btn-compact" type="button" id="exit-display-btn">
+                Back to sign-in
+              </button>
+            </div>
+
+            <div id="status-presets" class="status-presets hidden" role="group" aria-label="Status presets">
+              <button type="button" class="preset-chip" data-status-title="Welcome" data-status-message="Please sign in when you’re ready.">Welcome</button>
+              <button type="button" class="preset-chip" data-status-title="Be right back" data-status-message="Someone will be with you shortly.">Be right back</button>
+              <button type="button" class="preset-chip" data-status-title="In a meeting" data-status-message="Please wait or come back later.">In a meeting</button>
+              <button type="button" class="preset-chip" data-status-title="Closed" data-status-message="Not accepting visitors right now.">Closed</button>
+            </div>
+
             <div class="field" id="display-title-field">
-              <label for="display-title">Title</label>
+              <label for="display-title" id="display-title-label">Title</label>
               <input id="display-title" type="text" maxlength="120" placeholder="What’s on the screen" />
             </div>
             <div class="field" id="display-message-field">
               <label for="display-message" id="display-message-label">Message</label>
-              <textarea id="display-message" maxlength="1000" placeholder="Custom text for the tablet…"></textarea>
+              <textarea id="display-message" maxlength="2000" placeholder="Custom text for the tablet…"></textarea>
             </div>
             <div class="field" id="display-link-field">
               <label for="display-link" id="display-link-label">Link</label>
@@ -213,7 +283,7 @@
               <input id="display-countdown" type="datetime-local" />
             </div>
             <div class="field" id="display-image-field">
-              <label for="display-image-file">Photo or file</label>
+              <label for="display-image-file" id="display-image-label">Photo or file</label>
               <input
                 id="display-image-file"
                 type="file"
@@ -244,14 +314,15 @@
             <div class="settings-row" id="display-clock-row">
               <div>
                 <strong>Show clock</strong>
-                <div class="muted" style="font-size: 0.85rem;">Small live clock on the custom screen</div>
+                <div class="muted" style="font-size: 0.85rem;">Small live clock on this screen</div>
               </div>
               <label class="toggle" aria-label="Show clock">
                 <input type="checkbox" id="display-show-clock" />
                 <span></span>
               </label>
             </div>
-            <button class="btn btn-primary" type="button" id="save-display-btn">Update tablet display</button>
+            <button class="btn btn-primary" type="button" id="save-display-btn">Show on tablet</button>
+            <p class="muted" id="display-dirty-hint" style="margin: 10px 0 0; font-size: 0.82rem;"></p>
           </div>
 
           <p class="muted" id="display-mode-hint" style="margin: 12px 0 0; font-size: 0.85rem;">
@@ -327,6 +398,12 @@
       const displayModeHint = document.getElementById("display-mode-hint");
       const saveDisplayBtn = document.getElementById("save-display-btn");
       const exitDisplayBtn = document.getElementById("exit-display-btn");
+      const displayLiveLabel = document.getElementById("display-live-label");
+      const displayEditorTitle = document.getElementById("display-editor-title");
+      const displayTitleLabel = document.getElementById("display-title-label");
+      const displayImageLabel = document.getElementById("display-image-label");
+      const displayDirtyHint = document.getElementById("display-dirty-hint");
+      const statusPresets = document.getElementById("status-presets");
       const chatInboxEl = document.getElementById("chat-inbox");
       const chatEmptyEl = document.getElementById("chat-empty");
       const chatCountEl = document.getElementById("chat-count");
@@ -343,16 +420,38 @@
       const PANE_KEY = "visitor_admin_pane";
       const DISPLAY_MODES = [
         "signin",
+        "welcome",
         "message",
+        "status",
+        "schedule",
+        "list",
         "image",
         "poster",
+        "gallery",
         "clock",
         "countdown",
         "qr",
         "video",
-        "list",
+        "embed",
         "blackout",
       ];
+      const MODE_LABELS = {
+        signin: "Sign-in",
+        welcome: "Welcome",
+        message: "Message",
+        status: "Status",
+        schedule: "Schedule",
+        list: "List",
+        image: "Image",
+        poster: "Poster",
+        gallery: "Gallery",
+        clock: "Clock",
+        countdown: "Countdown",
+        qr: "QR code",
+        video: "Video",
+        embed: "Web page",
+        blackout: "Blackout",
+      };
       let secret =
         localStorage.getItem(STORAGE_KEY) ||
         sessionStorage.getItem(STORAGE_KEY) ||
@@ -390,17 +489,43 @@
       };
 
       const DISPLAY_HINTS = {
-        signin: "Tablet is using the normal visitor sign-in screen.",
-        message: "Custom title and message on the tablet.",
+        signin: "Tablet uses the normal visitor sign-in screen.",
+        welcome: "Warm greeting with a title and short message.",
+        message: "Custom title and body copy on the tablet.",
+        status: "Large status board for quick hallway updates.",
+        schedule: "Agenda-style list — one item per line.",
+        list: "Simple bullet list from each line of your message.",
         image: "Full-screen photo on the tablet.",
-        poster: "Photo with title and message overlaid.",
-        clock: "Large live clock.",
+        poster: "Photo with title and caption overlaid.",
+        gallery: "Slideshow from an uploaded photo plus image links (one per line).",
+        clock: "Large live clock fills the tablet.",
         countdown: "Live countdown to a date and time.",
-        qr: "Big QR code for a link.",
-        video: "Loops a video on the tablet.",
-        list: "Bullet list from each line of your message.",
-        blackout: "Blank black screen.",
+        qr: "Big QR code for any link.",
+        video: "Loops a muted video or YouTube clip.",
+        embed: "Embed another webpage full-screen (site must allow embedding).",
+        blackout: "Blank black screen — chat button is hidden.",
       };
+
+      function modeLabel(mode) {
+        return MODE_LABELS[normalizeDisplayMode(mode)] || "Sign-in";
+      }
+
+      function updateDisplayLivePill(mode) {
+        const next = normalizeDisplayMode(mode);
+        displayLiveLabel.textContent =
+          next === "signin" ? "On tablet: Sign-in" : `On tablet: ${modeLabel(next)}`;
+        document.getElementById("display-live-pill").classList.toggle("is-custom", next !== "signin");
+      }
+
+      function markDisplayDirty() {
+        const drafting = normalizeDisplayMode(displayModeInput.value);
+        const live = normalizeDisplayMode(currentSettings.displayMode);
+        if (drafting === "signin" || drafting === live) {
+          displayDirtyHint.textContent = "";
+          return;
+        }
+        displayDirtyHint.textContent = `Selected ${modeLabel(drafting)} — tap “Show on tablet” to apply.`;
+      }
 
       function setAdminPane(pane) {
         const next = pane === "control" ? "control" : "signin";
@@ -559,17 +684,16 @@
         });
         const custom = next !== "signin";
         displayEditor.classList.toggle("hidden", !custom);
-        exitDisplayBtn.classList.toggle("hidden", !custom);
-        exitDisplayBtn.textContent = custom
-          ? "Back to sign-in screen"
-          : "Using sign-in screen";
+        if (displayEditorTitle) displayEditorTitle.textContent = modeLabel(next);
 
-        const showTitle = ["message", "poster", "countdown", "qr", "video", "list"].includes(next);
-        const showMessage = ["message", "poster", "list", "qr", "countdown"].includes(next);
-        const showImage = ["image", "poster"].includes(next);
-        const showLink = ["qr", "video"].includes(next);
+        const showTitle = ["welcome", "message", "status", "schedule", "list", "poster", "countdown", "qr", "video"].includes(next);
+        const showMessage = ["welcome", "message", "status", "schedule", "list", "poster", "qr", "countdown", "gallery", "video"].includes(next);
+        const showImage = ["image", "poster", "gallery"].includes(next);
+        const showLink = ["qr", "video", "embed"].includes(next);
         const showCountdown = next === "countdown";
-        const showClockToggle = ["message", "image", "poster", "qr", "list", "video"].includes(next);
+        const showClockToggle = ["welcome", "message", "status", "schedule", "list", "image", "poster", "gallery", "qr", "video", "embed"].includes(next);
+        const showSave = !["clock", "blackout"].includes(next);
+        const showPresets = next === "status";
 
         displayTitleField.classList.toggle("hidden", !showTitle);
         displayMessageField.classList.toggle("hidden", !showMessage);
@@ -577,15 +701,30 @@
         displayLinkField.classList.toggle("hidden", !showLink);
         displayCountdownField.classList.toggle("hidden", !showCountdown);
         displayClockRow.classList.toggle("hidden", !showClockToggle);
+        saveDisplayBtn.classList.toggle("hidden", !showSave || !custom);
+        statusPresets.classList.toggle("hidden", !showPresets);
+
+        displayTitleLabel.textContent =
+          next === "status" ? "Status" :
+          next === "welcome" ? "Greeting title" :
+          next === "schedule" ? "Schedule title" :
+          "Title";
 
         displayMessageLabel.textContent =
-          next === "list" ? "List items (one per line)" :
-          next === "qr" ? "Caption" :
+          next === "list" || next === "schedule" ? "Items (one per line)" :
+          next === "gallery" ? "Extra image links (one per line)" :
+          next === "qr" || next === "video" ? "Caption" :
           next === "countdown" ? "Note" :
+          next === "status" ? "Details" :
           "Message";
         displayMessageInput.placeholder =
-          next === "list" ? "First item\nSecond item\nThird item" :
+          next === "list" || next === "schedule" ? "9:00  Doors open\n10:00  Welcome\n11:00  Tour" :
+          next === "gallery" ? "https://example.com/photo-2.jpg\nhttps://example.com/photo-3.jpg" :
+          next === "status" ? "Short explanation under the status…" :
           "Custom text for the tablet…";
+
+        displayImageLabel.textContent =
+          next === "gallery" ? "First photo" : "Photo or file";
 
         if (next === "qr") {
           displayLinkLabel.textContent = "QR link";
@@ -596,10 +735,16 @@
           displayLinkLabel.textContent = "Video link";
           displayLinkInput.type = "url";
           displayLinkInput.placeholder = "https://…mp4 or YouTube link";
-          displayLinkHint.textContent = "Direct video file or YouTube URL.";
+          displayLinkHint.textContent = "Direct video file or YouTube URL. Caption is optional.";
+        } else if (next === "embed") {
+          displayLinkLabel.textContent = "Page link";
+          displayLinkInput.type = "url";
+          displayLinkInput.placeholder = "https://…";
+          displayLinkHint.textContent = "Only works if the site allows embedding in an iframe.";
         }
 
         displayModeHint.textContent = DISPLAY_HINTS[next] || DISPLAY_HINTS.signin;
+        markDisplayDirty();
       }
 
       function applySettingsToForm(settings) {
@@ -639,6 +784,7 @@
         displayImageFile.value = "";
         syncImagePreview(currentSettings.displayImageUrl);
         syncDisplayEditorUi(currentSettings.displayMode);
+        updateDisplayLivePill(currentSettings.displayMode);
         applyTheme(currentSettings.theme);
         openLabel.textContent = currentSettings.isOpen
           ? "Accepting visitors"
@@ -1445,25 +1591,55 @@
         const nextMode = normalizeDisplayMode(btn.getAttribute("data-mode"));
         syncDisplayEditorUi(nextMode);
 
-        // Modes with no required fields can apply immediately.
-        if (nextMode === "clock" || nextMode === "blackout") {
+        // Instant-apply modes with no required fields.
+        if (nextMode === "signin" || nextMode === "clock" || nextMode === "blackout") {
           saveDisplayBtn.disabled = true;
+          exitDisplayBtn.disabled = true;
           try {
             await saveSettings({ displayMode: nextMode });
-            showToast(nextMode === "clock" ? "Clock mode on" : "Blackout on");
+            updateDisplayLivePill(nextMode);
+            displayDirtyHint.textContent = "";
+            showToast(
+              nextMode === "signin"
+                ? "Tablet back on sign-in"
+                : nextMode === "clock"
+                  ? "Clock mode on"
+                  : "Blackout on"
+            );
           } catch (err) {
             syncDisplayEditorUi(currentSettings.displayMode);
             showToast(err.message || "Could not update");
           } finally {
             saveDisplayBtn.disabled = false;
+            exitDisplayBtn.disabled = false;
           }
+        } else {
+          markDisplayDirty();
         }
+      });
+
+      statusPresets.addEventListener("click", (e) => {
+        const chip = e.target.closest(".preset-chip");
+        if (!chip) return;
+        displayTitleInput.value = chip.getAttribute("data-status-title") || "";
+        displayMessageInput.value = chip.getAttribute("data-status-message") || "";
+        markDisplayDirty();
+      });
+
+      ["input", "change"].forEach((evt) => {
+        displayTitleInput.addEventListener(evt, markDisplayDirty);
+        displayMessageInput.addEventListener(evt, markDisplayDirty);
+        displayLinkInput.addEventListener(evt, markDisplayDirty);
+        displayCountdownInput.addEventListener(evt, markDisplayDirty);
+        displayShowClockToggle.addEventListener(evt, markDisplayDirty);
       });
 
       exitDisplayBtn.addEventListener("click", async () => {
         exitDisplayBtn.disabled = true;
         try {
           await saveSettings({ displayMode: "signin" });
+          updateDisplayLivePill("signin");
+          displayDirtyHint.textContent = "";
           showToast("Tablet back on sign-in");
         } catch (err) {
           syncDisplayEditorUi(currentSettings.displayMode);
@@ -1584,6 +1760,8 @@
             displayShowClock: displayShowClockToggle.checked,
           });
           showToast("Tablet display updated");
+          updateDisplayLivePill(mode);
+          displayDirtyHint.textContent = "";
         } catch (err) {
           showToast(err.message || "Could not update");
         } finally {

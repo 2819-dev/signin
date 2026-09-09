@@ -16,14 +16,19 @@ const DEFAULTS = {
 
 const DISPLAY_MODES = new Set([
   "signin",
+  "welcome",
   "message",
+  "status",
+  "schedule",
+  "list",
   "image",
   "poster",
+  "gallery",
   "clock",
   "countdown",
   "qr",
   "video",
-  "list",
+  "embed",
   "blackout",
 ]);
 
@@ -171,7 +176,7 @@ exports.handler = async (event) => {
           : current.displayMessage
       )
         .trim()
-        .slice(0, 1000);
+        .slice(0, 2000);
       const displayImageUrl = normalizeImageUrl(
         typeof body.displayImageUrl === "string"
           ? body.displayImageUrl
@@ -198,17 +203,35 @@ exports.handler = async (event) => {
         return json(400, { error: "Add a photo for this display mode" });
       }
       if (
-        (displayMode === "message" || displayMode === "list") &&
+        (displayMode === "message" ||
+          displayMode === "list" ||
+          displayMode === "schedule" ||
+          displayMode === "welcome") &&
         !displayTitle &&
         !displayMessage
       ) {
         return json(400, { error: "Add a title or message" });
+      }
+      if (displayMode === "status" && !displayTitle) {
+        return json(400, { error: "Add a status title" });
+      }
+      if (displayMode === "gallery") {
+        const galleryLines = displayMessage
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+        if (!displayImageUrl && galleryLines.length === 0) {
+          return json(400, { error: "Add at least one image for the gallery" });
+        }
       }
       if (displayMode === "qr" && !displayLink) {
         return json(400, { error: "Add a link for the QR code" });
       }
       if (displayMode === "video" && !displayLink) {
         return json(400, { error: "Add a video link" });
+      }
+      if (displayMode === "embed" && !displayLink) {
+        return json(400, { error: "Add a page link to embed" });
       }
       if (displayMode === "countdown" && !displayLink) {
         return json(400, { error: "Pick a countdown date and time" });
