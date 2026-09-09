@@ -147,6 +147,9 @@ label {
 
 input[type="text"],
 input[type="password"],
+input[type="url"],
+input[type="datetime-local"],
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--line-strong);
@@ -161,13 +164,29 @@ textarea {
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-faint) 50%),
+    linear-gradient(135deg, var(--ink-faint) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 40px;
+}
+
 input:focus,
+select:focus,
 textarea:focus {
   border-color: rgba(15, 15, 15, 0.35);
   box-shadow: 0 0 0 4px rgba(15, 15, 15, 0.06);
 }
 
 html[data-theme="dark"] input:focus,
+html[data-theme="dark"] select:focus,
 html[data-theme="dark"] textarea:focus {
   border-color: rgba(255, 255, 255, 0.4);
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08);
@@ -741,8 +760,12 @@ html[data-theme="dark"] .chat-bubble.mine {
 
 .chat-inbox {
   display: grid;
-  gap: 0.65rem;
-  margin-bottom: 1rem;
+  gap: 12px;
+  margin: 0;
+}
+
+.chat-inbox:empty {
+  display: none;
 }
 
 .chat-session-card {
@@ -819,8 +842,10 @@ html[data-theme="dark"] .chat-bubble.mine {
 
 .chat-empty-note {
   margin: 0;
+  padding: 4px 2px;
   color: var(--muted);
   font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .urgent-banner {
@@ -1032,24 +1057,41 @@ html[data-theme="dark"] .face-modal-card {
 
 .face-enroll-form {
   display: grid;
-  gap: 0.35rem;
-  margin-bottom: 16px;
+  gap: 0;
+  margin: 0 0 18px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
 }
 
-.face-enroll-form select {
+.face-enroll-form .field {
+  margin-bottom: 14px;
+}
+
+.face-enroll-form .btn {
+  margin-top: 2px;
+}
+
+.face-enroll-form input[type="file"],
+.admin-shell input[type="file"] {
   width: 100%;
-  border: 1px solid var(--line-strong);
+  border: 1px dashed var(--line-strong);
   border-radius: var(--radius-sm);
-  padding: 15px 16px;
-  background: var(--input-bg);
+  padding: 14px;
+  background: rgba(15, 15, 15, 0.02);
   color: var(--ink);
   font: inherit;
-  font-size: 16px;
+  font-size: 0.9rem;
+}
+
+html[data-theme="dark"] .face-enroll-form input[type="file"],
+html[data-theme="dark"] .admin-shell input[type="file"] {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .face-profiles {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  margin-top: 4px;
 }
 
 .face-profile-card {
@@ -1057,7 +1099,7 @@ html[data-theme="dark"] .face-modal-card {
   grid-template-columns: 64px 1fr;
   gap: 12px;
   align-items: start;
-  padding: 12px;
+  padding: 14px;
   border-radius: 16px;
   border: 1px solid var(--line);
   background: var(--surface-solid);
@@ -1073,12 +1115,23 @@ html[data-theme="dark"] .face-modal-card {
 
 .face-profile-meta {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
 .face-profile-meta strong {
+  display: block;
   font-size: 1rem;
+  line-height: 1.25;
+}
+
+.face-profile-meta .field {
+  margin: 0;
+}
+
+.face-profile-meta .field > span {
+  display: block;
+  margin-bottom: 6px;
 }
 
 .face-profile-actions {
@@ -1130,7 +1183,7 @@ html[data-theme="dark"] .face-modal-card {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin: 14px 0;
+  margin: 4px 0 0;
 }
 
 .mode-grid-wide,
@@ -1463,6 +1516,9 @@ body.mode-blackout .sand-waves path {
 
 .admin-pane {
   min-height: 0;
+  display: grid;
+  gap: 16px;
+  align-content: start;
 }
 
 .admin-tabbar {
@@ -1553,9 +1609,9 @@ html[data-theme="dark"] #display-image-file {
   position: sticky;
   top: 0;
   z-index: 20;
-  margin: 0 -16px 18px;
-  padding: 14px 16px 12px;
-  background: color-mix(in srgb, var(--theme-color) 84%, transparent);
+  margin: 0;
+  padding: 4px 0 14px;
+  background: color-mix(in srgb, var(--theme-color) 92%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--line);
@@ -1589,7 +1645,7 @@ html[data-theme="dark"] #display-image-file {
 }
 
 .section-label {
-  margin: 18px 0 10px;
+  margin: 6px 0 -6px;
   font-size: 0.7rem;
   font-weight: 650;
   letter-spacing: 0.14em;
@@ -1601,8 +1657,8 @@ html[data-theme="dark"] #display-image-file {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 22px;
-  padding: 20px;
-  margin-bottom: 8px;
+  padding: 18px;
+  margin: 0;
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -1619,14 +1675,28 @@ html[data-theme="dark"] #display-image-file {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 10px 0;
+  margin: 0;
   padding: 14px 0;
   border-top: 1px solid var(--line);
 }
 
 .settings-row:first-of-type {
   border-top: none;
-  padding-top: 8px;
+  padding-top: 10px;
+}
+
+#closed-editor {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+#closed-editor.hidden {
+  display: none;
+}
+
+#closed-editor .field:last-of-type {
+  margin-bottom: 12px;
 }
 
 .toggle {
@@ -1684,6 +1754,10 @@ html[data-theme="dark"] .toggle input:checked + span {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.request-list:empty {
+  display: none;
 }
 
 .request-card {
@@ -1813,7 +1887,7 @@ html[data-theme="dark"] .pill-pending {
 
 .empty {
   text-align: center;
-  padding: 52px 22px;
+  padding: 28px 20px;
   color: var(--ink-faint);
   background: color-mix(in srgb, var(--surface) 70%, transparent);
   border: 1px dashed var(--line-strong);
@@ -1905,10 +1979,9 @@ html[data-theme="dark"] .pill-pending {
   }
 
   .admin-top {
-    margin-left: -24px;
-    margin-right: -24px;
-    padding-left: 24px;
-    padding-right: 24px;
+    margin: 0;
+    padding-left: 0;
+    padding-right: 0;
   }
 }
 

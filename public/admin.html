@@ -135,41 +135,6 @@
           </div>
         </section>
 
-        <p class="section-label">Known faces</p>
-        <section class="settings-card" id="faces-settings">
-          <h2>Face sign-in</h2>
-          <p class="muted" style="margin: 0 0 12px;">
-            Enroll people the kiosk can recognize. Choose auto-fill name, auto-admit, or auto-deny.
-          </p>
-
-          <form id="face-enroll-form" class="face-enroll-form" autocomplete="off">
-            <div class="field">
-              <label for="face-enroll-name">Name</label>
-              <input id="face-enroll-name" type="text" maxlength="100" required placeholder="Person’s name" />
-            </div>
-            <div class="field">
-              <label for="face-enroll-policy">When recognized</label>
-              <select id="face-enroll-policy">
-                <option value="autofill">Auto-fill name only</option>
-                <option value="auto_admit">Auto-admit (skip approval)</option>
-                <option value="auto_deny">Auto-deny</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="face-enroll-file">Face photo</label>
-              <input id="face-enroll-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
-              <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
-                Clear front-facing photo works best.
-              </p>
-            </div>
-            <button class="btn btn-primary" type="submit" id="face-enroll-btn">Add person</button>
-            <p id="face-enroll-status" class="muted" style="margin: 8px 0 0; font-size: 0.85rem;"></p>
-          </form>
-
-          <div id="face-profiles" class="face-profiles"></div>
-          <p id="face-profiles-empty" class="chat-empty-note">No enrolled faces yet.</p>
-        </section>
-
         <p class="section-label">Queue</p>
         <div id="list" class="request-list"></div>
         <div id="empty" class="empty hidden">No requests yet.</div>
@@ -203,6 +168,41 @@
             />
             <button class="btn btn-primary btn-compact" type="submit" id="admin-chat-send">Send</button>
           </form>
+        </section>
+
+        <p class="section-label">Known faces</p>
+        <section class="settings-card" id="faces-settings">
+          <h2>Face sign-in</h2>
+          <p class="muted" style="margin: 0 0 12px;">
+            Enroll people the kiosk can recognize. Choose auto-fill name, auto-admit, or auto-deny.
+          </p>
+
+          <form id="face-enroll-form" class="face-enroll-form" autocomplete="off">
+            <div class="field">
+              <label for="face-enroll-name">Name</label>
+              <input id="face-enroll-name" type="text" maxlength="100" required placeholder="Person’s name" />
+            </div>
+            <div class="field">
+              <label for="face-enroll-policy">When recognized</label>
+              <select id="face-enroll-policy">
+                <option value="autofill">Auto-fill name only</option>
+                <option value="auto_admit">Auto-admit (skip approval)</option>
+                <option value="auto_deny">Auto-deny</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="face-enroll-file">Face photo</label>
+              <input id="face-enroll-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
+              <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
+                Clear front-facing photo works best.
+              </p>
+            </div>
+            <button class="btn btn-primary" type="submit" id="face-enroll-btn">Add person</button>
+            <p id="face-enroll-status" class="muted" style="margin: 8px 0 0; font-size: 0.85rem;"></p>
+          </form>
+
+          <div id="face-profiles" class="face-profiles"></div>
+          <p id="face-profiles-empty" class="chat-empty-note">No enrolled faces yet.</p>
         </section>
       </div>
 
