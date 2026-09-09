@@ -129,6 +129,44 @@
     </main>
 
     <button type="button" id="urgent-btn" class="urgent-fab hidden">Urgent</button>
+    <button type="button" id="chat-fab" class="chat-fab" aria-label="Open live chat">Chat</button>
+
+    <div id="chat-modal" class="chat-modal hidden" role="dialog" aria-modal="true" aria-labelledby="chat-modal-title">
+      <div class="chat-modal-card">
+        <button type="button" class="chat-modal-close" id="chat-close-btn" aria-label="Close chat">✕</button>
+
+        <div id="chat-gate" class="chat-gate">
+          <p class="eyebrow">Live chat</p>
+          <h2 id="chat-modal-title">Message us</h2>
+          <p class="subtitle">
+            It’s easier to use your phone to message. Scan the QR code, or continue here on the tablet.
+          </p>
+          <div class="chat-gate-qr-wrap">
+            <img id="chat-gate-qr" class="chat-gate-qr" alt="QR code for live chat" />
+          </div>
+          <p class="muted" id="chat-gate-link" style="font-size: 0.82rem; word-break: break-all;"></p>
+          <button class="btn btn-primary" type="button" id="chat-continue-btn">Continue here</button>
+        </div>
+
+        <div id="chat-panel" class="chat-panel hidden">
+          <p class="eyebrow">Live chat</p>
+          <h2>Chat</h2>
+          <div id="kiosk-chat-messages" class="chat-messages" aria-live="polite"></div>
+          <form id="kiosk-chat-form" class="chat-composer" autocomplete="off">
+            <input
+              id="kiosk-chat-input"
+              type="text"
+              maxlength="1000"
+              required
+              placeholder="Type a message…"
+              enterkeyhint="send"
+            />
+            <button class="btn btn-primary btn-compact" type="submit">Send</button>
+          </form>
+          <button class="btn btn-secondary" type="button" id="chat-back-gate-btn">Show QR again</button>
+        </div>
+      </div>
+    </div>
 
     <script>
       const closedView = document.getElementById("closed-view");
@@ -622,6 +660,160 @@
       document.addEventListener("gesturestart", (e) => e.preventDefault());
       pollKioskStatus();
       kioskPollTimer = setInterval(pollKioskStatus, 4000);
+
+      // Live chat
+      const chatFab = document.getElementById("chat-fab");
+      const chatModal = document.getElementById("chat-modal");
+      const chatCloseBtn = document.getElementById("chat-close-btn");
+      const chatGate = document.getElementById("chat-gate");
+      const chatPanel = document.getElementById("chat-panel");
+      const chatContinueBtn = document.getElementById("chat-continue-btn");
+      const chatBackGateBtn = document.getElementById("chat-back-gate-btn");
+      const chatGateQr = document.getElementById("chat-gate-qr");
+      const chatGateLink = document.getElementById("chat-gate-link");
+      const kioskChatMessages = document.getElementById("kiosk-chat-messages");
+      const kioskChatForm = document.getElementById("kiosk-chat-form");
+      const kioskChatInput = document.getElementById("kiosk-chat-input");
+      const CHAT_SESSION_KEY = "kiosk_chat_session_id";
+      let chatSessionId = sessionStorage.getItem(CHAT_SESSION_KEY) || "";
+      let chatPollTimer = null;
+      let chatLastKey = "";
+
+      function escapeChatHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function chatUrlForSession(id) {
+        return `${window.location.origin}/chat?id=${encodeURIComponent(id)}`;
+      }
+
+      function updateChatQr(id) {
+        const url = chatUrlForSession(id);
+        chatGateLink.textContent = url;
+        chatGateQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=10&data=${encodeURIComponent(url)}`;
+      }
+
+      function renderKioskChat(messages) {
+        const key = messages.map((m) => `${m.id}:${m.body}`).join("|");
+        if (key === chatLastKey) return;
+        chatLastKey = key;
+        kioskChatMessages.innerHTML = messages
+          .map((m) => {
+            const cls =
+              m.sender === "visitor" ? "mine" :
+              m.sender === "admin" ? "theirs" : "system";
+            return `<div class="chat-bubble ${cls}">${escapeChatHtml(m.body)}</div>`;
+          })
+          .join("");
+        kioskChatMessages.scrollTop = kioskChatMessages.scrollHeight;
+      }
+
+      async function ensureChatSession() {
+        if (chatSessionId) {
+          const res = await fetch(`/api/chat-session?id=${encodeURIComponent(chatSessionId)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.session && data.session.status !== "closed") {
+              updateChatQr(chatSessionId);
+              return data;
+            }
+          }
+        }
+
+        const res = await fetch("/api/chat-session", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not start chat");
+        chatSessionId = data.session.id;
+        sessionStorage.setItem(CHAT_SESSION_KEY, chatSessionId);
+        updateChatQr(chatSessionId);
+        return data;
+      }
+
+      async function pollKioskChat() {
+        if (!chatSessionId || chatModal.classList.contains("hidden") || chatPanel.classList.contains("hidden")) {
+          return;
+        }
+        try {
+          const res = await fetch(`/api/chat-session?id=${encodeURIComponent(chatSessionId)}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          renderKioskChat(data.messages || []);
+        } catch (_) {}
+      }
+
+      function openChatModal() {
+        chatModal.classList.remove("hidden");
+        chatGate.classList.remove("hidden");
+        chatPanel.classList.add("hidden");
+        ensureChatSession().catch((err) => {
+          chatGateLink.textContent = err.message || "Could not start chat";
+        });
+      }
+
+      function closeChatModal() {
+        chatModal.classList.add("hidden");
+        if (chatPollTimer) {
+          clearInterval(chatPollTimer);
+          chatPollTimer = null;
+        }
+      }
+
+      function showKioskChatPanel() {
+        chatGate.classList.add("hidden");
+        chatPanel.classList.remove("hidden");
+        pollKioskChat();
+        if (!chatPollTimer) chatPollTimer = setInterval(pollKioskChat, 2500);
+        setTimeout(() => kioskChatInput.focus(), 50);
+      }
+
+      chatFab.addEventListener("click", openChatModal);
+      chatCloseBtn.addEventListener("click", closeChatModal);
+      chatModal.addEventListener("click", (e) => {
+        if (e.target === chatModal) closeChatModal();
+      });
+      chatContinueBtn.addEventListener("click", async () => {
+        try {
+          await ensureChatSession();
+          showKioskChatPanel();
+        } catch (err) {
+          chatGateLink.textContent = err.message || "Could not open chat";
+        }
+      });
+      chatBackGateBtn.addEventListener("click", () => {
+        chatPanel.classList.add("hidden");
+        chatGate.classList.remove("hidden");
+        if (chatPollTimer) {
+          clearInterval(chatPollTimer);
+          chatPollTimer = null;
+        }
+      });
+
+      kioskChatForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const body = kioskChatInput.value.trim();
+        if (!body || !chatSessionId) return;
+        const btn = kioskChatForm.querySelector("button[type='submit']");
+        btn.disabled = true;
+        try {
+          const res = await fetch("/api/chat-message", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId: chatSessionId, sender: "visitor", body }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not send");
+          kioskChatInput.value = "";
+          await pollKioskChat();
+        } catch (err) {
+          chatGateLink.textContent = err.message || "Could not send";
+        } finally {
+          btn.disabled = false;
+        }
+      });
     </script>
   </body>
 </html>

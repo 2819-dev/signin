@@ -124,6 +124,37 @@
         <p class="section-label">Queue</p>
         <div id="list" class="request-list"></div>
         <div id="empty" class="empty hidden">No requests yet.</div>
+
+        <p class="section-label">Live chat <span id="chat-count" class="badge hidden">0</span></p>
+        <div id="chat-inbox" class="chat-inbox"></div>
+        <p id="chat-empty" class="chat-empty-note">No live chats yet.</p>
+
+        <section id="chat-thread" class="settings-card chat-thread-card hidden">
+          <div class="admin-header" style="margin-bottom: 10px;">
+            <div>
+              <p class="eyebrow">Conversation</p>
+              <h2 id="chat-thread-title" style="margin:0;font-size:1.15rem;">Chat</h2>
+              <p class="muted" id="chat-thread-status" style="margin:4px 0 0;font-size:0.85rem;"></p>
+            </div>
+            <div class="admin-header-actions">
+              <button class="btn btn-secondary btn-compact" type="button" id="chat-close-session-btn">
+                Close chat
+              </button>
+            </div>
+          </div>
+          <div id="admin-chat-messages" class="chat-messages" aria-live="polite"></div>
+          <form id="admin-chat-form" class="chat-composer" autocomplete="off" style="margin-top: 10px;">
+            <input
+              id="admin-chat-input"
+              type="text"
+              maxlength="1000"
+              required
+              placeholder="Reply…"
+              enterkeyhint="send"
+            />
+            <button class="btn btn-primary btn-compact" type="submit" id="admin-chat-send">Send</button>
+          </form>
+        </section>
       </div>
 
       <div id="pane-control" class="admin-pane hidden">
@@ -293,6 +324,17 @@
       const displayModeHint = document.getElementById("display-mode-hint");
       const saveDisplayBtn = document.getElementById("save-display-btn");
       const exitDisplayBtn = document.getElementById("exit-display-btn");
+      const chatInboxEl = document.getElementById("chat-inbox");
+      const chatEmptyEl = document.getElementById("chat-empty");
+      const chatCountEl = document.getElementById("chat-count");
+      const chatThreadEl = document.getElementById("chat-thread");
+      const chatThreadTitle = document.getElementById("chat-thread-title");
+      const chatThreadStatus = document.getElementById("chat-thread-status");
+      const adminChatMessages = document.getElementById("admin-chat-messages");
+      const adminChatForm = document.getElementById("admin-chat-form");
+      const adminChatInput = document.getElementById("admin-chat-input");
+      const adminChatSend = document.getElementById("admin-chat-send");
+      const chatCloseSessionBtn = document.getElementById("chat-close-session-btn");
 
       const STORAGE_KEY = "visitor_admin_secret";
       const PANE_KEY = "visitor_admin_pane";
@@ -325,6 +367,11 @@
       let historyCleanupTimer = null;
       let latestRequests = [];
       let pendingUploadData = null;
+      let activeChatId = "";
+      let chatSessionsCache = [];
+      let chatMessagesKey = "";
+      let knownChatIds = new Set();
+      let chatFirstLoad = true;
       let currentSettings = {
         isOpen: true,
         urgentEnabled: true,
@@ -941,6 +988,116 @@
         }
       }
 
+      function renderChatInbox(sessions) {
+        const openSessions = sessions.filter((s) => s.status === "open");
+        chatCountEl.textContent = String(openSessions.length);
+        chatCountEl.classList.toggle("hidden", openSessions.length === 0);
+
+        if (!sessions.length) {
+          chatInboxEl.innerHTML = "";
+          chatEmptyEl.classList.remove("hidden");
+          return;
+        }
+
+        chatEmptyEl.classList.add("hidden");
+        chatInboxEl.innerHTML = sessions
+          .map((session) => {
+            const preview = session.lastBody || "New chat";
+            const active = session.id === activeChatId ? "active" : "";
+            return `
+              <button type="button" class="chat-session-card ${active}" data-chat-id="${escapeHtml(session.id)}">
+                <div class="chat-session-top">
+                  <span>${session.status === "open" ? "Open" : "Closed"} · ${escapeHtml(formatTime(session.lastMessageAt || session.createdAt))}</span>
+                  <span>${Number(session.visitorCount || 0)} visitor msg${Number(session.visitorCount || 0) === 1 ? "" : "s"}</span>
+                </div>
+                <p class="chat-session-preview">${escapeHtml(preview)}</p>
+              </button>
+            `;
+          })
+          .join("");
+      }
+
+      function renderAdminChatMessages(messages) {
+        const key = messages.map((m) => `${m.id}:${m.body}`).join("|");
+        if (key === chatMessagesKey) return;
+        chatMessagesKey = key;
+        adminChatMessages.innerHTML = messages
+          .map((m) => {
+            const cls =
+              m.sender === "admin" ? "mine" :
+              m.sender === "visitor" ? "theirs" : "system";
+            return `<div class="chat-bubble ${cls}">${escapeHtml(m.body)}</div>`;
+          })
+          .join("");
+        adminChatMessages.scrollTop = adminChatMessages.scrollHeight;
+      }
+
+      async function loadActiveChat() {
+        if (!activeChatId) {
+          chatThreadEl.classList.add("hidden");
+          return;
+        }
+        const res = await fetch(`/api/chat-session?id=${encodeURIComponent(activeChatId)}`, {
+          headers: adminHeaders(),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load chat");
+        chatThreadEl.classList.remove("hidden");
+        chatThreadTitle.textContent = "Visitor chat";
+        chatThreadStatus.textContent =
+          data.session && data.session.status === "closed"
+            ? "Closed"
+            : "Live · reply below";
+        adminChatForm.classList.toggle("hidden", data.session && data.session.status === "closed");
+        chatCloseSessionBtn.textContent =
+          data.session && data.session.status === "closed" ? "Reopen chat" : "Close chat";
+        chatCloseSessionBtn.dataset.status =
+          data.session && data.session.status === "closed" ? "closed" : "open";
+        renderAdminChatMessages(data.messages || []);
+      }
+
+      async function fetchChatSessions() {
+        const res = await fetch("/api/chat-session", {
+          headers: adminHeaders(),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Could not load chats");
+        }
+        return res.json();
+      }
+
+      async function refreshChats() {
+        try {
+          const data = await fetchChatSessions();
+          const sessions = data.sessions || [];
+          chatSessionsCache = sessions;
+
+          if (!chatFirstLoad) {
+            for (const session of sessions) {
+              if (session.status === "open" && !knownChatIds.has(session.id) && Number(session.visitorCount || 0) > 0) {
+                showToast("New chat message");
+                break;
+              }
+            }
+          }
+
+          knownChatIds = new Set(sessions.map((s) => s.id));
+          chatFirstLoad = false;
+          renderChatInbox(sessions);
+
+          if (activeChatId) {
+            if (!sessions.some((s) => s.id === activeChatId)) {
+              // Still allow loading a recently selected chat even if filtered out.
+            }
+            await loadActiveChat();
+          }
+        } catch (err) {
+          // Keep request polling healthy even if chat fails.
+          console.error(err);
+        }
+      }
+
       async function refresh() {
         try {
           const data = await fetchRequests();
@@ -963,6 +1120,7 @@
           connectionStatus.textContent = renderPaused
             ? "Live · paused while you type"
             : "Live · updates every few seconds";
+          await refreshChats();
         } catch (err) {
           if (err.message !== "Unauthorized") {
             connectionStatus.textContent = "Couldn’t refresh — retrying…";
@@ -1163,6 +1321,10 @@
           setAdminPane(localStorage.getItem(PANE_KEY) || "signin");
           firstLoad = true;
           knownIds = new Set();
+          chatFirstLoad = true;
+          knownChatIds = new Set();
+          activeChatId = "";
+          chatMessagesKey = "";
           const settings = await fetchSettings();
           applySettingsToForm(settings);
           await refresh();
@@ -1307,6 +1469,65 @@
 
       tabSignin.addEventListener("click", () => setAdminPane("signin"));
       tabControl.addEventListener("click", () => setAdminPane("control"));
+
+      chatInboxEl.addEventListener("click", async (e) => {
+        const card = e.target.closest("[data-chat-id]");
+        if (!card) return;
+        activeChatId = card.getAttribute("data-chat-id") || "";
+        chatMessagesKey = "";
+        renderChatInbox(chatSessionsCache);
+        try {
+          await loadActiveChat();
+        } catch (err) {
+          showToast(err.message || "Could not open chat");
+        }
+      });
+
+      adminChatForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const body = adminChatInput.value.trim();
+        if (!body || !activeChatId) return;
+        adminChatSend.disabled = true;
+        try {
+          const res = await fetch("/api/chat-message", {
+            method: "POST",
+            headers: adminHeaders(),
+            body: JSON.stringify({ sessionId: activeChatId, sender: "admin", body }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not send");
+          adminChatInput.value = "";
+          await loadActiveChat();
+          await refreshChats();
+        } catch (err) {
+          showToast(err.message || "Could not send");
+        } finally {
+          adminChatSend.disabled = false;
+          adminChatInput.focus();
+        }
+      });
+
+      chatCloseSessionBtn.addEventListener("click", async () => {
+        if (!activeChatId) return;
+        const currentlyClosed = chatCloseSessionBtn.dataset.status === "closed";
+        const nextStatus = currentlyClosed ? "open" : "closed";
+        chatCloseSessionBtn.disabled = true;
+        try {
+          const res = await fetch("/api/chat-session", {
+            method: "PATCH",
+            headers: adminHeaders(),
+            body: JSON.stringify({ id: activeChatId, status: nextStatus }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not update chat");
+          showToast(nextStatus === "closed" ? "Chat closed" : "Chat reopened");
+          await refreshChats();
+        } catch (err) {
+          showToast(err.message || "Could not update chat");
+        } finally {
+          chatCloseSessionBtn.disabled = false;
+        }
+      });
 
       saveDisplayBtn.addEventListener("click", async () => {
         saveDisplayBtn.disabled = true;

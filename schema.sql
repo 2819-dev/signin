@@ -65,3 +65,27 @@ ALTER TABLE kiosk_settings
 
 ALTER TABLE kiosk_settings
   ADD COLUMN IF NOT EXISTS display_show_clock BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  status TEXT NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'closed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_visitor_message_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS chat_sessions_status_updated_idx
+  ON chat_sessions (status, last_message_at DESC);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+  sender TEXT NOT NULL CHECK (sender IN ('visitor', 'admin', 'system')),
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS chat_messages_session_created_idx
+  ON chat_messages (session_id, created_at ASC);
