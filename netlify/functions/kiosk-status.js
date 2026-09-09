@@ -6,10 +6,33 @@ const DEFAULTS = {
   theme: "light",
   closedTitle: "Closed",
   closedMessage: "Not accepting visitors right now.",
+  displayMode: "signin",
+  displayTitle: "",
+  displayMessage: "",
+  displayImageUrl: "",
+  displayShowClock: false,
 };
+
+const DISPLAY_MODES = new Set(["signin", "message", "image", "poster", "clock"]);
 
 function normalizeTheme(value) {
   return value === "dark" ? "dark" : "light";
+}
+
+function normalizeDisplayMode(value) {
+  return DISPLAY_MODES.has(value) ? value : "signin";
+}
+
+function normalizeImageUrl(value) {
+  const raw = String(value || "").trim().slice(0, 2000);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
 }
 
 function mapSettings(row) {
@@ -20,9 +43,20 @@ function mapSettings(row) {
     theme: normalizeTheme(row.theme),
     closedTitle: row.closed_title || DEFAULTS.closedTitle,
     closedMessage: row.closed_message || DEFAULTS.closedMessage,
+    displayMode: normalizeDisplayMode(row.display_mode),
+    displayTitle: row.display_title || "",
+    displayMessage: row.display_message || "",
+    displayImageUrl: row.display_image_url || "",
+    displayShowClock: Boolean(row.display_show_clock),
     updatedAt: row.updated_at || null,
   };
 }
+
+const SETTINGS_SELECT = `
+  is_open, urgent_enabled, theme, closed_title, closed_message,
+  display_mode, display_title, display_message, display_image_url, display_show_clock,
+  updated_at
+`;
 
 async function ensureSettings(sql) {
   await sql`
@@ -30,8 +64,17 @@ async function ensureSettings(sql) {
     VALUES (1)
     ON CONFLICT (id) DO NOTHING
   `;
+  // Keep older databases working even if schema.sql ALTERs weren't run yet.
+  await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_mode TEXT NOT NULL DEFAULT 'signin'`;
+  await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_title TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_message TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_image_url TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_show_clock BOOLEAN NOT NULL DEFAULT FALSE`;
+
   const rows = await sql`
-    SELECT is_open, urgent_enabled, theme, closed_title, closed_message, updated_at
+    SELECT is_open, urgent_enabled, theme, closed_title, closed_message,
+           display_mode, display_title, display_message, display_image_url, display_show_clock,
+           updated_at
     FROM kiosk_settings
     WHERE id = 1
     LIMIT 1
@@ -65,7 +108,9 @@ exports.handler = async (event) => {
 
       await ensureSettings(sql);
       const currentRows = await sql`
-        SELECT is_open, urgent_enabled, theme, closed_title, closed_message, updated_at
+        SELECT is_open, urgent_enabled, theme, closed_title, closed_message,
+               display_mode, display_title, display_message, display_image_url, display_show_clock,
+               updated_at
         FROM kiosk_settings
         WHERE id = 1
         LIMIT 1
@@ -96,11 +141,54 @@ exports.handler = async (event) => {
         .trim()
         .slice(0, 500);
 
+      const displayMode = normalizeDisplayMode(
+        typeof body.displayMode === "string" ? body.displayMode : current.displayMode
+      );
+      const displayTitle = (
+        typeof body.displayTitle === "string"
+          ? body.displayTitle
+          : current.displayTitle
+      )
+        .trim()
+        .slice(0, 120);
+      const displayMessage = (
+        typeof body.displayMessage === "string"
+          ? body.displayMessage
+          : current.displayMessage
+      )
+        .trim()
+        .slice(0, 1000);
+      const displayImageUrl = normalizeImageUrl(
+        typeof body.displayImageUrl === "string"
+          ? body.displayImageUrl
+          : current.displayImageUrl
+      );
+      const displayShowClock =
+        typeof body.displayShowClock === "boolean"
+          ? body.displayShowClock
+          : current.displayShowClock;
+
       if (!closedTitle) {
         return json(400, { error: "Closed title is required" });
       }
       if (!closedMessage) {
         return json(400, { error: "Closed message is required" });
+      }
+      if (
+        (displayMode === "image" || displayMode === "poster") &&
+        !displayImageUrl
+      ) {
+        return json(400, { error: "Image URL is required for this display mode" });
+      }
+      if (displayMode === "message" && !displayTitle && !displayMessage) {
+        return json(400, { error: "Add a title or message for message mode" });
+      }
+      if (
+        typeof body.displayImageUrl === "string" &&
+        body.displayImageUrl.trim() &&
+        !displayImageUrl
+      ) {
+        return json(400, { error: "Image URL must start with http:// or https://" });
       }
 
       const rows = await sql`
@@ -110,9 +198,16 @@ exports.handler = async (event) => {
             theme = ${theme},
             closed_title = ${closedTitle},
             closed_message = ${closedMessage},
+            display_mode = ${displayMode},
+            display_title = ${displayTitle},
+            display_message = ${displayMessage},
+            display_image_url = ${displayImageUrl},
+            display_show_clock = ${displayShowClock},
             updated_at = NOW()
         WHERE id = 1
-        RETURNING is_open, urgent_enabled, theme, closed_title, closed_message, updated_at
+        RETURNING is_open, urgent_enabled, theme, closed_title, closed_message,
+                  display_mode, display_title, display_message, display_image_url, display_show_clock,
+                  updated_at
       `;
 
       return json(200, { settings: mapSettings(rows[0]) });

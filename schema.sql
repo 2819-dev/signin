@@ -47,3 +47,18 @@ ALTER TABLE kiosk_settings
 
 ALTER TABLE kiosk_settings
   ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'light';
+
+ALTER TABLE kiosk_settings
+  ADD COLUMN IF NOT EXISTS display_mode TEXT NOT NULL DEFAULT 'signin';
+
+ALTER TABLE kiosk_settings
+  ADD COLUMN IF NOT EXISTS display_title TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE kiosk_settings
+  ADD COLUMN IF NOT EXISTS display_message TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE kiosk_settings
+  ADD COLUMN IF NOT EXISTS display_image_url TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE kiosk_settings
+  ADD COLUMN IF NOT EXISTS display_show_clock BOOLEAN NOT NULL DEFAULT FALSE;

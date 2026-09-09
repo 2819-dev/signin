@@ -76,7 +76,7 @@
 
       <section class="settings-card" id="kiosk-settings">
         <h2>Kiosk</h2>
-        <p class="muted" style="margin: 0 0 4px;">Control the visitor sign-in screen.</p>
+        <p class="muted" style="margin: 0 0 4px;">Control visitor access and basic options.</p>
         <div class="settings-row">
           <div>
             <strong id="open-label">Accepting visitors</strong>
@@ -120,6 +120,62 @@
         </div>
       </section>
 
+      <section class="settings-card" id="display-settings">
+        <h2>Tablet display</h2>
+        <p class="muted" style="margin: 0 0 12px;">
+          Take over the kiosk screen with a custom message, image, poster, or clock.
+        </p>
+
+        <div class="mode-grid" id="display-mode-grid" role="radiogroup" aria-label="Display mode">
+          <button type="button" class="mode-chip active" data-mode="signin">Sign-in</button>
+          <button type="button" class="mode-chip" data-mode="message">Message</button>
+          <button type="button" class="mode-chip" data-mode="image">Image</button>
+          <button type="button" class="mode-chip" data-mode="poster">Poster</button>
+          <button type="button" class="mode-chip" data-mode="clock">Clock</button>
+        </div>
+        <input type="hidden" id="display-mode" value="signin" />
+
+        <div id="display-editor" class="display-editor hidden">
+          <div class="field" id="display-title-field">
+            <label for="display-title">Title</label>
+            <input id="display-title" type="text" maxlength="120" placeholder="What’s on the screen" />
+          </div>
+          <div class="field" id="display-message-field">
+            <label for="display-message">Message</label>
+            <textarea id="display-message" maxlength="1000" placeholder="Custom text for the tablet…"></textarea>
+          </div>
+          <div class="field" id="display-image-field">
+            <label for="display-image-url">Image URL</label>
+            <input
+              id="display-image-url"
+              type="url"
+              maxlength="2000"
+              placeholder="https://…"
+              inputmode="url"
+              autocomplete="off"
+            />
+            <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">
+              Use a direct image link (https). The tablet will show it full-screen.
+            </p>
+          </div>
+          <div class="settings-row" id="display-clock-row">
+            <div>
+              <strong>Show clock</strong>
+              <div class="muted" style="font-size: 0.85rem;">Small live clock on the custom screen</div>
+            </div>
+            <label class="toggle" aria-label="Show clock">
+              <input type="checkbox" id="display-show-clock" />
+              <span></span>
+            </label>
+          </div>
+          <button class="btn btn-primary" type="button" id="save-display-btn">Update tablet display</button>
+        </div>
+
+        <p class="muted" id="display-mode-hint" style="margin: 12px 0 0; font-size: 0.85rem;">
+          Sign-in mode uses the normal visitor flow.
+        </p>
+      </section>
+
       <p class="section-label">Queue</p>
       <div id="list" class="request-list"></div>
       <div id="empty" class="empty hidden">No requests yet.</div>
@@ -151,6 +207,19 @@
       const closedMessageInput = document.getElementById("closed-message");
       const saveClosedBtn = document.getElementById("save-closed-btn");
       const closedEditor = document.getElementById("closed-editor");
+      const displayModeInput = document.getElementById("display-mode");
+      const displayModeGrid = document.getElementById("display-mode-grid");
+      const displayEditor = document.getElementById("display-editor");
+      const displayTitleInput = document.getElementById("display-title");
+      const displayMessageInput = document.getElementById("display-message");
+      const displayImageInput = document.getElementById("display-image-url");
+      const displayShowClockToggle = document.getElementById("display-show-clock");
+      const displayTitleField = document.getElementById("display-title-field");
+      const displayMessageField = document.getElementById("display-message-field");
+      const displayImageField = document.getElementById("display-image-field");
+      const displayClockRow = document.getElementById("display-clock-row");
+      const displayModeHint = document.getElementById("display-mode-hint");
+      const saveDisplayBtn = document.getElementById("save-display-btn");
 
       const STORAGE_KEY = "visitor_admin_secret";
       let secret =
@@ -175,6 +244,19 @@
         theme: "light",
         closedTitle: "Closed",
         closedMessage: "Not accepting visitors right now.",
+        displayMode: "signin",
+        displayTitle: "",
+        displayMessage: "",
+        displayImageUrl: "",
+        displayShowClock: false,
+      };
+
+      const DISPLAY_HINTS = {
+        signin: "Sign-in mode uses the normal visitor flow.",
+        message: "Shows your custom title and message on the tablet.",
+        image: "Fills the tablet with your image.",
+        poster: "Image with title and message overlaid.",
+        clock: "Large live clock on the tablet.",
       };
 
       function applyTheme(theme) {
@@ -192,6 +274,27 @@
         setTimeout(() => toastEl.classList.remove("show"), 2200);
       }
 
+      function normalizeDisplayMode(value) {
+        return ["signin", "message", "image", "poster", "clock"].includes(value)
+          ? value
+          : "signin";
+      }
+
+      function syncDisplayEditorUi(mode) {
+        const next = normalizeDisplayMode(mode);
+        displayModeInput.value = next;
+        displayModeGrid.querySelectorAll(".mode-chip").forEach((btn) => {
+          btn.classList.toggle("active", btn.getAttribute("data-mode") === next);
+        });
+        const custom = next !== "signin";
+        displayEditor.classList.toggle("hidden", !custom);
+        displayTitleField.classList.toggle("hidden", next === "image" || next === "clock");
+        displayMessageField.classList.toggle("hidden", next === "image" || next === "clock");
+        displayImageField.classList.toggle("hidden", next === "message" || next === "clock");
+        displayClockRow.classList.toggle("hidden", next === "clock" || next === "signin");
+        displayModeHint.textContent = DISPLAY_HINTS[next] || DISPLAY_HINTS.signin;
+      }
+
       function applySettingsToForm(settings) {
         currentSettings = {
           isOpen: settings.isOpen !== false,
@@ -200,19 +303,32 @@
           closedTitle: settings.closedTitle || "Closed",
           closedMessage:
             settings.closedMessage || "Not accepting visitors right now.",
+          displayMode: normalizeDisplayMode(settings.displayMode),
+          displayTitle: settings.displayTitle || "",
+          displayMessage: settings.displayMessage || "",
+          displayImageUrl: settings.displayImageUrl || "",
+          displayShowClock: Boolean(settings.displayShowClock),
         };
         isOpenToggle.checked = currentSettings.isOpen;
         urgentToggle.checked = currentSettings.urgentEnabled;
         themeToggle.checked = currentSettings.theme === "dark";
         closedTitleInput.value = currentSettings.closedTitle;
         closedMessageInput.value = currentSettings.closedMessage;
+        displayTitleInput.value = currentSettings.displayTitle;
+        displayMessageInput.value = currentSettings.displayMessage;
+        displayImageInput.value = currentSettings.displayImageUrl;
+        displayShowClockToggle.checked = currentSettings.displayShowClock;
+        syncDisplayEditorUi(currentSettings.displayMode);
         applyTheme(currentSettings.theme);
         openLabel.textContent = currentSettings.isOpen
           ? "Accepting visitors"
           : "Closed — not accepting";
-        openHint.textContent = currentSettings.isOpen
-          ? "Kiosk shows the sign-in form"
-          : "Kiosk shows your closed sign";
+        openHint.textContent =
+          currentSettings.displayMode !== "signin"
+            ? "Access control still applies if someone uses urgent sign-in"
+            : currentSettings.isOpen
+              ? "Kiosk shows the sign-in form"
+              : "Kiosk shows your closed sign";
         urgentLabel.textContent = currentSettings.urgentEnabled
           ? "Urgent button on"
           : "Urgent button off";
@@ -259,6 +375,26 @@
             typeof partial.closedMessage === "string"
               ? partial.closedMessage
               : closedMessageInput.value,
+          displayMode:
+            typeof partial.displayMode === "string"
+              ? partial.displayMode
+              : displayModeInput.value || currentSettings.displayMode,
+          displayTitle:
+            typeof partial.displayTitle === "string"
+              ? partial.displayTitle
+              : displayTitleInput.value,
+          displayMessage:
+            typeof partial.displayMessage === "string"
+              ? partial.displayMessage
+              : displayMessageInput.value,
+          displayImageUrl:
+            typeof partial.displayImageUrl === "string"
+              ? partial.displayImageUrl
+              : displayImageInput.value,
+          displayShowClock:
+            typeof partial.displayShowClock === "boolean"
+              ? partial.displayShowClock
+              : displayShowClockToggle.checked,
         };
         const res = await fetch("/api/kiosk-status", {
           method: "POST",
@@ -819,6 +955,65 @@
           showToast(err.message || "Could not save");
         } finally {
           saveClosedBtn.disabled = false;
+        }
+      });
+
+      displayModeGrid.addEventListener("click", async (e) => {
+        const btn = e.target.closest(".mode-chip[data-mode]");
+        if (!btn) return;
+        const nextMode = normalizeDisplayMode(btn.getAttribute("data-mode"));
+        syncDisplayEditorUi(nextMode);
+
+        if (nextMode === "signin") {
+          saveDisplayBtn.disabled = true;
+          try {
+            await saveSettings({ displayMode: "signin" });
+            showToast("Tablet back on sign-in");
+          } catch (err) {
+            syncDisplayEditorUi(currentSettings.displayMode);
+            showToast(err.message || "Could not update");
+          } finally {
+            saveDisplayBtn.disabled = false;
+          }
+        }
+      });
+
+      saveDisplayBtn.addEventListener("click", async () => {
+        saveDisplayBtn.disabled = true;
+        try {
+          await saveSettings({
+            displayMode: displayModeInput.value,
+            displayTitle: displayTitleInput.value.trim(),
+            displayMessage: displayMessageInput.value.trim(),
+            displayImageUrl: displayImageInput.value.trim(),
+            displayShowClock: displayShowClockToggle.checked,
+          });
+          showToast("Tablet display updated");
+        } catch (err) {
+          showToast(err.message || "Could not update");
+        } finally {
+          saveDisplayBtn.disabled = false;
+        }
+      });
+
+      displayShowClockToggle.addEventListener("change", async () => {
+        if (normalizeDisplayMode(displayModeInput.value) === "signin") return;
+        const next = displayShowClockToggle.checked;
+        displayShowClockToggle.disabled = true;
+        try {
+          await saveSettings({
+            displayMode: displayModeInput.value,
+            displayTitle: displayTitleInput.value.trim(),
+            displayMessage: displayMessageInput.value.trim(),
+            displayImageUrl: displayImageInput.value.trim(),
+            displayShowClock: next,
+          });
+          showToast(next ? "Clock shown" : "Clock hidden");
+        } catch (err) {
+          displayShowClockToggle.checked = !next;
+          showToast(err.message || "Could not update");
+        } finally {
+          displayShowClockToggle.disabled = false;
         }
       });
 

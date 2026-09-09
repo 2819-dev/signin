@@ -522,6 +522,159 @@ html[data-theme="dark"] .hero-pane {
   display: none !important;
 }
 
+/* Tablet display modes */
+.stage-display {
+  width: min(100%, 1120px);
+}
+
+.display-screen {
+  position: relative;
+  width: 100%;
+  min-height: min(70dvh, 720px);
+  border-radius: 28px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  padding: 40px 36px;
+}
+
+.display-screen.is-image {
+  padding: 0;
+  min-height: min(78dvh, 820px);
+  background: #000;
+}
+
+.display-screen.is-poster {
+  padding: 0;
+  min-height: min(78dvh, 820px);
+  align-items: end;
+}
+
+.display-screen.is-clock {
+  min-height: min(70dvh, 680px);
+}
+
+.display-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.display-copy {
+  position: relative;
+  z-index: 2;
+  max-width: 720px;
+  text-align: center;
+}
+
+.display-screen.is-poster .display-copy {
+  width: 100%;
+  max-width: none;
+  padding: 36px 32px 40px;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.72));
+  color: #fff;
+  text-align: left;
+}
+
+.display-screen.is-poster .display-copy .eyebrow,
+.display-screen.is-poster .display-copy .subtitle,
+.display-screen.is-poster .display-copy h1 {
+  color: #fff;
+}
+
+.display-screen.is-poster .display-copy .subtitle {
+  margin-bottom: 0;
+  opacity: 0.88;
+}
+
+.display-clock {
+  position: relative;
+  z-index: 3;
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.display-screen.is-image .display-clock,
+.display-screen.is-poster .display-clock {
+  position: absolute;
+  top: 22px;
+  right: 24px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.display-screen.is-clock .display-clock {
+  margin: 0;
+}
+
+.display-clock-time {
+  font-size: clamp(3.2rem, 10vw, 7rem);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.display-screen.is-image .display-clock-time,
+.display-screen.is-poster .display-clock-time {
+  font-size: 1.4rem;
+  letter-spacing: -0.03em;
+}
+
+.display-clock-date {
+  margin-top: 10px;
+  color: var(--ink-soft);
+  font-size: clamp(1rem, 2.4vw, 1.35rem);
+}
+
+.display-screen.is-image .display-clock-date,
+.display-screen.is-poster .display-clock-date {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.82rem;
+}
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.mode-chip {
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 10px 12px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.mode-chip.active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
+.display-editor {
+  margin-top: 8px;
+  padding-top: 4px;
+}
+
 .admin-shell {
   position: relative;
   z-index: 1;
@@ -865,6 +1018,15 @@ html[data-theme="dark"] .pill-pending {
 
   .status-panel {
     padding: 60px 52px;
+  }
+
+  .display-screen {
+    min-height: 640px;
+    border-radius: 32px;
+  }
+
+  .mode-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .admin-shell {
