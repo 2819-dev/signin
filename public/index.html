@@ -256,6 +256,7 @@
       let currentRequestId = null;
       let isOpen = true;
       let urgentEnabled = true;
+      let chatEnabled = true;
       let urgentMode = false;
       let activeView = "form";
       let displayMode = "signin";
@@ -325,6 +326,20 @@
         if (meta) meta.setAttribute("content", next === "dark" ? "#0a0a0a" : "#ffffff");
       }
 
+      function canShowChatButton() {
+        return Boolean(chatEnabled);
+      }
+
+      function syncChatFabVisibility() {
+        const show = canShowChatButton();
+        chatFab.classList.toggle("display-hidden", !show);
+        chatFab.classList.toggle("hidden", !show);
+        if (!show) {
+          const modal = document.getElementById("chat-modal");
+          if (modal) modal.classList.add("hidden");
+        }
+      }
+
       function canShowUrgentButton() {
         if (!urgentEnabled || urgentMode || currentRequestId) return false;
         return activeView === "closed" || activeView === "form" || activeView === "display";
@@ -342,10 +357,8 @@
           el.classList.toggle("hidden", el !== view);
         });
         urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
-        chatFab.classList.toggle(
-          "display-hidden",
-          activeView === "display" && displayMode === "blackout"
-        );
+        syncChatFabVisibility();
+        document.body.classList.toggle("mode-blackout", activeView === "display" && displayMode === "blackout");
         if (activeView === "display") startDisplayTimers();
         else stopDisplayTimers();
       }
@@ -535,7 +548,8 @@
             (mode === "video" && !title && !message)
         );
 
-        chatFab.classList.toggle("display-hidden", mode === "blackout" && activeView === "display");
+        document.body.classList.toggle("mode-blackout", mode === "blackout" && activeView === "display");
+        syncChatFabVisibility();
 
         const yt = mode === "video" ? youtubeEmbedUrl(link) : "";
         if (mode === "video" && yt) {
@@ -653,12 +667,10 @@
           displayImage.removeAttribute("src");
         }
 
-        // Keep chat available except during blackout takeover.
+        // Keep chat visibility in sync with the admin toggle.
+        syncChatFabVisibility();
         if (activeView === "display") {
-          chatFab.classList.toggle("display-hidden", mode === "blackout");
           startDisplayTimers();
-        } else {
-          chatFab.classList.remove("display-hidden");
         }
       }
 
@@ -761,8 +773,10 @@
           applyDisplayContent(settings);
           isOpen = settings.isOpen !== false;
           urgentEnabled = settings.urgentEnabled !== false;
+          chatEnabled = settings.chatEnabled !== false;
           displayMode = normalizeDisplayMode(settings.displayMode);
           applyTheme(settings.theme);
+          syncChatFabVisibility();
           if (currentRequestId || urgentMode || ["waiting", "admitted", "declined"].includes(activeView)) {
             urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
             return;
@@ -968,6 +982,7 @@
       }
 
       function openChatModal() {
+        if (!canShowChatButton()) return;
         chatModal.classList.remove("hidden");
         chatNameError.classList.add("hidden");
         if (chatSessionId && chatVisitorName) {

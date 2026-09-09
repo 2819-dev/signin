@@ -103,6 +103,16 @@
           </div>
           <div class="settings-row">
             <div>
+              <strong id="chat-label">Chat button</strong>
+              <div class="muted" id="chat-hint" style="font-size: 0.85rem;">Show the live chat button on the kiosk</div>
+            </div>
+            <label class="toggle" aria-label="Chat button">
+              <input type="checkbox" id="chat-toggle" checked />
+              <span></span>
+            </label>
+          </div>
+          <div class="settings-row">
+            <div>
               <strong id="theme-label">Dark mode</strong>
               <div class="muted" id="theme-hint" style="font-size: 0.85rem;">Applies to admin and kiosk</div>
             </div>
@@ -242,7 +252,7 @@
             </button>
             <button type="button" class="mode-chip" data-mode="blackout">
               <span class="mode-chip-label">Blackout</span>
-              <span class="mode-chip-desc">Blank black screen</span>
+              <span class="mode-chip-desc">Gold waves only</span>
             </button>
           </div>
           <input type="hidden" id="display-mode" value="signin" />
@@ -360,11 +370,14 @@
       const toastEl = document.getElementById("toast");
       const isOpenToggle = document.getElementById("is-open-toggle");
       const urgentToggle = document.getElementById("urgent-toggle");
+      const chatToggle = document.getElementById("chat-toggle");
       const themeToggle = document.getElementById("theme-toggle");
       const openLabel = document.getElementById("open-label");
       const openHint = document.getElementById("open-hint");
       const urgentLabel = document.getElementById("urgent-label");
       const urgentHint = document.getElementById("urgent-hint");
+      const chatLabel = document.getElementById("chat-label");
+      const chatHint = document.getElementById("chat-hint");
       const themeLabel = document.getElementById("theme-label");
       const themeHint = document.getElementById("theme-hint");
       const closedTitleInput = document.getElementById("closed-title");
@@ -477,6 +490,7 @@
       let currentSettings = {
         isOpen: true,
         urgentEnabled: true,
+        chatEnabled: true,
         theme: "light",
         closedTitle: "Closed",
         closedMessage: "Not accepting visitors right now.",
@@ -503,7 +517,7 @@
         qr: "Big QR code for any link.",
         video: "Loops a muted video or YouTube clip.",
         embed: "Embed another webpage full-screen (site must allow embedding).",
-        blackout: "Blank black screen — chat button is hidden.",
+        blackout: "Calm screen with only the gold wave lines.",
       };
 
       function modeLabel(mode) {
@@ -751,6 +765,7 @@
         currentSettings = {
           isOpen: settings.isOpen !== false,
           urgentEnabled: settings.urgentEnabled !== false,
+          chatEnabled: settings.chatEnabled !== false,
           theme: settings.theme === "dark" ? "dark" : "light",
           closedTitle: settings.closedTitle || "Closed",
           closedMessage:
@@ -764,6 +779,7 @@
         };
         isOpenToggle.checked = currentSettings.isOpen;
         urgentToggle.checked = currentSettings.urgentEnabled;
+        chatToggle.checked = currentSettings.chatEnabled;
         themeToggle.checked = currentSettings.theme === "dark";
         closedTitleInput.value = currentSettings.closedTitle;
         closedMessageInput.value = currentSettings.closedMessage;
@@ -801,6 +817,12 @@
         urgentHint.textContent = currentSettings.urgentEnabled
           ? "Show corner urgent sign-in on the kiosk"
           : "Hidden on the kiosk";
+        chatLabel.textContent = currentSettings.chatEnabled
+          ? "Chat button on"
+          : "Chat button off";
+        chatHint.textContent = currentSettings.chatEnabled
+          ? "Show the live chat button on the kiosk"
+          : "Hidden on the kiosk";
         themeLabel.textContent =
           currentSettings.theme === "dark" ? "Dark mode on" : "Dark mode off";
         themeHint.textContent = "Applies to admin and kiosk";
@@ -829,6 +851,10 @@
             typeof partial.urgentEnabled === "boolean"
               ? partial.urgentEnabled
               : currentSettings.urgentEnabled,
+          chatEnabled:
+            typeof partial.chatEnabled === "boolean"
+              ? partial.chatEnabled
+              : currentSettings.chatEnabled,
           theme:
             typeof partial.theme === "string"
               ? partial.theme
@@ -1550,6 +1576,20 @@
           showToast(err.message || "Could not update");
         } finally {
           urgentToggle.disabled = false;
+        }
+      });
+
+      chatToggle.addEventListener("change", async () => {
+        const next = chatToggle.checked;
+        chatToggle.disabled = true;
+        try {
+          await saveSettings({ chatEnabled: next });
+          showToast(next ? "Chat button enabled" : "Chat button disabled");
+        } catch (err) {
+          chatToggle.checked = !next;
+          showToast(err.message || "Could not update");
+        } finally {
+          chatToggle.disabled = false;
         }
       });
 

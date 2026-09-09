@@ -66,6 +66,9 @@ ALTER TABLE kiosk_settings
 ALTER TABLE kiosk_settings
   ADD COLUMN IF NOT EXISTS display_show_clock BOOLEAN NOT NULL DEFAULT FALSE;
 
+ALTER TABLE kiosk_settings
+  ADD COLUMN IF NOT EXISTS chat_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+
 CREATE TABLE IF NOT EXISTS chat_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   status TEXT NOT NULL DEFAULT 'open'

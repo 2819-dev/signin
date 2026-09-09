@@ -1104,7 +1104,6 @@ html[data-theme="dark"] .chat-bubble.mine {
 
 .display-screen.is-embed,
 .display-screen.is-gallery,
-.display-screen.is-blackout,
 .display-screen.is-image,
 .display-screen.is-video {
   padding: 0;
@@ -1112,8 +1111,45 @@ html[data-theme="dark"] .chat-bubble.mine {
 }
 
 .display-screen.is-blackout {
-  background: #000;
-  border-color: #000;
+  min-height: min(78dvh, 820px);
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.mode-blackout .kiosk-shell {
+  min-height: 100dvh;
+  padding: 0;
+}
+
+body.mode-blackout .stage-display {
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+}
+
+body.mode-blackout .display-screen.is-blackout {
+  min-height: 100dvh;
+  border-radius: 0;
+}
+
+body.mode-blackout .sand-waves {
+  opacity: 1;
+}
+
+body.mode-blackout .sand-waves::after {
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(255, 255, 255, 0.28) 100%);
+}
+
+html[data-theme="dark"] body.mode-blackout .sand-waves::after {
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+body.mode-blackout .sand-waves path {
+  opacity: 1;
 }
 
 .display-screen.is-welcome .display-copy h1,

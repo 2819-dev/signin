@@ -3,6 +3,7 @@ const { getSql, json, requireAdmin } = require("./lib/db");
 const DEFAULTS = {
   isOpen: true,
   urgentEnabled: true,
+  chatEnabled: true,
   theme: "light",
   closedTitle: "Closed",
   closedMessage: "Not accepting visitors right now.",
@@ -64,6 +65,7 @@ function mapSettings(row) {
   return {
     isOpen: Boolean(row.is_open),
     urgentEnabled: row.urgent_enabled !== false,
+    chatEnabled: row.chat_enabled !== false,
     theme: normalizeTheme(row.theme),
     closedTitle: row.closed_title || DEFAULTS.closedTitle,
     closedMessage: row.closed_message || DEFAULTS.closedMessage,
@@ -89,9 +91,10 @@ async function ensureSettings(sql) {
   await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_image_url TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_link TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS display_show_clock BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE kiosk_settings ADD COLUMN IF NOT EXISTS chat_enabled BOOLEAN NOT NULL DEFAULT TRUE`;
 
   const rows = await sql`
-    SELECT is_open, urgent_enabled, theme, closed_title, closed_message,
+    SELECT is_open, urgent_enabled, chat_enabled, theme, closed_title, closed_message,
            display_mode, display_title, display_message, display_image_url, display_link, display_show_clock,
            updated_at
     FROM kiosk_settings
@@ -127,7 +130,7 @@ exports.handler = async (event) => {
 
       await ensureSettings(sql);
       const currentRows = await sql`
-        SELECT is_open, urgent_enabled, theme, closed_title, closed_message,
+        SELECT is_open, urgent_enabled, chat_enabled, theme, closed_title, closed_message,
                display_mode, display_title, display_message, display_image_url, display_link, display_show_clock,
                updated_at
         FROM kiosk_settings
@@ -142,6 +145,10 @@ exports.handler = async (event) => {
         typeof body.urgentEnabled === "boolean"
           ? body.urgentEnabled
           : current.urgentEnabled;
+      const chatEnabled =
+        typeof body.chatEnabled === "boolean"
+          ? body.chatEnabled
+          : current.chatEnabled;
       const theme = normalizeTheme(
         typeof body.theme === "string" ? body.theme : current.theme
       );
@@ -250,6 +257,7 @@ exports.handler = async (event) => {
         UPDATE kiosk_settings
         SET is_open = ${isOpen},
             urgent_enabled = ${urgentEnabled},
+            chat_enabled = ${chatEnabled},
             theme = ${theme},
             closed_title = ${closedTitle},
             closed_message = ${closedMessage},
@@ -261,7 +269,7 @@ exports.handler = async (event) => {
             display_show_clock = ${displayShowClock},
             updated_at = NOW()
         WHERE id = 1
-        RETURNING is_open, urgent_enabled, theme, closed_title, closed_message,
+        RETURNING is_open, urgent_enabled, chat_enabled, theme, closed_title, closed_message,
                   display_mode, display_title, display_message, display_image_url, display_link, display_show_clock,
                   updated_at
       `;
