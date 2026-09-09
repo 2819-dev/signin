@@ -1,8 +1,9 @@
-const { getStore } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("@netlify/blobs");
 const { json } = require("./lib/db");
 
-exports.handler = async () => {
+exports.handler = async (event) => {
   try {
+    connectLambda(event);
     const store = getStore("kiosk-media");
     const result = await store.getWithMetadata("display-image", {
       type: "arrayBuffer",

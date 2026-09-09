@@ -1,4 +1,4 @@
-const { getStore } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("@netlify/blobs");
 const { json, requireAdmin } = require("./lib/db");
 
 const MAX_BYTES = 4.5 * 1024 * 1024;
@@ -49,6 +49,7 @@ exports.handler = async (event) => {
   }
 
   try {
+    connectLambda(event);
     const store = getStore("kiosk-media");
     await store.set("display-image", buffer, {
       metadata: {
