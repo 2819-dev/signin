@@ -36,7 +36,10 @@ Visitors enter their **name** and **why they want to come in**. You get the requ
 |----------|--------|
 | `DATABASE_URL` | Your Neon connection string |
 | `ADMIN_SECRET` | A long random string only you know |
-| `SYNK_ADMIN_SECRET` | A **different** long random string for Synk Admin |
+| `SYNK_ADMIN_USERNAME` | Synk Admin username |
+| `SYNK_ADMIN_PASSWORD_HASH` | scrypt hash from `node scripts/generate-synk-admin-credentials.js` |
+| `SYNK_ADMIN_TOTP_SECRET` | Base32 TOTP secret for an authenticator app |
+| `SYNK_ADMIN_SESSION_SECRET` | Long random string used to sign admin sessions |
 
 3. Deploy. Publish directory is `public`; functions are in `netlify/functions`.
 
@@ -70,7 +73,8 @@ Synk Admin is deployed as its own Netlify project:
 - Site: https://synk-admin.netlify.app
 - Source: `synk-admin/` in this repo
 - APIs still run on the visitor kiosk site; Synk Admin proxies `/api/*` there
-- Secret: `SYNK_ADMIN_SECRET` on the **visitor** site (not duplicated on Synk Admin)
+- Auth: username + password + TOTP 2FA on the **visitor** site; Synk Admin stores a signed session token locally
+- Generate credentials: `node scripts/generate-synk-admin-credentials.js`
 
 Local:
 

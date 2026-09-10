@@ -22,23 +22,50 @@
     <main id="unlock-view" class="screen">
       <section class="card">
         <h1>Synk Admin</h1>
-        <p class="lede">Enter the admin secret.</p>
+        <p class="lede">Sign in with username, password, and authenticator code.</p>
         <p id="unlock-error" class="error hidden"></p>
         <form id="unlock-form" autocomplete="off">
           <div class="field">
-            <label for="secret">Secret</label>
+            <label for="username">Username</label>
             <input
-              id="secret"
+              id="username"
+              type="text"
+              required
+              autocomplete="username"
+              enterkeyhint="next"
+              autocapitalize="none"
+              spellcheck="false"
+            />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input
+              id="password"
               type="password"
               required
               autocomplete="current-password"
-              enterkeyhint="go"
+              enterkeyhint="next"
             />
           </div>
-          <button class="btn" type="submit">Unlock</button>
+          <div class="field">
+            <label for="totp">2FA code</label>
+            <input
+              id="totp"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="6"
+              minlength="6"
+              required
+              autocomplete="one-time-code"
+              enterkeyhint="go"
+              placeholder="6-digit code"
+            />
+          </div>
+          <button class="btn" type="submit" id="unlock-btn">Sign in</button>
         </form>
         <p class="muted" style="margin-top:14px;font-size:0.82rem;">
-          Uses <code>SYNK_ADMIN_SECRET</code>. Separate from visitor admin.
+          Username + password + TOTP. Session stays on this device until you lock or it expires.
         </p>
       </section>
     </main>
@@ -229,7 +256,7 @@
 
         <section class="panel">
           <h2>Session</h2>
-          <p class="muted" style="margin:0 0 12px;">Secret stays on this device until you lock.</p>
+          <p class="muted" style="margin:0 0 12px;">Signed-in session stays on this device until you lock or it expires.</p>
           <button class="btn btn-danger" type="button" id="lock-btn-settings">Lock</button>
         </section>
       </div>
@@ -293,10 +320,10 @@
       const cameraSideSelect = document.getElementById("camera-side");
       const cameraSideStatus = document.getElementById("camera-side-status");
 
-      const STORAGE_KEY = "synk_admin_secret";
+      const STORAGE_KEY = "synk_admin_session";
       const PANE_KEY = "synk_admin_pane";
 
-      let secret = localStorage.getItem(STORAGE_KEY) || "";
+      let sessionToken = localStorage.getItem(STORAGE_KEY) || "";
       let synkProfilesCache = [];
       let synkAppsCache = [];
       let synkEventsCache = [];
@@ -341,7 +368,7 @@
       function adminHeaders() {
         return {
           "Content-Type": "application/json",
-          "x-synk-admin-secret": secret,
+          Authorization: `Bearer ${sessionToken}`,
         };
       }
 
@@ -355,13 +382,18 @@
       }
 
       function lockAdmin() {
-        secret = "";
+        sessionToken = "";
         localStorage.removeItem(STORAGE_KEY);
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = null;
         panelView.classList.add("hidden");
         unlockView.classList.remove("hidden");
-        document.getElementById("secret").value = "";
+        const userInput = document.getElementById("username");
+        const passInput = document.getElementById("password");
+        const totpInput = document.getElementById("totp");
+        if (passInput) passInput.value = "";
+        if (totpInput) totpInput.value = "";
+        if (userInput && !userInput.value) userInput.focus();
       }
 
       function synkPolicyLabel(policy) {
@@ -604,11 +636,11 @@
         await Promise.all([refreshSynkProfiles(), refreshSynkApps(), refreshSettings()]);
       }
 
-      async function unlockWithSecret(nextSecret) {
-        secret = String(nextSecret || "").trim();
-        if (!secret) throw new Error("Enter the Synk Admin secret");
+      async function openAdminSession(token) {
+        sessionToken = String(token || "").trim();
+        if (!sessionToken) throw new Error("Missing session");
         await refreshSettings();
-        localStorage.setItem(STORAGE_KEY, secret);
+        localStorage.setItem(STORAGE_KEY, sessionToken);
         unlockView.classList.add("hidden");
         panelView.classList.remove("hidden");
         setAdminPane(localStorage.getItem(PANE_KEY) || "overview");
@@ -620,15 +652,39 @@
         }, 15000);
       }
 
+      async function loginWithCredentials({ username, password, totp }) {
+        const res = await fetch("/api/synk-admin-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password, totp }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not sign in");
+        if (!data.token) throw new Error("Login succeeded but no session was returned");
+        await openAdminSession(data.token);
+      }
+
       unlockForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         unlockError.classList.add("hidden");
+        const unlockBtn = document.getElementById("unlock-btn");
+        if (unlockBtn) unlockBtn.disabled = true;
         try {
-          await unlockWithSecret(document.getElementById("secret").value);
+          await loginWithCredentials({
+            username: document.getElementById("username").value.trim(),
+            password: document.getElementById("password").value,
+            totp: document.getElementById("totp").value.trim(),
+          });
+          document.getElementById("password").value = "";
+          document.getElementById("totp").value = "";
         } catch (err) {
-          unlockError.textContent = err.message || "Could not unlock";
+          unlockError.textContent = err.message || "Could not sign in";
           unlockError.classList.remove("hidden");
-          secret = "";
+          sessionToken = "";
+          document.getElementById("totp").value = "";
+          document.getElementById("totp").focus();
+        } finally {
+          if (unlockBtn) unlockBtn.disabled = false;
         }
       });
 
@@ -960,14 +1016,14 @@
         })
         .catch(() => {});
 
-      if (secret) {
-        unlockWithSecret(secret).catch(() => {
+      if (sessionToken) {
+        openAdminSession(sessionToken).catch(() => {
           lockAdmin();
         });
       }
 
       document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible" && secret) {
+        if (document.visibilityState === "visible" && sessionToken) {
           refreshAll().catch(() => {});
         }
       });

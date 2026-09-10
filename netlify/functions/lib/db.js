@@ -1,4 +1,9 @@
 const { neon } = require("@neondatabase/serverless");
+const {
+  authConfigured,
+  extractSessionToken,
+  verifySessionToken,
+} = require("./synk-admin-auth");
 
 function getSql() {
   const url = process.env.DATABASE_URL;
@@ -41,29 +46,23 @@ function requireAdmin(event) {
 }
 
 function requireSynkAdmin(event) {
-  const expected = process.env.SYNK_ADMIN_SECRET;
-  if (!expected) {
+  if (!authConfigured()) {
     return {
       ok: false,
-      response: json(500, { error: "SYNK_ADMIN_SECRET is not configured" }),
+      response: json(500, {
+        error:
+          "Synk Admin auth is not configured (username / password hash / TOTP / session secret)",
+      }),
     };
   }
 
-  const headers = event.headers || {};
-  const header =
-    headers["x-synk-admin-secret"] || headers["X-Synk-Admin-Secret"] || "";
-  const querySecret =
-    event.queryStringParameters && event.queryStringParameters.secret
-      ? event.queryStringParameters.secret
-      : null;
-  const provided = header || querySecret;
-
-  // Synk Admin uses SYNK_ADMIN_SECRET only (not visitor ADMIN_SECRET).
-  if (!provided || provided !== expected) {
+  const token = extractSessionToken(event);
+  const claims = verifySessionToken(token);
+  if (!claims) {
     return { ok: false, response: json(401, { error: "Unauthorized" }) };
   }
 
-  return { ok: true };
+  return { ok: true, claims };
 }
 
 function mapRow(row) {
