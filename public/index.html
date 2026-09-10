@@ -291,6 +291,7 @@
             />
             <button class="btn btn-primary btn-compact" type="submit">Send</button>
           </form>
+          <p id="kiosk-chat-closed" class="chat-closed-note hidden" role="status">Chat closed</p>
           <button class="btn btn-secondary" type="button" id="chat-back-gate-btn">Show QR again</button>
         </div>
       </div>
@@ -1387,6 +1388,7 @@
       const kioskChatMessages = document.getElementById("kiosk-chat-messages");
       const kioskChatForm = document.getElementById("kiosk-chat-form");
       const kioskChatInput = document.getElementById("kiosk-chat-input");
+      const kioskChatClosed = document.getElementById("kiosk-chat-closed");
       const CHAT_SESSION_KEY = "kiosk_chat_session_id";
       const CHAT_NAME_KEY = "kiosk_chat_visitor_name";
       let chatSessionId = sessionStorage.getItem(CHAT_SESSION_KEY) || "";
@@ -1472,6 +1474,12 @@
         return data;
       }
 
+      function setKioskChatClosed(isClosed) {
+        if (kioskChatForm) kioskChatForm.classList.toggle("hidden", Boolean(isClosed));
+        if (kioskChatClosed) kioskChatClosed.classList.toggle("hidden", !isClosed);
+        if (kioskChatInput) kioskChatInput.disabled = Boolean(isClosed);
+      }
+
       async function pollKioskChat() {
         if (!chatSessionId || chatModal.classList.contains("hidden") || chatPanel.classList.contains("hidden")) {
           return;
@@ -1481,6 +1489,7 @@
           if (!res.ok) return;
           const data = await res.json();
           if (data.session) setChatIdentity(data.session);
+          setKioskChatClosed(data.session && data.session.status === "closed");
           renderKioskChat(data.messages || []);
         } catch (_) {}
       }
@@ -1520,7 +1529,11 @@
         showChatStep("chat");
         pollKioskChat();
         if (!chatPollTimer) chatPollTimer = setInterval(pollKioskChat, 2500);
-        setTimeout(() => kioskChatInput.focus(), 50);
+        setTimeout(() => {
+          if (kioskChatInput && !kioskChatInput.disabled && !kioskChatForm.classList.contains("hidden")) {
+            kioskChatInput.focus();
+          }
+        }, 50);
       }
 
       chatFab.addEventListener("click", openChatModal);

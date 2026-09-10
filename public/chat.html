@@ -68,6 +68,7 @@
         />
         <button class="btn btn-primary btn-compact" type="submit" id="chat-send">Send</button>
       </form>
+      <p id="chat-closed-note" class="chat-closed-note hidden" role="status">Chat closed</p>
     </main>
 
     <script>
@@ -83,6 +84,7 @@
       const nameForm = document.getElementById("phone-chat-name-form");
       const nameInput = document.getElementById("phone-chat-name-input");
       const headingEl = document.getElementById("chat-heading");
+      const closedNote = document.getElementById("chat-closed-note");
       let lastKey = "";
       let closed = false;
       let visitorName = "";
@@ -103,13 +105,16 @@
         namePanel.classList.add("hidden");
         messagesEl.classList.remove("hidden");
         form.classList.toggle("hidden", closed);
+        if (closedNote) closedNote.classList.toggle("hidden", !closed);
         headingEl.textContent = visitorName ? `Hi, ${visitorName}` : "Message us";
+        statusEl.textContent = closed ? "Chat closed" : "Live";
       }
 
       function showNameGate() {
         namePanel.classList.remove("hidden");
         messagesEl.classList.add("hidden");
         form.classList.add("hidden");
+        if (closedNote) closedNote.classList.add("hidden");
         statusEl.textContent = "Name needed";
         setTimeout(() => nameInput.focus(), 50);
       }
@@ -145,7 +150,7 @@
           if (!res.ok) throw new Error(data.error || "Could not load chat");
           closed = data.session && data.session.status === "closed";
           visitorName = (data.session && data.session.visitorName) || "";
-          statusEl.textContent = closed ? "Closed" : "Live";
+          statusEl.textContent = closed ? "Chat closed" : "Live";
           if (!visitorName) {
             showNameGate();
           } else {

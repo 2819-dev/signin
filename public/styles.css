@@ -2528,3 +2528,16 @@ html[data-theme="dark"] .pill-pending {
     transform: none;
   }
 }
+
+
+.chat-closed-note {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--fill, #f3f5f8);
+  color: var(--ink-faint, #5b6b82);
+  text-align: center;
+  font-size: 0.92rem;
+  font-weight: 600;
+}

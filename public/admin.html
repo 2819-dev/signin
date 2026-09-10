@@ -178,6 +178,7 @@
             />
             <button class="btn btn-primary btn-compact" type="submit" id="admin-chat-send">Send</button>
           </form>
+          <p id="admin-chat-closed" class="chat-closed-note hidden" role="status">Chat closed</p>
         </section>
 
         <p class="section-label">Known faces</p>
@@ -474,6 +475,7 @@
       const adminChatForm = document.getElementById("admin-chat-form");
       const adminChatInput = document.getElementById("admin-chat-input");
       const adminChatSend = document.getElementById("admin-chat-send");
+      const adminChatClosed = document.getElementById("admin-chat-closed");
       const chatCloseSessionBtn = document.getElementById("chat-close-session-btn");
       const faceEnrollForm = document.getElementById("face-enroll-form");
       const faceEnrollName = document.getElementById("face-enroll-name");
@@ -1321,11 +1323,11 @@
         } else {
           chatThreadStatus.textContent = "Live · reply below";
         }
-        adminChatForm.classList.toggle("hidden", data.session && data.session.status === "closed");
-        chatCloseSessionBtn.textContent =
-          data.session && data.session.status === "closed" ? "Reopen chat" : "Close chat";
-        chatCloseSessionBtn.dataset.status =
-          data.session && data.session.status === "closed" ? "closed" : "open";
+        const isClosed = Boolean(data.session && data.session.status === "closed");
+        adminChatForm.classList.toggle("hidden", isClosed);
+        if (adminChatClosed) adminChatClosed.classList.toggle("hidden", !isClosed);
+        chatCloseSessionBtn.textContent = isClosed ? "Reopen chat" : "Close chat";
+        chatCloseSessionBtn.dataset.status = isClosed ? "closed" : "open";
         renderAdminChatMessages(data.messages || []);
       }
 
