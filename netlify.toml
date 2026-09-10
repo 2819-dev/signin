@@ -23,13 +23,21 @@
 
 [[redirects]]
   from = "/synk-join"
-  to = "/synk-join.html"
-  status = 200
+  to = "https://synkid.netlify.app/"
+  status = 302
+  force = true
 
 [[redirects]]
   from = "/join"
-  to = "/synk-join.html"
-  status = 200
+  to = "https://synkid.netlify.app/"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/synk-join.html"
+  to = "https://synkid.netlify.app/"
+  status = 302
+  force = true
 
 [[redirects]]
   from = "/synk-admin"

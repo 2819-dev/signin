@@ -11,6 +11,7 @@ Visitors enter their **name** and **why they want to come in**. You get the requ
 | `/` | iPad (kiosk) | Sign-in form → waits → shows admitted / declined |
 | `/admin` | Phone | Live request list, admit / decline, browser alerts |
 | `/synk` | Any | Public Synk ID face verify |
+| [synkid.netlify.app](https://synkid.netlify.app/) | Phone / tablet / desktop | Synk ID membership signup (separate site) |
 | [synk-admin.netlify.app](https://synk-admin.netlify.app/) | Phone / desktop | Synk Admin (separate site; username + password + 2FA) |
 
 ## Stack
@@ -76,7 +77,7 @@ Synk Admin is deployed as its own Netlify project:
 - Auth: username + password + TOTP 2FA on the **visitor** site; Synk Admin keeps a signed, **revocable** session locally
 - **Stay signed in** is per device (about 2 months). Turn it off on shared tablets so each visit needs a fresh login
 - Manual Lock always signs out; there is no idle auto-lock and no short forced expiry while remembered
-- Public member join requests: `/synk-join` → review/accept in Synk Admin → Requests
+- Public member join requests: [synkid.netlify.app](https://synkid.netlify.app/) → review/accept in Synk Admin → Requests
 - Member photos are served with short-lived signed URLs
 - Active Synk passes can be listed and revoked from Overview / Members
 - Activity is filterable and exportable as CSV
@@ -87,4 +88,18 @@ Local:
 ```bash
 cd synk-admin && npm run build
 npx netlify deploy --prod --filter synk-admin
+```
+
+## Separate Synk ID signup site
+
+Member signup is deployed as its own Netlify project:
+
+- Site: https://synkid.netlify.app
+- Source: `synk-id/` in this repo
+- APIs still run on the visitor kiosk site; Synk ID proxies `/api/*` there
+- Optimized for phones, tablets, and desktops (camera capture, large tap targets, safe areas)
+- Legacy paths `/join` and `/synk-join` on the visitor site redirect here
+
+```bash
+npm run deploy:synk-id
 ```

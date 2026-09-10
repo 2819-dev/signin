@@ -5,6 +5,7 @@
  * - Visitor kiosk
  * - Visitor admin
  * - Synk Admin
+ * - Synk ID (signup)
  */
 const fs = require("fs");
 const path = require("path");
@@ -123,6 +124,56 @@ function synkAdminSvg() {
 </svg>`;
 }
 
+function synkIdSvg() {
+  // Iris motif + person/join badge (membership signup)
+  const dots = [];
+  const cx = 78;
+  const cy = 78;
+  const rings = [
+    { r: 10, n: 8, o: 0.95 },
+    { r: 18, n: 12, o: 0.9 },
+    { r: 26, n: 16, o: 0.85 },
+    { r: 34, n: 20, o: 0.8 },
+    { r: 42, n: 24, o: 0.75 },
+    { r: 50, n: 28, o: 0.7 },
+    { r: 58, n: 32, o: 0.62 },
+  ];
+  for (const ring of rings) {
+    for (let i = 0; i < ring.n; i += 1) {
+      const a = (Math.PI * 2 * i) / ring.n - Math.PI / 2;
+      const deg = ((a + Math.PI / 2) * 180) / Math.PI;
+      if (ring.r >= 42 && deg > 20 && deg < 95) continue;
+      const x = cx + Math.cos(a) * ring.r;
+      const y = cy + Math.sin(a) * ring.r;
+      dots.push(
+        `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="3.1" fill="#FFFFFF" fill-opacity="${ring.o}"/>`
+      );
+    }
+  }
+  dots.push(`<circle cx="${cx}" cy="${cy}" r="3.4" fill="#FFFFFF"/>`);
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 180 180">
+  <defs>
+    <linearGradient id="bg" x1="10" y1="0" x2="170" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4A86FF"/>
+      <stop offset="1" stop-color="#1E4FD6"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" fill="url(#bg)"/>
+  <circle cx="40" cy="36" r="40" fill="#ffffff" fill-opacity="0.12"/>
+  ${dots.join("\n  ")}
+
+  <!-- join / person badge -->
+  <circle cx="132" cy="132" r="28" fill="#0B1B4A"/>
+  <circle cx="132" cy="132" r="24" fill="#ffffff"/>
+  <circle cx="132" cy="122" r="8" fill="#2B6BFF"/>
+  <path d="M116 148c0-9.4 7.2-16 16-16s16 6.6 16 16" fill="#2B6BFF"/>
+  <circle cx="148" cy="118" r="9" fill="#1E4FD6"/>
+  <path d="M148 113 v10 M143 118 h10" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>
+</svg>`;
+}
+
 async function writePng(svg, outPath) {
   const buf = await sharp(Buffer.from(svg))
     .resize(SIZE, SIZE)
@@ -138,10 +189,12 @@ async function main() {
   await writePng(kioskSvg(), path.join(root, "public", "apple-touch-icon.png"));
   await writePng(visitorAdminSvg(), path.join(root, "public", "admin-touch-icon.png"));
   await writePng(synkAdminSvg(), path.join(root, "synk-admin", "src", "apple-touch-icon.png"));
+  await writePng(synkIdSvg(), path.join(root, "synk-id", "src", "apple-touch-icon.png"));
   // also drop a preview copy under artifacts
   await writePng(kioskSvg(), path.join("/opt/cursor/artifacts", "kiosk-apple-touch-icon.png"));
   await writePng(visitorAdminSvg(), path.join("/opt/cursor/artifacts", "admin-apple-touch-icon.png"));
   await writePng(synkAdminSvg(), path.join("/opt/cursor/artifacts", "synk-admin-apple-touch-icon.png"));
+  await writePng(synkIdSvg(), path.join("/opt/cursor/artifacts", "synk-id-apple-touch-icon.png"));
 }
 
 main().catch((err) => {

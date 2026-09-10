@@ -7,7 +7,8 @@ const root = path.join(__dirname, "..");
 const publicDir = path.join(root, "public");
 const sourcePublic = path.join(root, "..", "public");
 const sourceHtml = path.join(root, "src", "index.html");
-const sourceCss = path.join(root, "src", "admin.css");
+const sourceCss = path.join(root, "src", "join.css");
+const sourceManifest = path.join(root, "src", "manifest.webmanifest");
 const touchIconSrc = path.join(root, "src", "apple-touch-icon.png");
 
 fs.mkdirSync(publicDir, { recursive: true });
@@ -27,10 +28,13 @@ for (const name of sharedAssets) {
 }
 
 if (!fs.existsSync(sourceCss)) throw new Error(`Missing CSS: ${sourceCss}`);
-fs.copyFileSync(sourceCss, path.join(publicDir, "admin.css"));
+fs.copyFileSync(sourceCss, path.join(publicDir, "join.css"));
 
 if (!fs.existsSync(touchIconSrc)) throw new Error(`Missing touch icon: ${touchIconSrc}`);
 fs.copyFileSync(touchIconSrc, path.join(publicDir, "apple-touch-icon.png"));
+
+if (!fs.existsSync(sourceManifest)) throw new Error(`Missing manifest: ${sourceManifest}`);
+fs.copyFileSync(sourceManifest, path.join(publicDir, "manifest.webmanifest"));
 
 if (!fs.existsSync(sourceHtml)) throw new Error(`Missing page: ${sourceHtml}`);
 let html = fs.readFileSync(sourceHtml, "utf8");
@@ -38,12 +42,9 @@ let html = fs.readFileSync(sourceHtml, "utf8");
 const visitorOrigin =
   process.env.VISITOR_SITE_ORIGIN || "https://visitor-signin-kiosk.netlify.app";
 
-const synkIdOrigin = process.env.SYNK_ID_ORIGIN || "https://synkid.netlify.app";
-
 html = html
   .replace(/href="\/synk"/g, `href="${visitorOrigin}/synk"`)
-  .replace(/href="\/admin"/g, `href="${visitorOrigin}/admin"`)
-  .replace(/href="\/synk-join"/g, `href="${synkIdOrigin}/"`);
+  .replace(/__VISITOR_ORIGIN__/g, visitorOrigin);
 
 fs.writeFileSync(path.join(publicDir, "index.html"), html);
-console.log(`Prepared Synk Admin public/ (visitor origin: ${visitorOrigin})`);
+console.log(`Prepared Synk ID public/ (visitor origin: ${visitorOrigin})`);

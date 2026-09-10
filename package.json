@@ -7,7 +7,8 @@
     "prebuild": "node scripts/write-version.js",
     "dev": "node scripts/write-version.js && netlify dev",
     "build": "node scripts/write-version.js",
-    "deploy:synk-admin": "bash scripts/deploy-synk-admin.sh"
+    "deploy:synk-admin": "bash scripts/deploy-synk-admin.sh",
+    "deploy:synk-id": "bash scripts/deploy-synk-id.sh"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",

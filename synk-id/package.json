@@ -1,0 +1,10 @@
+{
+  "name": "synk-id",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Synk ID signup Netlify site",
+  "scripts": {
+    "build": "node scripts/prepare.js",
+    "prepare:public": "node scripts/prepare.js"
+  }
+}

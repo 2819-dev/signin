@@ -1,0 +1,56 @@
+[build]
+  publish = "public"
+  command = "node scripts/prepare.js"
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://visitor-signin-kiosk.netlify.app/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/synk"
+  to = "https://visitor-signin-kiosk.netlify.app/synk"
+  status = 302
+
+[[redirects]]
+  from = "/synk-join"
+  to = "/"
+  status = 302
+
+[[redirects]]
+  from = "/join"
+  to = "/"
+  status = 302
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
+
+[[headers]]
+  for = "/version.json"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
+    Content-Type = "application/json; charset=utf-8"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate, max-age=0"
+    Content-Type = "application/manifest+json; charset=utf-8"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "no-referrer"
+    X-Content-Type-Options = "nosniff"
+    Permissions-Policy = "camera=(self), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; img-src 'self' data: blob: https://visitor-signin-kiosk.netlify.app; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://visitor-signin-kiosk.netlify.app https://cdn.jsdelivr.net; font-src 'self' data:; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    Cache-Control = "no-cache, must-revalidate, max-age=0"
