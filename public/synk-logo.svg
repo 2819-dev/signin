@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Synk">
   <title>Synk</title>
-  <rect x="18.00" y="40.00" width="92.00" height="18.00" rx="9.00" fill="#041A55"/>
-  <rect x="18.00" y="70.00" width="92.00" height="18.00" rx="9.00" fill="#041A55"/>
+  <path d="M 30.66 29.47 A 48.00 48.00 0 1 1 30.66 98.53" fill="none" stroke="#041A55" stroke-width="12.00" stroke-linecap="round"/>
+  <path d="M 85.53 86.30 A 31.00 31.00 0 1 1 85.53 41.70" fill="none" stroke="#041A55" stroke-width="12.00" stroke-linecap="round"/>
+  <path d="M 54.27 53.93 A 14.00 14.00 0 1 1 54.27 74.07" fill="none" stroke="#041A55" stroke-width="12.00" stroke-linecap="round"/>
 </svg>

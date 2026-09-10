@@ -1,8 +1,8 @@
 "use strict";
 
 /**
- * Shared Synk mark — two horizontal sync bars.
- * Abstract, modern, minimal. Not a letterform.
+ * Shared Synk mark — abstract concentric arcs (circle motif).
+ * Single color. No letterforms, gradients, or glass effects.
  */
 const INK = "#041A55";
 const ACCENT = "#041A55";
@@ -15,16 +15,40 @@ function synkLogoSvg({
 } = {}) {
   void accent;
   const s = size / 128;
+  const cx = 64 * s;
+  const cy = 64 * s;
+  const stroke = 12 * s;
 
-  // Two parallel rounded bars — reads as "sync", never as "S"
-  const bar = (x, y, w, h) =>
-    `<rect x="${(x * s).toFixed(2)}" y="${(y * s).toFixed(2)}" width="${(w * s).toFixed(2)}" height="${(h * s).toFixed(2)}" rx="${((h * s) / 2).toFixed(2)}" fill="${ink}"/>`;
+  // Alternating open sides on concentric arcs
+  const arcs = [
+    { r: 48 * s, gapAt: 180 },
+    { r: 31 * s, gapAt: 0 },
+    { r: 14 * s, gapAt: 180 },
+  ];
+  const sweep = 268;
+
+  function arcPath(r, gapAtDeg) {
+    const startDeg = gapAtDeg + (360 - sweep) / 2;
+    const start = (startDeg * Math.PI) / 180;
+    const end = ((startDeg + sweep) * Math.PI) / 180;
+    const x1 = cx + r * Math.cos(start);
+    const y1 = cy + r * Math.sin(start);
+    const x2 = cx + r * Math.cos(end);
+    const y2 = cy + r * Math.sin(end);
+    return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r.toFixed(2)} ${r.toFixed(2)} 0 1 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+  }
+
+  const paths = arcs
+    .map(
+      (a) =>
+        `<path d="${arcPath(a.r, a.gapAt)}" fill="none" stroke="${ink}" stroke-width="${stroke.toFixed(2)}" stroke-linecap="round"/>`
+    )
+    .join("\n  ");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="${title}">
   <title>${title}</title>
-  ${bar(18, 40, 92, 18)}
-  ${bar(18, 70, 92, 18)}
+  ${paths}
 </svg>
 `;
 }
