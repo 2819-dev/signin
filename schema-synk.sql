@@ -91,6 +91,19 @@ CREATE INDEX IF NOT EXISTS synk_passes_active_idx
 
 ALTER TABLE synk_passes ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
 
+CREATE TABLE IF NOT EXISTS synk_admins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  username TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  totp_secret TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS synk_admins_username_idx
+  ON synk_admins (username);
+
 CREATE TABLE IF NOT EXISTS synk_admin_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username TEXT NOT NULL,

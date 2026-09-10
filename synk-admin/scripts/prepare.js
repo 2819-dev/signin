@@ -14,7 +14,6 @@ fs.mkdirSync(publicDir, { recursive: true });
 
 const sharedAssets = [
   "face.js",
-  "force-refresh.js",
   "synk-logo.svg",
   "version.json",
 ];
@@ -25,6 +24,10 @@ for (const name of sharedAssets) {
   if (!fs.existsSync(from)) throw new Error(`Missing shared asset: ${from}`);
   fs.copyFileSync(from, to);
 }
+
+const localForceRefresh = path.join(root, "src", "force-refresh.js");
+if (!fs.existsSync(localForceRefresh)) throw new Error(`Missing force-refresh: ${localForceRefresh}`);
+fs.copyFileSync(localForceRefresh, path.join(publicDir, "force-refresh.js"));
 
 if (!fs.existsSync(sourceCss)) throw new Error(`Missing CSS: ${sourceCss}`);
 fs.copyFileSync(sourceCss, path.join(publicDir, "admin.css"));

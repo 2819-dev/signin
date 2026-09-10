@@ -20,7 +20,7 @@ exports.handler = async (event) => {
     const username = auth.claims.sub || expectedUsername();
 
     if (event.httpMethod === "GET") {
-      const sessions = await listSessions(sql, username);
+      const sessions = await listSessions(sql, null);
       const marked = sessions.map((s) => ({
         ...s,
         current: String(s.id) === String(auth.claims.sid),

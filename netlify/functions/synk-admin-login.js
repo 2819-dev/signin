@@ -34,7 +34,7 @@ exports.handler = async (event) => {
     if (!authConfigured()) {
       return json(500, {
         error:
-          "Synk Admin login is not configured. Set SYNK_ADMIN_USERNAME, SYNK_ADMIN_PASSWORD_HASH, SYNK_ADMIN_TOTP_SECRET, and SYNK_ADMIN_SESSION_SECRET.",
+          "Synk Admin login is not configured. Set SYNK_ADMIN_SESSION_SECRET (and bootstrap admin env vars on first setup).",
       });
     }
 

@@ -53,8 +53,7 @@ async function requireSynkAdmin(event) {
     return {
       ok: false,
       response: json(500, {
-        error:
-          "Synk Admin auth is not configured (username / password hash / TOTP / session secret)",
+        error: "Synk Admin auth is not configured (set SYNK_ADMIN_SESSION_SECRET)",
       }),
     };
   }

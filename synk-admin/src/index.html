@@ -65,12 +65,12 @@
             />
           </div>
           <p class="muted" style="margin:4px 0 14px;font-size:0.82rem;">
-            You stay signed in on this device until you lock or revoke the session.
-          </p>
+        You stay signed in on this device until you lock or revoke the session — including after app updates.
+      </p>
           <button class="btn" type="submit" id="unlock-btn">Sign in</button>
         </form>
         <p class="muted" style="margin-top:14px;font-size:0.82rem;">
-          Two-factor authentication required. Use Lock to sign out.
+          Two-factor authentication required. Use Lock to sign out. Manage admins in Settings after sign-in.
         </p>
       </section>
     </main>
@@ -315,6 +315,56 @@
         </section>
 
         <section class="panel">
+          <h2>Your password</h2>
+          <p class="muted" style="margin:0 0 12px;">
+            Change the password for the account you’re signed in with. You’ll need your current 2FA code.
+          </p>
+          <form id="change-password-form" class="synk-enroll-form" autocomplete="off">
+            <div class="field">
+              <label for="current-password">Current password</label>
+              <input id="current-password" type="password" required autocomplete="current-password" />
+            </div>
+            <div class="field">
+              <label for="new-password">New password</label>
+              <input id="new-password" type="password" minlength="8" required autocomplete="new-password" />
+            </div>
+            <div class="field">
+              <label for="new-password-totp">2FA code</label>
+              <input id="new-password-totp" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" minlength="6" required autocomplete="one-time-code" />
+            </div>
+            <button class="btn" type="submit" id="change-password-btn">Update password</button>
+            <p id="change-password-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
+          </form>
+        </section>
+
+        <section class="panel">
+          <h2>Admins</h2>
+          <p class="muted" style="margin:0 0 12px;">
+            Add Synk Admin users. Each person gets their own password and authenticator app setup.
+          </p>
+          <form id="add-admin-form" class="synk-enroll-form" autocomplete="off">
+            <div class="field">
+              <label for="new-admin-username">Username</label>
+              <input id="new-admin-username" type="text" maxlength="64" required autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="field">
+              <label for="new-admin-password">Temporary password</label>
+              <input id="new-admin-password" type="password" minlength="8" required autocomplete="new-password" />
+            </div>
+            <button class="btn btn-secondary" type="submit" id="add-admin-btn">Add admin</button>
+            <p id="add-admin-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
+          </form>
+          <div id="admin-totp-box" class="pass-box hidden" style="margin-top:12px;">
+            <div class="muted" style="font-size:0.78rem;">Authenticator setup (show once)</div>
+            <strong id="admin-totp-user">—</strong>
+            <div class="code" id="admin-totp-secret" style="margin-top:8px;word-break:break-all;"></div>
+            <p class="muted" style="margin:8px 0 0;font-size:0.82rem;" id="admin-totp-url"></p>
+          </div>
+          <div id="synk-admins" class="synk-sessions" style="margin-top:14px;"></div>
+          <p id="synk-admins-empty" class="chat-empty-note">No admins loaded.</p>
+        </section>
+
+        <section class="panel">
           <h2>Security</h2>
           <p class="muted" style="margin:0 0 12px;">
             Active sessions can be revoked from any signed-in device.
@@ -399,6 +449,9 @@
       const synkBusinessesEl = document.getElementById("synk-businesses");
       const synkBusinessesEmpty = document.getElementById("synk-businesses-empty");
       let synkBusinessesCache = [];
+      const synkAdminsEl = document.getElementById("synk-admins");
+      const synkAdminsEmpty = document.getElementById("synk-admins-empty");
+      let synkAdminsCache = [];
       const synkEventsEl = document.getElementById("synk-events");
       const synkEventsEmpty = document.getElementById("synk-events-empty");
       const overviewEventsEl = document.getElementById("overview-events");
@@ -519,6 +572,7 @@
         localStorage.setItem(PANE_KEY, next);
         if (next === "settings") {
           refreshSessions().catch(() => {});
+          refreshSynkAdmins().catch(() => {});
         }
         if (next === "activity") {
           refreshSynkActivity().catch(() => {});
@@ -819,6 +873,7 @@
                   ${session.revoked ? `<span class="synk-badge">Revoked</span>` : ""}
                 </div>
                 <div class="synk-session-meta">
+                  ${session.username ? `${escapeHtml(session.username)} · ` : ""}
                   ${escapeHtml(shortUa(session.userAgent))}
                   <br />
                   Last seen ${escapeHtml(when ? formatTime(when) : "—")}
@@ -890,6 +945,63 @@
         synkSessionsCache = data.sessions || [];
         updateOverviewSubtitle();
         renderSessions();
+        return data;
+      }
+
+      function renderSynkAdmins() {
+        if (!synkAdminsEl) return;
+        if (!synkAdminsCache.length) {
+          synkAdminsEl.innerHTML = "";
+          if (synkAdminsEmpty) {
+            synkAdminsEmpty.classList.remove("hidden");
+            synkAdminsEmpty.textContent = "No admins yet.";
+          }
+          return;
+        }
+        if (synkAdminsEmpty) synkAdminsEmpty.classList.add("hidden");
+        synkAdminsEl.innerHTML = synkAdminsCache
+          .map((admin) => {
+            const isYou =
+              normalizeLoose(admin.username) === normalizeLoose(sessionUsername);
+            return `
+              <article class="synk-session-row" data-admin-id="${escapeHtml(admin.id)}">
+                <div class="synk-session-top">
+                  <strong>${escapeHtml(admin.username)}</strong>
+                  ${isYou ? `<span class="synk-badge">You</span>` : ""}
+                  ${admin.enabled ? "" : `<span class="synk-badge">Paused</span>`}
+                </div>
+                <div class="synk-session-meta">
+                  Added ${escapeHtml(admin.createdAt ? formatTime(admin.createdAt) : "—")}
+                </div>
+                ${
+                  isYou
+                    ? ""
+                    : `<div class="btn-row" style="margin-top:8px;">
+                        <button class="btn btn-secondary btn-compact" type="button" data-admin-action="toggle">
+                          ${admin.enabled ? "Pause" : "Enable"}
+                        </button>
+                        <button class="btn btn-danger btn-compact" type="button" data-admin-action="delete">Remove</button>
+                      </div>`
+                }
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      function normalizeLoose(value) {
+        return String(value || "")
+          .trim()
+          .toLowerCase();
+      }
+
+      async function refreshSynkAdmins() {
+        const res = await fetch("/api/synk-admin-users", { headers: adminHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load admins");
+        if (data.username) sessionUsername = data.username;
+        synkAdminsCache = data.admins || [];
+        renderSynkAdmins();
         return data;
       }
 
@@ -1054,7 +1166,11 @@
       async function refreshSettings() {
         const res = await fetch("/api/synk-settings", { headers: adminHeaders() });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "Could not load settings");
+        if (!res.ok) {
+          const err = new Error(data.error || "Could not load settings");
+          err.status = res.status;
+          throw err;
+        }
         const side = ["left", "right", "center"].includes(String(data.cameraSide || "").toLowerCase())
           ? String(data.cameraSide).toLowerCase()
           : "left";
@@ -1110,15 +1226,29 @@
       async function openAdminSession(token, meta = {}) {
         sessionToken = String(token || "").trim();
         if (!sessionToken) throw new Error("Missing session");
-        await refreshSettings();
+        // Persist immediately so deploys / soft reloads keep you signed in.
         writeStoredSession({ token: sessionToken });
         unlockView.classList.add("hidden");
         panelView.classList.remove("hidden");
         updateOverviewSubtitle();
         setAdminPane(localStorage.getItem(PANE_KEY) || "overview");
-        await Promise.all([refreshSynkProfiles(), refreshSynkApps(), refreshSynkActivity()]);
+
+        try {
+          await refreshSettings();
+        } catch (err) {
+          if (err && (err.status === 401 || /unauthorized|session revoked/i.test(err.message || ""))) {
+            throw err;
+          }
+          // Transient API blip (common during deploys) — stay signed in.
+          showToast("Still signed in — reconnecting…");
+        }
+
+        refreshSynkProfiles().catch(() => {});
+        refreshSynkApps().catch(() => {});
+        refreshSynkActivity().catch(() => {});
         refreshSessions().catch(() => {});
         refreshSynkRequests().catch(() => {});
+        refreshSynkBusinesses().catch(() => {});
         refreshSynkPasses().catch(() => {});
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(() => {
@@ -1168,6 +1298,121 @@
 
       document.getElementById("lock-btn").addEventListener("click", () => lockAdmin({ remote: true }));
       document.getElementById("lock-btn-settings").addEventListener("click", () => lockAdmin({ remote: true }));
+
+      const changePasswordForm = document.getElementById("change-password-form");
+      if (changePasswordForm) {
+        changePasswordForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const status = document.getElementById("change-password-status");
+          const btn = document.getElementById("change-password-btn");
+          if (btn) btn.disabled = true;
+          if (status) status.textContent = "Updating…";
+          try {
+            const res = await fetch("/api/synk-admin-users", {
+              method: "POST",
+              headers: adminHeaders(),
+              body: JSON.stringify({
+                action: "change-password",
+                currentPassword: document.getElementById("current-password").value,
+                newPassword: document.getElementById("new-password").value,
+                totp: document.getElementById("new-password-totp").value.trim(),
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not update password");
+            changePasswordForm.reset();
+            if (status) status.textContent = "Password updated";
+            showToast("Password updated");
+          } catch (err) {
+            if (status) status.textContent = err.message || "Could not update password";
+            showToast(err.message || "Could not update password");
+          } finally {
+            if (btn) btn.disabled = false;
+          }
+        });
+      }
+
+      const addAdminForm = document.getElementById("add-admin-form");
+      if (addAdminForm) {
+        addAdminForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const status = document.getElementById("add-admin-status");
+          const btn = document.getElementById("add-admin-btn");
+          const totpBox = document.getElementById("admin-totp-box");
+          if (btn) btn.disabled = true;
+          if (status) status.textContent = "Creating…";
+          if (totpBox) totpBox.classList.add("hidden");
+          try {
+            const res = await fetch("/api/synk-admin-users", {
+              method: "POST",
+              headers: adminHeaders(),
+              body: JSON.stringify({
+                action: "create",
+                username: document.getElementById("new-admin-username").value.trim(),
+                password: document.getElementById("new-admin-password").value,
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not add admin");
+            addAdminForm.reset();
+            if (status) status.textContent = `Added ${data.admin.username}. Save the authenticator secret now.`;
+            if (totpBox) {
+              document.getElementById("admin-totp-user").textContent = data.admin.username;
+              document.getElementById("admin-totp-secret").textContent = data.totpSecret || "";
+              document.getElementById("admin-totp-url").textContent = data.otpauthUrl || "";
+              totpBox.classList.remove("hidden");
+            }
+            showToast("Admin added");
+            await refreshSynkAdmins();
+          } catch (err) {
+            if (status) status.textContent = err.message || "Could not add admin";
+            showToast(err.message || "Could not add admin");
+          } finally {
+            if (btn) btn.disabled = false;
+          }
+        });
+      }
+
+      if (synkAdminsEl) {
+        synkAdminsEl.addEventListener("click", async (e) => {
+          const btn = e.target.closest("[data-admin-action]");
+          const row = e.target.closest("[data-admin-id]");
+          if (!btn || !row) return;
+          const id = row.getAttribute("data-admin-id");
+          const action = btn.getAttribute("data-admin-action");
+          const admin = synkAdminsCache.find((a) => String(a.id) === String(id));
+          if (!admin) return;
+          try {
+            if (action === "toggle") {
+              const res = await fetch("/api/synk-admin-users", {
+                method: "POST",
+                headers: adminHeaders(),
+                body: JSON.stringify({
+                  action: admin.enabled ? "disable" : "enable",
+                  id,
+                }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not update admin");
+              showToast(admin.enabled ? "Admin paused" : "Admin enabled");
+              await refreshSynkAdmins();
+            } else if (action === "delete") {
+              if (!confirm(`Remove admin “${admin.username}”?`)) return;
+              const res = await fetch("/api/synk-admin-users", {
+                method: "POST",
+                headers: adminHeaders(),
+                body: JSON.stringify({ action: "delete", id }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not remove admin");
+              showToast("Admin removed");
+              await refreshSynkAdmins();
+            }
+          } catch (err) {
+            showToast(err.message || "Could not update admin");
+          }
+        });
+      }
 
       const refreshRequestsBtn = document.getElementById("refresh-requests-btn");
       if (refreshRequestsBtn) {
@@ -1703,8 +1948,23 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
 
       const stored = readStoredSession();
       if (stored && stored.token) {
-        openAdminSession(stored.token).catch(() => {
-          lockAdmin({ remote: false });
+        openAdminSession(stored.token).catch((err) => {
+          const msg = String((err && err.message) || "");
+          const status = err && err.status;
+          if (status === 401 || /unauthorized|session revoked|missing session/i.test(msg)) {
+            lockAdmin({ remote: false });
+            return;
+          }
+          // Keep the saved session through updates / brief API downtime.
+          sessionToken = stored.token;
+          writeStoredSession({ token: stored.token });
+          unlockView.classList.add("hidden");
+          panelView.classList.remove("hidden");
+          updateOverviewSubtitle();
+          showToast("Signed in — waiting for server…");
+          setTimeout(() => {
+            openAdminSession(stored.token).catch(() => {});
+          }, 3000);
         });
       }
 

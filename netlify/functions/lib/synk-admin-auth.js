@@ -40,11 +40,14 @@ function expectedTotpSecret() {
 }
 
 function authConfigured() {
+  // Sessions can be issued as long as we can sign tokens.
+  // Bootstrap admin credentials may live in env and/or synk_admins.
+  return Boolean(sessionSigningSecret());
+}
+
+function bootstrapEnvConfigured() {
   return Boolean(
-    expectedUsername() &&
-      expectedPasswordHash() &&
-      expectedTotpSecret() &&
-      sessionSigningSecret()
+    expectedUsername() && expectedPasswordHash() && expectedTotpSecret() && sessionSigningSecret()
   );
 }
 
@@ -172,6 +175,210 @@ async function ensureAdminSessionTables(sql) {
     CREATE INDEX IF NOT EXISTS synk_admin_sessions_user_idx
     ON synk_admin_sessions (username, revoked_at, expires_at DESC)
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_admins (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      username TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      totp_secret TEXT NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_admins_username_idx
+    ON synk_admins (username)
+  `;
+
+  await seedBootstrapAdmin(sql);
+}
+
+async function seedBootstrapAdmin(sql) {
+  if (!bootstrapEnvConfigured()) return;
+  const username = expectedUsername();
+  const passwordHash = expectedPasswordHash();
+  const totpSecret = expectedTotpSecret();
+
+  const existing = await sql`
+    SELECT id FROM synk_admins WHERE LOWER(username) = ${username.toLowerCase()} LIMIT 1
+  `;
+  if (existing[0]) return;
+
+  await sql`
+    INSERT INTO synk_admins (username, password_hash, totp_secret, enabled)
+    VALUES (${username}, ${passwordHash}, ${totpSecret}, TRUE)
+  `;
+}
+
+function normalizeAdminUsername(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .slice(0, 64);
+}
+
+async function findAdminByUsername(sql, username) {
+  await ensureAdminSessionTables(sql);
+  const normalized = normalizeAdminUsername(username);
+  if (!normalized) return null;
+  const rows = await sql`
+    SELECT id, username, password_hash, totp_secret, enabled, created_at, updated_at
+    FROM synk_admins
+    WHERE LOWER(username) = ${normalized}
+    LIMIT 1
+  `;
+  return rows[0] || null;
+}
+
+async function listAdmins(sql) {
+  await ensureAdminSessionTables(sql);
+  const rows = await sql`
+    SELECT id, username, enabled, created_at, updated_at
+    FROM synk_admins
+    ORDER BY created_at ASC
+    LIMIT 100
+  `;
+  return rows.map((row) => ({
+    id: row.id,
+    username: row.username,
+    enabled: row.enabled !== false,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+async function createAdminUser(sql, { username, password }) {
+  await ensureAdminSessionTables(sql);
+  const normalized = normalizeAdminUsername(username);
+  if (!normalized || normalized.length < 3) {
+    const err = new Error("Username must be at least 3 characters");
+    err.statusCode = 400;
+    throw err;
+  }
+  const pass = String(password || "");
+  if (pass.length < 8) {
+    const err = new Error("Password must be at least 8 characters");
+    err.statusCode = 400;
+    throw err;
+  }
+  const totpSecret = generateTotpSecret();
+  try {
+    const rows = await sql`
+      INSERT INTO synk_admins (username, password_hash, totp_secret, enabled)
+      VALUES (${normalized}, ${hashPassword(pass)}, ${totpSecret}, TRUE)
+      RETURNING id, username, enabled, created_at, updated_at
+    `;
+    return {
+      admin: {
+        id: rows[0].id,
+        username: rows[0].username,
+        enabled: true,
+        createdAt: rows[0].created_at,
+        updatedAt: rows[0].updated_at,
+      },
+      totpSecret,
+      otpauthUrl: otpauthUrl({ username: normalized, secret: totpSecret }),
+    };
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      const conflict = new Error("That username is already taken");
+      conflict.statusCode = 409;
+      throw conflict;
+    }
+    throw err;
+  }
+}
+
+async function setAdminEnabled(sql, { id, enabled }) {
+  await ensureAdminSessionTables(sql);
+  const rows = await sql`
+    UPDATE synk_admins
+    SET enabled = ${Boolean(enabled)}, updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING id, username, enabled, created_at, updated_at
+  `;
+  if (!rows[0]) {
+    const err = new Error("Admin not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  if (!enabled) {
+    await revokeSession(sql, { username: rows[0].username });
+  }
+  return {
+    id: rows[0].id,
+    username: rows[0].username,
+    enabled: rows[0].enabled !== false,
+    createdAt: rows[0].created_at,
+    updatedAt: rows[0].updated_at,
+  };
+}
+
+async function changeAdminPassword(sql, { username, currentPassword, newPassword, totp }) {
+  await ensureAdminSessionTables(sql);
+  const admin = await findAdminByUsername(sql, username);
+  if (!admin || !admin.enabled) {
+    const err = new Error("Admin not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  if (!verifyPassword(currentPassword, admin.password_hash)) {
+    const err = new Error("Current password is incorrect");
+    err.statusCode = 401;
+    throw err;
+  }
+  if (!verifyTotp(admin.totp_secret, totp)) {
+    const err = new Error("Invalid 2FA code");
+    err.statusCode = 401;
+    throw err;
+  }
+  const next = String(newPassword || "");
+  if (next.length < 8) {
+    const err = new Error("New password must be at least 8 characters");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (next === String(currentPassword || "")) {
+    const err = new Error("New password must be different");
+    err.statusCode = 400;
+    throw err;
+  }
+  await sql`
+    UPDATE synk_admins
+    SET password_hash = ${hashPassword(next)}, updated_at = NOW()
+    WHERE id = ${admin.id}
+  `;
+  return { ok: true, username: admin.username };
+}
+
+async function deleteAdminUser(sql, { id, actorUsername }) {
+  await ensureAdminSessionTables(sql);
+  const rows = await sql`
+    SELECT id, username FROM synk_admins WHERE id = ${id} LIMIT 1
+  `;
+  if (!rows[0]) {
+    const err = new Error("Admin not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  if (normalizeAdminUsername(rows[0].username) === normalizeAdminUsername(actorUsername)) {
+    const err = new Error("You cannot remove your own admin account");
+    err.statusCode = 400;
+    throw err;
+  }
+  const enabledCount = await sql`SELECT COUNT(*)::int AS n FROM synk_admins WHERE enabled = TRUE`;
+  const target = await sql`SELECT enabled FROM synk_admins WHERE id = ${id} LIMIT 1`;
+  if (target[0]?.enabled && (enabledCount[0]?.n || 0) <= 1) {
+    const err = new Error("Keep at least one enabled admin");
+    err.statusCode = 400;
+    throw err;
+  }
+  await revokeSession(sql, { username: rows[0].username });
+  await sql`DELETE FROM synk_admins WHERE id = ${id}`;
+  return { ok: true };
 }
 
 function signClaims(claims) {
@@ -307,18 +514,27 @@ async function revokeSession(sql, { sessionId = null, token = null, username = n
   }
 }
 
-async function listSessions(sql, username) {
+async function listSessions(sql, username = null) {
   await ensureAdminSessionTables(sql);
-  const rows = await sql`
-    SELECT id, ip, user_agent, created_at, last_seen_at, expires_at, revoked_at
-    FROM synk_admin_sessions
-    WHERE username = ${username}
-      AND (revoked_at IS NULL OR revoked_at > NOW() - INTERVAL '7 days')
-    ORDER BY created_at DESC
-    LIMIT 30
-  `;
+  const rows = username
+    ? await sql`
+        SELECT id, username, ip, user_agent, created_at, last_seen_at, expires_at, revoked_at
+        FROM synk_admin_sessions
+        WHERE username = ${username}
+          AND (revoked_at IS NULL OR revoked_at > NOW() - INTERVAL '7 days')
+        ORDER BY created_at DESC
+        LIMIT 50
+      `
+    : await sql`
+        SELECT id, username, ip, user_agent, created_at, last_seen_at, expires_at, revoked_at
+        FROM synk_admin_sessions
+        WHERE revoked_at IS NULL OR revoked_at > NOW() - INTERVAL '7 days'
+        ORDER BY created_at DESC
+        LIMIT 50
+      `;
   return rows.map((row) => ({
     id: row.id,
+    username: row.username || "",
     ip: row.ip || "",
     userAgent: row.user_agent || "",
     createdAt: row.created_at,
@@ -344,28 +560,62 @@ async function loginWithPasswordAndTotp(
   sql,
   { username, password, totp, ip = "", userAgent = "", remember = true } = {}
 ) {
-  if (!authConfigured()) {
+  if (!authConfigured() && !(await hasAnyAdmin(sql))) {
     const err = new Error("Synk Admin login is not configured");
     err.statusCode = 500;
     throw err;
   }
 
-  const userOk = timingSafeStringEqual(username, expectedUsername());
-  const passOk = verifyPassword(password, expectedPasswordHash());
-  const totpOk = verifyTotp(expectedTotpSecret(), totp);
+  await ensureAdminSessionTables(sql);
+  let admin = await findAdminByUsername(sql, username);
 
-  if (!userOk || !passOk || !totpOk) {
+  // Legacy env bootstrap fallback (first deploy / before table seed completes).
+  if (
+    !admin &&
+    bootstrapEnvConfigured() &&
+    normalizeAdminUsername(username) === normalizeAdminUsername(expectedUsername())
+  ) {
+    const passOk = verifyPassword(password, expectedPasswordHash());
+    const totpOk = verifyTotp(expectedTotpSecret(), totp);
+    if (!passOk || !totpOk) {
+      const err = new Error("Invalid username, password, or 2FA code");
+      err.statusCode = 401;
+      throw err;
+    }
+    await seedBootstrapAdmin(sql);
+    admin = await findAdminByUsername(sql, expectedUsername());
+  }
+
+  if (!admin || !admin.enabled) {
+    const err = new Error("Invalid username, password, or 2FA code");
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const passOk = verifyPassword(password, admin.password_hash);
+  const totpOk = verifyTotp(admin.totp_secret, totp);
+  if (!passOk || !totpOk) {
     const err = new Error("Invalid username, password, or 2FA code");
     err.statusCode = 401;
     throw err;
   }
 
   return createAdminSession(sql, {
-    username: expectedUsername(),
+    username: admin.username,
     ip,
     userAgent,
     remember: true,
   });
+}
+
+async function hasAnyAdmin(sql) {
+  try {
+    await ensureAdminSessionTables(sql);
+    const rows = await sql`SELECT id FROM synk_admins WHERE enabled = TRUE LIMIT 1`;
+    return Boolean(rows[0]);
+  } catch {
+    return false;
+  }
 }
 
 function signMediaToken(imageId, ttlSec = 60 * 30) {
@@ -411,6 +661,7 @@ function signedPhotoUrl(photoUrl) {
 
 module.exports = {
   authConfigured,
+  bootstrapEnvConfigured,
   hashPassword,
   verifyPassword,
   generateTotpSecret,
@@ -422,7 +673,14 @@ module.exports = {
   assertSessionActive,
   revokeSession,
   listSessions,
+  listAdmins,
+  createAdminUser,
+  setAdminEnabled,
+  changeAdminPassword,
+  deleteAdminUser,
+  findAdminByUsername,
   ensureAdminSessionTables,
+  normalizeAdminUsername,
   otpauthUrl,
   encodeBase32,
   signMediaToken,
