@@ -1,4 +1,5 @@
-/* Synk Admin — minimal with a little Synk blue */
+/* Synk Admin — CLEAR-inspired: black primary, teal accent */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 *,
 *::before,
@@ -7,19 +8,21 @@
 }
 
 :root {
-  --bg: #f7f9fc;
+  --bg: #f5f5f7;
   --surface: #ffffff;
-  --ink: #152033;
-  --muted: #5b6b82;
-  --line: #d7e0ee;
-  --fill: #eef3fb;
-  --accent: #2b6bff;
-  --accent-ink: #1e4fd6;
-  --accent-soft: #e8f0ff;
+  --ink: #0a0a0a;
+  --muted: #6b6b73;
+  --line: #e5e5ea;
+  --fill: #f0f0f2;
+  --brand: #0a0a0a;
+  --accent: #00b4a6;
+  --accent-ink: #008f84;
+  --accent-soft: #e4f8f6;
   --danger: #c62828;
   --danger-soft: #fdeceb;
-  --focus: #2b6bff;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --focus: #00b4a6;
+  --radius-pill: 999px;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
 html,
@@ -54,7 +57,7 @@ code {
   background: var(--accent-soft);
   color: var(--accent-ink);
   padding: 0.05em 0.3em;
-  border: 1px solid #c9daf8;
+  border: 1px solid #b8ebe6;
 }
 
 h1,
@@ -102,6 +105,7 @@ p {
   width: min(100%, 420px);
   border: 1px solid var(--line);
   background: var(--surface);
+  border-radius: 20px;
   padding: 20px;
 }
 
@@ -140,7 +144,7 @@ textarea {
   width: 100%;
   border: 1px solid var(--line);
   background: var(--surface);
-  border-radius: 0;
+  border-radius: 12px;
   padding: 10px 12px;
   outline: none;
 }
@@ -158,14 +162,15 @@ button.btn {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
+  border: 1px solid var(--brand);
+  background: var(--brand);
   color: #fff;
-  border-radius: 0;
-  padding: 10px 14px;
+  border-radius: var(--radius-pill);
+  padding: 10px 16px;
   cursor: pointer;
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .btn:disabled,
@@ -176,12 +181,13 @@ button.btn:disabled {
 
 .btn-secondary {
   background: var(--surface);
-  color: var(--accent-ink);
-  border-color: #b7c9ef;
+  color: var(--ink);
+  border-color: #d4d4d8;
 }
 
 .btn-secondary:hover {
-  background: var(--accent-soft);
+  background: var(--fill);
+  border-color: #a1a1aa;
 }
 
 .btn-danger {
@@ -207,9 +213,15 @@ button.btn:disabled {
 
 .btn.btn-primary,
 .btn-primary {
-  background: var(--accent);
+  background: var(--brand);
   color: #fff;
-  border-color: var(--accent);
+  border-color: var(--brand);
+}
+
+.btn.btn-primary:hover,
+.btn-primary:hover {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
 }
 
 .admin-shell {
@@ -248,6 +260,7 @@ button.btn:disabled {
 .panel {
   border: 1px solid var(--line);
   background: var(--surface);
+  border-radius: 20px;
   padding: 14px;
 }
 
@@ -273,6 +286,7 @@ button.btn:disabled {
 
 .synk-stat-card {
   border: 1px solid var(--line);
+  border-radius: 16px;
   border-top: 3px solid var(--accent);
   padding: 12px;
   background: var(--surface);
@@ -305,6 +319,7 @@ button.btn:disabled {
 .synk-event-row,
 .synk-session-row {
   border: 1px solid var(--line);
+  border-radius: 16px;
   padding: 12px;
   background: var(--surface);
 }
@@ -319,6 +334,7 @@ button.btn:disabled {
   width: 72px;
   height: 72px;
   object-fit: cover;
+  border-radius: 50%;
   border: 1px solid var(--line);
   background: var(--fill);
 }
@@ -377,7 +393,7 @@ button.btn:disabled {
 }
 
 .synk-session-row.current {
-  border-color: #b7c9ef;
+  border-color: #b8ebe6;
   background: var(--accent-soft);
 }
 
@@ -392,14 +408,15 @@ button.btn:disabled {
 .synk-badge {
   display: inline-flex;
   align-items: center;
-  border: 1px solid #b7c9ef;
+  border: 1px solid #b8ebe6;
+  border-radius: var(--radius-pill);
   background: var(--surface);
   color: var(--accent-ink);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  padding: 2px 6px;
+  padding: 2px 8px;
 }
 
 .synk-session-row.revoked {
@@ -420,6 +437,7 @@ button.btn:disabled {
 .synk-link-list a {
   display: block;
   border: 1px solid var(--line);
+  border-radius: 14px;
   background: var(--surface);
   padding: 10px 12px;
   text-decoration: none;
@@ -428,7 +446,7 @@ button.btn:disabled {
 
 .synk-link-list a:hover {
   background: var(--accent-soft);
-  border-color: #b7c9ef;
+  border-color: #b8ebe6;
 }
 
 .chat-empty-note {
@@ -478,9 +496,10 @@ button.btn:disabled {
   left: 50%;
   bottom: calc(72px + env(safe-area-inset-bottom));
   transform: translateX(-50%) translateY(12px);
-  background: var(--accent);
+  background: var(--brand);
   color: #fff;
-  padding: 10px 14px;
+  border-radius: var(--radius-pill);
+  padding: 10px 16px;
   font-size: 0.88rem;
   opacity: 0;
   pointer-events: none;
@@ -496,30 +515,51 @@ button.btn:disabled {
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b1220;
-    --surface: #121a2b;
-    --ink: #e8eefc;
-    --muted: #93a0b8;
-    --line: #273349;
-    --fill: #182338;
-    --accent: #5b8cff;
-    --accent-ink: #9bbbff;
-    --accent-soft: #1a2742;
+    --bg: #0a0a0a;
+    --surface: #171717;
+    --ink: #fafafa;
+    --muted: #a1a1aa;
+    --line: #2a2a2e;
+    --fill: #1f1f23;
+    --brand: #fafafa;
+    --accent: #2dd4bf;
+    --accent-ink: #5eead4;
+    --accent-soft: rgba(0, 180, 166, 0.18);
     --danger: #ff8b82;
     --danger-soft: #3a1d1d;
-    --focus: #5b8cff;
+    --focus: #2dd4bf;
   }
 
   code {
-    border-color: #314868;
+    border-color: #14534e;
   }
 
   .error {
     border-color: #6a3030;
   }
 
+  .btn,
+  button.btn,
+  .btn.btn-primary,
+  .btn-primary {
+    color: #0a0a0a;
+  }
+
+  .btn.btn-primary:hover,
+  .btn-primary:hover {
+    background: #e4e4e7;
+    border-color: #e4e4e7;
+  }
+
   .btn-secondary {
-    border-color: #3d547a;
+    background: #171717;
+    color: var(--ink);
+    border-color: #3f3f46;
+  }
+
+  .btn-secondary:hover {
+    background: #27272a;
+    border-color: #52525b;
   }
 
   .btn-danger {
@@ -528,11 +568,15 @@ button.btn:disabled {
 
   .synk-badge,
   .synk-session-row.current {
-    border-color: #3d547a;
+    border-color: #14534e;
   }
 
-  .synk-link-list a:hover,
-  .btn-secondary:hover {
-    border-color: #4d6a99;
+  .synk-link-list a:hover {
+    border-color: #14534e;
+  }
+
+  .toast {
+    background: #fafafa;
+    color: #0a0a0a;
   }
 }

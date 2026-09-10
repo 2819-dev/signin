@@ -75,10 +75,11 @@ function visitorAdminSvg() {
 }
 
 function synkAdminSvg() {
-  // Concentric dotted iris + admin shield badge
+  // Concentric dotted iris + admin shield badge (CLEAR-inspired teal)
   const dots = [];
   const cx = 78;
   const cy = 78;
+  const accent = "#00B4A6";
   const rings = [
     { r: 10, n: 8, o: 0.95 },
     { r: 18, n: 12, o: 0.9 },
@@ -97,38 +98,39 @@ function synkAdminSvg() {
       const x = cx + Math.cos(a) * ring.r;
       const y = cy + Math.sin(a) * ring.r;
       dots.push(
-        `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="3.1" fill="#2B6BFF" fill-opacity="${ring.o}"/>`
+        `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="3.1" fill="${accent}" fill-opacity="${ring.o}"/>`
       );
     }
   }
   // center cluster
-  dots.push(`<circle cx="${cx}" cy="${cy}" r="3.4" fill="#2B6BFF"/>`);
+  dots.push(`<circle cx="${cx}" cy="${cy}" r="3.4" fill="${accent}"/>`);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 180 180">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="180" y2="180" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#EAF1FF"/>
+      <stop offset="1" stop-color="#E4F8F6"/>
     </linearGradient>
   </defs>
   <rect width="180" height="180" fill="url(#bg)"/>
   ${dots.join("\n  ")}
 
   <!-- admin badge -->
-  <circle cx="132" cy="132" r="28" fill="#101828"/>
-  <circle cx="132" cy="132" r="24" fill="#2B6BFF"/>
+  <circle cx="132" cy="132" r="28" fill="#0A0A0A"/>
+  <circle cx="132" cy="132" r="24" fill="${accent}"/>
   <path d="M132 116c8.8 0 17.5 4.4 17.5 11v8.5c0 7.8-7.1 14.4-17.5 18.2-10.4-3.8-17.5-10.4-17.5-18.2V127c0-6.6 8.7-11 17.5-11z" fill="#ffffff"/>
-  <circle cx="132" cy="133" r="4.6" fill="#2B6BFF"/>
-  <rect x="130" y="135.5" width="4" height="8.5" rx="2" fill="#2B6BFF"/>
+  <circle cx="132" cy="133" r="4.6" fill="${accent}"/>
+  <rect x="130" y="135.5" width="4" height="8.5" rx="2" fill="${accent}"/>
 </svg>`;
 }
 
 function synkIdSvg() {
-  // Iris motif + person/join badge (membership signup)
+  // Iris motif + person/join badge — black field, teal accents (CLEAR-like)
   const dots = [];
   const cx = 78;
   const cy = 78;
+  const accent = "#00B4A6";
   const rings = [
     { r: 10, n: 8, o: 0.95 },
     { r: 18, n: 12, o: 0.9 },
@@ -156,20 +158,20 @@ function synkIdSvg() {
 <svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 180 180">
   <defs>
     <linearGradient id="bg" x1="10" y1="0" x2="170" y2="180" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#4A86FF"/>
-      <stop offset="1" stop-color="#1E4FD6"/>
+      <stop stop-color="#1A1A1A"/>
+      <stop offset="1" stop-color="#0A0A0A"/>
     </linearGradient>
   </defs>
   <rect width="180" height="180" fill="url(#bg)"/>
-  <circle cx="40" cy="36" r="40" fill="#ffffff" fill-opacity="0.12"/>
+  <circle cx="40" cy="36" r="40" fill="#ffffff" fill-opacity="0.08"/>
   ${dots.join("\n  ")}
 
   <!-- join / person badge -->
-  <circle cx="132" cy="132" r="28" fill="#0B1B4A"/>
+  <circle cx="132" cy="132" r="28" fill="#00B4A6"/>
   <circle cx="132" cy="132" r="24" fill="#ffffff"/>
-  <circle cx="132" cy="122" r="8" fill="#2B6BFF"/>
-  <path d="M116 148c0-9.4 7.2-16 16-16s16 6.6 16 16" fill="#2B6BFF"/>
-  <circle cx="148" cy="118" r="9" fill="#1E4FD6"/>
+  <circle cx="132" cy="122" r="8" fill="${accent}"/>
+  <path d="M116 148c0-9.4 7.2-16 16-16s16 6.6 16 16" fill="${accent}"/>
+  <circle cx="148" cy="118" r="9" fill="#0A0A0A"/>
   <path d="M148 113 v10 M143 118 h10" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>
 </svg>`;
 }

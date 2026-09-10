@@ -1,18 +1,23 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
 :root {
   color-scheme: light;
-  --bg: #f7f9fc;
+  --bg: #f5f5f7;
   --surface: #ffffff;
-  --ink: #152033;
-  --muted: #5b6b82;
-  --line: #d7e0ee;
-  --fill: #eef3fb;
-  --accent: #2b6bff;
-  --accent-ink: #1e4fd6;
-  --accent-soft: #e8f0ff;
+  --ink: #0a0a0a;
+  --muted: #6b6b73;
+  --line: #e5e5ea;
+  --fill: #f0f0f2;
+  --brand: #0a0a0a;
+  --accent: #00b4a6;
+  --accent-ink: #008f84;
+  --accent-soft: #e4f8f6;
   --danger: #c62828;
   --danger-soft: #fdeceb;
-  --tap: 48px;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --tap: 52px;
+  --radius-pill: 999px;
+  --radius: 16px;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
 *,
@@ -33,6 +38,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   line-height: 1.45;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -59,15 +65,15 @@ a:hover {
 .shell {
   position: relative;
   z-index: 1;
-  width: min(560px, 100%);
+  width: min(480px, 100%);
   margin: 0 auto;
   padding:
-    max(20px, env(safe-area-inset-top, 0px))
-    max(16px, env(safe-area-inset-right, 0px))
-    calc(28px + env(safe-area-inset-bottom, 0px))
-    max(16px, env(safe-area-inset-left, 0px));
+    max(28px, env(safe-area-inset-top, 0px))
+    max(20px, env(safe-area-inset-right, 0px))
+    calc(32px + env(safe-area-inset-bottom, 0px))
+    max(20px, env(safe-area-inset-left, 0px));
   display: grid;
-  gap: 16px;
+  gap: 20px;
 }
 
 .header {
@@ -80,24 +86,25 @@ a:hover {
 .logo {
   width: 56px;
   height: 56px;
-  border-radius: 4px;
-  background: var(--accent-soft);
-  border: 1px solid #c9daf8;
+  border-radius: 50%;
+  background: #0a0a0a;
+  border: none;
   display: grid;
   place-items: center;
   overflow: hidden;
 }
 
 .logo img {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   display: block;
+  filter: brightness(0) invert(1);
 }
 
 .eyebrow {
   margin: 0 0 4px;
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 600;
@@ -105,36 +112,37 @@ a:hover {
 
 .header h1 {
   margin: 0 0 6px;
-  font-size: clamp(1.25rem, 4vw, 1.45rem);
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  font-weight: 600;
+  font-size: clamp(1.45rem, 5vw, 1.75rem);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  font-weight: 650;
 }
 
 .subtitle {
   margin: 0;
   color: var(--muted);
   font-size: 0.95rem;
+  line-height: 1.45;
 }
 
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 0;
-  padding: 18px;
+  border-radius: 24px;
+  padding: 22px;
 }
 
 .card h2 {
   margin: 0 0 8px;
-  font-size: 1.15rem;
-  letter-spacing: -0.01em;
-  font-weight: 600;
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+  font-weight: 650;
 }
 
 .section-label {
-  margin: 0 0 6px;
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 600;
@@ -152,8 +160,8 @@ a:hover {
 
 .field label,
 .field > span {
-  font-size: 0.9rem;
-  font-weight: 560;
+  font-size: 0.88rem;
+  font-weight: 600;
   color: var(--ink);
 }
 
@@ -174,8 +182,8 @@ a:hover {
 .field textarea {
   width: 100%;
   min-height: var(--tap);
-  padding: 12px 14px;
-  border-radius: 0;
+  padding: 12px 16px;
+  border-radius: 14px;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
@@ -192,7 +200,7 @@ a:hover {
 }
 
 .field input::placeholder {
-  color: #93a0b4;
+  color: #9a9aa3;
 }
 
 .row-2 {
@@ -211,9 +219,9 @@ a:hover {
   aspect-ratio: 1 / 1;
   max-width: 220px;
   margin: 0 auto;
-  border-radius: 0;
+  border-radius: 50%;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 2px solid var(--line);
   background: var(--fill);
   display: grid;
   place-items: center;
@@ -230,7 +238,7 @@ a:hover {
   text-align: center;
   padding: 16px;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
 
 .photo-actions {
@@ -245,11 +253,11 @@ a:hover {
   align-items: center;
   justify-content: center;
   min-height: var(--tap);
-  padding: 0 14px;
-  border-radius: 0;
-  border: 1px solid var(--line);
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink);
   background: var(--surface);
-  color: var(--accent-ink);
+  color: var(--ink);
   font-weight: 600;
   cursor: pointer;
   text-align: center;
@@ -267,8 +275,7 @@ a:hover {
 
 .file-btn:focus-within,
 .file-btn:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  background: var(--fill);
 }
 
 .btn {
@@ -277,11 +284,12 @@ a:hover {
   justify-content: center;
   gap: 8px;
   min-height: var(--tap);
-  padding: 0 16px;
-  border-radius: 0;
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
   border: 1px solid transparent;
   font-weight: 600;
   font-size: 1rem;
+  letter-spacing: -0.02em;
   cursor: pointer;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
@@ -289,37 +297,37 @@ a:hover {
 }
 
 .btn:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .btn-primary {
   width: 100%;
-  background: var(--accent);
+  background: var(--brand);
   color: #fff;
-  border-color: var(--accent);
+  border-color: var(--brand);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-ink);
-  border-color: var(--accent-ink);
+  background: #1a1a1a;
+  border-color: #1a1a1a;
 }
 
 .btn-secondary {
   background: var(--surface);
-  color: var(--accent-ink);
-  border-color: var(--line);
+  color: var(--ink);
+  border-color: var(--ink);
 }
 
 .btn-secondary:hover {
   background: var(--fill);
-  color: var(--accent-ink);
+  color: var(--ink);
 }
 
 .error {
   margin: 0;
-  padding: 10px 12px;
-  border-radius: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
   background: var(--danger-soft);
   border: 1px solid #f3c4c0;
   color: var(--danger);
@@ -333,33 +341,33 @@ a:hover {
 .status {
   margin: 0;
   min-height: 1.2em;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
 }
 
 .footer-note {
   margin: 2px 0 0;
   text-align: center;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
 }
 
 .done-actions {
   display: grid;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .steps {
   display: none;
   gap: 8px;
-  margin: 0 0 12px;
+  margin: 0 0 14px;
 }
 
 .step-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  border-radius: 0;
+  padding: 7px 12px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--line);
   color: var(--muted);
   font-size: 0.78rem;
@@ -370,7 +378,64 @@ a:hover {
 .step-pill.active {
   color: var(--accent-ink);
   background: var(--accent-soft);
-  border-color: #c9daf8;
+  border-color: #b7ebe5;
+}
+
+.btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pod-frame {
+  position: relative;
+  width: min(100%, 280px);
+  margin: 14px auto 16px;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  background: #111111;
+}
+
+.pod-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  display: block;
+}
+
+.pod-ring {
+  pointer-events: none;
+  position: absolute;
+  width: 72%;
+  aspect-ratio: 1;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.28);
+  transform: translate(-50%, -50%);
+}
+
+.pass-box {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--fill);
+}
+
+.pass-box .code,
+.code {
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  color: var(--accent-ink);
+  font-weight: 700;
 }
 
 @media (max-height: 520px) and (orientation: landscape) {
@@ -392,7 +457,8 @@ a:hover {
     grid-row: 1 / span 2;
   }
 
-  .photo-preview {
+  .photo-preview,
+  .pod-frame {
     max-width: 160px;
   }
 }
@@ -401,17 +467,12 @@ a:hover {
   .row-2 {
     grid-template-columns: 1fr 1fr;
   }
-
-  .card {
-    padding: 22px;
-  }
 }
 
 @media (min-width: 768px) {
   .shell {
-    width: min(640px, 100%);
-    padding-top: max(40px, env(safe-area-inset-top, 0px));
-    gap: 20px;
+    width: min(520px, 100%);
+    padding-top: max(48px, env(safe-area-inset-top, 0px));
   }
 
   .steps {
@@ -419,22 +480,8 @@ a:hover {
     flex-wrap: wrap;
   }
 
-  .header {
-    grid-template-columns: 64px 1fr;
-  }
-
-  .logo {
-    width: 64px;
-    height: 64px;
-  }
-
-  .logo img {
-    width: 42px;
-    height: 42px;
-  }
-
   .photo-box {
-    grid-template-columns: 200px 1fr;
+    grid-template-columns: 180px 1fr;
     align-items: center;
   }
 
@@ -446,67 +493,6 @@ a:hover {
   .photo-actions {
     grid-template-columns: 1fr;
   }
-}
-
-@media (min-width: 1100px) {
-  .shell {
-    width: min(720px, 100%);
-  }
-}
-
-.btn-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.pod-frame {
-  position: relative;
-  width: min(100%, 320px);
-  margin: 10px auto 14px;
-  aspect-ratio: 3 / 4;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background: #111827;
-}
-
-.pod-video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scaleX(-1);
-  display: block;
-}
-
-.pod-ring {
-  pointer-events: none;
-  position: absolute;
-  width: 58%;
-  aspect-ratio: 1;
-  top: 50%;
-  left: 50%;
-  border-radius: 50%;
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 0 999px rgba(17, 24, 39, 0.42);
-  transform: translate(-50%, -50%);
-}
-
-.pass-box {
-  margin-top: 12px;
-  padding: 14px;
-  border: 1px solid #c9daf8;
-  background: var(--accent-soft);
-}
-
-.pass-box .code,
-.code {
-  margin-top: 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.92rem;
-  letter-spacing: 0.04em;
-  color: var(--accent-ink);
-  font-weight: 700;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -4,8 +4,8 @@
   "description": "Synk identity verification and access requests",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f7f9fc",
-  "theme_color": "#f7f9fc",
+  "background_color": "#f5f5f7",
+  "theme_color": "#f5f5f7",
   "icons": [
     {
       "src": "/apple-touch-icon.png",
