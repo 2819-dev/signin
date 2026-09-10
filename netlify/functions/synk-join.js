@@ -11,9 +11,37 @@ const {
   generateSynkCode,
 } = require("./lib/synk");
 const { signedPhotoUrl } = require("./lib/synk-admin-auth");
+const { sendEmail, normalizeEmail } = require("./lib/email");
 
 const MAX_BYTES = 3.5 * 1024 * 1024;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function parseJsonBody(event) {
+  let raw = event && event.body != null ? event.body : "{}";
+  if (event && event.isBase64Encoded) {
+    try {
+      raw = Buffer.from(String(raw), "base64").toString("utf8");
+    } catch {
+      const err = new Error("Invalid JSON");
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+  if (typeof raw !== "string") {
+    // Some runtimes may already parse JSON bodies.
+    if (raw && typeof raw === "object") return raw;
+    raw = String(raw || "{}");
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) return {};
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const err = new Error("Invalid JSON");
+    err.statusCode = 400;
+    throw err;
+  }
+}
 
 function normalizeName(value) {
   return String(value || "")
@@ -60,11 +88,25 @@ function toDobString(value) {
   return match ? match[1] : raw.slice(0, 10);
 }
 
+function descriptorSqlValue(value) {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return JSON.stringify(parsed);
+    } catch {
+      return value;
+    }
+  }
+  return JSON.stringify(value);
+}
+
 function mapRequest(row) {
   if (!row) return null;
   return {
     id: row.id,
     name: row.name,
+    email: row.email || "",
     dateOfBirth: toDobString(row.date_of_birth),
     photoUrl: signedPhotoUrl(row.photo_url || ""),
     note: row.note || "",
@@ -137,6 +179,37 @@ async function saveJoinPhoto(event, body) {
   return `/api/synk-image?id=${encodeURIComponent(id)}&v=${Date.now()}`;
 }
 
+async function notifyJoinDecision({ email, name, accepted, synkCode }) {
+  if (!email) return { ok: false, skipped: true };
+  if (accepted) {
+    return sendEmail({
+      to: email,
+      subject: "Your Synk request was accepted",
+      text:
+        `Hi ${name || "there"},\n\n` +
+        `Your Synk membership request was accepted.` +
+        (synkCode ? ` Your Synk ID is ${synkCode}.` : "") +
+        `\n\nYou can log in at https://synkid.netlify.app/verify\n\n— Synk\n`,
+      html:
+        `<p>Hi ${name || "there"},</p>` +
+        `<p>Your Synk membership request was <strong>accepted</strong>.` +
+        (synkCode ? ` Your Synk ID is <strong>${synkCode}</strong>.` : "") +
+        `</p><p><a href="https://synkid.netlify.app/verify">Log in to Synk</a></p><p>— Synk</p>`,
+    });
+  }
+  return sendEmail({
+    to: email,
+    subject: "Your Synk request was declined",
+    text:
+      `Hi ${name || "there"},\n\n` +
+      `Your Synk membership request was declined.\n\n— Synk\n`,
+    html:
+      `<p>Hi ${name || "there"},</p>` +
+      `<p>Your Synk membership request was <strong>declined</strong>.</p>` +
+      `<p>— Synk</p>`,
+  });
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return json(204, {});
 
@@ -184,9 +257,9 @@ exports.handler = async (event) => {
 
     let body;
     try {
-      body = JSON.parse(event.body || "{}");
-    } catch {
-      return json(400, { error: "Invalid JSON" });
+      body = parseJsonBody(event);
+    } catch (err) {
+      return json(400, { error: err.message || "Invalid JSON" });
     }
 
     const action = String(body.action || "create").trim().toLowerCase();
@@ -205,12 +278,14 @@ exports.handler = async (event) => {
       }
 
       const name = normalizeName(body.name);
-      const dateOfBirth = normalizeDob(body.dateOfBirth);
+      const email = normalizeEmail(body.email);
+      const dateOfBirth = normalizeDob(body.dateOfBirth || body.dob);
       const secret = normalizeSecret(body.secret);
       const note = normalizeNote(body.note || body.reason);
       const descriptor = normalizeDescriptor(body.descriptor);
 
       if (!name) return json(400, { error: "Name is required" });
+      if (!email) return json(400, { error: "A valid email is required" });
       if (!dateOfBirth) return json(400, { error: "Date of birth is required" });
       if (!descriptor) return json(400, { error: "A clear face photo is required" });
       if (secret && secret.length < 4) {
@@ -222,14 +297,15 @@ exports.handler = async (event) => {
       const secretHash = secret ? hashSecret(secret) : null;
       const rows = await sql`
         INSERT INTO synk_join_requests (
-          name, date_of_birth, secret_hash, photo_url, descriptor, note, status, ip
+          name, email, date_of_birth, secret_hash, photo_url, descriptor, note, status, ip
         )
         VALUES (
           ${name},
+          ${email},
           ${dateOfBirth}::date,
           ${secretHash},
           ${photoUrl},
-          ${JSON.stringify(descriptor)}::jsonb,
+          ${descriptorSqlValue(descriptor)}::jsonb,
           ${note},
           'pending',
           ${ip || null}
@@ -239,13 +315,14 @@ exports.handler = async (event) => {
       await logSynkEvent(sql, {
         eventType: "join_request_create",
         ip,
-        detail: name,
+        detail: `${name}<${email}>`,
       });
       return json(201, {
         ok: true,
         request: {
           id: rows[0].id,
           status: "pending",
+          email: rows[0].email || email,
           createdAt: rows[0].created_at,
         },
       });
@@ -266,7 +343,7 @@ exports.handler = async (event) => {
       return json(400, { error: `Request is already ${req.status}` });
     }
 
-    if (action === "deny" || action === "reject") {
+    if (action === "deny" || action === "reject" || action === "decline") {
       const rows = await sql`
         UPDATE synk_join_requests
         SET status = 'denied', reviewed_at = NOW(), updated_at = NOW()
@@ -278,7 +355,16 @@ exports.handler = async (event) => {
         ip,
         detail: req.name,
       });
-      return json(200, { ok: true, request: mapRequest(rows[0]) });
+      const mail = await notifyJoinDecision({
+        email: req.email,
+        name: req.name,
+        accepted: false,
+      });
+      return json(200, {
+        ok: true,
+        request: mapRequest(rows[0]),
+        email: mail,
+      });
     }
 
     if (action === "approve" || action === "accept") {
@@ -286,21 +372,23 @@ exports.handler = async (event) => {
       const policy = ["pending", "autofill", "auto_admit", "auto_deny"].includes(body.policy)
         ? body.policy
         : "pending";
+      const email = normalizeEmail(req.email) || "";
       const profileRows = await sql`
         INSERT INTO synk_profiles (
-          synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, policy, enabled
+          synk_code, name, email, date_of_birth, secret_hash, photo_url, descriptor, policy, enabled
         )
         VALUES (
           ${synkCode},
           ${req.name},
+          ${email},
           ${toDobString(req.date_of_birth)}::date,
           ${req.secret_hash},
           ${req.photo_url || ""},
-          ${req.descriptor},
+          ${descriptorSqlValue(req.descriptor)}::jsonb,
           ${policy},
           TRUE
         )
-        RETURNING id, synk_code, name, date_of_birth, photo_url, policy, enabled, created_at, updated_at
+        RETURNING id, synk_code, name, email, date_of_birth, photo_url, policy, enabled, created_at, updated_at
       `;
       const profile = profileRows[0];
       const rows = await sql`
@@ -318,6 +406,12 @@ exports.handler = async (event) => {
         ip,
         detail: profile.synk_code,
       });
+      const mail = await notifyJoinDecision({
+        email: profile.email || email,
+        name: profile.name,
+        accepted: true,
+        synkCode: profile.synk_code,
+      });
       return json(200, {
         ok: true,
         request: mapRequest(rows[0]),
@@ -325,10 +419,12 @@ exports.handler = async (event) => {
           id: profile.id,
           synkCode: profile.synk_code,
           name: profile.name,
+          email: profile.email || email,
           dateOfBirth: toDobString(profile.date_of_birth),
           policy: profile.policy,
           enabled: profile.enabled !== false,
         },
+        email: mail,
       });
     }
 

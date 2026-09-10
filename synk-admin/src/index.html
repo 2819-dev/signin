@@ -1154,6 +1154,7 @@
                       </div>
                       <div class="synk-session-meta">
                         DOB ${escapeHtml(formatDob(req.dateOfBirth))}
+                        ${req.email ? ` · ${escapeHtml(req.email)}` : ""}
                         ${req.note ? ` · ${escapeHtml(req.note)}` : ""}
                         · ${escapeHtml(req.createdAt ? formatTime(req.createdAt) : "")}
                       </div>
@@ -1553,10 +1554,23 @@
       async function handleRequestAction(requestId, action) {
         const res = await fetch("/api/synk-join", {
           method: "POST",
-          headers: adminHeaders(),
+          headers: {
+            ...adminHeaders(),
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ action, id: requestId }),
         });
-        const data = await res.json().catch(() => ({}));
+        const raw = await res.text();
+        let data = {};
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch {
+          throw new Error(
+            res.ok
+              ? "Unexpected response from server"
+              : `Could not update request (${res.status})`
+          );
+        }
         if (!res.ok) throw new Error(data.error || "Could not update request");
         return data;
       }
@@ -1627,12 +1641,20 @@
           if (!confirm(label)) return;
           try {
             const data = await handleRequestAction(id, action);
+            const mailNote =
+              data.email && data.email.ok
+                ? " · email sent"
+                : data.email && data.email.skipped
+                  ? " · email not configured"
+                  : data.email && data.email.error
+                    ? " · email failed"
+                    : "";
             showToast(
               action === "approve"
                 ? data.profile
-                  ? `Accepted ${data.profile.synkCode || data.profile.name}`
-                  : "Accepted"
-                : "Denied"
+                  ? `Accepted ${data.profile.synkCode || data.profile.name}${mailNote}`
+                  : `Accepted${mailNote}`
+                : `Denied${mailNote}`
             );
             await refreshSynkRequests();
             if (action === "approve") {

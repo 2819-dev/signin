@@ -71,6 +71,21 @@
           </div>
 
           <div class="field">
+            <label for="join-email">Email</label>
+            <input
+              id="join-email"
+              name="email"
+              type="email"
+              maxlength="160"
+              required
+              autocomplete="email"
+              enterkeyhint="next"
+              placeholder="you@example.com"
+            />
+            <p class="hint">We’ll email you when your request is accepted or declined.</p>
+          </div>
+
+          <div class="field">
             <label for="join-note">Note <span class="muted">(optional)</span></label>
             <input
               id="join-note"
@@ -150,7 +165,7 @@
         <p class="section-label">Submitted</p>
         <h2>Request received</h2>
         <p class="muted" id="join-done-copy">
-          Your request is pending review. After approval, you can log in here.
+          Your request is pending review. We’ll email you when it’s accepted or declined. After approval, you can log in here.
         </p>
         <div class="done-actions">
           <a class="btn btn-primary" href="/verify">Go to log in</a>
@@ -257,11 +272,13 @@
         e.preventDefault();
         clearError();
         const name = document.getElementById("join-name").value.trim();
+        const email = document.getElementById("join-email").value.trim();
         const dateOfBirth = document.getElementById("join-dob").value;
         const note = document.getElementById("join-note").value.trim();
         const secret = document.getElementById("join-secret").value.trim();
 
         if (!name) return showError("Enter your legal name");
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError("Enter a valid email address");
         if (!dateOfBirth) return showError("Enter your date of birth");
         if (!selectedFile) return showError("Add a clear face photo");
         if (secret && secret.length < 4) {
@@ -293,6 +310,7 @@
             body: JSON.stringify({
               action: "create",
               name,
+              email,
               dateOfBirth,
               note: note || undefined,
               secret: secret || undefined,

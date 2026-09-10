@@ -302,6 +302,8 @@ async function ensureSynkCoreTables(sql) {
     )
   `;
   await sql`CREATE INDEX IF NOT EXISTS synk_join_requests_status_idx ON synk_join_requests (status, created_at DESC)`;
+  await sql`ALTER TABLE synk_join_requests ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`;
 
   await seedVisitorSignInBusiness(sql);
 }
