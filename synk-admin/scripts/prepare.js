@@ -7,38 +7,32 @@ const root = path.join(__dirname, "..");
 const publicDir = path.join(root, "public");
 const sourcePublic = path.join(root, "..", "public");
 const sourceHtml = path.join(root, "src", "index.html");
+const sourceCss = path.join(root, "src", "admin.css");
+const touchIconSrc = path.join(root, "src", "apple-touch-icon.png");
 
 fs.mkdirSync(publicDir, { recursive: true });
 
-const assets = [
-  "styles.css",
+const sharedAssets = [
   "face.js",
   "force-refresh.js",
   "synk-logo.svg",
   "version.json",
 ];
 
-for (const name of assets) {
+for (const name of sharedAssets) {
   const from = path.join(sourcePublic, name);
   const to = path.join(publicDir, name);
-  if (!fs.existsSync(from)) {
-    throw new Error(`Missing shared asset: ${from}`);
-  }
+  if (!fs.existsSync(from)) throw new Error(`Missing shared asset: ${from}`);
   fs.copyFileSync(from, to);
 }
 
-// Synk-branded home-screen icon (not the visitor kiosk icon).
-const touchIconSrc = path.join(root, "src", "apple-touch-icon.png");
-const touchIconDest = path.join(publicDir, "apple-touch-icon.png");
-if (!fs.existsSync(touchIconSrc)) {
-  throw new Error(`Missing Synk Admin touch icon: ${touchIconSrc}`);
-}
-fs.copyFileSync(touchIconSrc, touchIconDest);
+if (!fs.existsSync(sourceCss)) throw new Error(`Missing CSS: ${sourceCss}`);
+fs.copyFileSync(sourceCss, path.join(publicDir, "admin.css"));
 
-if (!fs.existsSync(sourceHtml)) {
-  throw new Error(`Missing Synk Admin page: ${sourceHtml}`);
-}
+if (!fs.existsSync(touchIconSrc)) throw new Error(`Missing touch icon: ${touchIconSrc}`);
+fs.copyFileSync(touchIconSrc, path.join(publicDir, "apple-touch-icon.png"));
 
+if (!fs.existsSync(sourceHtml)) throw new Error(`Missing page: ${sourceHtml}`);
 let html = fs.readFileSync(sourceHtml, "utf8");
 
 const visitorOrigin =

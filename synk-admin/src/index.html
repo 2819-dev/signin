@@ -14,70 +14,47 @@
     <title>Synk Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synk-admin3" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin3" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/admin.css" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js" defer></script>
   </head>
   <body class="synk-admin">
-    <div class="sand-waves" aria-hidden="true">
-      <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-        <path d="M-80 110 C 140 70, 300 150, 500 118 S 880 60, 1100 112 S 1380 170, 1560 120" stroke-width="1.15" opacity="0.42"/>
-        <path d="M-80 160 C 120 120, 280 190, 480 155 S 860 100, 1080 155 S 1360 210, 1560 165" stroke-width="1.4" opacity="0.55"/>
-        <path d="M-80 280 C 160 235, 340 315, 560 275 S 940 220, 1160 280 S 1430 340, 1560 295" stroke-width="1.45" opacity="0.5"/>
-        <path d="M-80 420 C 170 375, 370 455, 600 415 S 980 360, 1200 420 S 1460 480, 1560 435" stroke-width="1.3" opacity="0.44"/>
-        <path d="M-80 580 C 180 535, 400 615, 630 575 S 1020 520, 1240 580 S 1480 640, 1560 595" stroke-width="1.1" opacity="0.28"/>
-        <path d="M-80 745 C 170 705, 420 780, 650 740 S 1050 685, 1270 745 S 1500 805, 1560 760" stroke-width="1.05" opacity="0.28"/>
-      </svg>
-    </div>
-
     <main id="unlock-view" class="screen">
       <section class="card">
-        <div class="synk-hero" style="margin-bottom:14px;">
-          <div class="synk-hero-logo" aria-hidden="true">
-            <img src="/synk-logo.svg" alt="" />
-          </div>
-          <div>
-            <p class="eyebrow">Synk Admin</p>
-            <h1 style="margin:0;">Welcome back</h1>
-          </div>
-        </div>
-        <p class="subtitle">Enter the Synk Admin secret to manage members, apps, and verify settings.</p>
+        <h1>Synk Admin</h1>
+        <p class="lede">Enter the admin secret.</p>
         <p id="unlock-error" class="error hidden"></p>
         <form id="unlock-form" autocomplete="off">
           <div class="field">
-            <label for="secret">Synk Admin secret</label>
+            <label for="secret">Secret</label>
             <input
               id="secret"
               type="password"
               required
               autocomplete="current-password"
               enterkeyhint="go"
-              placeholder="Synk Admin secret"
             />
           </div>
-          <button class="btn btn-primary" type="submit">Continue</button>
+          <button class="btn" type="submit">Unlock</button>
         </form>
-        <p class="muted" style="margin:14px 0 0;font-size:0.82rem;">
-          Uses <code>SYNK_ADMIN_SECRET</code> — separate from Visitor Admin.
+        <p class="muted" style="margin-top:14px;font-size:0.82rem;">
+          Uses <code>SYNK_ADMIN_SECRET</code>. Separate from visitor admin.
         </p>
       </section>
     </main>
 
-    <div id="panel-view" class="admin-shell synk-admin-shell hidden">
+    <div id="panel-view" class="admin-shell hidden">
       <div id="pane-overview" class="admin-pane">
-        <div class="admin-top">
-          <header class="admin-header">
-            <div>
-              <p class="eyebrow">Synk ID</p>
-              <h1><span class="synk-mark" aria-hidden="true"><img src="/synk-logo.svg" alt="" /></span>Overview</h1>
-              <p class="muted" id="overview-subtitle">Identity control plane</p>
-            </div>
-            <div class="admin-header-actions">
-              <a class="btn btn-secondary btn-compact" href="/synk" target="_blank" rel="noopener">Open verify</a>
-              <button class="btn btn-secondary btn-compact" type="button" id="lock-btn">Lock</button>
-            </div>
-          </header>
-        </div>
+        <header class="admin-header">
+          <div>
+            <h1>Overview</h1>
+            <p class="muted" id="overview-subtitle">Synk Admin</p>
+          </div>
+          <div class="admin-header-actions">
+            <a class="btn btn-secondary btn-compact" href="/synk" target="_blank" rel="noopener">Verify</a>
+            <button class="btn btn-secondary btn-compact" type="button" id="lock-btn">Lock</button>
+          </div>
+        </header>
 
         <div class="synk-stat-grid" id="synk-stat-grid">
           <div class="synk-stat-card">
@@ -102,49 +79,34 @@
           </div>
         </div>
 
-        <section class="settings-card">
-          <h2 style="margin:0 0 6px;">Quick actions</h2>
-          <p class="muted" style="margin:0 0 12px;">Jump into the most common Synk Admin tasks.</p>
-          <div class="btn-row" style="flex-wrap:wrap;">
-            <button class="btn btn-primary btn-compact" type="button" data-jump="members">Enroll member</button>
+        <section class="panel">
+          <h2>Quick actions</h2>
+          <div class="btn-row">
+            <button class="btn btn-compact" type="button" data-jump="members">Enroll member</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="apps">Add app</button>
-            <button class="btn btn-secondary btn-compact" type="button" data-jump="activity">View activity</button>
-            <button class="btn btn-secondary btn-compact" type="button" data-jump="settings">Camera framing</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-jump="activity">Activity</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-jump="settings">Camera</button>
           </div>
         </section>
 
-        <section class="settings-card">
-          <h2 style="margin:0 0 6px;">Latest activity</h2>
+        <section class="panel">
+          <h2>Latest activity</h2>
           <div id="overview-events" class="synk-events"></div>
           <p id="overview-events-empty" class="chat-empty-note">No activity yet.</p>
         </section>
       </div>
 
       <div id="pane-members" class="admin-pane hidden">
-        <div class="admin-top">
-          <header class="admin-header">
-            <div>
-              <p class="eyebrow">Directory</p>
-              <h1>Members</h1>
-              <p class="muted">Enroll once. Face-first verify issues a short-lived Synk pass.</p>
-            </div>
-          </header>
-        </div>
-
-        <section class="settings-card">
-          <div class="synk-hero">
-            <div class="synk-hero-logo" aria-hidden="true">
-              <img src="/synk-logo.svg" alt="" />
-            </div>
-            <div>
-              <h2 style="margin:0 0 6px;">Enroll Synk member</h2>
-              <p class="muted" style="margin:0;">
-                Clear front-facing photo required. Optional backup secret for code + DOB fallback.
-              </p>
-            </div>
+        <header class="admin-header">
+          <div>
+            <h1>Members</h1>
+            <p class="muted">Enroll people. Face verify issues a short Synk pass.</p>
           </div>
+        </header>
 
-          <form id="synk-enroll-form" class="synk-enroll-form" autocomplete="off" style="margin-top:16px;">
+        <section class="panel">
+          <h2>Enroll</h2>
+          <form id="synk-enroll-form" class="synk-enroll-form" autocomplete="off">
             <div class="field">
               <label for="synk-enroll-name">Legal name</label>
               <input id="synk-enroll-name" type="text" maxlength="100" required placeholder="Full name" />
@@ -163,26 +125,22 @@
               </select>
             </div>
             <div class="field">
-              <label for="synk-enroll-file">Face biometrics photo</label>
+              <label for="synk-enroll-file">Face photo</label>
               <input id="synk-enroll-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
             </div>
             <div class="field">
               <label for="synk-enroll-secret">Backup secret <span class="muted">(optional)</span></label>
-              <input id="synk-enroll-secret" type="password" maxlength="200" placeholder="Only if camera fails" autocomplete="new-password" />
+              <input id="synk-enroll-secret" type="password" maxlength="200" autocomplete="new-password" />
             </div>
-            <button class="btn btn-primary" type="submit" id="synk-enroll-btn">Enroll Synk member</button>
-            <p id="synk-enroll-status" class="muted" style="margin: 8px 0 0; font-size: 0.85rem;"></p>
+            <button class="btn" type="submit" id="synk-enroll-btn">Enroll</button>
+            <p id="synk-enroll-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
           </form>
         </section>
 
-        <section class="settings-card">
-          <div class="admin-header" style="margin-bottom:12px;">
-            <div>
-              <h2 style="margin:0;">Member list</h2>
-              <p class="muted" style="margin:4px 0 0;font-size:0.85rem;" id="members-count-label">0 members</p>
-            </div>
-          </div>
-          <div class="field" style="margin-bottom:12px;">
+        <section class="panel">
+          <h2>Member list</h2>
+          <p class="muted" style="margin:0 0 10px;font-size:0.85rem;" id="members-count-label">0 members</p>
+          <div class="field">
             <label for="member-search">Search</label>
             <input id="member-search" type="search" placeholder="Name or Synk code" autocomplete="off" />
           </div>
@@ -192,28 +150,25 @@
       </div>
 
       <div id="pane-apps" class="admin-pane hidden">
-        <div class="admin-top">
-          <header class="admin-header">
-            <div>
-              <p class="eyebrow">Integrations</p>
-              <h1>Connected apps</h1>
-              <p class="muted">Each app gets an API key to redeem Synk passes. Visitor Sign-In is built in.</p>
-            </div>
-          </header>
-        </div>
+        <header class="admin-header">
+          <div>
+            <h1>Apps</h1>
+            <p class="muted">API keys for redeeming Synk passes.</p>
+          </div>
+        </header>
 
-        <section class="settings-card">
+        <section class="panel">
           <form id="synk-app-form" class="synk-enroll-form" autocomplete="off">
             <div class="field">
               <label for="synk-app-name">App name</label>
-              <input id="synk-app-name" type="text" maxlength="100" required placeholder="Door access, HQ app…" />
+              <input id="synk-app-name" type="text" maxlength="100" required placeholder="Door access" />
             </div>
             <div class="field">
               <label for="synk-app-slug">Slug</label>
               <input id="synk-app-slug" type="text" maxlength="60" placeholder="door-access" />
             </div>
             <button class="btn btn-secondary" type="submit" id="synk-app-btn">Add app</button>
-            <p id="synk-app-status" class="muted" style="margin:8px 0 0;font-size:0.85rem;"></p>
+            <p id="synk-app-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
           </form>
           <div id="synk-apps" class="synk-apps" style="margin-top:14px;"></div>
           <p id="synk-apps-empty" class="chat-empty-note">No apps yet.</p>
@@ -221,20 +176,17 @@
       </div>
 
       <div id="pane-activity" class="admin-pane hidden">
-        <div class="admin-top">
-          <header class="admin-header">
-            <div>
-              <p class="eyebrow">Security</p>
-              <h1>Activity</h1>
-              <p class="muted">Verifies, passes, rate limits, and app key events.</p>
-            </div>
-            <div class="admin-header-actions">
-              <button class="btn btn-secondary btn-compact" type="button" id="refresh-activity-btn">Refresh</button>
-            </div>
-          </header>
-        </div>
-        <section class="settings-card">
-          <div class="field" style="margin-bottom:12px;">
+        <header class="admin-header">
+          <div>
+            <h1>Activity</h1>
+            <p class="muted">Verifies, passes, rate limits, key events.</p>
+          </div>
+          <div class="admin-header-actions">
+            <button class="btn btn-secondary btn-compact" type="button" id="refresh-activity-btn">Refresh</button>
+          </div>
+        </header>
+        <section class="panel">
+          <div class="field">
             <label for="activity-filter">Filter</label>
             <input id="activity-filter" type="search" placeholder="Type, app, or detail" autocomplete="off" />
           </div>
@@ -244,63 +196,50 @@
       </div>
 
       <div id="pane-settings" class="admin-pane hidden">
-        <div class="admin-top">
-          <header class="admin-header">
-            <div>
-              <p class="eyebrow">Config</p>
-              <h1>Settings</h1>
-              <p class="muted">Framing and Synk Admin session.</p>
-            </div>
-          </header>
-        </div>
+        <header class="admin-header">
+          <div>
+            <h1>Settings</h1>
+            <p class="muted">Camera framing and session.</p>
+          </div>
+        </header>
 
-        <section class="settings-card">
-          <h2 style="margin:0 0 6px;">Tablet camera framing</h2>
+        <section class="panel">
+          <h2>Camera side</h2>
           <p class="muted" style="margin:0 0 12px;">
-            Used by Synk verify and the visitor kiosk face flow. Preview stays upright; we digitally reframe so standing at screen center feels camera-centered.
+            Used by Synk verify and the visitor kiosk face flow.
           </p>
           <div class="field">
-            <label for="camera-side">Camera side</label>
+            <label for="camera-side">Side</label>
             <select id="camera-side">
-              <option value="left">Camera on left edge</option>
-              <option value="right">Camera on right edge</option>
-              <option value="center">Camera centered / portrait</option>
+              <option value="left">Left edge</option>
+              <option value="right">Right edge</option>
+              <option value="center">Centered / portrait</option>
             </select>
           </div>
-          <p id="camera-side-status" class="muted" style="margin:8px 0 0;font-size:0.85rem;"></p>
+          <p id="camera-side-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
         </section>
 
-        <section class="settings-card">
-          <h2 style="margin:0 0 6px;">Links</h2>
+        <section class="panel">
+          <h2>Links</h2>
           <div class="synk-link-list">
-            <a href="/synk" target="_blank" rel="noopener">Public Synk verify →</a>
-            <a href="/admin" target="_blank" rel="noopener">Visitor Admin (different secret) →</a>
+            <a href="/synk" target="_blank" rel="noopener">Public Synk verify</a>
+            <a href="/admin" target="_blank" rel="noopener">Visitor Admin</a>
           </div>
         </section>
 
-        <section class="settings-card">
-          <h2 style="margin:0 0 6px;">Session</h2>
-          <p class="muted" style="margin:0 0 12px;">Secret stays in this device’s local storage until you lock.</p>
-          <button class="btn btn-danger" type="button" id="lock-btn-settings">Lock Synk Admin</button>
+        <section class="panel">
+          <h2>Session</h2>
+          <p class="muted" style="margin:0 0 12px;">Secret stays on this device until you lock.</p>
+          <button class="btn btn-danger" type="button" id="lock-btn-settings">Lock</button>
         </section>
       </div>
 
-      <nav class="admin-tabbar synk-admin-tabbar" aria-label="Synk Admin sections">
-        <button type="button" class="admin-tab active" data-pane="overview" id="tab-overview">
-          <span class="admin-tab-label">Home</span>
-        </button>
-        <button type="button" class="admin-tab" data-pane="members" id="tab-members">
-          <span class="admin-tab-label">Members</span>
-        </button>
-        <button type="button" class="admin-tab" data-pane="apps" id="tab-apps">
-          <span class="admin-tab-label">Apps</span>
-        </button>
-        <button type="button" class="admin-tab" data-pane="activity" id="tab-activity">
-          <span class="admin-tab-label">Activity</span>
-        </button>
-        <button type="button" class="admin-tab" data-pane="settings" id="tab-settings">
-          <span class="admin-tab-label">Settings</span>
-        </button>
+      <nav class="admin-tabbar" aria-label="Synk Admin sections">
+        <button type="button" class="admin-tab active" data-pane="overview" id="tab-overview">Home</button>
+        <button type="button" class="admin-tab" data-pane="members" id="tab-members">Members</button>
+        <button type="button" class="admin-tab" data-pane="apps" id="tab-apps">Apps</button>
+        <button type="button" class="admin-tab" data-pane="activity" id="tab-activity">Activity</button>
+        <button type="button" class="admin-tab" data-pane="settings" id="tab-settings">Settings</button>
       </nav>
     </div>
 
