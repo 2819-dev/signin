@@ -294,14 +294,16 @@ button.btn:disabled {
 
 .synk-profiles,
 .synk-apps,
-.synk-events {
+.synk-events,
+.synk-sessions {
   display: grid;
   gap: 10px;
 }
 
 .synk-profile-card,
 .synk-app-card,
-.synk-event-row {
+.synk-event-row,
+.synk-session-row {
   border: 1px solid var(--line);
   padding: 12px;
   background: var(--surface);
@@ -327,10 +329,17 @@ button.btn:disabled {
   min-width: 0;
 }
 
+.synk-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
 .synk-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.85rem;
-  margin-top: 2px;
   color: var(--accent-ink);
 }
 
@@ -343,6 +352,64 @@ button.btn:disabled {
 .synk-profile-card.disabled,
 .synk-app-card.disabled {
   opacity: 0.55;
+}
+
+.activity-filters {
+  display: grid;
+  gap: 0;
+}
+
+@media (min-width: 640px) {
+  .activity-filters {
+    grid-template-columns: 1fr minmax(140px, 200px);
+    gap: 12px;
+    align-items: end;
+  }
+
+  .activity-filters .field {
+    margin-bottom: 12px;
+  }
+}
+
+.synk-session-row {
+  display: grid;
+  gap: 8px;
+}
+
+.synk-session-row.current {
+  border-color: #b7c9ef;
+  background: var(--accent-soft);
+}
+
+.synk-session-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.synk-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #b7c9ef;
+  background: var(--surface);
+  color: var(--accent-ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+}
+
+.synk-session-row.revoked {
+  opacity: 0.55;
+}
+
+.synk-session-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+  word-break: break-word;
 }
 
 .synk-link-list {
@@ -457,6 +524,11 @@ button.btn:disabled {
 
   .btn-danger {
     border-color: #6a3030;
+  }
+
+  .synk-badge,
+  .synk-session-row.current {
+    border-color: #3d547a;
   }
 
   .synk-link-list a:hover,

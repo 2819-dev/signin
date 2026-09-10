@@ -14,7 +14,7 @@
     <title>Synk Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synk-admin3" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin3" />
-    <link rel="stylesheet" href="/admin.css?v=color1" />
+    <link rel="stylesheet" href="/admin.css?v=color2" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js" defer></script>
   </head>
@@ -65,7 +65,7 @@
           <button class="btn" type="submit" id="unlock-btn">Sign in</button>
         </form>
         <p class="muted" style="margin-top:14px;font-size:0.82rem;">
-          Username + password + TOTP. Session stays on this device until you lock or it expires.
+          Protected with 2FA, revocable server sessions, and idle auto-lock.
         </p>
       </section>
     </main>
@@ -209,13 +209,22 @@
             <p class="muted">Verifies, passes, rate limits, key events.</p>
           </div>
           <div class="admin-header-actions">
+            <button class="btn btn-secondary btn-compact" type="button" id="export-activity-btn">Export CSV</button>
             <button class="btn btn-secondary btn-compact" type="button" id="refresh-activity-btn">Refresh</button>
           </div>
         </header>
         <section class="panel">
-          <div class="field">
-            <label for="activity-filter">Filter</label>
-            <input id="activity-filter" type="search" placeholder="Type, app, or detail" autocomplete="off" />
+          <div class="activity-filters">
+            <div class="field">
+              <label for="activity-filter">Filter</label>
+              <input id="activity-filter" type="search" placeholder="Type, app, or detail" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="activity-type">Type</label>
+              <select id="activity-type">
+                <option value="">All types</option>
+              </select>
+            </div>
           </div>
           <div id="synk-events" class="synk-events"></div>
           <p id="synk-events-empty" class="chat-empty-note">No activity yet.</p>
@@ -255,8 +264,27 @@
         </section>
 
         <section class="panel">
+          <h2>Security</h2>
+          <p class="muted" style="margin:0 0 12px;">
+            Sessions are server-tracked and can be revoked from any signed-in device.
+          </p>
+          <p id="security-session-meta" class="muted" style="margin:0 0 12px;font-size:0.85rem;">
+            Not signed in.
+          </p>
+          <div id="synk-sessions" class="synk-sessions"></div>
+          <p id="synk-sessions-empty" class="chat-empty-note hidden">No sessions found.</p>
+          <div class="btn-row" style="margin-top:12px;">
+            <button class="btn btn-danger btn-compact" type="button" id="revoke-all-sessions-btn">
+              Revoke all sessions
+            </button>
+          </div>
+        </section>
+
+        <section class="panel">
           <h2>Session</h2>
-          <p class="muted" style="margin:0 0 12px;">Signed-in session stays on this device until you lock or it expires.</p>
+          <p class="muted" style="margin:0 0 12px;">
+            Lock signs you out on this device and revokes the current server session. Idle time also auto-locks.
+          </p>
           <button class="btn btn-danger" type="button" id="lock-btn-settings">Lock</button>
         </section>
       </div>
@@ -317,17 +345,31 @@
       const overviewEventsEl = document.getElementById("overview-events");
       const overviewEventsEmpty = document.getElementById("overview-events-empty");
       const activityFilter = document.getElementById("activity-filter");
+      const activityTypeSelect = document.getElementById("activity-type");
       const cameraSideSelect = document.getElementById("camera-side");
       const cameraSideStatus = document.getElementById("camera-side-status");
+      const overviewSubtitle = document.getElementById("overview-subtitle");
+      const securitySessionMeta = document.getElementById("security-session-meta");
+      const synkSessionsEl = document.getElementById("synk-sessions");
+      const synkSessionsEmpty = document.getElementById("synk-sessions-empty");
 
       const STORAGE_KEY = "synk_admin_session";
       const PANE_KEY = "synk_admin_pane";
+      const DEFAULT_IDLE_SEC = 30 * 60;
 
-      let sessionToken = localStorage.getItem(STORAGE_KEY) || "";
+      let sessionToken = "";
+      let sessionExpiresAt = "";
+      let sessionIdleTimeoutSec = DEFAULT_IDLE_SEC;
+      let sessionUsername = "";
+      let sessionId = "";
       let synkProfilesCache = [];
       let synkAppsCache = [];
       let synkEventsCache = [];
+      let synkEventTypesCache = [];
+      let synkSessionsCache = [];
       let pollTimer = null;
+      let idleTimer = null;
+      let locking = false;
 
       function showToast(message) {
         toastEl.textContent = message;
@@ -365,11 +407,54 @@
         return `${m}/${d}/${y}`;
       }
 
+      function readStoredSession() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object" && parsed.token) {
+            return {
+              token: String(parsed.token),
+              expiresAt: parsed.expiresAt || "",
+              idleTimeoutSec: Number(parsed.idleTimeoutSec) || DEFAULT_IDLE_SEC,
+            };
+          }
+        } catch (_) {
+          /* legacy plain token string */
+        }
+        return { token: raw, expiresAt: "", idleTimeoutSec: DEFAULT_IDLE_SEC };
+      }
+
+      function writeStoredSession({ token, expiresAt, idleTimeoutSec }) {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            token: String(token || ""),
+            expiresAt: expiresAt || null,
+            idleTimeoutSec: Number(idleTimeoutSec) || DEFAULT_IDLE_SEC,
+          })
+        );
+      }
+
+      function clearStoredSession() {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+
       function adminHeaders() {
         return {
           "Content-Type": "application/json",
           Authorization: `Bearer ${sessionToken}`,
         };
+      }
+
+      function updateOverviewSubtitle() {
+        if (!overviewSubtitle) return;
+        let text = "Synk Admin";
+        if (sessionExpiresAt) {
+          const when = formatTime(sessionExpiresAt);
+          if (when) text += ` · session ends ${when}`;
+        }
+        overviewSubtitle.textContent = text;
       }
 
       function setAdminPane(pane) {
@@ -379,13 +464,51 @@
           tabs[key].classList.toggle("active", key === next);
         });
         localStorage.setItem(PANE_KEY, next);
+        if (next === "settings") {
+          refreshSessions().catch(() => {});
+        }
+        if (next === "activity") {
+          refreshSynkActivity().catch(() => {});
+        }
       }
 
-      function lockAdmin() {
-        sessionToken = "";
-        localStorage.removeItem(STORAGE_KEY);
+      function stopIdleWatch() {
+        if (idleTimer) {
+          clearTimeout(idleTimer);
+          idleTimer = null;
+        }
+      }
+
+      function resetIdleTimer() {
+        if (!sessionToken) return;
+        stopIdleWatch();
+        const ms = Math.max(60, Number(sessionIdleTimeoutSec) || DEFAULT_IDLE_SEC) * 1000;
+        idleTimer = setTimeout(() => {
+          showToast("Locked after idle");
+          lockAdmin({ remote: true });
+        }, ms);
+      }
+
+      function startIdleWatch() {
+        resetIdleTimer();
+      }
+
+      async function lockAdmin({ remote = true } = {}) {
+        if (locking) return;
+        locking = true;
+        const token = sessionToken;
+        stopIdleWatch();
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = null;
+        sessionToken = "";
+        sessionExpiresAt = "";
+        sessionIdleTimeoutSec = DEFAULT_IDLE_SEC;
+        sessionUsername = "";
+        sessionId = "";
+        clearStoredSession();
+        updateOverviewSubtitle();
+        if (securitySessionMeta) securitySessionMeta.textContent = "Not signed in.";
+        if (synkSessionsEl) synkSessionsEl.innerHTML = "";
         panelView.classList.add("hidden");
         unlockView.classList.remove("hidden");
         const userInput = document.getElementById("username");
@@ -394,6 +517,22 @@
         if (passInput) passInput.value = "";
         if (totpInput) totpInput.value = "";
         if (userInput && !userInput.value) userInput.focus();
+        try {
+          if (remote && token) {
+            await fetch("/api/synk-admin-session", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ action: "logout" }),
+            });
+          }
+        } catch (_) {
+          /* ignore logout network errors */
+        } finally {
+          locking = false;
+        }
       }
 
       function synkPolicyLabel(policy) {
@@ -482,13 +621,21 @@
             const photo = profile.photoUrl
               ? `<img src="${escapeHtml(profile.photoUrl)}" alt="" />`
               : `<img alt="" style="background:#ddd" />`;
+            const code = profile.synkCode || "";
             return `
               <article class="synk-profile-card ${profile.enabled ? "" : "disabled"}" data-synk-id="${escapeHtml(profile.id)}">
                 ${photo}
                 <div class="synk-profile-meta">
                   <div>
                     <strong>${escapeHtml(profile.name)}</strong>
-                    <div class="synk-code">${escapeHtml(profile.synkCode || "")}</div>
+                    <div class="synk-code-row">
+                      <div class="synk-code">${escapeHtml(code)}</div>
+                      ${
+                        code
+                          ? `<button class="btn btn-secondary btn-compact" type="button" data-synk-action="copy-code" data-synk-code="${escapeHtml(code)}">Copy</button>`
+                          : ""
+                      }
+                    </div>
                     <div class="muted" style="font-size:0.82rem;margin-top:4px;">
                       DOB ${escapeHtml(formatDob(profile.dateOfBirth))}
                       · ${escapeHtml(synkPolicyLabel(profile.policy))}
@@ -558,10 +705,29 @@
           .join("");
       }
 
+      function populateActivityTypes(types) {
+        synkEventTypesCache = types || [];
+        const current = activityTypeSelect.value;
+        const options = [`<option value="">All types</option>`].concat(
+          synkEventTypesCache.map(
+            (row) =>
+              `<option value="${escapeHtml(row.type)}">${escapeHtml(row.type)}${
+                row.count != null ? ` (${row.count})` : ""
+              }</option>`
+          )
+        );
+        activityTypeSelect.innerHTML = options.join("");
+        if (current && [...activityTypeSelect.options].some((o) => o.value === current)) {
+          activityTypeSelect.value = current;
+        }
+      }
+
       function filteredEvents() {
         const q = activityFilter.value.trim().toLowerCase();
-        if (!q) return synkEventsCache;
+        const type = activityTypeSelect.value;
         return synkEventsCache.filter((ev) => {
+          if (type && ev.type !== type) return false;
+          if (!q) return true;
           const hay = `${ev.type || ""} ${ev.appSlug || ""} ${ev.detail || ""} ${ev.ip || ""}`.toLowerCase();
           return hay.includes(q);
         });
@@ -597,6 +763,57 @@
         renderEventList(overviewEventsEl, overviewEventsEmpty, synkEventsCache, 8);
       }
 
+      function shortUa(ua) {
+        const raw = String(ua || "").trim();
+        if (!raw) return "Unknown device";
+        return raw.length > 72 ? `${raw.slice(0, 69)}…` : raw;
+      }
+
+      function renderSessions() {
+        if (!synkSessionsEl) return;
+        const active = synkSessionsCache.filter((s) => !s.revoked);
+        const list = synkSessionsCache;
+        if (!list.length) {
+          synkSessionsEl.innerHTML = "";
+          synkSessionsEmpty.classList.remove("hidden");
+          return;
+        }
+        synkSessionsEmpty.classList.add("hidden");
+        synkSessionsEl.innerHTML = list
+          .map((session) => {
+            const isCurrent = Boolean(session.current) || String(session.id) === String(sessionId);
+            const when = session.lastSeenAt || session.createdAt;
+            return `
+              <article class="synk-session-row ${isCurrent ? "current" : ""} ${session.revoked ? "revoked" : ""}" data-session-id="${escapeHtml(session.id)}">
+                <div class="synk-session-top">
+                  <strong>${escapeHtml(session.ip || "No IP")}</strong>
+                  ${isCurrent ? `<span class="synk-badge">Current</span>` : ""}
+                  ${session.revoked ? `<span class="synk-badge">Revoked</span>` : ""}
+                </div>
+                <div class="synk-session-meta">
+                  ${escapeHtml(shortUa(session.userAgent))}
+                  <br />
+                  Last seen ${escapeHtml(when ? formatTime(when) : "—")}
+                  ${session.expiresAt ? ` · expires ${escapeHtml(formatTime(session.expiresAt))}` : ""}
+                </div>
+                ${
+                  !session.revoked && !isCurrent
+                    ? `<div class="btn-row"><button class="btn btn-danger btn-compact" type="button" data-session-action="revoke">Revoke</button></div>`
+                    : ""
+                }
+              </article>
+            `;
+          })
+          .join("");
+        if (securitySessionMeta) {
+          const parts = [];
+          if (sessionUsername) parts.push(`Signed in as ${sessionUsername}`);
+          if (sessionExpiresAt) parts.push(`expires ${formatTime(sessionExpiresAt)}`);
+          parts.push(`${active.length} active session${active.length === 1 ? "" : "s"}`);
+          securitySessionMeta.textContent = parts.join(" · ");
+        }
+      }
+
       async function refreshSynkProfiles() {
         const res = await fetch("/api/synk-profiles", { headers: adminHeaders() });
         const data = await res.json().catch(() => ({}));
@@ -610,8 +827,52 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Could not load Synk apps");
         renderSynkApps(data.apps || []);
-        synkEventsCache = data.events || [];
-        renderSynkEvents();
+        return data;
+      }
+
+      async function refreshSynkActivity() {
+        const qs = new URLSearchParams({ limit: "150" });
+        const type = activityTypeSelect.value;
+        if (type) qs.set("type", type);
+        try {
+          const res = await fetch(`/api/synk-activity?${qs}`, { headers: adminHeaders() });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not load activity");
+          synkEventsCache = data.events || [];
+          if (Array.isArray(data.types)) populateActivityTypes(data.types);
+          renderSynkEvents();
+          return data;
+        } catch (err) {
+          const appsRes = await fetch("/api/synk-apps", { headers: adminHeaders() });
+          const appsData = await appsRes.json().catch(() => ({}));
+          if (!appsRes.ok) throw err;
+          synkEventsCache = appsData.events || [];
+          renderSynkEvents();
+          return appsData;
+        }
+      }
+
+      async function refreshSessions() {
+        const res = await fetch("/api/synk-admin-session", { headers: adminHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load sessions");
+        sessionUsername = data.username || sessionUsername || "";
+        sessionId = data.sessionId || sessionId || "";
+        if (data.expiresAt) {
+          sessionExpiresAt = data.expiresAt;
+          writeStoredSession({
+            token: sessionToken,
+            expiresAt: sessionExpiresAt,
+            idleTimeoutSec: sessionIdleTimeoutSec,
+          });
+        }
+        if (data.idleTimeoutSec) {
+          sessionIdleTimeoutSec = Number(data.idleTimeoutSec) || DEFAULT_IDLE_SEC;
+        }
+        synkSessionsCache = data.sessions || [];
+        updateOverviewSubtitle();
+        renderSessions();
+        return data;
       }
 
       async function refreshSettings() {
@@ -633,21 +894,57 @@
       }
 
       async function refreshAll() {
-        await Promise.all([refreshSynkProfiles(), refreshSynkApps(), refreshSettings()]);
+        await Promise.all([
+          refreshSynkProfiles(),
+          refreshSynkApps(),
+          refreshSynkActivity(),
+          refreshSettings(),
+        ]);
       }
 
-      async function openAdminSession(token) {
+      async function exportActivityCsv() {
+        const res = await fetch("/api/synk-activity?format=csv&limit=500", {
+          headers: { Authorization: `Bearer ${sessionToken}` },
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Could not export activity");
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "synk-activity.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      async function openAdminSession(token, meta = {}) {
         sessionToken = String(token || "").trim();
         if (!sessionToken) throw new Error("Missing session");
+        if (meta.expiresAt) sessionExpiresAt = meta.expiresAt;
+        if (meta.idleTimeoutSec) {
+          sessionIdleTimeoutSec = Number(meta.idleTimeoutSec) || DEFAULT_IDLE_SEC;
+        }
         await refreshSettings();
-        localStorage.setItem(STORAGE_KEY, sessionToken);
+        writeStoredSession({
+          token: sessionToken,
+          expiresAt: sessionExpiresAt,
+          idleTimeoutSec: sessionIdleTimeoutSec,
+        });
         unlockView.classList.add("hidden");
         panelView.classList.remove("hidden");
+        updateOverviewSubtitle();
         setAdminPane(localStorage.getItem(PANE_KEY) || "overview");
-        await Promise.all([refreshSynkProfiles(), refreshSynkApps()]);
+        await Promise.all([refreshSynkProfiles(), refreshSynkApps(), refreshSynkActivity()]);
+        refreshSessions().catch(() => {});
+        startIdleWatch();
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(() => {
           refreshSynkApps().catch(() => {});
+          refreshSynkActivity().catch(() => {});
           refreshSettings().catch(() => {});
         }, 15000);
       }
@@ -661,7 +958,12 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Could not sign in");
         if (!data.token) throw new Error("Login succeeded but no session was returned");
-        await openAdminSession(data.token);
+        sessionUsername = username;
+        sessionId = data.sessionId || "";
+        await openAdminSession(data.token, {
+          expiresAt: data.expiresAt || "",
+          idleTimeoutSec: data.idleTimeoutSec || DEFAULT_IDLE_SEC,
+        });
       }
 
       unlockForm.addEventListener("submit", async (e) => {
@@ -688,14 +990,38 @@
         }
       });
 
-      document.getElementById("lock-btn").addEventListener("click", lockAdmin);
-      document.getElementById("lock-btn-settings").addEventListener("click", lockAdmin);
+      document.getElementById("lock-btn").addEventListener("click", () => lockAdmin({ remote: true }));
+      document.getElementById("lock-btn-settings").addEventListener("click", () => lockAdmin({ remote: true }));
       document.getElementById("refresh-activity-btn").addEventListener("click", async () => {
         try {
-          await refreshSynkApps();
+          await refreshSynkActivity();
           showToast("Activity refreshed");
         } catch (err) {
           showToast(err.message || "Could not refresh");
+        }
+      });
+      document.getElementById("export-activity-btn").addEventListener("click", async () => {
+        try {
+          await exportActivityCsv();
+          showToast("CSV downloaded");
+        } catch (err) {
+          showToast(err.message || "Could not export");
+        }
+      });
+      document.getElementById("revoke-all-sessions-btn").addEventListener("click", async () => {
+        if (!confirm("Revoke all sessions? You will be signed out everywhere.")) return;
+        try {
+          const res = await fetch("/api/synk-admin-session", {
+            method: "POST",
+            headers: adminHeaders(),
+            body: JSON.stringify({ action: "revoke-all" }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not revoke sessions");
+          showToast("All sessions revoked");
+          await lockAdmin({ remote: false });
+        } catch (err) {
+          showToast(err.message || "Could not revoke sessions");
         }
       });
 
@@ -709,6 +1035,14 @@
 
       memberSearch.addEventListener("input", () => renderSynkProfiles());
       activityFilter.addEventListener("input", () => renderSynkEvents());
+      activityTypeSelect.addEventListener("change", async () => {
+        try {
+          await refreshSynkActivity();
+        } catch (err) {
+          showToast(err.message || "Could not filter activity");
+          renderSynkEvents();
+        }
+      });
 
       cameraSideSelect.addEventListener("change", async () => {
         const next = cameraSideSelect.value;
@@ -836,6 +1170,19 @@
         if (!btn || !card) return;
         const action = btn.getAttribute("data-synk-action");
         if (action === "photo" || action === "secret" || action === "policy") return;
+
+        if (action === "copy-code") {
+          const code = btn.getAttribute("data-synk-code") || "";
+          if (!code) return;
+          try {
+            await navigator.clipboard.writeText(code);
+            showToast("Synk code copied");
+          } catch (_) {
+            showToast(code);
+          }
+          return;
+        }
+
         const id = card.getAttribute("data-synk-id");
         const profile = synkProfilesCache.find((p) => p.id === id);
         if (!profile) return;
@@ -895,6 +1242,29 @@
           } catch (err) {
             showToast(err.message || "Could not remove");
           }
+        }
+      });
+
+      synkSessionsEl.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-session-action]");
+        const row = e.target.closest("[data-session-id]");
+        if (!btn || !row) return;
+        const action = btn.getAttribute("data-session-action");
+        const sid = row.getAttribute("data-session-id");
+        if (action !== "revoke" || !sid) return;
+        if (!confirm("Revoke this session?")) return;
+        try {
+          const res = await fetch("/api/synk-admin-session", {
+            method: "POST",
+            headers: adminHeaders(),
+            body: JSON.stringify({ action: "revoke", sessionId: sid }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not revoke session");
+          showToast("Session revoked");
+          await refreshSessions();
+        } catch (err) {
+          showToast(err.message || "Could not revoke session");
         }
       });
 
@@ -1007,6 +1377,16 @@
         }
       });
 
+      ["pointerdown", "keydown"].forEach((evt) => {
+        document.addEventListener(
+          evt,
+          () => {
+            if (sessionToken) resetIdleTimer();
+          },
+          { passive: true }
+        );
+      });
+
       fetch("/api/kiosk-status")
         .then((res) => res.json())
         .then((data) => {
@@ -1016,15 +1396,23 @@
         })
         .catch(() => {});
 
-      if (sessionToken) {
-        openAdminSession(sessionToken).catch(() => {
-          lockAdmin();
+      const stored = readStoredSession();
+      if (stored && stored.token) {
+        sessionExpiresAt = stored.expiresAt || "";
+        sessionIdleTimeoutSec = Number(stored.idleTimeoutSec) || DEFAULT_IDLE_SEC;
+        openAdminSession(stored.token, {
+          expiresAt: sessionExpiresAt,
+          idleTimeoutSec: sessionIdleTimeoutSec,
+        }).catch(() => {
+          lockAdmin({ remote: false });
         });
       }
 
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && sessionToken) {
+          resetIdleTimer();
           refreshAll().catch(() => {});
+          refreshSessions().catch(() => {});
         }
       });
     </script>
