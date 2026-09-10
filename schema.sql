@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS visitor_requests (
   name TEXT NOT NULL,
   reason TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'admitted', 'declined')),
+    CHECK (status IN ('pending', 'admitted', 'declined', 'timed_out')),
   decline_reason TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   resolved_at TIMESTAMPTZ
@@ -144,3 +144,10 @@ ALTER TABLE synk_profiles ALTER COLUMN secret_hash DROP NOT NULL;
 
 ALTER TABLE kiosk_settings
   ADD COLUMN IF NOT EXISTS camera_rotation INTEGER NOT NULL DEFAULT 90;
+
+
+-- Allow request timeouts when staff do not respond
+ALTER TABLE visitor_requests DROP CONSTRAINT IF EXISTS visitor_requests_status_check;
+ALTER TABLE visitor_requests
+  ADD CONSTRAINT visitor_requests_status_check
+  CHECK (status IN ('pending', 'admitted', 'declined', 'timed_out'));

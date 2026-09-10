@@ -150,6 +150,17 @@
           <button class="btn btn-secondary btn-inline" type="button" id="reset-btn">Start over</button>
         </div>
       </section>
+
+      <section id="timeout-view" class="stage stage-status hidden">
+        <div class="status-panel">
+          <div class="status-icon no" aria-hidden="true">⏱</div>
+          <p class="eyebrow">No response</p>
+          <h1>Request timed out</h1>
+          <p class="subtitle">Staff didn’t respond in time. Please try again.</p>
+          <p class="hint-text" id="timeout-reset-hint">Starting over in 15 seconds…</p>
+          <button class="btn btn-secondary btn-inline" type="button" id="timeout-reset-btn">Start over</button>
+        </div>
+      </section>
     </main>
 
     <button type="button" id="urgent-btn" class="urgent-fab hidden">Urgent</button>
@@ -369,6 +380,9 @@
       const waitingView = document.getElementById("waiting-view");
       const admittedView = document.getElementById("admitted-view");
       const declinedView = document.getElementById("declined-view");
+      const timeoutView = document.getElementById("timeout-view");
+      const timeoutResetBtn = document.getElementById("timeout-reset-btn");
+      const timeoutResetHint = document.getElementById("timeout-reset-hint");
       const form = document.getElementById("signin-form");
       const formError = document.getElementById("form-error");
       const submitBtn = document.getElementById("submit-btn");
@@ -390,6 +404,8 @@
       let pollTimer = null;
       let resetTimer = null;
       let countdownTimer = null;
+      let requestTimeoutTimer = null;
+      const REQUEST_TIMEOUT_MS = 60 * 1000;
       let kioskPollTimer = null;
       let clockTimer = null;
       let eventCountdownTimer = null;
@@ -537,9 +553,10 @@
           view === closedView ? "closed" :
           view === displayView ? "display" :
           view === waitingView ? "waiting" :
-          view === admittedView ? "admitted" : "declined";
+          view === admittedView ? "admitted" :
+          view === timeoutView ? "timeout" : "declined";
 
-        [closedView, displayView, formView, waitingView, admittedView, declinedView].forEach((el) => {
+        [closedView, displayView, formView, waitingView, admittedView, declinedView, timeoutView].forEach((el) => {
           el.classList.toggle("hidden", el !== view);
         });
         urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
@@ -882,6 +899,7 @@
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         if (resetTimer) { clearTimeout(resetTimer); resetTimer = null; }
         if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        if (requestTimeoutTimer) { clearTimeout(requestTimeoutTimer); requestTimeoutTimer = null; }
       }
 
       function applyClosedSign(settings) {
@@ -926,6 +944,26 @@
         resetTimer = setTimeout(goIdle, seconds * 1000);
       }
 
+      function showTimedOut() {
+        clearTimers();
+        show(timeoutView);
+        startAutoReset(timeoutResetHint, 15);
+      }
+
+      function beginWaitingForRequest(requestId, message) {
+        clearTimers();
+        currentRequestId = requestId;
+        if (message) waitingText.textContent = message;
+        show(waitingView);
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        pollTimer = setInterval(pollRequestStatus, 2000);
+        pollRequestStatus();
+        requestTimeoutTimer = setTimeout(() => {
+          // Client-side backup — server also expires at 60s on the next poll.
+          if (activeView === "waiting") showTimedOut();
+        }, REQUEST_TIMEOUT_MS);
+      }
+
       async function pollRequestStatus() {
         if (!currentRequestId) return;
         try {
@@ -938,6 +976,8 @@
             clearTimers();
             show(admittedView);
             startAutoReset(admittedResetHint, 5);
+          } else if (req.status === "timed_out") {
+            showTimedOut();
           } else if (req.status === "declined") {
             clearTimers();
             declineText.textContent = req.declineReason || "Your request was declined.";
@@ -972,7 +1012,7 @@
           displayMode = normalizeDisplayMode(settings.displayMode);
           applyTheme(settings.theme);
           syncChatFabVisibility();
-          if (currentRequestId || urgentMode || ["waiting", "admitted", "declined"].includes(activeView)) {
+          if (currentRequestId || urgentMode || ["waiting", "admitted", "declined", "timeout"].includes(activeView)) {
             urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
             return;
           }
@@ -1031,13 +1071,11 @@
             }
             throw new Error(data.error || "Could not send request");
           }
-          currentRequestId = data.request.id;
-          waitingText.textContent = `Thanks, ${data.request.name}. Please wait…`;
           setUrgentMode(false);
-          show(waitingView);
-          if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-          pollTimer = setInterval(pollRequestStatus, 2000);
-          pollRequestStatus();
+          beginWaitingForRequest(
+            data.request.id,
+            `Thanks, ${data.request.name}. Please wait…`
+          );
         } catch (err) {
           formError.textContent = err.message || "Something went wrong";
           formError.classList.remove("hidden");
@@ -1047,6 +1085,7 @@
 
       resetBtn.addEventListener("click", goIdle);
       admittedResetBtn.addEventListener("click", goIdle);
+      if (timeoutResetBtn) timeoutResetBtn.addEventListener("click", goIdle);
 
       // Face sign-in (camera recognition — not Apple Face ID)
       const moreOptionsBtn = document.getElementById("more-options-btn");
@@ -1413,12 +1452,7 @@
         synkStatus.textContent = "Verified. Waiting for approval.";
         await new Promise((r) => setTimeout(r, 700));
         closeSynkModal();
-        clearTimers();
-        currentRequestId = data.request.id;
-        waitingText.textContent = `${name}, please wait…`;
-        show(waitingView);
-        pollTimer = setInterval(pollRequestStatus, 2000);
-        pollRequestStatus();
+        beginWaitingForRequest(data.request.id, `${name}, please wait…`);
       }
 
       async function runSynkScan() {

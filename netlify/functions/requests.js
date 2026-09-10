@@ -1,4 +1,5 @@
 const { getSql, json, requireAdmin, mapRow } = require("./lib/db");
+const { expireTimedOutRequests } = require("./lib/request-timeout");
 const { notifyAdmins } = require("./lib/push");
 
 exports.handler = async (event) => {
@@ -77,6 +78,8 @@ exports.handler = async (event) => {
       const auth = requireAdmin(event);
       if (!auth.ok) return auth.response;
 
+      await expireTimedOutRequests(sql);
+
       const status =
         event.queryStringParameters && event.queryStringParameters.status
           ? event.queryStringParameters.status
@@ -96,7 +99,7 @@ exports.handler = async (event) => {
           FROM visitor_requests
           WHERE status = 'pending'
              OR (
-               status IN ('admitted', 'declined')
+               status IN ('admitted', 'declined', 'timed_out')
                AND resolved_at > NOW() - INTERVAL '10 seconds'
              )
           ORDER BY urgent DESC, created_at DESC

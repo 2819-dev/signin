@@ -1179,7 +1179,9 @@
                 ? "pill-admitted"
                 : req.status === "declined"
                   ? "pill-declined"
-                  : "pill-pending";
+                  : req.status === "timed_out"
+                    ? "pill-declined"
+                    : "pill-pending";
 
             const actions = isPending
               ? `
@@ -1200,6 +1202,8 @@
               `
               : req.status === "declined"
                 ? `<p class="muted" style="margin:0;">Declined: ${escapeHtml(req.declineReason || "")}</p>`
+                : req.status === "timed_out"
+                  ? `<p class="muted" style="margin:0;">Timed out</p>`
                 : `<p class="muted" style="margin:0;">Admitted</p>`;
 
             return `
@@ -1208,7 +1212,7 @@
                   <div class="avatar ${req.urgent ? "urgent" : ""}">${escapeHtml(initials(req.name))}</div>
                   <div style="min-width:0;flex:1;">
                     <div class="request-meta">
-                      <span class="pill ${pillClass}">${escapeHtml(req.status)}</span>
+                      <span class="pill ${pillClass}">${escapeHtml(req.status === "timed_out" ? "timed out" : req.status)}</span>
                       ${req.urgent ? '<span class="pill pill-urgent">Urgent</span>' : ""}
                       <span>${escapeHtml(formatTime(req.createdAt))}</span>
                     </div>

@@ -1,4 +1,5 @@
 const { getSql, json, mapRow } = require("./lib/db");
+const { expireTimedOutRequests } = require("./lib/request-timeout");
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
@@ -19,6 +20,8 @@ exports.handler = async (event) => {
     }
 
     const sql = getSql();
+    await expireTimedOutRequests(sql, { id });
+
     const rows = await sql`
       SELECT id, name, reason, status, decline_reason, urgent, created_at, resolved_at
       FROM visitor_requests
