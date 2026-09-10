@@ -114,13 +114,16 @@ exports.handler = async (event) => {
     }
 
     if (sender === "visitor") {
-      const visitorName = String(sessions[0].visitor_name || "").trim();
+      const visitorName = String(sessions[0].visitor_name || "").trim() || "Visitor";
       try {
         await notifyAdmins({
-          title: visitorName ? `Chat from ${visitorName}` : "New chat message",
-          body: text.length > 120 ? `${text.slice(0, 117)}…` : text,
+          title: "Chat",
+          body: visitorName,
           url: "/admin",
           tag: `chat-${sessionId}`,
+          type: "chat",
+          urgent: false,
+          name: visitorName,
         });
       } catch (err) {
         console.error("chat push failed", err.message || err);

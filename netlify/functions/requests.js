@@ -56,17 +56,12 @@ exports.handler = async (event) => {
       const request = mapRow(rows[0]);
 
       try {
-        const preview =
-          request.reason.length > 120
-            ? `${request.reason.slice(0, 117)}…`
-            : request.reason;
         await notifyAdmins({
-          title: request.urgent ? "Urgent request" : "Visitor waiting",
-          body: request.urgent
-            ? `${request.name} needs to come in now\n${preview}`
-            : `${request.name} wants to come in\n${preview}`,
+          title: request.urgent ? "Urgent" : "Request",
+          body: request.name || "Visitor",
           url: "/admin",
           tag: `visitor-${request.id}`,
+          type: request.urgent ? "urgent" : "request",
           urgent: request.urgent,
           name: request.name,
           reason: request.reason,

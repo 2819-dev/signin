@@ -2340,7 +2340,8 @@ html[data-theme="dark"] .pill-pending {
   padding: 11px 16px;
   border-radius: 999px;
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   z-index: 50;
   opacity: 0;
   pointer-events: none;
@@ -2350,6 +2351,21 @@ html[data-theme="dark"] .pill-pending {
 .toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+.toast-request {
+  background: #1f2937;
+  color: #fff;
+}
+
+.toast-urgent {
+  background: #c62828;
+  color: #fff;
+}
+
+.toast-chat {
+  background: #1565c0;
+  color: #fff;
 }
 
 @media (min-width: 768px) {

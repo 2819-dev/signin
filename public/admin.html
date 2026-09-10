@@ -544,6 +544,7 @@
       let chatSessionsCache = [];
       let chatMessagesKey = "";
       let knownChatIds = new Set();
+      let knownChatVisitorCounts = new Map();
       let chatFirstLoad = true;
       let currentSettings = {
         isOpen: true,
@@ -717,10 +718,12 @@
         }
       }
 
-      function showToast(message) {
+      function showToast(message, type) {
         toastEl.textContent = message;
-        toastEl.classList.add("show");
-        setTimeout(() => toastEl.classList.remove("show"), 2200);
+        toastEl.className = "toast show" + (type ? ` toast-${type}` : "");
+        setTimeout(() => {
+          toastEl.classList.remove("show");
+        }, 2200);
       }
 
       function normalizeDisplayMode(value) {
@@ -993,77 +996,111 @@
         }
       }
 
-      function playChime() {
+      function playAlert(kind) {
         try {
           if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
           }
           const now = audioCtx.currentTime;
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(880, now);
-          osc.frequency.exponentialRampToValueAtTime(1320, now + 0.12);
-          gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-          osc.connect(gain);
-          gain.connect(audioCtx.destination);
-          osc.start(now);
-          osc.stop(now + 0.4);
+          const beep = (freq, start, dur, vol, wave) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = wave || "sine";
+            osc.frequency.setValueAtTime(freq, now + start);
+            gain.gain.setValueAtTime(0.0001, now + start);
+            gain.gain.exponentialRampToValueAtTime(vol, now + start + 0.015);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + start + dur);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now + start);
+            osc.stop(now + start + dur + 0.02);
+          };
+
+          if (kind === "urgent") {
+            beep(980, 0, 0.11, 0.24, "square");
+            beep(980, 0.15, 0.11, 0.24, "square");
+            beep(1240, 0.3, 0.18, 0.26, "square");
+          } else if (kind === "chat") {
+            beep(660, 0, 0.09, 0.14, "sine");
+            beep(880, 0.11, 0.13, 0.14, "sine");
+          } else {
+            beep(880, 0, 0.11, 0.18, "sine");
+            beep(1175, 0.1, 0.2, 0.18, "sine");
+          }
         } catch (_) {}
       }
 
-      function notifyNew(req) {
-        playChime();
-        if (Notification.permission !== "granted") return;
+      function showOsAlert({ title, body, tag, type, requireInteraction }) {
+        if (!("Notification" in window) || Notification.permission !== "granted") {
+          return;
+        }
 
-        const preview =
-          (req.reason || "").length > 120
-            ? `${req.reason.slice(0, 117)}…`
-            : req.reason || "";
-        const title = req.urgent ? "Urgent request" : "Visitor waiting";
-        const body = req.urgent
-          ? `${req.name} needs to come in now\n${preview}`
-          : `${req.name} wants to come in\n${preview}`;
+        const options = {
+          body,
+          tag,
+          renotify: true,
+          requireInteraction: Boolean(requireInteraction),
+          icon: "/admin-touch-icon.png",
+          badge: "/admin-touch-icon.png",
+          data: { url: "/admin", type, urgent: type === "urgent" },
+          actions: [
+            { action: "open", title: "Open" },
+            { action: "dismiss", title: "Dismiss" },
+          ],
+        };
 
-        // Prefer service worker notifications when available (nicer + action buttons).
         if ("serviceWorker" in navigator) {
           navigator.serviceWorker.ready
-            .then((reg) =>
-              reg.showNotification(title, {
-                body,
-                tag: `visitor-${req.id}`,
-                renotify: true,
-                requireInteraction: Boolean(req.urgent),
-                icon: "/admin-touch-icon.png",
-                badge: "/admin-touch-icon.png",
-                data: { url: "/admin", urgent: Boolean(req.urgent) },
-                actions: [
-                  { action: "open", title: req.urgent ? "Review now" : "Open" },
-                  { action: "dismiss", title: "Dismiss" },
-                ],
-              })
-            )
+            .then((reg) => reg.showNotification(title, options))
             .catch(() => {
               try {
-                new Notification(title, { body, tag: `visitor-${req.id}` });
+                new Notification(title, { body, tag, renotify: true });
               } catch (_) {}
             });
           return;
         }
 
         try {
-          const n = new Notification(title, {
-            body,
-            tag: `visitor-${req.id}`,
-            renotify: true,
-          });
+          const n = new Notification(title, { body, tag, renotify: true });
           n.onclick = () => {
             window.focus();
             n.close();
           };
         } catch (_) {}
+      }
+
+      function notifyNew(req) {
+        const type = req.urgent ? "urgent" : "request";
+        const title = req.urgent ? "Urgent" : "Request";
+        const name = req.name || "Visitor";
+
+        playAlert(type);
+        showToast(`${title} · ${name}`, type);
+        showOsAlert({
+          title,
+          body: name,
+          tag: `visitor-${req.id}`,
+          type,
+          requireInteraction: Boolean(req.urgent),
+        });
+      }
+
+      function notifyChat(session) {
+        const name = session.visitorName || "Visitor";
+        const viewingThisChat =
+          document.visibilityState === "visible" && session.id === activeChatId;
+
+        playAlert("chat");
+        if (!viewingThisChat) {
+          showToast(`Chat · ${name}`, "chat");
+          showOsAlert({
+            title: "Chat",
+            body: name,
+            tag: `chat-${session.id}`,
+            type: "chat",
+            requireInteraction: false,
+          });
+        }
       }
 
       function escapeHtml(str) {
@@ -1350,14 +1387,21 @@
 
           if (!chatFirstLoad) {
             for (const session of sessions) {
-              if (session.status === "open" && !knownChatIds.has(session.id) && Number(session.visitorCount || 0) > 0) {
-                showToast("New chat message");
-                break;
+              if (session.status !== "open") continue;
+              const count = Number(session.visitorCount || 0);
+              const prev = knownChatVisitorCounts.get(session.id);
+              const isNewSession = !knownChatIds.has(session.id) && count > 0;
+              const hasNewVisitorMsg = prev != null && count > prev;
+              if (isNewSession || hasNewVisitorMsg) {
+                notifyChat(session);
               }
             }
           }
 
           knownChatIds = new Set(sessions.map((s) => s.id));
+          knownChatVisitorCounts = new Map(
+            sessions.map((s) => [s.id, Number(s.visitorCount || 0)])
+          );
           chatFirstLoad = false;
           renderChatInbox(sessions);
 
@@ -1563,10 +1607,10 @@
         // Local test ping so they know it worked
         try {
           const reg = await navigator.serviceWorker.ready;
-        await reg.showNotification("Alerts ready", {
-            body: "You’ll get a clear alert when someone wants to come in.",
+        await reg.showNotification("Alerts on", {
+            body: "Request · Urgent · Chat",
             tag: "alerts-enabled",
-            data: { url: "/admin" },
+            data: { url: "/admin", type: "request" },
             icon: "/admin-touch-icon.png",
             badge: "/admin-touch-icon.png",
             actions: [{ action: "open", title: "Open" }],
@@ -1601,6 +1645,7 @@
           knownIds = new Set();
           chatFirstLoad = true;
           knownChatIds = new Set();
+          knownChatVisitorCounts = new Map();
           activeChatId = "";
           chatMessagesKey = "";
           const settings = await fetchSettings();

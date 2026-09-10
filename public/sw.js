@@ -7,47 +7,71 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+function normalizeType(data) {
+  if (data.type === "chat" || data.type === "urgent" || data.type === "request") {
+    return data.type;
+  }
+  if (data.urgent) return "urgent";
+  if (String(data.tag || "").startsWith("chat-")) return "chat";
+  return "request";
+}
+
+function defaultTitle(type) {
+  if (type === "urgent") return "Urgent";
+  if (type === "chat") return "Chat";
+  return "Request";
+}
+
+function defaultBody(type) {
+  if (type === "chat") return "New message";
+  if (type === "urgent") return "Needs you now";
+  return "Someone is waiting";
+}
+
+function vibrateFor(type) {
+  if (type === "urgent") return [200, 80, 200, 80, 200, 80, 280];
+  if (type === "chat") return [70, 40, 70];
+  return [140, 70, 140];
+}
+
 function buildNotificationOptions(data) {
-  const urgent = Boolean(data.urgent);
-  const body = data.body || "Someone wants to come in.";
+  const type = normalizeType(data);
+  const urgent = type === "urgent";
+  const body = data.body || data.name || defaultBody(type);
 
   return {
     body,
-    tag: data.tag || "visitor-request",
+    tag: data.tag || (type === "chat" ? "chat" : "visitor-request"),
     renotify: true,
     requireInteraction: urgent,
     silent: false,
     lang: "en",
     icon: "/apple-touch-icon.png",
     badge: "/apple-touch-icon.png",
-    vibrate: urgent ? [160, 70, 160, 70, 220] : [120, 60, 120],
+    vibrate: vibrateFor(type),
     timestamp: Date.now(),
     data: {
       url: data.url || "/admin",
       urgent,
+      type,
       name: data.name || "",
       reason: data.reason || "",
     },
     actions: [
-      {
-        action: "open",
-        title: urgent ? "Review now" : "Open",
-      },
-      {
-        action: "dismiss",
-        title: "Dismiss",
-      },
+      { action: "open", title: "Open" },
+      { action: "dismiss", title: "Dismiss" },
     ],
   };
 }
 
 self.addEventListener("push", (event) => {
   let data = {
-    title: "Visitor waiting",
-    body: "Someone wants to come in.",
+    title: "Request",
+    body: "Someone is waiting",
     url: "/admin",
     tag: "visitor-request",
     urgent: false,
+    type: "request",
   };
 
   try {
@@ -56,10 +80,11 @@ self.addEventListener("push", (event) => {
     }
   } catch (_) {}
 
-  const title = data.title || (data.urgent ? "Urgent request" : "Visitor waiting");
+  const type = normalizeType(data);
+  const title = data.title || defaultTitle(type);
 
   event.waitUntil(
-    self.registration.showNotification(title, buildNotificationOptions(data))
+    self.registration.showNotification(title, buildNotificationOptions({ ...data, type }))
   );
 });
 
