@@ -2,14 +2,14 @@
 
 /**
  * Shared Synk mark — minimal dual-tone S monogram.
- * CLEAR-adjacent simplicity (bold, geometric, high-contrast) without copying CLEAR's halo.
+ * CLEAR-adjacent: midnight navy + sky blue.
  */
-const ACCENT = "#00B4A6";
-const INK = "#0A0A0A";
+const INK = "#041A55"; // CLEAR-like midnight navy
+const ACCENT = "#5BA8F5"; // sky blue
 
 /**
  * A continuous S drawn as two stroke segments that meet in the middle.
- * Upper = ink, lower = teal accent. viewBox 0 0 128 128.
+ * Upper = navy, lower = sky. viewBox 0 0 128 128.
  */
 function synkLogoSvg({
   size = 128,
@@ -20,7 +20,6 @@ function synkLogoSvg({
   const s = size / 128;
   const stroke = 15 * s;
 
-  // Classic S geometry, split at the waist for the two-tone brand treatment
   const upper =
     `M ${(34 * s).toFixed(2)} ${(40 * s).toFixed(2)} ` +
     `C ${(34 * s).toFixed(2)} ${(24 * s).toFixed(2)} ${(48 * s).toFixed(2)} ${(16 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(16 * s).toFixed(2)} ` +

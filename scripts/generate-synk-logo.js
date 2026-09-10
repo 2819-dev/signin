@@ -28,7 +28,7 @@ function synkIdTouchSvg(size = 180) {
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" fill="#0A0A0A"/>
+  <rect width="${size}" height="${size}" fill="#041A55"/>
   <g transform="translate(${pad} ${pad})">
     ${inner}
   </g>
@@ -57,12 +57,12 @@ async function main() {
   const body = extractSvgBody(logo);
   const onLight = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#F5F5F7"/>
+  <rect width="512" height="512" fill="#F7F9FC"/>
   <g transform="translate(96 96) scale(2.5)">${body}</g>
 </svg>`;
   const onDark = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#0A0A0A"/>
+  <rect width="512" height="512" fill="#041A55"/>
   <g transform="translate(96 96) scale(2.5)">${extractSvgBody(synkLogoSvg({ size: 128, ink: "#FFFFFF", accent: ACCENT }))}</g>
 </svg>`;
 
