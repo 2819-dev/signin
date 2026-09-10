@@ -23,8 +23,21 @@
 
 [[redirects]]
   from = "/synk-admin"
-  to = "/synk-admin.html"
-  status = 200
+  to = "https://synk-admin.netlify.app/"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/synk-admin/*"
+  to = "https://synk-admin.netlify.app/:splat"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/synk-admin.html"
+  to = "https://synk-admin.netlify.app/"
+  status = 302
+  force = true
 
 [[redirects]]
   from = "/chat"
@@ -33,11 +46,6 @@
 
 [[headers]]
   for = "/synk.html"
-  [headers.values]
-    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
-
-[[headers]]
-  for = "/synk-admin.html"
   [headers.values]
     Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
 

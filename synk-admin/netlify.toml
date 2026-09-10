@@ -1,0 +1,42 @@
+[build]
+  publish = "public"
+  command = "node scripts/prepare.js"
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://visitor-signin-kiosk.netlify.app/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/synk"
+  to = "https://visitor-signin-kiosk.netlify.app/synk"
+  status = 302
+
+[[redirects]]
+  from = "/admin"
+  to = "https://visitor-signin-kiosk.netlify.app/admin"
+  status = 302
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
+
+[[headers]]
+  for = "/version.json"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
+    Content-Type = "application/json; charset=utf-8"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "no-referrer"
+    Cache-Control = "no-cache, must-revalidate, max-age=0"

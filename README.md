@@ -11,7 +11,7 @@ Visitors enter their **name** and **why they want to come in**. You get the requ
 | `/` | iPad (kiosk) | Sign-in form → waits → shows admitted / declined |
 | `/admin` | Phone | Live request list, admit / decline, browser alerts |
 | `/synk` | Any | Public Synk ID face verify |
-| `/synk-admin` | Phone / desktop | Synk Admin — members, apps, activity (own secret) |
+| [synk-admin.netlify.app](https://synk-admin.netlify.app/) | Phone / desktop | Synk Admin (separate Netlify site, own secret) |
 
 ## Stack
 
@@ -61,3 +61,20 @@ Then open `http://localhost:8888` (kiosk) and `http://localhost:8888/admin`.
 - There is no visitor login — only the admin secret protects `/admin` API actions.
 - Alerts use the browser Notification API + a short chime while the admin page is open. Keep `/admin` open on your phone for the best experience.
 - Light mode only; the kiosk UI is intentionally minimal.
+
+
+## Separate Synk Admin site
+
+Synk Admin is deployed as its own Netlify project:
+
+- Site: https://synk-admin.netlify.app
+- Source: `synk-admin/` in this repo
+- APIs still run on the visitor kiosk site; Synk Admin proxies `/api/*` there
+- Secret: `SYNK_ADMIN_SECRET` on the **visitor** site (not duplicated on Synk Admin)
+
+Local:
+
+```bash
+cd synk-admin && npm run build
+npx netlify deploy --prod --filter synk-admin
+```

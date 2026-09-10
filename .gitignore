@@ -3,3 +3,7 @@ node_modules/
 .env
 .DS_Store
 dist/
+
+# Generated Synk Admin publish dir
+synk-admin/public/*
+!synk-admin/public/.gitkeep
