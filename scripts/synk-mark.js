@@ -1,51 +1,45 @@
 "use strict";
 
 /**
- * Shared Synk mark (CLEAR-inspired geometric iris).
- * Used by logo SVG + Synk touch icons.
+ * Shared Synk mark — minimal dual-tone S monogram.
+ * CLEAR-adjacent simplicity (bold, geometric, high-contrast) without copying CLEAR's halo.
  */
 const ACCENT = "#00B4A6";
 const INK = "#0A0A0A";
 
-function synkLogoSvg({ size = 128, ink = INK, accent = ACCENT, title = "Synk" } = {}) {
-  const cx = size / 2;
-  const cy = size / 2;
+/**
+ * A continuous S drawn as two stroke segments that meet in the middle.
+ * Upper = ink, lower = teal accent. viewBox 0 0 128 128.
+ */
+function synkLogoSvg({
+  size = 128,
+  ink = INK,
+  accent = ACCENT,
+  title = "Synk",
+} = {}) {
   const s = size / 128;
+  const stroke = 15 * s;
 
-  const ticks = [];
-  const tickCount = 8;
-  const rInner = 31 * s;
-  const rOuter = 42 * s;
-  for (let i = 0; i < tickCount; i += 1) {
-    const a = (Math.PI * 2 * i) / tickCount - Math.PI / 2;
-    // Offset ticks so they sit between clock positions for a quieter look
-    const a2 = a + Math.PI / tickCount;
-    const x1 = cx + Math.cos(a2) * rInner;
-    const y1 = cy + Math.sin(a2) * rInner;
-    const x2 = cx + Math.cos(a2) * rOuter;
-    const y2 = cy + Math.sin(a2) * rOuter;
-    ticks.push(
-      `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${ink}" stroke-width="${(4 * s).toFixed(2)}" stroke-linecap="round"/>`
-    );
-  }
+  // Classic S geometry, split at the waist for the two-tone brand treatment
+  const upper =
+    `M ${(34 * s).toFixed(2)} ${(40 * s).toFixed(2)} ` +
+    `C ${(34 * s).toFixed(2)} ${(24 * s).toFixed(2)} ${(48 * s).toFixed(2)} ${(16 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(16 * s).toFixed(2)} ` +
+    `C ${(84 * s).toFixed(2)} ${(16 * s).toFixed(2)} ${(96 * s).toFixed(2)} ${(28 * s).toFixed(2)} ${(96 * s).toFixed(2)} ${(44 * s).toFixed(2)} ` +
+    `C ${(96 * s).toFixed(2)} ${(56 * s).toFixed(2)} ${(88 * s).toFixed(2)} ${(62 * s).toFixed(2)} ${(74 * s).toFixed(2)} ${(66 * s).toFixed(2)} ` +
+    `L ${(54 * s).toFixed(2)} ${(72 * s).toFixed(2)}`;
 
-  const arcR = 50 * s;
+  const lower =
+    `M ${(74 * s).toFixed(2)} ${(66 * s).toFixed(2)} ` +
+    `L ${(54 * s).toFixed(2)} ${(72 * s).toFixed(2)} ` +
+    `C ${(40 * s).toFixed(2)} ${(76 * s).toFixed(2)} ${(32 * s).toFixed(2)} ${(82 * s).toFixed(2)} ${(32 * s).toFixed(2)} ${(94 * s).toFixed(2)} ` +
+    `C ${(32 * s).toFixed(2)} ${(110 * s).toFixed(2)} ${(46 * s).toFixed(2)} ${(122 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(122 * s).toFixed(2)} ` +
+    `C ${(80 * s).toFixed(2)} ${(122 * s).toFixed(2)} ${(94 * s).toFixed(2)} ${(114 * s).toFixed(2)} ${(94 * s).toFixed(2)} ${(98 * s).toFixed(2)}`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="${title}">
   <title>${title}</title>
-  <!-- outer ring -->
-  <circle cx="${cx}" cy="${cy}" r="${(50 * s).toFixed(2)}" fill="none" stroke="${ink}" stroke-width="${(6.5 * s).toFixed(2)}"/>
-  <!-- iris ticks -->
-  ${ticks.join("\n  ")}
-  <!-- mid ring -->
-  <circle cx="${cx}" cy="${cy}" r="${(26 * s).toFixed(2)}" fill="none" stroke="${ink}" stroke-width="${(4.5 * s).toFixed(2)}"/>
-  <!-- teal sync arc (top-right) -->
-  <path d="M ${(cx + arcR * 0.15).toFixed(2)} ${(cy - arcR * 0.99).toFixed(2)} A ${arcR.toFixed(2)} ${arcR.toFixed(2)} 0 0 1 ${(cx + arcR * 0.99).toFixed(2)} ${(cy - arcR * 0.15).toFixed(2)}" fill="none" stroke="${accent}" stroke-width="${(6.5 * s).toFixed(2)}" stroke-linecap="round"/>
-  <!-- pupil -->
-  <circle cx="${cx}" cy="${cy}" r="${(15 * s).toFixed(2)}" fill="${accent}"/>
-  <!-- specular -->
-  <circle cx="${(cx - 4.8 * s).toFixed(2)}" cy="${(cy - 4.8 * s).toFixed(2)}" r="${(3.4 * s).toFixed(2)}" fill="#FFFFFF" fill-opacity="0.95"/>
+  <path d="${upper}" fill="none" stroke="${ink}" stroke-width="${stroke.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="${lower}" fill="none" stroke="${accent}" stroke-width="${stroke.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
 `;
 }

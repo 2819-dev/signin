@@ -1189,11 +1189,11 @@ html[data-theme="dark"] .admin-shell input[type="file"] {
   width: 56px;
   height: 56px;
   flex-shrink: 0;
-  border-radius: 50%;
-  background: #e4f8f6;
+  border-radius: 14px;
+  background: transparent;
   display: grid;
   place-items: center;
-  border: 1px solid #b8ebe6;
+  border: none;
 }
 
 .synk-hero-logo img {
@@ -1440,9 +1440,9 @@ body.synk-product .settings-card {
 }
 
 body.synk-product .synk-hero-logo {
-  border-radius: 50%;
-  background: #e4f8f6;
-  border: 1px solid #b8ebe6;
+  border-radius: 14px;
+  background: transparent;
+  border: none;
 }
 
 body.synk-product .btn {

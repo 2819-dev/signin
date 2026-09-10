@@ -1,23 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Synk">
   <title>Synk</title>
-  <!-- outer ring -->
-  <circle cx="64" cy="64" r="50.00" fill="none" stroke="#0A0A0A" stroke-width="6.50"/>
-  <!-- iris ticks -->
-  <line x1="75.86" y1="35.36" x2="80.07" y2="25.20" stroke="#0A0A0A" stroke-width="4.00" stroke-linecap="round"/>
-  <line x1="92.64" y1="52.14" x2="102.80" y2="47.93" stroke="#0A0A0A" stroke-width="4.00" stroke-linecap="round"/>
-  <line x1="92.64" y1="75.86" x2="102.80" y2="80.07" stroke="#0A0A0A" stroke-width="4.00" stroke-linecap="round"/>
-  <line x1="75.86" y1="92.64" x2="80.07" y2="102.80" stroke="#0A0A0A" stroke-width="4.00" stroke-linecap="round"/>
-  <line x1="52.14" y1="92.64" x2="47.93" y2="102.80" stroke="#0A0A0A" stroke-width="4.00" stroke-linecap="round"/>
-  <line x1="35.36" y1="75.86" x2="25.20" y2="80.07" stroke="#0A0A0A" stroke-width="4.00" stroke-linecap="round"/>
-  <line x1="35.36" y1="52.14" x2="25.20" y2="47.93" stroke="#0A0A0A" stroke-width="4.00" stroke-linecap="round"/>
-  <line x1="52.14" y1="35.36" x2="47.93" y2="25.20" stroke="#0A0A0A" stroke-width="4.00" stroke-linecap="round"/>
-  <!-- mid ring -->
-  <circle cx="64" cy="64" r="26.00" fill="none" stroke="#0A0A0A" stroke-width="4.50"/>
-  <!-- teal sync arc (top-right) -->
-  <path d="M 71.50 14.50 A 50.00 50.00 0 0 1 113.50 56.50" fill="none" stroke="#00B4A6" stroke-width="6.50" stroke-linecap="round"/>
-  <!-- pupil -->
-  <circle cx="64" cy="64" r="15.00" fill="#00B4A6"/>
-  <!-- specular -->
-  <circle cx="59.20" cy="59.20" r="3.40" fill="#FFFFFF" fill-opacity="0.95"/>
+  <path d="M 34.00 40.00 C 34.00 24.00 48.00 16.00 64.00 16.00 C 84.00 16.00 96.00 28.00 96.00 44.00 C 96.00 56.00 88.00 62.00 74.00 66.00 L 54.00 72.00" fill="none" stroke="#0A0A0A" stroke-width="15.00" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 74.00 66.00 L 54.00 72.00 C 40.00 76.00 32.00 82.00 32.00 94.00 C 32.00 110.00 46.00 122.00 64.00 122.00 C 80.00 122.00 94.00 114.00 94.00 98.00" fill="none" stroke="#00B4A6" stroke-width="15.00" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
