@@ -8,30 +8,26 @@ const { ACCENT, INK, synkLogoSvg, extractSvgBody } = require("./synk-mark");
 const ROOT = path.join(__dirname, "..");
 
 function synkAdminTouchSvg(size = 180) {
-  const mark = synkLogoSvg({ size: 120, ink: INK, accent: ACCENT });
+  const mark = synkLogoSvg({ size: 112, ink: INK });
   const inner = extractSvgBody(mark);
-  const pad = (size - 120) / 2;
+  const pad = (size - 112) / 2;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
   <rect width="${size}" height="${size}" fill="#FFFFFF"/>
-  <g transform="translate(${pad} ${pad})">
-    ${inner}
-  </g>
+  <g transform="translate(${pad} ${pad})">${inner}</g>
 </svg>`;
 }
 
 function synkIdTouchSvg(size = 180) {
-  const mark = synkLogoSvg({ size: 120, ink: "#FFFFFF", accent: ACCENT });
+  const mark = synkLogoSvg({ size: 112, ink: "#FFFFFF" });
   const inner = extractSvgBody(mark);
-  const pad = (size - 120) / 2;
+  const pad = (size - 112) / 2;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" fill="#041A55"/>
-  <g transform="translate(${pad} ${pad})">
-    ${inner}
-  </g>
+  <rect width="${size}" height="${size}" fill="${INK}"/>
+  <g transform="translate(${pad} ${pad})">${inner}</g>
 </svg>`;
 }
 
@@ -57,13 +53,13 @@ async function main() {
   const body = extractSvgBody(logo);
   const onLight = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#F7F9FC"/>
+  <rect width="512" height="512" fill="#FFFFFF"/>
   <g transform="translate(96 96) scale(2.5)">${body}</g>
 </svg>`;
   const onDark = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#041A55"/>
-  <g transform="translate(96 96) scale(2.5)">${extractSvgBody(synkLogoSvg({ size: 128, ink: "#FFFFFF", accent: ACCENT }))}</g>
+  <rect width="512" height="512" fill="${INK}"/>
+  <g transform="translate(96 96) scale(2.5)">${extractSvgBody(synkLogoSvg({ size: 128, ink: "#FFFFFF" }))}</g>
 </svg>`;
 
   await writePng(onLight, path.join("/opt/cursor/artifacts", "synk-logo-preview.png"), 512);

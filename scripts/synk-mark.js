@@ -1,44 +1,46 @@
 "use strict";
 
 /**
- * Shared Synk mark — minimal dual-tone S monogram.
- * CLEAR-adjacent: midnight navy + sky blue.
+ * Shared Synk mark — solid single-color S monogram.
+ * One color only. No gradients, glass, or multi-tone splits.
  */
-const INK = "#041A55"; // CLEAR-like midnight navy
-const ACCENT = "#5BA8F5"; // sky blue
+const INK = "#041A55";
+const ACCENT = "#041A55"; // API compat; mark is monochrome
 
-/**
- * A continuous S drawn as two stroke segments that meet in the middle.
- * Upper = navy, lower = sky. viewBox 0 0 128 128.
- */
 function synkLogoSvg({
   size = 128,
   ink = INK,
   accent = ACCENT,
   title = "Synk",
 } = {}) {
+  void accent;
   const s = size / 128;
-  const stroke = 15 * s;
 
-  const upper =
-    `M ${(34 * s).toFixed(2)} ${(40 * s).toFixed(2)} ` +
-    `C ${(34 * s).toFixed(2)} ${(24 * s).toFixed(2)} ${(48 * s).toFixed(2)} ${(16 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(16 * s).toFixed(2)} ` +
-    `C ${(84 * s).toFixed(2)} ${(16 * s).toFixed(2)} ${(96 * s).toFixed(2)} ${(28 * s).toFixed(2)} ${(96 * s).toFixed(2)} ${(44 * s).toFixed(2)} ` +
-    `C ${(96 * s).toFixed(2)} ${(56 * s).toFixed(2)} ${(88 * s).toFixed(2)} ${(62 * s).toFixed(2)} ${(74 * s).toFixed(2)} ${(66 * s).toFixed(2)} ` +
-    `L ${(54 * s).toFixed(2)} ${(72 * s).toFixed(2)}`;
-
-  const lower =
-    `M ${(74 * s).toFixed(2)} ${(66 * s).toFixed(2)} ` +
-    `L ${(54 * s).toFixed(2)} ${(72 * s).toFixed(2)} ` +
-    `C ${(40 * s).toFixed(2)} ${(76 * s).toFixed(2)} ${(32 * s).toFixed(2)} ${(82 * s).toFixed(2)} ${(32 * s).toFixed(2)} ${(94 * s).toFixed(2)} ` +
-    `C ${(32 * s).toFixed(2)} ${(110 * s).toFixed(2)} ${(46 * s).toFixed(2)} ${(122 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(122 * s).toFixed(2)} ` +
-    `C ${(80 * s).toFixed(2)} ${(122 * s).toFixed(2)} ${(94 * s).toFixed(2)} ${(114 * s).toFixed(2)} ${(94 * s).toFixed(2)} ${(98 * s).toFixed(2)}`;
+  // Solid geometric S — single fill, no stroke tricks
+  const path =
+    `M ${(64 * s).toFixed(2)} ${(12 * s).toFixed(2)} ` +
+    `C ${(45.5 * s).toFixed(2)} ${(12 * s).toFixed(2)} ${(32 * s).toFixed(2)} ${(24.5 * s).toFixed(2)} ${(32 * s).toFixed(2)} ${(41 * s).toFixed(2)} ` +
+    `H ${(49.5 * s).toFixed(2)} ` +
+    `C ${(49.5 * s).toFixed(2)} ${(34 * s).toFixed(2)} ${(55.5 * s).toFixed(2)} ${(28 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(28 * s).toFixed(2)} ` +
+    `C ${(73.5 * s).toFixed(2)} ${(28 * s).toFixed(2)} ${(79 * s).toFixed(2)} ${(33.5 * s).toFixed(2)} ${(79 * s).toFixed(2)} ${(41 * s).toFixed(2)} ` +
+    `C ${(79 * s).toFixed(2)} ${(48 * s).toFixed(2)} ${(74 * s).toFixed(2)} ${(52.5 * s).toFixed(2)} ${(61.5 * s).toFixed(2)} ${(56.5 * s).toFixed(2)} ` +
+    `L ${(49 * s).toFixed(2)} ${(60.5 * s).toFixed(2)} ` +
+    `C ${(36.5 * s).toFixed(2)} ${(64.5 * s).toFixed(2)} ${(30 * s).toFixed(2)} ${(73 * s).toFixed(2)} ${(30 * s).toFixed(2)} ${(85 * s).toFixed(2)} ` +
+    `C ${(30 * s).toFixed(2)} ${(104 * s).toFixed(2)} ${(44 * s).toFixed(2)} ${(116 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(116 * s).toFixed(2)} ` +
+    `C ${(84.5 * s).toFixed(2)} ${(116 * s).toFixed(2)} ${(98 * s).toFixed(2)} ${(103 * s).toFixed(2)} ${(98 * s).toFixed(2)} ${(85 * s).toFixed(2)} ` +
+    `H ${(80.5 * s).toFixed(2)} ` +
+    `C ${(80.5 * s).toFixed(2)} ${(94.5 * s).toFixed(2)} ${(74 * s).toFixed(2)} ${(100.5 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(100.5 * s).toFixed(2)} ` +
+    `C ${(53.5 * s).toFixed(2)} ${(100.5 * s).toFixed(2)} ${(47.5 * s).toFixed(2)} ${(94.5 * s).toFixed(2)} ${(47.5 * s).toFixed(2)} ${(86 * s).toFixed(2)} ` +
+    `C ${(47.5 * s).toFixed(2)} ${(78.5 * s).toFixed(2)} ${(52.5 * s).toFixed(2)} ${(74 * s).toFixed(2)} ${(64.5 * s).toFixed(2)} ${(70 * s).toFixed(2)} ` +
+    `L ${(77 * s).toFixed(2)} ${(66 * s).toFixed(2)} ` +
+    `C ${(90 * s).toFixed(2)} ${(61.5 * s).toFixed(2)} ${(96.5 * s).toFixed(2)} ${(52.5 * s).toFixed(2)} ${(96.5 * s).toFixed(2)} ${(40 * s).toFixed(2)} ` +
+    `C ${(96.5 * s).toFixed(2)} ${(23.5 * s).toFixed(2)} ${(83.5 * s).toFixed(2)} ${(12 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(12 * s).toFixed(2)} ` +
+    `Z`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="${title}">
   <title>${title}</title>
-  <path d="${upper}" fill="none" stroke="${ink}" stroke-width="${stroke.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="${lower}" fill="none" stroke="${accent}" stroke-width="${stroke.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="${path}" fill="${ink}"/>
 </svg>
 `;
 }
