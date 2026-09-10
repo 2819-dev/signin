@@ -70,6 +70,7 @@ async function requireSynkAdmin(event) {
     if (!active) {
       return { ok: false, response: json(401, { error: "Session revoked" }) };
     }
+    if (active.username) claims.sub = active.username;
   } catch (err) {
     console.error("synk admin session check failed", err);
     return { ok: false, response: json(500, { error: "Session validation failed" }) };

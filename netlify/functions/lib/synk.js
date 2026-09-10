@@ -8,6 +8,7 @@ const {
 
 const SCRYPT_KEYLEN = 64;
 const PASS_TTL_MS = 2 * 60 * 1000;
+const HUB_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const RATE_WINDOW_MS = 60 * 1000;
 const RATE_MAX_ATTEMPTS = 8;
 
@@ -204,6 +205,48 @@ async function ensureSynkCoreTables(sql) {
     CREATE INDEX IF NOT EXISTS synk_passes_active_idx
     ON synk_passes (expires_at)
     WHERE consumed_at IS NULL AND revoked_at IS NULL
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_hub_sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_hub_sessions_profile_idx
+    ON synk_hub_sessions (synk_profile_id, revoked_at, expires_at DESC)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_profiles (
+      synk_profile_id UUID PRIMARY KEY REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      public_username TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_community_profiles_username_idx
+    ON synk_community_profiles (public_username)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_posts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_posts_created_idx
+    ON synk_community_posts (created_at DESC)
   `;
 
   await sql`
@@ -578,6 +621,82 @@ async function requireSynkApp(sql, event, body = {}) {
   return { ok: false, error: "Unauthorized Synk app" };
 }
 
+async function issueHubSession(sql, { profileId }) {
+  const token = mintPassToken();
+  const tokenHash = hashToken(token);
+  const expiresAt = new Date(Date.now() + HUB_SESSION_TTL_MS).toISOString();
+  await sql`
+    INSERT INTO synk_hub_sessions (synk_profile_id, token_hash, expires_at)
+    VALUES (${profileId}, ${tokenHash}, ${expiresAt}::timestamptz)
+  `;
+  return {
+    token,
+    expiresAt,
+    ttlSeconds: Math.round(HUB_SESSION_TTL_MS / 1000),
+  };
+}
+
+function extractHubSessionToken(event, body = {}) {
+  const headers = event.headers || {};
+  const auth = headers.authorization || headers.Authorization || "";
+  if (String(auth).toLowerCase().startsWith("bearer ")) {
+    return String(auth).slice(7).trim();
+  }
+  const header =
+    headers["x-synk-hub-session"] || headers["X-Synk-Hub-Session"] || "";
+  if (header) return String(header).trim();
+  if (body && body.hubToken) return String(body.hubToken).trim();
+  if (body && body.sessionToken) return String(body.sessionToken).trim();
+  return "";
+}
+
+async function requireHubSession(sql, event, body = {}) {
+  await ensureSynkCoreTables(sql);
+  const token = extractHubSessionToken(event, body);
+  if (!token) return { ok: false, status: 401, error: "Sign in to Synk first" };
+  const tokenHash = hashToken(token);
+  const rows = await sql`
+    SELECT s.id, s.synk_profile_id, s.expires_at, s.revoked_at,
+           p.synk_code, p.name, p.photo_url, p.enabled,
+           c.public_username
+    FROM synk_hub_sessions s
+    JOIN synk_profiles p ON p.id = s.synk_profile_id
+    LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.id
+    WHERE s.token_hash = ${tokenHash}
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row || row.revoked_at) {
+    return { ok: false, status: 401, error: "Session expired. Log in again." };
+  }
+  if (new Date(row.expires_at).getTime() <= Date.now()) {
+    return { ok: false, status: 401, error: "Session expired. Log in again." };
+  }
+  if (row.enabled === false) {
+    return { ok: false, status: 403, error: "This Synk membership is paused" };
+  }
+  await sql`UPDATE synk_hub_sessions SET last_seen_at = NOW() WHERE id = ${row.id}`;
+  return {
+    ok: true,
+    sessionId: row.id,
+    profile: {
+      id: row.synk_profile_id,
+      synkCode: row.synk_code,
+      name: row.name,
+      photoUrl: row.photo_url || "",
+      publicUsername: row.public_username || "",
+    },
+  };
+}
+
+function normalizePublicUsername(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "")
+    .slice(0, 24);
+}
+
 module.exports = {
   hashSecret,
   verifySecret,
@@ -597,9 +716,14 @@ module.exports = {
   listActivePasses,
   revokePass,
   requireSynkApp,
+  issueHubSession,
+  requireHubSession,
+  extractHubSessionToken,
+  normalizePublicUsername,
   normalizeVerifyAction,
   getAppVerifyAction,
   seedVisitorSignInBusiness,
   PASS_TTL_MS,
+  HUB_SESSION_TTL_MS,
   RATE_MAX_ATTEMPTS,
 };

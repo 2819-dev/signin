@@ -8,6 +8,7 @@ const {
   logSynkEvent,
   assertNotRateLimited,
   issuePass,
+  issueHubSession,
   getAppVerifyAction,
   normalizeVerifyAction,
 } = require("./lib/synk");
@@ -278,6 +279,11 @@ exports.handler = async (event) => {
       purpose: intent === "visitor" ? "visitor" : "identity",
     });
 
+    let hubSession = null;
+    if (intent !== "visitor" && appSlug !== "visitor-signin") {
+      hubSession = await issueHubSession(sql, { profileId: matched.id });
+    }
+
     await logSynkEvent(sql, {
       eventType: "verify_ok",
       profileId: matched.id,
@@ -303,6 +309,7 @@ exports.handler = async (event) => {
       method,
       profile,
       pass,
+      hubSession,
       request,
     });
   } catch (err) {

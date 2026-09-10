@@ -354,6 +354,54 @@ async function changeAdminPassword(sql, { username, currentPassword, newPassword
   return { ok: true, username: admin.username };
 }
 
+async function changeAdminUsername(sql, { username, newUsername, password, totp }) {
+  await ensureAdminSessionTables(sql);
+  const admin = await findAdminByUsername(sql, username);
+  if (!admin || !admin.enabled) {
+    const err = new Error("Admin not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  if (!verifyPassword(password, admin.password_hash)) {
+    const err = new Error("Password is incorrect");
+    err.statusCode = 401;
+    throw err;
+  }
+  if (!verifyTotp(admin.totp_secret, totp)) {
+    const err = new Error("Invalid 2FA code");
+    err.statusCode = 401;
+    throw err;
+  }
+  const next = normalizeAdminUsername(newUsername);
+  if (!next || next.length < 3) {
+    const err = new Error("Username must be at least 3 characters");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (next === normalizeAdminUsername(admin.username)) {
+    return { ok: true, username: admin.username };
+  }
+  const clash = await sql`
+    SELECT id FROM synk_admins WHERE LOWER(username) = ${next} AND id <> ${admin.id} LIMIT 1
+  `;
+  if (clash[0]) {
+    const err = new Error("That username is already taken");
+    err.statusCode = 409;
+    throw err;
+  }
+  await sql`
+    UPDATE synk_admins
+    SET username = ${next}, updated_at = NOW()
+    WHERE id = ${admin.id}
+  `;
+  await sql`
+    UPDATE synk_admin_sessions
+    SET username = ${next}
+    WHERE username = ${admin.username} AND revoked_at IS NULL
+  `;
+  return { ok: true, username: next };
+}
+
 async function deleteAdminUser(sql, { id, actorUsername }) {
   await ensureAdminSessionTables(sql);
   const rows = await sql`
@@ -470,21 +518,21 @@ async function createAdminSession(sql, { username, ip = "", userAgent = "", reme
 async function assertSessionActive(sql, claims, token) {
   await ensureAdminSessionTables(sql);
   const rows = await sql`
-    SELECT id, token_hash, revoked_at, expires_at
+    SELECT id, username, token_hash, revoked_at, expires_at
     FROM synk_admin_sessions
     WHERE id = ${claims.sid}
     LIMIT 1
   `;
   const row = rows[0];
-  if (!row || row.revoked_at) return false;
-  if (row.token_hash !== hashToken(token)) return false;
+  if (!row || row.revoked_at) return null;
+  if (row.token_hash !== hashToken(token)) return null;
   await sql`
     UPDATE synk_admin_sessions
     SET last_seen_at = NOW(),
         expires_at = NOW() + INTERVAL '10 years'
     WHERE id = ${claims.sid}
   `;
-  return true;
+  return { username: row.username || claims.sub };
 }
 
 async function revokeSession(sql, { sessionId = null, token = null, username = null } = {}) {
@@ -677,6 +725,7 @@ module.exports = {
   createAdminUser,
   setAdminEnabled,
   changeAdminPassword,
+  changeAdminUsername,
   deleteAdminUser,
   findAdminByUsername,
   ensureAdminSessionTables,

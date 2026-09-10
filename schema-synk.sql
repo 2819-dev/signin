@@ -150,3 +150,37 @@ CREATE TABLE IF NOT EXISTS synk_events (
 
 CREATE INDEX IF NOT EXISTS synk_events_created_idx ON synk_events (created_at DESC);
 CREATE INDEX IF NOT EXISTS synk_events_ip_created_idx ON synk_events (ip, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS synk_hub_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS synk_hub_sessions_profile_idx
+  ON synk_hub_sessions (synk_profile_id, revoked_at, expires_at DESC);
+
+CREATE TABLE IF NOT EXISTS synk_community_profiles (
+  synk_profile_id UUID PRIMARY KEY REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  public_username TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS synk_community_profiles_username_idx
+  ON synk_community_profiles (public_username);
+
+CREATE TABLE IF NOT EXISTS synk_community_posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_posts_created_idx
+  ON synk_community_posts (created_at DESC);
+

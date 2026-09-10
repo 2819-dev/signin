@@ -17,7 +17,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid11" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
-    <link rel="stylesheet" href="/join.css?v=marketing1" />
+    <link rel="stylesheet" href="/join.css?v=layout4" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js" defer></script>
   </head>
@@ -208,10 +208,17 @@
                 assertion: pass.assertion || "",
                 ttlSeconds: pass.ttlSeconds || 120,
               },
+              hubSession: data.hubSession
+                ? {
+                    token: data.hubSession.token || "",
+                    expiresAt: data.hubSession.expiresAt || null,
+                    ttlSeconds: data.hubSession.ttlSeconds || null,
+                  }
+                : null,
               verifiedAt: Date.now(),
-              expiresAt: new Date(expiresAt).getTime
-                ? new Date(expiresAt).getTime()
-                : Number(expiresAt),
+              expiresAt: data.hubSession && data.hubSession.expiresAt
+                ? new Date(data.hubSession.expiresAt).getTime()
+                : Number(expiresAt) || Date.now() + 120000,
             })
           );
         } catch (_) {}

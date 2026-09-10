@@ -12,11 +12,9 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="format-detection" content="telephone=no" />
     <title>Synk Admin</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synk-admin11" />
-    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin11" />
-    <link rel="stylesheet" href="/admin.css?v=navy-sky1" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synk-admin12" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin12" />
+    <link rel="stylesheet" href="/admin.css?v=layout2" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js" defer></script>
   </head>
@@ -309,9 +307,33 @@
           <div class="synk-link-list">
             <a href="https://synkid.netlify.app/verify" target="_blank" rel="noopener">Member log in</a>
             <a href="https://synkid.netlify.app/hub" target="_blank" rel="noopener">Member hub</a>
+            <a href="https://synkid.netlify.app/community" target="_blank" rel="noopener">Synk Community</a>
             <a href="https://synkid.netlify.app/join" target="_blank" rel="noopener">Get Synk</a>
             <a href="https://synkid.netlify.app/business" target="_blank" rel="noopener">Synk Business</a>
           </div>
+        </section>
+
+        <section class="panel">
+          <h2>Your username</h2>
+          <p class="muted" style="margin:0 0 12px;">
+            Change the username you use to sign in to Synk Admin. You’ll need your password and 2FA code.
+          </p>
+          <form id="change-username-form" class="synk-enroll-form" autocomplete="off">
+            <div class="field">
+              <label for="new-admin-login-username">New username</label>
+              <input id="new-admin-login-username" type="text" maxlength="64" required autocomplete="username" spellcheck="false" />
+            </div>
+            <div class="field">
+              <label for="username-password">Current password</label>
+              <input id="username-password" type="password" required autocomplete="current-password" />
+            </div>
+            <div class="field">
+              <label for="username-totp">2FA code</label>
+              <input id="username-totp" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" minlength="6" required autocomplete="one-time-code" />
+            </div>
+            <button class="btn" type="submit" id="change-username-btn">Update username</button>
+            <p id="change-username-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
+          </form>
         </section>
 
         <section class="panel">
@@ -571,6 +593,10 @@
         });
         localStorage.setItem(PANE_KEY, next);
         if (next === "settings") {
+          const usernameField = document.getElementById("new-admin-login-username");
+          if (usernameField && sessionUsername && !usernameField.value) {
+            usernameField.value = sessionUsername;
+          }
           refreshSessions().catch(() => {});
           refreshSynkAdmins().catch(() => {});
         }
@@ -1300,6 +1326,41 @@
       document.getElementById("lock-btn-settings").addEventListener("click", () => lockAdmin({ remote: true }));
 
       const changePasswordForm = document.getElementById("change-password-form");
+      const changeUsernameForm = document.getElementById("change-username-form");
+      if (changeUsernameForm) {
+        changeUsernameForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const status = document.getElementById("change-username-status");
+          const btn = document.getElementById("change-username-btn");
+          if (btn) btn.disabled = true;
+          if (status) status.textContent = "Updating…";
+          try {
+            const res = await fetch("/api/synk-admin-users", {
+              method: "POST",
+              headers: adminHeaders(),
+              body: JSON.stringify({
+                action: "change-username",
+                newUsername: document.getElementById("new-admin-login-username").value.trim(),
+                password: document.getElementById("username-password").value,
+                totp: document.getElementById("username-totp").value.trim(),
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not update username");
+            sessionUsername = data.username || sessionUsername;
+            changeUsernameForm.reset();
+            if (status) status.textContent = `Username updated to ${sessionUsername}`;
+            showToast("Username updated");
+            await refreshSynkAdmins().catch(() => {});
+            await refreshSessions().catch(() => {});
+          } catch (err) {
+            if (status) status.textContent = err.message || "Could not update username";
+            showToast(err.message || "Could not update username");
+          } finally {
+            if (btn) btn.disabled = false;
+          }
+        });
+      }
       if (changePasswordForm) {
         changePasswordForm.addEventListener("submit", async (e) => {
           e.preventDefault();

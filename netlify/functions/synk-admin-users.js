@@ -6,6 +6,7 @@ const {
   createAdminUser,
   setAdminEnabled,
   changeAdminPassword,
+  changeAdminUsername,
   deleteAdminUser,
   ensureAdminSessionTables,
 } = require("./lib/synk-admin-auth");
@@ -56,6 +57,21 @@ exports.handler = async (event) => {
       });
       await logSynkEvent(sql, { eventType: "admin_password_change", ip, detail: actor });
       return json(200, { ok: true });
+    }
+
+    if (action === "change-username") {
+      const result = await changeAdminUsername(sql, {
+        username: actor,
+        newUsername: body.newUsername || body.username || "",
+        password: body.password || body.currentPassword || "",
+        totp: body.totp || body.code || "",
+      });
+      await logSynkEvent(sql, {
+        eventType: "admin_username_change",
+        ip,
+        detail: `${actor} -> ${result.username}`,
+      });
+      return json(200, { ok: true, username: result.username });
     }
 
     if (action === "create" || action === "add") {

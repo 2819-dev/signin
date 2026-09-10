@@ -1,5 +1,4 @@
 /* Synk Admin — CLEAR-inspired: midnight navy + sky blue */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 *,
 *::before,
@@ -21,8 +20,10 @@
   --danger: #c62828;
   --danger-soft: #fdeceb;
   --focus: #5ba8f5;
-  --radius-pill: 999px;
-  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --shell-pad-x: max(16px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
 }
 
 html,
@@ -97,7 +98,11 @@ p {
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 24px 16px;
+  padding:
+    max(20px, env(safe-area-inset-top, 0px))
+    max(16px, env(safe-area-inset-right, 0px))
+    max(20px, env(safe-area-inset-bottom, 0px))
+    max(16px, env(safe-area-inset-left, 0px));
   background: var(--bg);
 }
 
@@ -105,8 +110,8 @@ p {
   width: min(100%, 420px);
   border: 1px solid var(--line);
   background: var(--surface);
-  border-radius: 20px;
-  padding: 20px;
+  border-radius: var(--radius-lg);
+  padding: 18px;
 }
 
 .card h1 {
@@ -165,7 +170,7 @@ button.btn {
   border: 1px solid var(--brand);
   background: var(--brand);
   color: #fff;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius);
   padding: 10px 16px;
   cursor: pointer;
   text-decoration: none;
@@ -228,7 +233,11 @@ button.btn:disabled {
   width: min(100%, 860px);
   margin: 0 auto;
   min-height: 100dvh;
-  padding: 16px 16px calc(88px + env(safe-area-inset-bottom));
+  padding:
+    max(14px, env(safe-area-inset-top, 0px))
+    max(14px, env(safe-area-inset-right, 0px))
+    calc(88px + env(safe-area-inset-bottom, 0px))
+    max(14px, env(safe-area-inset-left, 0px));
 }
 
 .admin-pane {
@@ -260,8 +269,8 @@ button.btn:disabled {
 .panel {
   border: 1px solid var(--line);
   background: var(--surface);
-  border-radius: 20px;
-  padding: 14px;
+  border-radius: var(--radius-lg);
+  padding: 16px;
 }
 
 .panel + .panel {
@@ -286,7 +295,7 @@ button.btn:disabled {
 
 .synk-stat-card {
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius);
   border-top: 3px solid var(--accent);
   padding: 12px;
   background: var(--surface);
@@ -319,7 +328,7 @@ button.btn:disabled {
 .synk-event-row,
 .synk-session-row {
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 12px;
   background: var(--surface);
 }
@@ -409,7 +418,7 @@ button.btn:disabled {
   display: inline-flex;
   align-items: center;
   border: 1px solid #b7d9f8;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--accent-ink);
   font-size: 0.72rem;
@@ -437,7 +446,7 @@ button.btn:disabled {
 .synk-link-list a {
   display: block;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius);
   background: var(--surface);
   padding: 10px 12px;
   text-decoration: none;
@@ -498,7 +507,7 @@ button.btn:disabled {
   transform: translateX(-50%) translateY(12px);
   background: var(--brand);
   color: #fff;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius);
   padding: 10px 16px;
   font-size: 0.88rem;
   opacity: 0;
@@ -511,6 +520,62 @@ button.btn:disabled {
 .toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+@media (min-width: 768px) {
+  .admin-shell {
+    width: min(100%, 920px);
+    padding-top: 20px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .panel {
+    padding: 18px;
+  }
+
+  .screen {
+    padding: 32px 24px;
+  }
+
+  .card {
+    padding: 22px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .admin-shell {
+    width: min(100%, 980px);
+  }
+
+  .admin-header {
+    align-items: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .admin-tab {
+    padding: 12px 2px;
+    font-size: 0.72rem;
+  }
+
+  .synk-profile-card {
+    grid-template-columns: 56px 1fr;
+  }
+
+  .synk-profile-card img {
+    width: 56px;
+    height: 56px;
+  }
+
+  .admin-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-header-actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
