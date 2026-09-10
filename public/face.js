@@ -239,9 +239,12 @@
 
   function reframeParams(side = cameraSide) {
     const resolved = effectiveCameraSide(side);
-    if (resolved === "left") return { zoom: 1.55, panRawX: 0.24 };
-    if (resolved === "right") return { zoom: 1.55, panRawX: -0.24 };
-    return { zoom: 1.06, panRawX: 0 };
+    // Landscape iPads put the FaceTime camera on a short edge. Zoom + pan so a
+    // person standing at the screen center lands in the preview/capture center.
+    // Keep |pan| under (zoom-1)/2 so we never open black bars in the crop.
+    if (resolved === "left") return { zoom: 1.5, panRawX: 0.18 };
+    if (resolved === "right") return { zoom: 1.5, panRawX: -0.18 };
+    return { zoom: 1.08, panRawX: 0 };
   }
 
   function applyPreviewTransform(videoEl) {
@@ -250,9 +253,13 @@
     const { zoom, panRawX } = reframeParams(cameraSide);
     videoEl.dataset.cameraSide = side;
     videoEl.dataset.cameraRotation = "0";
-    const panCss = (-panRawX * 100).toFixed(2);
+    // Transform is applied right-to-left: mirror, then zoom, then pan in screen
+    // space. Positive panRawX (camera on left) moves the mirrored subject toward
+    // center. Translate must come after scale or the pan gets amplified and
+    // reveals the black letterbox (what the kiosk photos showed).
+    const panCss = (panRawX * 100).toFixed(2);
     videoEl.style.transformOrigin = "center center";
-    videoEl.style.transform = `scaleX(-1) scale(${zoom}) translateX(${panCss}%)`;
+    videoEl.style.transform = `translateX(${panCss}%) scale(${zoom}) scaleX(-1)`;
   }
 
   function applyPreviewRotation(videoEl) {
