@@ -159,8 +159,8 @@
       <div class="face-modal-card">
         <button type="button" class="chat-modal-close" id="face-close-btn" aria-label="Close">✕</button>
         <p class="eyebrow">Face sign-in</p>
-        <h2 id="face-modal-title">Look at the camera</h2>
-        <p class="subtitle" id="face-modal-hint">Hold still for a moment.</p>
+        <h2 id="face-modal-title">Look at the screen</h2>
+        <p class="subtitle" id="face-modal-hint">Face the center of the iPad and hold still.</p>
         <div class="face-video-wrap">
           <video id="face-video" class="face-video" playsinline muted autoplay></video>
         </div>
@@ -187,7 +187,7 @@
               <h2 id="synk-modal-title" style="margin:0;">Verify with Synk</h2>
             </div>
           </div>
-          <p class="subtitle" id="synk-pod-hint" style="margin-top:0;">Center your face in the frame.</p>
+          <p class="subtitle" id="synk-pod-hint" style="margin-top:0;">Look straight at the circle — not the camera hole.</p>
           <div class="synk-pod-frame">
             <video id="synk-video" class="face-video synk-video" playsinline muted autoplay></video>
             <div class="synk-pod-ring" aria-hidden="true"></div>
@@ -1159,7 +1159,7 @@
         showSynkPod();
         synkError.classList.add("hidden");
         synkStatus.textContent = "Starting camera…";
-        synkPodHint.textContent = "Look at the camera. Keep your face inside the circle.";
+        synkPodHint.textContent = "Look straight at the circle on screen — not the camera hole.";
         synkScanBtn.disabled = true;
         synkBusy = false;
         try {

@@ -288,14 +288,16 @@
         <section class="panel">
           <h2>Camera framing</h2>
           <p class="muted" style="margin:0 0 12px;">
-            Preferred framing for Synk face verification.
+            For a counter iPad, prefer <strong>landscape</strong> and set which short edge has the camera.
+            Portrait (camera on top) is best for face alignment alone; the app auto-centers framing in portrait.
+            Ask people to look at the on-screen ring, not the camera hole.
           </p>
           <div class="field">
             <label for="camera-side">Position</label>
             <select id="camera-side">
-              <option value="left">Left</option>
-              <option value="right">Right</option>
-              <option value="center">Center</option>
+              <option value="left">Landscape — camera on left</option>
+              <option value="right">Landscape — camera on right</option>
+              <option value="center">Portrait / centered</option>
             </select>
           </div>
           <p id="camera-side-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>

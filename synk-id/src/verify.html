@@ -52,7 +52,7 @@
         <p class="section-label">Face verification</p>
         <h2>Center your face in the frame</h2>
         <p class="muted" id="synk-pod-hint">
-          Look at the camera. Keep your face inside the circle.
+          Look straight at the circle on screen — not the camera hole.
         </p>
         <div class="pod-frame">
           <video id="synk-video" class="pod-video" playsinline muted autoplay></video>
@@ -136,7 +136,8 @@
 
       let stream = null;
       let busy = false;
-      const cameraSide = "center";
+      // Consumer phones/tablets: center. Landscape edge reframing is for the kiosk setting.
+      let cameraSide = "center";
 
       function stopCamera() {
         if (window.KioskFace) window.KioskFace.stopCamera(video);
@@ -163,7 +164,7 @@
           window.KioskFace.setCameraSide(cameraSide);
           stream = await window.KioskFace.startCamera(video, { side: cameraSide });
           statusEl.textContent = "Ready. Select Verify when prepared.";
-          hintEl.textContent = "Look at the camera. Keep your face inside the circle.";
+          hintEl.textContent = "Look straight at the circle on screen — not the camera hole.";
           scanBtn.disabled = false;
         } catch (err) {
           errorEl.textContent = err.message || "Could not open camera";

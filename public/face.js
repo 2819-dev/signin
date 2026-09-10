@@ -7,9 +7,12 @@
 
   let loading = null;
   let ready = false;
-  // Physical camera edge on a landscape-mounted iPad.
+  // Preferred physical camera edge on a landscape-mounted iPad.
+  // Portrait auto-uses center (camera is usually top-center).
   // We digitally reframe so standing at screen-center looks camera-centered.
   let cameraSide = "left";
+  let activePreviewVideo = null;
+  let orientationHooked = false;
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -95,20 +98,40 @@
     return 0;
   }
 
+  function isPortraitOrientation() {
+    try {
+      if (typeof window.matchMedia === "function") {
+        if (window.matchMedia("(orientation: portrait)").matches) return true;
+        if (window.matchMedia("(orientation: landscape)").matches) return false;
+      }
+    } catch (_) {}
+    return Boolean(window.innerHeight > window.innerWidth);
+  }
+
+  // In portrait the front camera is almost always top-center — ignore left/right.
+  // Landscape keeps the configured edge so a counter-mounted iPad can reframe.
+  function effectiveCameraSide(side = cameraSide) {
+    const resolved = normalizeCameraSide(side);
+    if (resolved === "center") return "center";
+    if (isPortraitOrientation()) return "center";
+    return resolved;
+  }
+
   // Zoom + pan so a person standing at screen center lands in the middle of the view.
   // panRawX shifts the crop in the unmirrored camera buffer.
   // Left-edge camera: screen-centered subject sits toward the right of the raw frame.
   function reframeParams(side = cameraSide) {
-    const resolved = normalizeCameraSide(side);
-    if (resolved === "left") return { zoom: 1.42, panRawX: 0.18 };
-    if (resolved === "right") return { zoom: 1.42, panRawX: -0.18 };
-    return { zoom: 1.08, panRawX: 0 };
+    const resolved = effectiveCameraSide(side);
+    if (resolved === "left") return { zoom: 1.55, panRawX: 0.24 };
+    if (resolved === "right") return { zoom: 1.55, panRawX: -0.24 };
+    return { zoom: 1.06, panRawX: 0 };
   }
 
   function applyPreviewTransform(videoEl) {
     if (!videoEl) return;
+    const side = effectiveCameraSide(cameraSide);
     const { zoom, panRawX } = reframeParams(cameraSide);
-    videoEl.dataset.cameraSide = cameraSide;
+    videoEl.dataset.cameraSide = side;
     videoEl.dataset.cameraRotation = "0";
     // Mirror for selfie feel. Pan is flipped vs raw because of scaleX(-1).
     const panCss = (-panRawX * 100).toFixed(2);
@@ -122,7 +145,7 @@
 
   function applyCameraGuide(rootEl, side = cameraSide) {
     const target = rootEl || document;
-    const resolved = normalizeCameraSide(side);
+    const resolved = effectiveCameraSide(side);
     target.querySelectorAll(".synk-pod-frame, .face-video-wrap").forEach((el) => {
       el.dataset.cameraSide = resolved;
     });
@@ -130,6 +153,32 @@
     target.querySelectorAll(".synk-pod-ring, .face-guide-ring").forEach((el) => {
       el.dataset.cameraSide = "center";
     });
+  }
+
+  function refreshActivePreview() {
+    if (activePreviewVideo && activePreviewVideo.srcObject) {
+      applyPreviewTransform(activePreviewVideo);
+      applyCameraGuide(
+        activePreviewVideo.closest(
+          ".synk-pod-frame, .face-video-wrap, .face-modal-card, .synk-modal-card, body"
+        ) || document
+      );
+    }
+  }
+
+  function ensureOrientationHook() {
+    if (orientationHooked || typeof window === "undefined") return;
+    orientationHooked = true;
+    const onChange = () => refreshActivePreview();
+    window.addEventListener("orientationchange", onChange);
+    window.addEventListener("resize", onChange);
+    try {
+      if (typeof window.matchMedia === "function") {
+        const mq = window.matchMedia("(orientation: portrait)");
+        if (mq && mq.addEventListener) mq.addEventListener("change", onChange);
+        else if (mq && mq.addListener) mq.addListener(onChange);
+      }
+    } catch (_) {}
   }
 
   async function descriptorFromImage(input) {
@@ -151,6 +200,7 @@
     }
     if (side != null) setCameraSide(side);
     else if (rotation != null) setCameraSide(rotation);
+    ensureOrientationHook();
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
@@ -160,6 +210,7 @@
       },
     });
     videoEl.srcObject = stream;
+    activePreviewVideo = videoEl;
     applyPreviewTransform(videoEl);
     applyCameraGuide(
       videoEl.closest(".synk-pod-frame, .face-video-wrap, .face-modal-card, .synk-modal-card, body") ||
@@ -177,6 +228,7 @@
     if (videoEl) {
       videoEl.srcObject = null;
     }
+    if (activePreviewVideo === videoEl) activePreviewVideo = null;
   }
 
   function captureVideoFrame(videoEl) {
@@ -212,8 +264,10 @@
     captureVideoFrame,
     setCameraSide,
     getCameraSide,
+    effectiveCameraSide,
     applyCameraGuide,
     applyPreviewTransform,
+    refreshActivePreview,
     reframeParams,
     setCameraRotation,
     getCameraRotation,

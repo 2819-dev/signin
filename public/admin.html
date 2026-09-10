@@ -126,12 +126,16 @@
             <div style="flex:1;min-width:0;">
               <strong>Tablet camera side</strong>
               <div class="muted" style="font-size: 0.85rem;">
-                Camera can stay on the left/right edge — we reframe the view so looking at the screen center feels like the camera is centered. People should not need to slide sideways.
+                <strong>Use landscape for the kiosk overall</strong> — more room for the form, buttons, and Synk flow.
+                The front camera sits on a short edge in landscape, so pick which edge it is on; we zoom/pan so people can look at the
+                <em>center of the screen</em> (the ring), not the physical camera.
+                Portrait is better for face-only capture (camera on top) and auto-switches to centered framing.
+                People should not need to slide sideways.
               </div>
               <select id="camera-side" style="margin-top:10px;max-width:100%;">
-                <option value="left">Camera on left edge</option>
-                <option value="right">Camera on right edge</option>
-                <option value="center">Camera centered / portrait</option>
+                <option value="left">Landscape — camera on left edge</option>
+                <option value="right">Landscape — camera on right edge</option>
+                <option value="center">Portrait / camera centered</option>
               </select>
             </div>
           </div>
