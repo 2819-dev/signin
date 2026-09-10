@@ -64,15 +64,9 @@
               placeholder="6-digit code"
             />
           </div>
-          <label class="field checkbox-field" style="display:flex;align-items:flex-start;gap:10px;margin:4px 0 14px;">
-            <input id="stay-signed-in" type="checkbox" checked style="margin-top:3px;" />
-            <span>
-              <strong style="font-weight:600;">Stay signed in on this device</strong>
-              <span class="muted" style="display:block;font-size:0.82rem;margin-top:2px;">
-                Keeps this device signed in for about 2 months. Disable on shared devices.
-              </span>
-            </span>
-          </label>
+          <p class="muted" style="margin:4px 0 14px;font-size:0.82rem;">
+            You stay signed in on this device until you lock or revoke the session.
+          </p>
           <button class="btn" type="submit" id="unlock-btn">Sign in</button>
         </form>
         <p class="muted" style="margin-top:14px;font-size:0.82rem;">
@@ -335,18 +329,11 @@
         <section class="panel">
           <h2>This device</h2>
           <p class="muted" style="margin:0 0 12px;">
-            Choose whether Synk Admin should remember you here. Shared tablets should leave this off.
+            Synk Admin stays signed in on this device until you lock or revoke the session.
           </p>
-          <label class="field checkbox-field" style="display:flex;align-items:flex-start;gap:10px;margin:0 0 14px;">
-            <input id="settings-stay-signed-in" type="checkbox" style="margin-top:3px;" />
-            <span>
-              <strong style="font-weight:600;">Stay signed in on this device</strong>
-              <span class="muted" style="display:block;font-size:0.82rem;margin-top:2px;">
-                Applies the next time you sign in. Remembered sessions last about 2 months.
-              </span>
-            </span>
-          </label>
-          <p id="device-session-status" class="muted" style="margin:0 0 12px;font-size:0.85rem;"></p>
+          <p id="device-session-status" class="muted" style="margin:0 0 12px;font-size:0.85rem;">
+            Signed in until you lock.
+          </p>
           <button class="btn btn-danger" type="button" id="lock-btn-settings">Lock now</button>
         </section>
       </div>
@@ -421,11 +408,9 @@
       const synkSessionsEmpty = document.getElementById("synk-sessions-empty");
 
       const STORAGE_KEY = "synk_admin_session";
-      const REMEMBER_KEY = "synk_admin_remember";
       const PANE_KEY = "synk_admin_pane";
 
       let sessionToken = "";
-      let sessionExpiresAt = "";
       let sessionUsername = "";
       let sessionId = "";
       let synkProfilesCache = [];
@@ -473,62 +458,35 @@
         return `${m}/${d}/${y}`;
       }
 
-      function getRememberPref() {
-        const raw = localStorage.getItem(REMEMBER_KEY);
-        if (raw === null) return true;
-        return raw === "1" || raw === "true";
-      }
-
-      function setRememberPref(value) {
-        localStorage.setItem(REMEMBER_KEY, value ? "1" : "0");
-        const loginBox = document.getElementById("stay-signed-in");
-        const settingsBox = document.getElementById("settings-stay-signed-in");
-        if (loginBox) loginBox.checked = Boolean(value);
-        if (settingsBox) settingsBox.checked = Boolean(value);
-        const status = document.getElementById("device-session-status");
-        if (status) {
-          status.textContent = value
-            ? "This device will keep you signed in for about 2 months after login."
-            : "This device will require sign-in every time (nothing saved locally).";
-        }
-      }
-
       function readStoredSession() {
-        if (!getRememberPref()) return null;
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return null;
         try {
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed === "object" && parsed.token) {
-            return {
-              token: String(parsed.token),
-              expiresAt: parsed.expiresAt || "",
-            };
+            return { token: String(parsed.token) };
           }
         } catch (_) {
           /* legacy plain token string */
         }
-        return { token: raw, expiresAt: "" };
+        return { token: raw };
       }
 
-      function writeStoredSession({ token, expiresAt, remember }) {
-        const keep = remember == null ? getRememberPref() : Boolean(remember);
-        setRememberPref(keep);
-        if (!keep) {
-          localStorage.removeItem(STORAGE_KEY);
-          return;
-        }
+      function writeStoredSession({ token }) {
         localStorage.setItem(
           STORAGE_KEY,
           JSON.stringify({
             token: String(token || ""),
-            expiresAt: expiresAt || null,
           })
         );
+        const status = document.getElementById("device-session-status");
+        if (status) status.textContent = "Signed in until you lock.";
       }
 
       function clearStoredSession() {
         localStorage.removeItem(STORAGE_KEY);
+        // Clean up legacy stay-signed-in preference
+        localStorage.removeItem("synk_admin_remember");
       }
 
       function adminHeaders() {
@@ -540,12 +498,9 @@
 
       function updateOverviewSubtitle() {
         if (!overviewSubtitle) return;
-        let text = "Synk Admin";
-        if (sessionExpiresAt) {
-          const when = formatTime(sessionExpiresAt);
-          if (when) text += ` · session ends ${when}`;
-        }
-        overviewSubtitle.textContent = text;
+        overviewSubtitle.textContent = sessionToken
+          ? "Signed in until you lock"
+          : "Synk Admin";
       }
 
       function setAdminPane(pane) {
@@ -564,9 +519,6 @@
         if (next === "requests") {
           refreshSynkRequests().catch(() => {});
         }
-        if (next === "settings") {
-          setRememberPref(getRememberPref());
-        }
       }
 
 
@@ -577,12 +529,13 @@
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = null;
         sessionToken = "";
-        sessionExpiresAt = "";
         sessionUsername = "";
         sessionId = "";
         clearStoredSession();
         updateOverviewSubtitle();
         if (securitySessionMeta) securitySessionMeta.textContent = "Not signed in.";
+        const deviceStatus = document.getElementById("device-session-status");
+        if (deviceStatus) deviceStatus.textContent = "Not signed in.";
         if (synkSessionsEl) synkSessionsEl.innerHTML = "";
         panelView.classList.add("hidden");
         unlockView.classList.remove("hidden");
@@ -870,7 +823,7 @@
                   ${escapeHtml(shortUa(session.userAgent))}
                   <br />
                   Last seen ${escapeHtml(when ? formatTime(when) : "—")}
-                  ${session.expiresAt ? ` · expires ${escapeHtml(formatTime(session.expiresAt))}` : ""}
+                  ${session.revoked ? "" : " · until locked"}
                 </div>
                 ${
                   !session.revoked && !isCurrent
@@ -884,7 +837,7 @@
         if (securitySessionMeta) {
           const parts = [];
           if (sessionUsername) parts.push(`Signed in as ${sessionUsername}`);
-          if (sessionExpiresAt) parts.push(`expires ${formatTime(sessionExpiresAt)}`);
+          parts.push("until locked");
           parts.push(`${active.length} active session${active.length === 1 ? "" : "s"}`);
           securitySessionMeta.textContent = parts.join(" · ");
         }
@@ -934,13 +887,7 @@
         if (!res.ok) throw new Error(data.error || "Could not load sessions");
         sessionUsername = data.username || sessionUsername || "";
         sessionId = data.sessionId || sessionId || "";
-        if (data.expiresAt) {
-          sessionExpiresAt = data.expiresAt;
-          writeStoredSession({
-            token: sessionToken,
-            expiresAt: sessionExpiresAt,
-          });
-        }
+        writeStoredSession({ token: sessionToken });
         synkSessionsCache = data.sessions || [];
         updateOverviewSubtitle();
         renderSessions();
@@ -1116,13 +1063,8 @@
       async function openAdminSession(token, meta = {}) {
         sessionToken = String(token || "").trim();
         if (!sessionToken) throw new Error("Missing session");
-        if (meta.expiresAt) sessionExpiresAt = meta.expiresAt;
         await refreshSettings();
-        writeStoredSession({
-          token: sessionToken,
-          expiresAt: sessionExpiresAt,
-          remember: meta.remember,
-        });
+        writeStoredSession({ token: sessionToken });
         unlockView.classList.add("hidden");
         panelView.classList.remove("hidden");
         updateOverviewSubtitle();
@@ -1139,21 +1081,18 @@
         }, 15000);
       }
 
-      async function loginWithCredentials({ username, password, totp, remember }) {
+      async function loginWithCredentials({ username, password, totp }) {
         const res = await fetch("/api/synk-admin-login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password, totp, remember: Boolean(remember) }),
+          body: JSON.stringify({ username, password, totp, remember: true }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Could not sign in");
         if (!data.token) throw new Error("Login succeeded but no session was returned");
         sessionUsername = username;
         sessionId = data.sessionId || "";
-        await openAdminSession(data.token, {
-          expiresAt: data.expiresAt || "",
-          remember: data.remember != null ? data.remember : Boolean(remember),
-        });
+        await openAdminSession(data.token);
       }
 
       unlockForm.addEventListener("submit", async (e) => {
@@ -1162,14 +1101,10 @@
         const unlockBtn = document.getElementById("unlock-btn");
         if (unlockBtn) unlockBtn.disabled = true;
         try {
-          const stayBox = document.getElementById("stay-signed-in");
-          const remember = stayBox ? stayBox.checked : getRememberPref();
-          setRememberPref(remember);
           await loginWithCredentials({
             username: document.getElementById("username").value.trim(),
             password: document.getElementById("password").value,
             totp: document.getElementById("totp").value.trim(),
-            remember,
           });
           document.getElementById("password").value = "";
           document.getElementById("totp").value = "";
@@ -1186,19 +1121,6 @@
 
       document.getElementById("lock-btn").addEventListener("click", () => lockAdmin({ remote: true }));
       document.getElementById("lock-btn-settings").addEventListener("click", () => lockAdmin({ remote: true }));
-
-      const settingsStayBox = document.getElementById("settings-stay-signed-in");
-      if (settingsStayBox) {
-        settingsStayBox.addEventListener("change", () => {
-          setRememberPref(settingsStayBox.checked);
-          if (!settingsStayBox.checked) {
-            clearStoredSession();
-            showToast("This device will ask for sign-in next time");
-          } else {
-            showToast("Stay signed in enabled for next login");
-          }
-        });
-      }
 
       const refreshRequestsBtn = document.getElementById("refresh-requests-btn");
       if (refreshRequestsBtn) {
@@ -1698,15 +1620,9 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
         .then(() => {})
         .catch(() => {});
 
-      setRememberPref(getRememberPref());
-
       const stored = readStoredSession();
       if (stored && stored.token) {
-        sessionExpiresAt = stored.expiresAt || "";
-        openAdminSession(stored.token, {
-          expiresAt: sessionExpiresAt,
-          remember: true,
-        }).catch(() => {
+        openAdminSession(stored.token).catch(() => {
           lockAdmin({ remote: false });
         });
       }

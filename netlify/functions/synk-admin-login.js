@@ -48,7 +48,6 @@ exports.handler = async (event) => {
     const username = String(body.username || "").trim();
     const password = String(body.password || "");
     const totp = String(body.totp || body.code || body.otp || "").trim();
-    const remember = body.remember !== false && body.staySignedIn !== false;
     if (!username || !password || !totp) {
       return json(400, { error: "Username, password, and 2FA code are required" });
     }
@@ -77,7 +76,7 @@ exports.handler = async (event) => {
         totp,
         ip,
         userAgent: userAgent(event),
-        remember,
+        remember: true,
       });
       await logSynkEvent(sql, {
         eventType: "admin_login_ok",
@@ -87,11 +86,12 @@ exports.handler = async (event) => {
       return json(200, {
         ok: true,
         token: session.token,
-        expiresAt: session.expiresAt,
-        expiresIn: session.expiresIn,
-        idleTimeoutSec: session.idleTimeoutSec,
+        expiresAt: null,
+        expiresIn: null,
+        idleTimeoutSec: 0,
         sessionId: session.sessionId,
-        remember: session.remember,
+        remember: true,
+        persistent: true,
       });
     } catch (err) {
       await logSynkEvent(sql, {

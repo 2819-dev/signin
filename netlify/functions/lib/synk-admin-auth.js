@@ -9,10 +9,10 @@ const {
 } = require("crypto");
 const { hashSecret, verifySecret } = require("./synk");
 
-const SESSION_TTL_REMEMBER_SEC = 60 * 60 * 24 * 60; // ~2 months when "stay signed in"
-const SESSION_TTL_EPHEMERAL_SEC = 60 * 60 * 12; // same-day session when not remembered
-const SESSION_TTL_SEC = SESSION_TTL_REMEMBER_SEC; // default / export for callers
-const IDLE_TTL_SEC = 60 * 30; // unused by UI; kept for API compatibility
+const SESSION_TTL_SEC = 60 * 60 * 24 * 365 * 10; // far-future JWT bookkeeping; sessions end only on logout
+const SESSION_TTL_REMEMBER_SEC = SESSION_TTL_SEC; // alias kept for callers
+const SESSION_TTL_EPHEMERAL_SEC = SESSION_TTL_SEC; // alias kept for callers
+const IDLE_TTL_SEC = 0; // unused; no idle auto-lock
 const SCRYPT_KEYLEN = 64;
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
@@ -200,7 +200,7 @@ function verifySessionToken(token) {
     return null;
   }
   if (!claims || claims.role !== "synk-admin") return null;
-  if (!claims.exp || Math.floor(Date.now() / 1000) >= Number(claims.exp)) return null;
+  // Sessions remain valid until revoked (logout). Token exp is informational only.
   if (!claims.sub || !claims.sid) return null;
   return claims;
 }
@@ -222,7 +222,8 @@ function extractSessionToken(event) {
 async function createAdminSession(sql, { username, ip = "", userAgent = "", remember = true } = {}) {
   await ensureAdminSessionTables(sql);
   const now = Math.floor(Date.now() / 1000);
-  const ttlSec = remember ? SESSION_TTL_REMEMBER_SEC : SESSION_TTL_EPHEMERAL_SEC;
+  // Always persistent until logout/revoke. `remember` kept for API compatibility.
+  const ttlSec = SESSION_TTL_SEC;
   const expiresAt = new Date((now + ttlSec) * 1000);
   const sidRows = await sql`
     INSERT INTO synk_admin_sessions (username, token_hash, ip, user_agent, expires_at)
@@ -242,7 +243,7 @@ async function createAdminSession(sql, { username, ip = "", userAgent = "", reme
     sid: String(sid),
     iat: now,
     exp: now + ttlSec,
-    rem: remember ? 1 : 0,
+    rem: 1,
   });
   await sql`
     UPDATE synk_admin_sessions
@@ -251,11 +252,11 @@ async function createAdminSession(sql, { username, ip = "", userAgent = "", reme
   `;
   return {
     token,
-    expiresAt: expiresAt.toISOString(),
-    expiresIn: ttlSec,
+    expiresAt: null,
+    expiresIn: null,
     idleTimeoutSec: IDLE_TTL_SEC,
     sessionId: sid,
-    remember: Boolean(remember),
+    remember: true,
   };
 }
 
@@ -269,11 +270,11 @@ async function assertSessionActive(sql, claims, token) {
   `;
   const row = rows[0];
   if (!row || row.revoked_at) return false;
-  if (new Date(row.expires_at).getTime() <= Date.now()) return false;
   if (row.token_hash !== hashToken(token)) return false;
   await sql`
     UPDATE synk_admin_sessions
-    SET last_seen_at = NOW()
+    SET last_seen_at = NOW(),
+        expires_at = NOW() + INTERVAL '10 years'
     WHERE id = ${claims.sid}
   `;
   return true;
@@ -363,7 +364,7 @@ async function loginWithPasswordAndTotp(
     username: expectedUsername(),
     ip,
     userAgent,
-    remember: remember !== false,
+    remember: true,
   });
 }
 

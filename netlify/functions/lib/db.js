@@ -69,7 +69,7 @@ async function requireSynkAdmin(event) {
     const sql = getSql();
     const active = await assertSessionActive(sql, claims, token);
     if (!active) {
-      return { ok: false, response: json(401, { error: "Session expired or revoked" }) };
+      return { ok: false, response: json(401, { error: "Session revoked" }) };
     }
   } catch (err) {
     console.error("synk admin session check failed", err);

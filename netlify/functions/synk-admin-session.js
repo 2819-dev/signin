@@ -4,8 +4,6 @@ const { getSql, json, requireSynkAdmin } = require("./lib/db");
 const {
   listSessions,
   revokeSession,
-  IDLE_TTL_SEC,
-  SESSION_TTL_SEC,
   expectedUsername,
 } = require("./lib/synk-admin-auth");
 const { ensureSynkCoreTables, logSynkEvent, clientIp } = require("./lib/synk");
@@ -30,9 +28,10 @@ exports.handler = async (event) => {
       return json(200, {
         username,
         sessionId: auth.claims.sid,
-        expiresAt: new Date(Number(auth.claims.exp) * 1000).toISOString(),
-        idleTimeoutSec: IDLE_TTL_SEC,
-        sessionTtlSec: SESSION_TTL_SEC,
+        expiresAt: null,
+        idleTimeoutSec: 0,
+        sessionTtlSec: null,
+        persistent: true,
         sessions: marked,
       });
     }
