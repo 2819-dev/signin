@@ -229,22 +229,15 @@ exports.handler = async (event) => {
       const q = event.queryStringParameters || {};
       const status = String(q.status || "").trim().toLowerCase();
       const limit = Math.min(100, Math.max(1, Number(q.limit) || 50));
-      const rows = status
-        ? await sql`
-            SELECT *
-            FROM synk_join_requests
-            WHERE status = ${status}
-            ORDER BY created_at DESC
-            LIMIT ${limit}
-          `
-        : await sql`
-            SELECT *
-            FROM synk_join_requests
-            ORDER BY
-              CASE WHEN status = 'pending' THEN 0 ELSE 1 END,
-              created_at DESC
-            LIMIT ${limit}
-          `;
+      // Default inbox is pending-only so denied/accepted people leave Requests.
+      const filterStatus = status || "pending";
+      const rows = await sql`
+        SELECT *
+        FROM synk_join_requests
+        WHERE status = ${filterStatus}
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+      `;
       return json(200, {
         requests: rows.map(mapRequest),
         pendingCount: rows.filter((r) => r.status === "pending").length,

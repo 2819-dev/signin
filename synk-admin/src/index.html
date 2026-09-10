@@ -1174,9 +1174,10 @@
             .join("");
         }
 
+        // Requests inbox is pending-only — accepted/denied people leave this list.
         if (listEl) {
-          listEl.innerHTML = rowsHtml(synkRequestsCache);
-          if (emptyEl) emptyEl.classList.toggle("hidden", synkRequestsCache.length > 0);
+          listEl.innerHTML = rowsHtml(pending);
+          if (emptyEl) emptyEl.classList.toggle("hidden", pending.length > 0);
         }
         if (overviewEl) {
           overviewEl.innerHTML = rowsHtml(pending.slice(0, 5));
@@ -1185,7 +1186,9 @@
       }
 
       async function refreshSynkRequests() {
-        const res = await fetch("/api/synk-join?limit=50", { headers: adminHeaders() });
+        const res = await fetch("/api/synk-join?status=pending&limit=50", {
+          headers: adminHeaders(),
+        });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Could not load join requests");
         renderSynkRequests(data.requests || []);
