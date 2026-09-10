@@ -1,5 +1,8 @@
+"use strict";
+
 const { getStore, connectLambda } = require("@netlify/blobs");
-const { json } = require("./lib/db");
+const { json, requireSynkAdmin } = require("./lib/db");
+const { verifyMediaToken } = require("./lib/synk-admin-auth");
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
@@ -13,6 +16,19 @@ exports.handler = async (event) => {
   const id = event.queryStringParameters && event.queryStringParameters.id;
   if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
     return json(400, { error: "Valid id is required" });
+  }
+
+  const token = event.queryStringParameters && event.queryStringParameters.token;
+  let allowed = false;
+  if (token && verifyMediaToken(token, id)) {
+    allowed = true;
+  } else {
+    const auth = await requireSynkAdmin(event);
+    allowed = auth.ok;
+  }
+
+  if (!allowed) {
+    return json(401, { error: "Unauthorized" });
   }
 
   try {
@@ -32,7 +48,8 @@ exports.handler = async (event) => {
       statusCode: 200,
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "public, max-age=3600",
+        "Cache-Control": "private, max-age=300",
+        "X-Content-Type-Options": "nosniff",
       },
       body: buffer.toString("base64"),
       isBase64Encoded: true,

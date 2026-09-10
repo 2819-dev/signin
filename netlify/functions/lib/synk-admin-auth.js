@@ -5,12 +5,13 @@ const {
   createHmac,
   timingSafeEqual,
   scryptSync,
+  createHash,
 } = require("crypto");
 const { hashSecret, verifySecret } = require("./synk");
 
-const SESSION_TTL_SEC = 60 * 60 * 24 * 7; // 7 days
+const SESSION_TTL_SEC = 60 * 60 * 12; // 12 hours
+const IDLE_TTL_SEC = 60 * 30; // client idle lock guidance
 const SCRYPT_KEYLEN = 64;
-
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 function sessionSigningSecret() {
@@ -128,19 +129,15 @@ function hashPassword(password) {
 }
 
 function verifyPassword(password, storedHash) {
-  // Prefer salt:hash from hashSecret/verifySecret.
   if (storedHash && storedHash.includes(":")) {
     return verifySecret(password, storedHash);
   }
-  // Fallback: legacy scrypt$salt$hash
   if (storedHash && storedHash.startsWith("scrypt$")) {
     const parts = storedHash.split("$");
     if (parts.length !== 3) return false;
-    const salt = parts[1];
-    const hash = parts[2];
     try {
-      const derived = scryptSync(String(password), salt, SCRYPT_KEYLEN).toString("hex");
-      const a = Buffer.from(hash, "hex");
+      const derived = scryptSync(String(password), parts[1], SCRYPT_KEYLEN).toString("hex");
+      const a = Buffer.from(parts[2], "hex");
       const b = Buffer.from(derived, "hex");
       if (a.length !== b.length) return false;
       return timingSafeEqual(a, b);
@@ -151,24 +148,36 @@ function verifyPassword(password, storedHash) {
   return false;
 }
 
-function mintSessionToken(username) {
+function hashToken(token) {
+  return createHash("sha256").update(String(token)).digest("hex");
+}
+
+async function ensureAdminSessionTables(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_admin_sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      username TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      ip TEXT,
+      user_agent TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_admin_sessions_user_idx
+    ON synk_admin_sessions (username, revoked_at, expires_at DESC)
+  `;
+}
+
+function signClaims(claims) {
   const secret = sessionSigningSecret();
   if (!secret) throw new Error("Session signing secret missing");
-  const now = Math.floor(Date.now() / 1000);
-  const claims = {
-    role: "synk-admin",
-    sub: String(username),
-    iat: now,
-    exp: now + SESSION_TTL_SEC,
-    nonce: randomBytes(8).toString("base64url"),
-  };
   const body = Buffer.from(JSON.stringify(claims)).toString("base64url");
   const sig = createHmac("sha256", secret).update(body).digest("base64url");
-  return {
-    token: `${body}.${sig}`,
-    expiresAt: new Date(claims.exp * 1000).toISOString(),
-    expiresIn: SESSION_TTL_SEC,
-  };
+  return `${body}.${sig}`;
 }
 
 function verifySessionToken(token) {
@@ -190,7 +199,7 @@ function verifySessionToken(token) {
   }
   if (!claims || claims.role !== "synk-admin") return null;
   if (!claims.exp || Math.floor(Date.now() / 1000) >= Number(claims.exp)) return null;
-  if (!claims.sub) return null;
+  if (!claims.sub || !claims.sid) return null;
   return claims;
 }
 
@@ -208,6 +217,111 @@ function extractSessionToken(event) {
   return raw.trim();
 }
 
+async function createAdminSession(sql, { username, ip = "", userAgent = "" }) {
+  await ensureAdminSessionTables(sql);
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = new Date((now + SESSION_TTL_SEC) * 1000);
+  const sidRows = await sql`
+    INSERT INTO synk_admin_sessions (username, token_hash, ip, user_agent, expires_at)
+    VALUES (
+      ${String(username)},
+      ${"pending:" + randomBytes(8).toString("hex")},
+      ${ip ? String(ip).slice(0, 80) : null},
+      ${userAgent ? String(userAgent).slice(0, 240) : null},
+      ${expiresAt.toISOString()}::timestamptz
+    )
+    RETURNING id
+  `;
+  const sid = sidRows[0].id;
+  const token = signClaims({
+    role: "synk-admin",
+    sub: String(username),
+    sid: String(sid),
+    iat: now,
+    exp: now + SESSION_TTL_SEC,
+  });
+  await sql`
+    UPDATE synk_admin_sessions
+    SET token_hash = ${hashToken(token)}
+    WHERE id = ${sid}
+  `;
+  return {
+    token,
+    expiresAt: expiresAt.toISOString(),
+    expiresIn: SESSION_TTL_SEC,
+    idleTimeoutSec: IDLE_TTL_SEC,
+    sessionId: sid,
+  };
+}
+
+async function assertSessionActive(sql, claims, token) {
+  await ensureAdminSessionTables(sql);
+  const rows = await sql`
+    SELECT id, token_hash, revoked_at, expires_at
+    FROM synk_admin_sessions
+    WHERE id = ${claims.sid}
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row || row.revoked_at) return false;
+  if (new Date(row.expires_at).getTime() <= Date.now()) return false;
+  if (row.token_hash !== hashToken(token)) return false;
+  await sql`
+    UPDATE synk_admin_sessions
+    SET last_seen_at = NOW()
+    WHERE id = ${claims.sid}
+  `;
+  return true;
+}
+
+async function revokeSession(sql, { sessionId = null, token = null, username = null } = {}) {
+  await ensureAdminSessionTables(sql);
+  if (sessionId) {
+    await sql`
+      UPDATE synk_admin_sessions
+      SET revoked_at = NOW()
+      WHERE id = ${sessionId} AND revoked_at IS NULL
+    `;
+    return;
+  }
+  if (token) {
+    await sql`
+      UPDATE synk_admin_sessions
+      SET revoked_at = NOW()
+      WHERE token_hash = ${hashToken(token)} AND revoked_at IS NULL
+    `;
+    return;
+  }
+  if (username) {
+    await sql`
+      UPDATE synk_admin_sessions
+      SET revoked_at = NOW()
+      WHERE username = ${username} AND revoked_at IS NULL
+    `;
+  }
+}
+
+async function listSessions(sql, username) {
+  await ensureAdminSessionTables(sql);
+  const rows = await sql`
+    SELECT id, ip, user_agent, created_at, last_seen_at, expires_at, revoked_at
+    FROM synk_admin_sessions
+    WHERE username = ${username}
+      AND (revoked_at IS NULL OR revoked_at > NOW() - INTERVAL '7 days')
+    ORDER BY created_at DESC
+    LIMIT 30
+  `;
+  return rows.map((row) => ({
+    id: row.id,
+    ip: row.ip || "",
+    userAgent: row.user_agent || "",
+    createdAt: row.created_at,
+    lastSeenAt: row.last_seen_at,
+    expiresAt: row.expires_at,
+    revoked: Boolean(row.revoked_at),
+  }));
+}
+
 function otpauthUrl({ username, secret, issuer = "Synk Admin" }) {
   const label = encodeURIComponent(`${issuer}:${username}`);
   const q = new URLSearchParams({
@@ -220,7 +334,7 @@ function otpauthUrl({ username, secret, issuer = "Synk Admin" }) {
   return `otpauth://totp/${label}?${q.toString()}`;
 }
 
-function loginWithPasswordAndTotp({ username, password, totp }) {
+async function loginWithPasswordAndTotp(sql, { username, password, totp, ip = "", userAgent = "" }) {
   if (!authConfigured()) {
     const err = new Error("Synk Admin login is not configured");
     err.statusCode = 500;
@@ -231,14 +345,58 @@ function loginWithPasswordAndTotp({ username, password, totp }) {
   const passOk = verifyPassword(password, expectedPasswordHash());
   const totpOk = verifyTotp(expectedTotpSecret(), totp);
 
-  // Always check all three to reduce timing oracles a bit.
   if (!userOk || !passOk || !totpOk) {
     const err = new Error("Invalid username, password, or 2FA code");
     err.statusCode = 401;
     throw err;
   }
 
-  return mintSessionToken(expectedUsername());
+  return createAdminSession(sql, {
+    username: expectedUsername(),
+    ip,
+    userAgent,
+  });
+}
+
+function signMediaToken(imageId, ttlSec = 60 * 30) {
+  const secret = sessionSigningSecret();
+  if (!secret) throw new Error("Signing secret missing");
+  const exp = Math.floor(Date.now() / 1000) + ttlSec;
+  const body = Buffer.from(JSON.stringify({ id: imageId, exp })).toString("base64url");
+  const sig = createHmac("sha256", secret).update(body).digest("base64url");
+  return { token: `${body}.${sig}`, exp };
+}
+
+function verifyMediaToken(token, imageId) {
+  const secret = sessionSigningSecret();
+  if (!secret || !token || !token.includes(".")) return false;
+  const [body, sig] = token.split(".");
+  const expected = createHmac("sha256", secret).update(body).digest("base64url");
+  const a = Buffer.from(sig || "");
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
+  let claims;
+  try {
+    claims = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+  } catch {
+    return false;
+  }
+  if (!claims || claims.id !== imageId) return false;
+  if (!claims.exp || Math.floor(Date.now() / 1000) >= Number(claims.exp)) return false;
+  return true;
+}
+
+function signedPhotoUrl(photoUrl) {
+  if (!photoUrl) return "";
+  const match = String(photoUrl).match(/[?&]id=([0-9a-f-]{36})/i);
+  if (!match) return photoUrl;
+  const id = match[1];
+  try {
+    const { token } = signMediaToken(id);
+    return `/api/synk-image?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`;
+  } catch {
+    return photoUrl;
+  }
 }
 
 module.exports = {
@@ -247,11 +405,20 @@ module.exports = {
   verifyPassword,
   generateTotpSecret,
   verifyTotp,
-  mintSessionToken,
   verifySessionToken,
   extractSessionToken,
   loginWithPasswordAndTotp,
+  createAdminSession,
+  assertSessionActive,
+  revokeSession,
+  listSessions,
+  ensureAdminSessionTables,
   otpauthUrl,
   encodeBase32,
+  signMediaToken,
+  verifyMediaToken,
+  signedPhotoUrl,
   SESSION_TTL_SEC,
+  IDLE_TTL_SEC,
+  expectedUsername,
 };

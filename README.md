@@ -11,7 +11,7 @@ Visitors enter their **name** and **why they want to come in**. You get the requ
 | `/` | iPad (kiosk) | Sign-in form → waits → shows admitted / declined |
 | `/admin` | Phone | Live request list, admit / decline, browser alerts |
 | `/synk` | Any | Public Synk ID face verify |
-| [synk-admin.netlify.app](https://synk-admin.netlify.app/) | Phone / desktop | Synk Admin (separate Netlify site, own secret) |
+| [synk-admin.netlify.app](https://synk-admin.netlify.app/) | Phone / desktop | Synk Admin (separate site; username + password + 2FA) |
 
 ## Stack
 
@@ -73,7 +73,11 @@ Synk Admin is deployed as its own Netlify project:
 - Site: https://synk-admin.netlify.app
 - Source: `synk-admin/` in this repo
 - APIs still run on the visitor kiosk site; Synk Admin proxies `/api/*` there
-- Auth: username + password + TOTP 2FA on the **visitor** site; Synk Admin stores a signed session token locally
+- Auth: username + password + TOTP 2FA on the **visitor** site; Synk Admin stores a signed, **revocable** server session locally
+- Sessions expire in 12 hours, idle-lock after 30 minutes, and can be revoked from Settings
+- Member photos are served with short-lived signed URLs
+- Active Synk passes can be listed and revoked from Overview / Members
+- Activity is filterable and exportable as CSV
 - Generate credentials: `node scripts/generate-synk-admin-credentials.js`
 
 Local:

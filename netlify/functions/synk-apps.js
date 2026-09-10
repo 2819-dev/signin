@@ -38,7 +38,7 @@ exports.handler = async (event) => {
     return json(204, {});
   }
 
-  const auth = requireSynkAdmin(event);
+  const auth = await requireSynkAdmin(event);
   if (!auth.ok) return auth.response;
 
   try {

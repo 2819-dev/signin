@@ -14,7 +14,7 @@ exports.handler = async (event) => {
     return json(405, { error: "Method not allowed" });
   }
 
-  const auth = requireSynkAdmin(event);
+  const auth = await requireSynkAdmin(event);
   if (!auth.ok) return auth.response;
 
   let body;

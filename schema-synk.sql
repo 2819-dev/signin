@@ -41,11 +41,32 @@ CREATE TABLE IF NOT EXISTS synk_passes (
   purpose TEXT NOT NULL DEFAULT 'identity',
   expires_at TIMESTAMPTZ NOT NULL,
   consumed_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS synk_passes_hash_idx ON synk_passes (token_hash);
 CREATE INDEX IF NOT EXISTS synk_passes_expires_idx ON synk_passes (expires_at);
+CREATE INDEX IF NOT EXISTS synk_passes_active_idx
+  ON synk_passes (expires_at)
+  WHERE consumed_at IS NULL AND revoked_at IS NULL;
+
+ALTER TABLE synk_passes ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS synk_admin_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  username TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  ip TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS synk_admin_sessions_user_idx
+  ON synk_admin_sessions (username, revoked_at, expires_at DESC);
 
 CREATE TABLE IF NOT EXISTS synk_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

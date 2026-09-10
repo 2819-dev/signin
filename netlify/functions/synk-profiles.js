@@ -1,5 +1,21 @@
 const { getSql, json, requireSynkAdmin } = require("./lib/db");
-const { hashSecret, generateSynkCode, ensureSynkCoreTables } = require("./lib/synk");
+const { hashSecret, generateSynkCode, ensureSynkCoreTables, logSynkEvent } = require("./lib/synk");
+const { signedPhotoUrl } = require("./lib/synk-admin-auth");
+
+function normalizePhotoUrl(value) {
+  const raw = String(value || "").trim().slice(0, 500);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw, "https://synk.local");
+    const id = url.searchParams.get("id");
+    if (id && /^[0-9a-f-]{36}$/i.test(id) && url.pathname.includes("synk-image")) {
+      return `/api/synk-image?id=${encodeURIComponent(id)}`;
+    }
+  } catch {
+    /* keep raw below */
+  }
+  return raw.replace(/([?&])token=[^&]+/g, "").replace(/[?&]$/, "");
+}
 
 function normalizeName(value) {
   return String(value || "")
@@ -52,7 +68,7 @@ function mapProfile(row, { includeSecretHint = false } = {}) {
     synkCode: row.synk_code,
     name: row.name,
     dateOfBirth: toDobString(row.date_of_birth),
-    photoUrl: row.photo_url || "",
+    photoUrl: signedPhotoUrl(row.photo_url || ""),
     policy: normalizePolicy(row.policy),
     enabled: row.enabled !== false,
     hasBiometrics: row.descriptor != null,
@@ -88,7 +104,7 @@ exports.handler = async (event) => {
     await ensureSynkTables(sql);
 
     if (event.httpMethod === "GET") {
-      const auth = requireSynkAdmin(event);
+      const auth = await requireSynkAdmin(event);
       if (!auth.ok) return auth.response;
 
       const rows = await sql`
@@ -103,7 +119,7 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === "POST") {
-      const auth = requireSynkAdmin(event);
+      const auth = await requireSynkAdmin(event);
       if (!auth.ok) return auth.response;
 
       let body;
@@ -116,7 +132,7 @@ exports.handler = async (event) => {
       const name = normalizeName(body.name);
       const secret = normalizeSecret(body.secret);
       const dateOfBirth = normalizeDob(body.dateOfBirth);
-      const photoUrl = String(body.photoUrl || "").trim().slice(0, 500);
+      const photoUrl = normalizePhotoUrl(body.photoUrl);
       const descriptor = normalizeDescriptor(body.descriptor);
       const policy = normalizePolicy(body.policy);
       const enabled = body.enabled !== false;
@@ -144,11 +160,12 @@ exports.handler = async (event) => {
         )
         RETURNING id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, policy, enabled, created_at, updated_at
       `;
+      await logSynkEvent(sql, { eventType: "admin_member_create", profileId: rows[0].id, detail: rows[0].synk_code || name });
       return json(201, { profile: mapProfile(rows[0], { includeSecretHint: true }) });
     }
 
     if (event.httpMethod === "PATCH") {
-      const auth = requireSynkAdmin(event);
+      const auth = await requireSynkAdmin(event);
       if (!auth.ok) return auth.response;
 
       let body;
@@ -178,7 +195,7 @@ exports.handler = async (event) => {
           : toDobString(existing.date_of_birth);
       const photoUrl =
         typeof body.photoUrl === "string"
-          ? String(body.photoUrl).trim().slice(0, 500)
+          ? normalizePhotoUrl(body.photoUrl)
           : existing.photo_url || "";
       const enabled =
         typeof body.enabled === "boolean" ? body.enabled : existing.enabled !== false;
@@ -233,11 +250,12 @@ exports.handler = async (event) => {
               RETURNING id, synk_code, name, date_of_birth, secret_hash, photo_url, descriptor, policy, enabled, created_at, updated_at
             `;
 
+      await logSynkEvent(sql, { eventType: "admin_member_update", profileId: rows[0].id, detail: rows[0].synk_code || name });
       return json(200, { profile: mapProfile(rows[0], { includeSecretHint: true }) });
     }
 
     if (event.httpMethod === "DELETE") {
-      const auth = requireSynkAdmin(event);
+      const auth = await requireSynkAdmin(event);
       if (!auth.ok) return auth.response;
 
       const id =
@@ -258,6 +276,7 @@ exports.handler = async (event) => {
         RETURNING id
       `;
       if (!rows[0]) return json(404, { error: "Person not found" });
+      await logSynkEvent(sql, { eventType: "admin_member_delete", profileId: rows[0].id, detail: "deleted" });
       return json(200, { ok: true });
     }
 

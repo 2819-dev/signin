@@ -9,6 +9,7 @@ const {
   assertNotRateLimited,
   issuePass,
 } = require("./lib/synk");
+const { signedPhotoUrl } = require("./lib/synk-admin-auth");
 
 const MATCH_THRESHOLD = 0.52;
 const POLICIES = new Set(["pending", "autofill", "auto_admit", "auto_deny"]);
@@ -66,7 +67,7 @@ function publicProfile(row) {
     id: row.id,
     synkCode: row.synk_code,
     name: row.name,
-    photoUrl: row.photo_url || "",
+    photoUrl: signedPhotoUrl(row.photo_url || ""),
     policy: normalizePolicy(row.policy),
   };
 }

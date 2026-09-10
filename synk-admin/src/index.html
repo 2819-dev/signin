@@ -100,9 +100,9 @@
             <div class="muted">last 24h</div>
           </div>
           <div class="synk-stat-card">
-            <div class="muted">Fails</div>
-            <strong id="stat-fails">—</strong>
-            <div class="muted">last 24h</div>
+            <div class="muted">Passes</div>
+            <strong id="stat-passes">—</strong>
+            <div class="muted">active now</div>
           </div>
         </div>
 
@@ -112,8 +112,22 @@
             <button class="btn btn-compact" type="button" data-jump="members">Enroll member</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="apps">Add app</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="activity">Activity</button>
-            <button class="btn btn-secondary btn-compact" type="button" data-jump="settings">Camera</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-jump="settings">Security</button>
           </div>
+        </section>
+
+        <section class="panel">
+          <div class="admin-header" style="padding:0;margin:0 0 12px;">
+            <div>
+              <h2 style="margin:0;">Active passes</h2>
+              <p class="muted" style="margin:4px 0 0;">Short-lived tokens from face verify. Revoke if leaked.</p>
+            </div>
+            <div class="admin-header-actions">
+              <button class="btn btn-secondary btn-compact" type="button" id="refresh-passes-btn">Refresh</button>
+            </div>
+          </div>
+          <div id="overview-passes" class="synk-sessions"></div>
+          <p id="overview-passes-empty" class="chat-empty-note">No active passes.</p>
         </section>
 
         <section class="panel">
@@ -344,6 +358,8 @@
       const synkEventsEmpty = document.getElementById("synk-events-empty");
       const overviewEventsEl = document.getElementById("overview-events");
       const overviewEventsEmpty = document.getElementById("overview-events-empty");
+      const overviewPassesEl = document.getElementById("overview-passes");
+      const overviewPassesEmpty = document.getElementById("overview-passes-empty");
       const activityFilter = document.getElementById("activity-filter");
       const activityTypeSelect = document.getElementById("activity-type");
       const cameraSideSelect = document.getElementById("camera-side");
@@ -664,6 +680,7 @@
                     </label>
                     <button class="btn btn-secondary btn-compact" type="button" data-synk-action="save-secret">Save secret</button>
                     <button class="btn btn-secondary btn-compact" type="button" data-synk-action="toggle">${profile.enabled ? "Pause" : "Enable"}</button>
+                    <button class="btn btn-secondary btn-compact" type="button" data-synk-action="revoke-passes">Revoke passes</button>
                     <button class="btn btn-danger btn-compact" type="button" data-synk-action="delete">Remove</button>
                   </div>
                 </div>
@@ -875,6 +892,52 @@
         return data;
       }
 
+      function renderSynkPasses(passes) {
+        synkPassesCache = passes || [];
+        if (!overviewPassesEl) return;
+        if (!synkPassesCache.length) {
+          overviewPassesEl.innerHTML = "";
+          if (overviewPassesEmpty) overviewPassesEmpty.classList.remove("hidden");
+          return;
+        }
+        if (overviewPassesEmpty) overviewPassesEmpty.classList.add("hidden");
+        overviewPassesEl.innerHTML = synkPassesCache
+          .map((pass) => {
+            const when = pass.expiresAt ? formatTime(pass.expiresAt) : "—";
+            return `
+              <article class="synk-session-row" data-pass-id="${escapeHtml(pass.id)}">
+                <div class="synk-session-top">
+                  <strong>${escapeHtml(pass.name || "Member")}</strong>
+                  <span class="synk-badge">${escapeHtml(pass.appSlug || "synk")}</span>
+                </div>
+                <div class="synk-session-meta">
+                  ${escapeHtml(pass.synkCode || "")}
+                  · ${escapeHtml(pass.purpose || "identity")}
+                  · expires ${escapeHtml(when)}
+                </div>
+                <div class="btn-row">
+                  <button class="btn btn-danger btn-compact" type="button" data-pass-action="revoke">Revoke</button>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      async function refreshSynkPasses() {
+        const res = await fetch("/api/synk-passes?limit=40", { headers: adminHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load passes");
+        renderSynkPasses(data.passes || []);
+        const passesEl = document.getElementById("stat-passes");
+        if (passesEl) {
+          passesEl.textContent = String(
+            data.activeCount != null ? data.activeCount : synkPassesCache.length
+          );
+        }
+        return data;
+      }
+
       async function refreshSettings() {
         const res = await fetch("/api/synk-settings", { headers: adminHeaders() });
         const data = await res.json().catch(() => ({}));
@@ -889,7 +952,14 @@
           stats.membersEnabled != null ? `${stats.membersEnabled} enabled` : "enabled";
         document.getElementById("stat-apps").textContent = String(stats.apps ?? "—");
         document.getElementById("stat-events").textContent = String(stats.events24h ?? "—");
-        document.getElementById("stat-fails").textContent = String(stats.fails24h ?? "—");
+        const passesEl = document.getElementById("stat-passes");
+        if (passesEl) {
+          passesEl.textContent = String(stats.activePasses ?? synkPassesCache.length ?? "—");
+        }
+        if (overviewSubtitle && stats.fails24h != null) {
+          const fails = Number(stats.fails24h) || 0;
+          overviewSubtitle.textContent = `${fails} failed event${fails === 1 ? "" : "s"} in last 24h`;
+        }
         return data;
       }
 
@@ -898,6 +968,7 @@
           refreshSynkProfiles(),
           refreshSynkApps(),
           refreshSynkActivity(),
+          refreshSynkPasses().catch(() => {}),
           refreshSettings(),
         ]);
       }
@@ -1008,7 +1079,41 @@
           showToast(err.message || "Could not export");
         }
       });
-      document.getElementById("revoke-all-sessions-btn").addEventListener("click", async () => {
+            document.getElementById("refresh-passes-btn").addEventListener("click", async () => {
+        try {
+          await refreshSynkPasses();
+          showToast("Passes refreshed");
+        } catch (err) {
+          showToast(err.message || "Could not refresh passes");
+        }
+      });
+
+      if (overviewPassesEl) {
+        overviewPassesEl.addEventListener("click", async (e) => {
+          const btn = e.target.closest("[data-pass-action]");
+          const row = e.target.closest("[data-pass-id]");
+          if (!btn || !row) return;
+          if (btn.getAttribute("data-pass-action") !== "revoke") return;
+          const passId = row.getAttribute("data-pass-id");
+          if (!passId || !confirm("Revoke this Synk pass?")) return;
+          try {
+            const res = await fetch("/api/synk-passes", {
+              method: "POST",
+              headers: adminHeaders(),
+              body: JSON.stringify({ action: "revoke", passId }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not revoke pass");
+            showToast("Pass revoked");
+            await refreshSynkPasses();
+            await refreshSynkActivity().catch(() => {});
+          } catch (err) {
+            showToast(err.message || "Could not revoke pass");
+          }
+        });
+      }
+
+document.getElementById("revoke-all-sessions-btn").addEventListener("click", async () => {
         if (!confirm("Revoke all sessions? You will be signed out everywhere.")) return;
         try {
           const res = await fetch("/api/synk-admin-session", {
@@ -1224,6 +1329,24 @@
             await refreshSettings();
           } catch (err) {
             showToast(err.message || "Could not update");
+          }
+        }
+
+        if (action === "revoke-passes") {
+          if (!confirm(`Revoke active passes for ${profile.name}?`)) return;
+          try {
+            const res = await fetch("/api/synk-passes", {
+              method: "POST",
+              headers: adminHeaders(),
+              body: JSON.stringify({ action: "revoke-member", profileId: id }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not revoke passes");
+            showToast(data.revoked ? `Revoked ${data.revoked} pass${data.revoked === 1 ? "" : "es"}` : "No active passes");
+            await refreshSynkPasses();
+            await refreshSynkActivity().catch(() => {});
+          } catch (err) {
+            showToast(err.message || "Could not revoke passes");
           }
         }
 

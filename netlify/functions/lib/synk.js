@@ -150,11 +150,18 @@ async function ensureSynkCoreTables(sql) {
       purpose TEXT NOT NULL DEFAULT 'identity',
       expires_at TIMESTAMPTZ NOT NULL,
       consumed_at TIMESTAMPTZ,
+      revoked_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE synk_passes ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ`;
   await sql`CREATE INDEX IF NOT EXISTS synk_passes_hash_idx ON synk_passes (token_hash)`;
   await sql`CREATE INDEX IF NOT EXISTS synk_passes_expires_idx ON synk_passes (expires_at)`;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_passes_active_idx
+    ON synk_passes (expires_at)
+    WHERE consumed_at IS NULL AND revoked_at IS NULL
+  `;
 
   await sql`
     CREATE TABLE IF NOT EXISTS synk_events (
@@ -244,7 +251,7 @@ async function consumePass(sql, token, { appSlug = null, singleUse = true } = {}
   if (!token || typeof token !== "string") return { ok: false, error: "Pass required" };
   const tokenHash = hashToken(token.trim());
   const rows = await sql`
-    SELECT p.id, p.synk_profile_id, p.app_slug, p.purpose, p.expires_at, p.consumed_at,
+    SELECT p.id, p.synk_profile_id, p.app_slug, p.purpose, p.expires_at, p.consumed_at, p.revoked_at,
            m.synk_code, m.name, m.photo_url, m.policy, m.enabled
     FROM synk_passes p
     JOIN synk_profiles m ON m.id = p.synk_profile_id
@@ -253,6 +260,7 @@ async function consumePass(sql, token, { appSlug = null, singleUse = true } = {}
   `;
   const row = rows[0];
   if (!row) return { ok: false, error: "Invalid Synk pass" };
+  if (row.revoked_at) return { ok: false, error: "Synk pass revoked" };
   if (row.consumed_at) return { ok: false, error: "Synk pass already used" };
   if (new Date(row.expires_at).getTime() < Date.now()) {
     return { ok: false, error: "Synk pass expired" };
@@ -286,6 +294,71 @@ async function consumePass(sql, token, { appSlug = null, singleUse = true } = {}
       policy: row.policy || "pending",
     },
   };
+}
+
+async function listActivePasses(sql, { limit = 50, profileId = null } = {}) {
+  const capped = Math.min(200, Math.max(1, Number(limit) || 50));
+  const rows = profileId
+    ? await sql`
+        SELECT p.id, p.synk_profile_id, p.app_slug, p.purpose, p.expires_at, p.created_at,
+               m.synk_code, m.name
+        FROM synk_passes p
+        JOIN synk_profiles m ON m.id = p.synk_profile_id
+        WHERE p.consumed_at IS NULL
+          AND p.revoked_at IS NULL
+          AND p.expires_at > NOW()
+          AND p.synk_profile_id = ${profileId}
+        ORDER BY p.created_at DESC
+        LIMIT ${capped}
+      `
+    : await sql`
+        SELECT p.id, p.synk_profile_id, p.app_slug, p.purpose, p.expires_at, p.created_at,
+               m.synk_code, m.name
+        FROM synk_passes p
+        JOIN synk_profiles m ON m.id = p.synk_profile_id
+        WHERE p.consumed_at IS NULL
+          AND p.revoked_at IS NULL
+          AND p.expires_at > NOW()
+        ORDER BY p.created_at DESC
+        LIMIT ${capped}
+      `;
+  return rows.map((row) => ({
+    id: row.id,
+    profileId: row.synk_profile_id,
+    synkCode: row.synk_code,
+    name: row.name,
+    appSlug: row.app_slug,
+    purpose: row.purpose,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  }));
+}
+
+async function revokePass(sql, { passId = null, profileId = null } = {}) {
+  if (passId) {
+    const rows = await sql`
+      UPDATE synk_passes
+      SET revoked_at = NOW()
+      WHERE id = ${passId}
+        AND revoked_at IS NULL
+        AND consumed_at IS NULL
+      RETURNING id, synk_profile_id
+    `;
+    return { count: rows.length, passId: rows[0]?.id || null, profileId: rows[0]?.synk_profile_id || null };
+  }
+  if (profileId) {
+    const rows = await sql`
+      UPDATE synk_passes
+      SET revoked_at = NOW()
+      WHERE synk_profile_id = ${profileId}
+        AND revoked_at IS NULL
+        AND consumed_at IS NULL
+        AND expires_at > NOW()
+      RETURNING id
+    `;
+    return { count: rows.length, profileId };
+  }
+  return { count: 0 };
 }
 
 async function requireSynkApp(sql, event, body = {}) {
@@ -339,6 +412,8 @@ module.exports = {
   assertNotRateLimited,
   issuePass,
   consumePass,
+  listActivePasses,
+  revokePass,
   requireSynkApp,
   PASS_TTL_MS,
   RATE_MAX_ATTEMPTS,

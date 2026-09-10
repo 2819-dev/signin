@@ -1,8 +1,11 @@
+"use strict";
+
 const { neon } = require("@neondatabase/serverless");
 const {
   authConfigured,
   extractSessionToken,
   verifySessionToken,
+  assertSessionActive,
 } = require("./synk-admin-auth");
 
 function getSql() {
@@ -45,7 +48,7 @@ function requireAdmin(event) {
   return { ok: true };
 }
 
-function requireSynkAdmin(event) {
+async function requireSynkAdmin(event) {
   if (!authConfigured()) {
     return {
       ok: false,
@@ -62,7 +65,18 @@ function requireSynkAdmin(event) {
     return { ok: false, response: json(401, { error: "Unauthorized" }) };
   }
 
-  return { ok: true, claims };
+  try {
+    const sql = getSql();
+    const active = await assertSessionActive(sql, claims, token);
+    if (!active) {
+      return { ok: false, response: json(401, { error: "Session expired or revoked" }) };
+    }
+  } catch (err) {
+    console.error("synk admin session check failed", err);
+    return { ok: false, response: json(500, { error: "Session validation failed" }) };
+  }
+
+  return { ok: true, claims, token };
 }
 
 function mapRow(row) {

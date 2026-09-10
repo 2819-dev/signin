@@ -5,28 +5,30 @@ const {
   authConfigured,
   loginWithPasswordAndTotp,
 } = require("./lib/synk-admin-auth");
-const { ensureSynkCoreTables, logSynkEvent } = require("./lib/synk");
+const { ensureSynkCoreTables, logSynkEvent, clientIp } = require("./lib/synk");
 
-function clientIp(event) {
+function requestIp(event) {
+  try {
+    return clientIp(event) || "";
+  } catch {
+    const headers = event.headers || {};
+    const forwarded = headers["x-forwarded-for"] || "";
+    return (
+      headers["x-nf-client-connection-ip"] ||
+      String(forwarded).split(",")[0].trim() ||
+      ""
+    );
+  }
+}
+
+function userAgent(event) {
   const headers = event.headers || {};
-  const forwarded = headers["x-forwarded-for"] || headers["X-Forwarded-For"] || "";
-  return (
-    headers["x-nf-client-connection-ip"] ||
-    String(forwarded).split(",")[0].trim() ||
-    headers["client-ip"] ||
-    headers["Client-Ip"] ||
-    ""
-  );
+  return headers["user-agent"] || headers["User-Agent"] || "";
 }
 
 exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") {
-    return json(204, {});
-  }
-
-  if (event.httpMethod !== "POST") {
-    return json(405, { error: "Method not allowed" });
-  }
+  if (event.httpMethod === "OPTIONS") return json(204, {});
+  if (event.httpMethod !== "POST") return json(405, { error: "Method not allowed" });
 
   try {
     if (!authConfigured()) {
@@ -46,14 +48,13 @@ exports.handler = async (event) => {
     const username = String(body.username || "").trim();
     const password = String(body.password || "");
     const totp = String(body.totp || body.code || body.otp || "").trim();
-
     if (!username || !password || !totp) {
       return json(400, { error: "Username, password, and 2FA code are required" });
     }
 
     const sql = getSql();
     await ensureSynkCoreTables(sql);
-    const ip = clientIp(event);
+    const ip = requestIp(event);
 
     if (ip) {
       const recent = await sql`
@@ -69,7 +70,13 @@ exports.handler = async (event) => {
     }
 
     try {
-      const session = loginWithPasswordAndTotp({ username, password, totp });
+      const session = await loginWithPasswordAndTotp(sql, {
+        username,
+        password,
+        totp,
+        ip,
+        userAgent: userAgent(event),
+      });
       await logSynkEvent(sql, {
         eventType: "admin_login_ok",
         ip,
@@ -80,6 +87,8 @@ exports.handler = async (event) => {
         token: session.token,
         expiresAt: session.expiresAt,
         expiresIn: session.expiresIn,
+        idleTimeoutSec: session.idleTimeoutSec,
+        sessionId: session.sessionId,
       });
     } catch (err) {
       await logSynkEvent(sql, {
@@ -87,9 +96,7 @@ exports.handler = async (event) => {
         ip,
         detail: username || "unknown",
       });
-      return json(err.statusCode || 401, {
-        error: err.message || "Unauthorized",
-      });
+      return json(err.statusCode || 401, { error: err.message || "Unauthorized" });
     }
   } catch (err) {
     console.error("synk-admin-login error:", err);

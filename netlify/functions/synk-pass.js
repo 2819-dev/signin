@@ -7,6 +7,7 @@ const {
   clientIp,
   logSynkEvent,
 } = require("./lib/synk");
+const { signedPhotoUrl } = require("./lib/synk-admin-auth");
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
@@ -69,12 +70,16 @@ exports.handler = async (event) => {
           id: rows[0].id,
           synkCode: rows[0].synk_code,
           name: rows[0].name,
-          photoUrl: rows[0].photo_url || "",
+          photoUrl: signedPhotoUrl(rows[0].photo_url || ""),
           policy: rows[0].policy || "pending",
         },
       };
     } else {
       return json(400, { error: "Pass or assertion required" });
+    }
+
+    if (result.ok && result.profile) {
+      result.profile.photoUrl = signedPhotoUrl(result.profile.photoUrl || "");
     }
 
     if (!result.ok) {

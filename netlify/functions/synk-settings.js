@@ -22,7 +22,7 @@ exports.handler = async (event) => {
     return json(204, {});
   }
 
-  const auth = requireSynkAdmin(event);
+  const auth = await requireSynkAdmin(event);
   if (!auth.ok) return auth.response;
 
   try {
@@ -39,7 +39,7 @@ exports.handler = async (event) => {
       `;
       const row = settingsRows[0] || {};
 
-      const [profileCount, enabledCount, appCount, eventCount, recentFails] =
+      const [profileCount, enabledCount, appCount, eventCount, recentFails, activePasses] =
         await Promise.all([
           sql`SELECT COUNT(*)::int AS n FROM synk_profiles`,
           sql`SELECT COUNT(*)::int AS n FROM synk_profiles WHERE enabled = TRUE`,
@@ -50,6 +50,13 @@ exports.handler = async (event) => {
             FROM synk_events
             WHERE created_at > NOW() - INTERVAL '24 hours'
               AND event_type ILIKE '%fail%'
+          `,
+          sql`
+            SELECT COUNT(*)::int AS n
+            FROM synk_passes
+            WHERE consumed_at IS NULL
+              AND revoked_at IS NULL
+              AND expires_at > NOW()
           `,
         ]);
 
@@ -62,6 +69,7 @@ exports.handler = async (event) => {
           apps: appCount[0]?.n || 0,
           events24h: eventCount[0]?.n || 0,
           fails24h: recentFails[0]?.n || 0,
+          activePasses: activePasses[0]?.n || 0,
         },
       });
     }
