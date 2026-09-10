@@ -234,6 +234,52 @@
             </div>
           </form>
         </div>
+
+        <div id="synk-setup-view" class="hidden">
+          <div class="synk-hero">
+            <div class="synk-hero-logo" aria-hidden="true">
+              <img src="/synk-logo.svg?v=circles2" alt="" />
+            </div>
+            <div>
+              <p class="eyebrow">Synk</p>
+              <h2 style="margin:0;">Synk isn’t enabled</h2>
+            </div>
+          </div>
+          <p class="subtitle" id="synk-setup-copy" style="margin-top:0;">
+            This business hasn’t enabled Synk for this application yet.
+          </p>
+          <p class="muted" style="margin:0 0 12px;font-size:0.88rem;">
+            A business admin can sign in below to pair this app.
+          </p>
+          <div id="synk-setup-actions">
+            <button class="btn btn-primary" type="button" id="synk-admin-login-btn" style="width:100%;">
+              Business admin login
+            </button>
+            <button class="btn btn-secondary" type="button" id="synk-setup-cancel-btn" style="width:100%;margin-top:10px;">
+              Cancel
+            </button>
+          </div>
+          <form id="synk-admin-form" class="hidden" autocomplete="on" style="margin-top:4px;">
+            <div class="field">
+              <label for="synk-admin-email">Work email</label>
+              <input id="synk-admin-email" type="email" required autocomplete="username" />
+            </div>
+            <div class="field">
+              <label for="synk-admin-password">Password</label>
+              <input id="synk-admin-password" type="password" required autocomplete="current-password" />
+            </div>
+            <div class="field">
+              <label for="synk-admin-device">Device name</label>
+              <input id="synk-admin-device" type="text" maxlength="80" placeholder="Lobby iPad" />
+            </div>
+            <p id="synk-admin-error" class="error hidden"></p>
+            <div class="btn-row" style="margin-top:4px;">
+              <button class="btn btn-secondary" type="button" id="synk-admin-back-btn">Back</button>
+              <button class="btn btn-primary" type="submit" id="synk-admin-submit-btn">Pair app</button>
+            </div>
+          </form>
+        </div>
+
       </div>
     </div>
 
@@ -1152,6 +1198,83 @@
       const synkSecretInput = document.getElementById("synk-secret-input");
       const synkSubmitBtn = document.getElementById("synk-submit-btn");
       const synkCodeError = document.getElementById("synk-code-error");
+
+      const SYNK_APP_SLUG = "visitor-signin";
+      const SYNK_BUSINESS_SESSION_KEY = "synk_business_session";
+      const synkSetupView = document.getElementById("synk-setup-view");
+      const synkSetupCopy = document.getElementById("synk-setup-copy");
+      const synkSetupActions = document.getElementById("synk-setup-actions");
+      const synkAdminLoginBtn = document.getElementById("synk-admin-login-btn");
+      const synkSetupCancelBtn = document.getElementById("synk-setup-cancel-btn");
+      const synkAdminForm = document.getElementById("synk-admin-form");
+      const synkAdminEmail = document.getElementById("synk-admin-email");
+      const synkAdminPassword = document.getElementById("synk-admin-password");
+      const synkAdminDevice = document.getElementById("synk-admin-device");
+      const synkAdminError = document.getElementById("synk-admin-error");
+      const synkAdminBackBtn = document.getElementById("synk-admin-back-btn");
+      const synkAdminSubmitBtn = document.getElementById("synk-admin-submit-btn");
+
+      function showSynkSetup(message) {
+        stopSynkCamera();
+        synkPodView.classList.add("hidden");
+        synkCodeView.classList.add("hidden");
+        synkSetupView.classList.remove("hidden");
+        synkAdminForm.classList.add("hidden");
+        synkSetupActions.classList.remove("hidden");
+        synkAdminError.classList.add("hidden");
+        if (message) synkSetupCopy.textContent = message;
+        else synkSetupCopy.textContent = "This business hasn’t enabled Synk for this application yet.";
+      }
+
+      function showSynkAdminLogin() {
+        synkSetupActions.classList.add("hidden");
+        synkAdminForm.classList.remove("hidden");
+        synkAdminError.classList.add("hidden");
+        setTimeout(() => synkAdminEmail.focus(), 50);
+      }
+
+      async function fetchSynkAppStatus() {
+        const res = await fetch(
+          `/api/synk-business?action=app-status&app=${encodeURIComponent(SYNK_APP_SLUG)}`
+        );
+        const data = await res.json().catch(() => ({}));
+        return data;
+      }
+
+      async function fetchPairedDevice() {
+        const code = pairedDeviceCode();
+        if (!code) return null;
+        try {
+          const res = await fetch(
+            `/api/synk-business?action=device-config&code=${encodeURIComponent(code)}`
+          );
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) return null;
+          return data;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      async function ensureSynkReady() {
+        const status = await fetchSynkAppStatus();
+        if (!status || status.ok === false || status.paired === false) {
+          return {
+            ready: false,
+            message: (status && status.error) || "This business hasn’t enabled Synk for this application yet.",
+          };
+        }
+        const device = await fetchPairedDevice();
+        if (!device || !device.ok) {
+          return {
+            ready: false,
+            message: "This business hasn’t enabled Synk on this device yet.",
+          };
+        }
+        return { ready: true, status, device };
+      }
+
+
       let synkStream = null;
       let synkBusy = false;
       let synkAutoTimer = null;
@@ -1167,6 +1290,7 @@
 
       function showSynkPod() {
         synkCodeView.classList.add("hidden");
+        if (synkSetupView) synkSetupView.classList.add("hidden");
         synkPodView.classList.remove("hidden");
         synkCodeError.classList.add("hidden");
       }
@@ -1174,6 +1298,7 @@
       function showSynkCode() {
         stopSynkCamera();
         synkPodView.classList.add("hidden");
+        if (synkSetupView) synkSetupView.classList.add("hidden");
         synkCodeView.classList.remove("hidden");
         synkError.classList.add("hidden");
         setTimeout(() => synkCodeInput.focus(), 50);
@@ -1200,14 +1325,28 @@
           formError.classList.remove("hidden");
           return;
         }
+
         synkModal.classList.remove("hidden");
         synkModal.classList.remove("synk-verified");
-        showSynkPod();
         synkError.classList.add("hidden");
+        synkBusy = false;
+
+        // If this app/device isn't paired, show a simple enable screen instead of verification.
+        try {
+          const ready = await ensureSynkReady();
+          if (!ready.ready) {
+            showSynkSetup(ready.message);
+            return;
+          }
+        } catch (_) {
+          showSynkSetup("This business hasn’t enabled Synk for this application yet.");
+          return;
+        }
+
+        showSynkPod();
         synkStatus.textContent = "Starting camera…";
         synkPodHint.textContent = "Look straight at the circle on screen — not the camera hole.";
         synkScanBtn.disabled = true;
-        synkBusy = false;
         try {
           synkStream = await window.KioskFace.startCamera(synkVideo, { side: cameraSide });
           synkStatus.textContent = "Loading face check…";
@@ -1318,6 +1457,75 @@
           synkBusy = false;
         }
       }
+
+      
+      synkAdminLoginBtn.addEventListener("click", showSynkAdminLogin);
+      synkSetupCancelBtn.addEventListener("click", closeSynkModal);
+      synkAdminBackBtn.addEventListener("click", () => {
+        synkAdminForm.classList.add("hidden");
+        synkSetupActions.classList.remove("hidden");
+        synkAdminError.classList.add("hidden");
+      });
+      synkAdminForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        synkAdminError.classList.add("hidden");
+        synkAdminSubmitBtn.disabled = true;
+        try {
+          const loginRes = await fetch("/api/synk-business", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "login",
+              email: synkAdminEmail.value.trim(),
+              password: synkAdminPassword.value,
+            }),
+          });
+          const loginData = await loginRes.json().catch(() => ({}));
+          if (!loginRes.ok) throw new Error(loginData.error || "Sign in failed");
+          const sessionToken = loginData.sessionToken;
+          try {
+            localStorage.setItem(SYNK_BUSINESS_SESSION_KEY, sessionToken);
+          } catch (_) {}
+
+          const pairRes = await fetch("/api/synk-business", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Synk-Business-Session": sessionToken,
+              Authorization: `Bearer ${sessionToken}`,
+            },
+            body: JSON.stringify({
+              action: "pair-app",
+              appSlug: SYNK_APP_SLUG,
+              appName: "Visitor Sign-In",
+              deviceName: synkAdminDevice.value.trim() || "Sign-in tablet",
+              cameraSide: cameraSide || "left",
+            }),
+          });
+          const pairData = await pairRes.json().catch(() => ({}));
+          if (!pairRes.ok) throw new Error(pairData.error || "Could not pair this app");
+
+          const code =
+            (pairData.device && (pairData.device.pairingCode || pairData.device.pairing_code)) || "";
+          if (code) {
+            try {
+              localStorage.setItem(DEVICE_PAIR_KEY, String(code).toUpperCase());
+            } catch (_) {}
+          }
+
+          // Refresh camera framing from the new pairing, then continue into Synk verify.
+          const pairedSide = await refreshPairedDeviceCamera();
+          if (pairedSide) cameraSide = pairedSide;
+
+          synkAdminForm.reset();
+          await openSynkModal();
+        } catch (err) {
+          synkAdminError.textContent = err.message || "Could not pair this app";
+          synkAdminError.classList.remove("hidden");
+        } finally {
+          synkAdminSubmitBtn.disabled = false;
+        }
+      });
 
       synkSigninBtn.addEventListener("click", openSynkModal);
       synkCloseBtn.addEventListener("click", closeSynkModal);

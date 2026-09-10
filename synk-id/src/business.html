@@ -162,6 +162,7 @@
       const verifyAction = document.getElementById("verify-action");
       let sessionToken = localStorage.getItem(STORAGE_KEY) || "";
       let currentAppId = "";
+      const pairAppSlug = (new URLSearchParams(location.search).get("pairApp") || "").trim().slice(0, 80);
 
       function show(view) {
         gate.classList.toggle("hidden", view !== "gate");
@@ -197,6 +198,37 @@
         if (app) verifyAction.value = app.verifyAction || "pending";
         renderDevices(data.devices || []);
         show("portal");
+        if (pairAppSlug) {
+          try {
+            const pairRes = await fetch("/api/synk-business", {
+              method: "POST",
+              headers: bizHeaders(),
+              body: JSON.stringify({
+                action: "pair-app",
+                appSlug: pairAppSlug,
+                appName: pairAppSlug,
+                deviceName: "Paired from Synk Business",
+              }),
+            });
+            const pairData = await pairRes.json().catch(() => ({}));
+            if (pairRes.ok) {
+              portalStatus.textContent = "Paired app: " + pairAppSlug;
+              if (pairData.device && pairData.device.pairingCode) {
+                portalStatus.textContent +=
+                  " · device code " + pairData.device.pairingCode;
+              }
+              // Clean the query param so refresh doesn't keep creating devices.
+              const url = new URL(location.href);
+              url.searchParams.delete("pairApp");
+              history.replaceState({}, "", url.pathname + url.search + url.hash);
+              await loadPortal();
+            } else if (pairData.error) {
+              portalStatus.textContent = pairData.error;
+            }
+          } catch (ex) {
+            portalStatus.textContent = ex.message || "Could not pair app";
+          }
+        }
       }
 
       function escapeHtml(value) {
@@ -251,6 +283,14 @@
       }
 
       document.getElementById("show-login").addEventListener("click", () => show("login"));
+      if (pairAppSlug) {
+        show("login");
+        const note = document.createElement("p");
+        note.className = "muted";
+        note.style.marginTop = "10px";
+        note.textContent = "Sign in to enable Synk for “" + pairAppSlug + "”.";
+        loginCard.appendChild(note);
+      }
       document.getElementById("show-request").addEventListener("click", () => show("request"));
 
       document.getElementById("add-device-form").addEventListener("submit", async (e) => {

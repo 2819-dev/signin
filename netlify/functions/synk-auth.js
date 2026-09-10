@@ -10,6 +10,7 @@ const {
   issuePass,
   issueHubSession,
   getAppVerifyAction,
+  getAppSynkStatus,
   normalizeVerifyAction,
 } = require("./lib/synk");
 const { signedPhotoUrl } = require("./lib/synk-admin-auth");
@@ -175,6 +176,22 @@ exports.handler = async (event) => {
     }
 
     const appSlug = String(body.appSlug || body.app || "synk").trim().slice(0, 80) || "synk";
+    const appStatus = await getAppSynkStatus(sql, appSlug);
+    if (!appStatus.ok) {
+      await logSynkEvent(sql, {
+        eventType: "verify_blocked",
+        appSlug,
+        ip: clientIp(event),
+        detail: appStatus.code || "not_paired",
+      });
+      return json(403, {
+        error: appStatus.error || "This business has not enabled Synk",
+        code: appStatus.code || "not_paired",
+        app: appStatus.app,
+        business: appStatus.business,
+      });
+    }
+
     const intent = String(body.intent || "").trim().toLowerCase(); // visitor | identity
     const descriptors = Array.isArray(body.descriptors)
       ? body.descriptors.map(normalizeDescriptor).filter(Boolean)

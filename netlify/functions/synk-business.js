@@ -13,6 +13,7 @@ const {
   normalizeCameraSide,
   generateDevicePairingCode,
   mapBusinessDevice,
+  getAppSynkStatus,
 } = require("./lib/synk");
 const {
   createBusinessSession,
@@ -251,7 +252,9 @@ exports.handler = async (event) => {
       }
       const rows = await sql`
         SELECT d.id, d.name, d.camera_side, d.pairing_code, d.created_at, d.updated_at, d.last_seen_at,
-               b.status AS business_status
+               d.business_id,
+               b.status AS business_status,
+               b.name AS business_name
         FROM synk_business_devices d
         JOIN synk_business_accounts b ON b.id = d.business_id
         WHERE d.pairing_code = ${code}
@@ -269,7 +272,27 @@ exports.handler = async (event) => {
       return json(200, {
         ok: true,
         device: mapBusinessDevice(row),
+        business: {
+          id: row.business_id,
+          name: row.business_name || "",
+          status: row.business_status,
+        },
       });
+    }
+
+    // Public: whether Sign in with Synk is enabled/paired for an app.
+    if (event.httpMethod === "GET" && action === "app-status") {
+      const appSlug = String(
+        (event.queryStringParameters &&
+          (event.queryStringParameters.app ||
+            event.queryStringParameters.slug ||
+            event.queryStringParameters.appSlug)) ||
+          ""
+      )
+        .trim()
+        .slice(0, 80);
+      const status = await getAppSynkStatus(sql, appSlug);
+      return json(status.ok ? 200 : 200, status);
     }
 
     // Business portal session routes (member-facing dashboard).
@@ -281,6 +304,7 @@ exports.handler = async (event) => {
       "create-device",
       "update-device",
       "delete-device",
+      "pair-app",
     ]);
     // Only treat Authorization as a business session when the token is actually a
     // business JWT. Synk Admin also sends Bearer tokens on GET /synk-business.
@@ -368,6 +392,91 @@ exports.handler = async (event) => {
           detail: `${name}:${pairingCode}`,
         });
         return json(201, { ok: true, device: mapBusinessDevice(rows[0]) });
+      }
+
+      
+      if (event.httpMethod === "POST" && action === "pair-app") {
+        const appSlug = String(body.appSlug || body.app || body.slug || "")
+          .trim()
+          .slice(0, 80);
+        if (!appSlug) return json(400, { error: "appSlug is required" });
+
+        const appRows = await sql`
+          SELECT id, slug, name, enabled, business_id, verify_action
+          FROM synk_apps
+          WHERE slug = ${appSlug}
+          LIMIT 1
+        `;
+        let app = appRows[0];
+        if (!app) {
+          // Create a lightweight app owned by this business so Sign in with Synk can turn on.
+          const apiKey = generateApiKey();
+          const inserted = await sql`
+            INSERT INTO synk_apps (slug, name, api_key_hash, business_id, verify_action, enabled)
+            VALUES (
+              ${appSlug},
+              ${body.appName ? String(body.appName).trim().slice(0, 120) : appSlug},
+              ${hashSecret(apiKey)},
+              ${auth.business.id},
+              'pending',
+              TRUE
+            )
+            RETURNING id, slug, name, enabled, business_id, verify_action
+          `;
+          app = inserted[0];
+        } else if (app.business_id && app.business_id !== auth.business.id) {
+          return json(409, {
+            error: "This application is already paired with another Synk Business account",
+            code: "owned_elsewhere",
+          });
+        } else if (!app.business_id) {
+          const updated = await sql`
+            UPDATE synk_apps
+            SET business_id = ${auth.business.id},
+                enabled = TRUE,
+                updated_at = NOW()
+            WHERE id = ${app.id}
+            RETURNING id, slug, name, enabled, business_id, verify_action
+          `;
+          app = updated[0];
+        } else if (app.enabled === false) {
+          const updated = await sql`
+            UPDATE synk_apps
+            SET enabled = TRUE, updated_at = NOW()
+            WHERE id = ${app.id}
+            RETURNING id, slug, name, enabled, business_id, verify_action
+          `;
+          app = updated[0];
+        }
+
+        // Pair this installation/device so the tablet is linked to the business.
+        const deviceName = String(body.deviceName || body.name || "Sign-in tablet")
+          .trim()
+          .replace(/\s+/g, " ")
+          .slice(0, 80) || "Sign-in tablet";
+        const cameraSide = normalizeCameraSide(body.cameraSide || body.camera || "left");
+        const pairingCode = await createUniquePairingCode(sql);
+        const deviceRows = await sql`
+          INSERT INTO synk_business_devices (business_id, name, camera_side, pairing_code)
+          VALUES (${auth.business.id}, ${deviceName}, ${cameraSide}, ${pairingCode})
+          RETURNING id, name, camera_side, pairing_code, created_at, updated_at, last_seen_at
+        `;
+
+        await logSynkEvent(sql, {
+          eventType: "business_pair_app",
+          appSlug,
+          ip: clientIp(event),
+          detail: `${app.slug}:${pairingCode}`,
+        });
+
+        const status = await getAppSynkStatus(sql, appSlug);
+        return json(200, {
+          ok: true,
+          app: status.app,
+          business: status.business,
+          device: mapBusinessDevice(deviceRows[0]),
+          status,
+        });
       }
 
       if (event.httpMethod === "POST" && action === "update-device") {

@@ -2557,3 +2557,17 @@ html[data-theme="dark"] .pill-pending {
   font-size: 0.92rem;
   font-weight: 600;
 }
+
+
+#synk-setup-view .subtitle {
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+#synk-admin-form {
+  margin-top: 8px;
+}
+
+#synk-setup-view .btn {
+  min-height: 44px;
+}

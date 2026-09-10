@@ -425,6 +425,88 @@ async function getAppVerifyAction(sql, appSlug) {
   return normalizeVerifyAction(rows[0] && rows[0].verify_action);
 }
 
+async function getAppSynkStatus(sql, appSlug) {
+  const slug = String(appSlug || "")
+    .trim()
+    .slice(0, 80);
+  if (!slug) {
+    return {
+      ok: false,
+      paired: false,
+      enabled: false,
+      code: "missing_app",
+      error: "App is required",
+      app: null,
+      business: null,
+    };
+  }
+
+  const rows = await sql`
+    SELECT
+      a.id,
+      a.slug,
+      a.name,
+      a.enabled,
+      a.business_id,
+      a.verify_action,
+      b.id AS business_id_join,
+      b.name AS business_name,
+      b.status AS business_status
+    FROM synk_apps a
+    LEFT JOIN synk_business_accounts b ON b.id = a.business_id
+    WHERE a.slug = ${slug}
+    LIMIT 1
+  `;
+
+  const row = rows[0];
+  if (!row) {
+    return {
+      ok: false,
+      paired: false,
+      enabled: false,
+      code: "not_found",
+      error: "This business has not enabled Synk",
+      app: { slug, name: slug },
+      business: null,
+    };
+  }
+
+  const enabled = row.enabled !== false;
+  const approved = row.business_status === "approved";
+  const paired = Boolean(row.business_id) && approved && enabled;
+  let code = "ok";
+  let error = null;
+  if (!enabled) {
+    code = "disabled";
+    error = "Synk is paused for this application";
+  } else if (!row.business_id || !approved) {
+    code = "not_paired";
+    error = "This business has not enabled Synk";
+  }
+
+  return {
+    ok: paired,
+    paired,
+    enabled,
+    code,
+    error,
+    app: {
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      verifyAction: normalizeVerifyAction(row.verify_action),
+    },
+    business: row.business_id
+      ? {
+          id: row.business_id,
+          name: row.business_name || "",
+          status: row.business_status || "",
+        }
+      : null,
+  };
+}
+
+
 async function logSynkEvent(sql, { eventType, profileId = null, appSlug = null, ip = null, detail = "" }) {
   try {
     await sql`
@@ -776,6 +858,7 @@ module.exports = {
   mapBusinessDevice,
   normalizeVerifyAction,
   getAppVerifyAction,
+  getAppSynkStatus,
   seedVisitorSignInBusiness,
   PASS_TTL_MS,
   HUB_SESSION_TTL_MS,

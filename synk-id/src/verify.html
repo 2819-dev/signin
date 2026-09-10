@@ -48,6 +48,35 @@
         </div>
       </header>
 
+      <section class="card hidden" id="synk-setup-view">
+        <p class="section-label">Synk</p>
+        <h2>Synk isn’t enabled</h2>
+        <p class="muted" id="synk-setup-copy">
+          This business hasn’t enabled Synk for this application yet.
+        </p>
+        <div id="synk-setup-actions" class="btn-row" style="margin-top:12px;">
+          <a class="btn btn-primary" id="synk-admin-link" href="/business">Business admin login</a>
+        </div>
+        <form id="synk-admin-form" class="form hidden" autocomplete="on" style="margin-top:12px;">
+          <div class="field">
+            <label for="synk-admin-email">Work email</label>
+            <input id="synk-admin-email" type="email" required autocomplete="username" />
+          </div>
+          <div class="field">
+            <label for="synk-admin-password">Password</label>
+            <input id="synk-admin-password" type="password" required autocomplete="current-password" />
+          </div>
+          <p id="synk-admin-error" class="error hidden" role="alert"></p>
+          <div class="btn-row">
+            <button class="btn btn-secondary" type="button" id="synk-admin-back-btn">Back</button>
+            <button class="btn btn-primary" type="submit">Pair app</button>
+          </div>
+        </form>
+        <button class="btn btn-secondary" type="button" id="synk-show-admin-form-btn" style="width:100%;margin-top:10px;">
+          Pair this app here
+        </button>
+      </section>
+
       <section class="card" id="synk-pod-view">
         <p class="section-label">Face verification</p>
         <h2>Center your face in the frame</h2>
@@ -144,7 +173,21 @@
         stream = null;
       }
 
+      const setupView = document.getElementById("synk-setup-view");
+      const adminForm = document.getElementById("synk-admin-form");
+      const adminLink = document.getElementById("synk-admin-link");
+      const setupCopy = document.getElementById("synk-setup-copy");
+      const setupActions = document.getElementById("synk-setup-actions");
+      const showAdminFormBtn = document.getElementById("synk-show-admin-form-btn");
+      const adminBackBtn = document.getElementById("synk-admin-back-btn");
+      const adminError = document.getElementById("synk-admin-error");
+
+      if (adminLink) {
+        adminLink.href = "/business?pairApp=" + encodeURIComponent(appSlug);
+      }
+
       function show(view) {
+        setupView.classList.toggle("hidden", view !== "setup");
         podView.classList.toggle("hidden", view !== "pod");
         codeView.classList.toggle("hidden", view !== "code");
         successView.classList.toggle("hidden", view !== "success");
@@ -278,6 +321,80 @@
         if (!res.ok) throw new Error(data.error || "Verification failed");
         showSuccess(data);
       }
+
+      
+      async function checkAppPairing() {
+        try {
+          const res = await fetch("/api/synk-business?action=app-status&app=" + encodeURIComponent(appSlug));
+          const data = await res.json().catch(() => ({}));
+          if (data && data.ok) return true;
+          if (setupCopy) {
+            setupCopy.textContent =
+              (data && data.error) || "This business hasn’t enabled Synk for this application yet.";
+          }
+          show("setup");
+          return false;
+        } catch (_) {
+          show("setup");
+          return false;
+        }
+      }
+
+      showAdminFormBtn.addEventListener("click", () => {
+        setupActions.classList.add("hidden");
+        showAdminFormBtn.classList.add("hidden");
+        adminForm.classList.remove("hidden");
+      });
+      adminBackBtn.addEventListener("click", () => {
+        adminForm.classList.add("hidden");
+        setupActions.classList.remove("hidden");
+        showAdminFormBtn.classList.remove("hidden");
+        adminError.classList.add("hidden");
+      });
+      adminForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        adminError.classList.add("hidden");
+        try {
+          const loginRes = await fetch("/api/synk-business", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "login",
+              email: document.getElementById("synk-admin-email").value.trim(),
+              password: document.getElementById("synk-admin-password").value,
+            }),
+          });
+          const loginData = await loginRes.json().catch(() => ({}));
+          if (!loginRes.ok) throw new Error(loginData.error || "Sign in failed");
+          const token = loginData.sessionToken;
+          localStorage.setItem("synk_business_session", token);
+          const pairRes = await fetch("/api/synk-business", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Synk-Business-Session": token,
+              Authorization: "Bearer " + token,
+            },
+            body: JSON.stringify({
+              action: "pair-app",
+              appSlug,
+              appName: appSlug,
+              deviceName: "Verify page",
+            }),
+          });
+          const pairData = await pairRes.json().catch(() => ({}));
+          if (!pairRes.ok) throw new Error(pairData.error || "Could not pair this app");
+          show("pod");
+          statusEl.textContent = "Synk enabled. Select Start camera to begin";
+        } catch (err) {
+          adminError.textContent = err.message || "Could not pair this app";
+          adminError.classList.remove("hidden");
+        }
+      });
+
+      checkAppPairing().then((ok) => {
+        if (!ok) return;
+      });
 
       startBtn.addEventListener("click", startCamera);
       scanBtn.addEventListener("click", async () => {
