@@ -1,4 +1,4 @@
-/* Synk Admin — flat, minimal, no glass / blur / gradients */
+/* Synk Admin — minimal with a little Synk blue */
 
 *,
 *::before,
@@ -7,13 +7,18 @@
 }
 
 :root {
-  --bg: #fff;
-  --ink: #111;
-  --muted: #666;
-  --line: #ddd;
-  --fill: #f5f5f5;
-  --danger: #b00020;
-  --focus: #111;
+  --bg: #f7f9fc;
+  --surface: #ffffff;
+  --ink: #152033;
+  --muted: #5b6b82;
+  --line: #d7e0ee;
+  --fill: #eef3fb;
+  --accent: #2b6bff;
+  --accent-ink: #1e4fd6;
+  --accent-soft: #e8f0ff;
+  --danger: #c62828;
+  --danger-soft: #fdeceb;
+  --focus: #2b6bff;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
@@ -40,15 +45,16 @@ body.synk-admin {
 }
 
 a {
-  color: var(--ink);
+  color: var(--accent-ink);
 }
 
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.92em;
-  background: var(--fill);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
   padding: 0.05em 0.3em;
-  border: 1px solid var(--line);
+  border: 1px solid #c9daf8;
 }
 
 h1,
@@ -56,6 +62,7 @@ h2 {
   margin: 0;
   font-weight: 600;
   letter-spacing: -0.02em;
+  color: var(--ink);
 }
 
 h1 {
@@ -76,7 +83,10 @@ p {
 
 .error {
   color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid #f3c4c0;
   margin: 0 0 10px;
+  padding: 8px 10px;
   font-size: 0.9rem;
 }
 
@@ -85,12 +95,13 @@ p {
   display: grid;
   place-items: center;
   padding: 24px 16px;
+  background: var(--bg);
 }
 
 .card {
   width: min(100%, 420px);
   border: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--surface);
   padding: 20px;
 }
 
@@ -128,7 +139,7 @@ select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--surface);
   border-radius: 0;
   padding: 10px 12px;
   outline: none;
@@ -138,6 +149,7 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .btn,
@@ -146,8 +158,8 @@ button.btn {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--ink);
-  background: var(--ink);
+  border: 1px solid var(--accent);
+  background: var(--accent);
   color: #fff;
   border-radius: 0;
   padding: 10px 14px;
@@ -163,14 +175,23 @@ button.btn:disabled {
 }
 
 .btn-secondary {
-  background: var(--bg);
-  color: var(--ink);
+  background: var(--surface);
+  color: var(--accent-ink);
+  border-color: #b7c9ef;
+}
+
+.btn-secondary:hover {
+  background: var(--accent-soft);
 }
 
 .btn-danger {
-  background: var(--bg);
+  background: var(--surface);
   color: var(--danger);
-  border-color: var(--danger);
+  border-color: #e4a8a3;
+}
+
+.btn-danger:hover {
+  background: var(--danger-soft);
 }
 
 .btn-compact {
@@ -186,9 +207,9 @@ button.btn:disabled {
 
 .btn.btn-primary,
 .btn-primary {
-  background: var(--ink);
+  background: var(--accent);
   color: #fff;
-  border-color: var(--ink);
+  border-color: var(--accent);
 }
 
 .admin-shell {
@@ -226,7 +247,7 @@ button.btn:disabled {
 
 .panel {
   border: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--surface);
   padding: 14px;
 }
 
@@ -252,8 +273,9 @@ button.btn:disabled {
 
 .synk-stat-card {
   border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
   padding: 12px;
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .synk-stat-card strong {
@@ -262,6 +284,7 @@ button.btn:disabled {
   line-height: 1.1;
   margin: 4px 0;
   letter-spacing: -0.03em;
+  color: var(--accent-ink);
 }
 
 .synk-enroll-form {
@@ -281,7 +304,7 @@ button.btn:disabled {
 .synk-event-row {
   border: 1px solid var(--line);
   padding: 12px;
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .synk-profile-card {
@@ -308,6 +331,7 @@ button.btn:disabled {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.85rem;
   margin-top: 2px;
+  color: var(--accent-ink);
 }
 
 .synk-profile-actions {
@@ -329,12 +353,15 @@ button.btn:disabled {
 .synk-link-list a {
   display: block;
   border: 1px solid var(--line);
+  background: var(--surface);
   padding: 10px 12px;
   text-decoration: none;
+  color: var(--accent-ink);
 }
 
 .synk-link-list a:hover {
-  background: var(--fill);
+  background: var(--accent-soft);
+  border-color: #b7c9ef;
 }
 
 .chat-empty-note {
@@ -353,7 +380,7 @@ button.btn:disabled {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
   border-top: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--surface);
   padding: 0 0 env(safe-area-inset-bottom);
   z-index: 20;
 }
@@ -361,7 +388,7 @@ button.btn:disabled {
 .admin-tab {
   border: 0;
   border-right: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--surface);
   color: var(--muted);
   padding: 14px 4px;
   font-size: 0.78rem;
@@ -374,8 +401,9 @@ button.btn:disabled {
 }
 
 .admin-tab.active {
-  color: var(--ink);
-  background: var(--fill);
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  box-shadow: inset 0 3px 0 var(--accent);
 }
 
 .toast {
@@ -383,7 +411,7 @@ button.btn:disabled {
   left: 50%;
   bottom: calc(72px + env(safe-area-inset-bottom));
   transform: translateX(-50%) translateY(12px);
-  background: var(--ink);
+  background: var(--accent);
   color: #fff;
   padding: 10px 14px;
   font-size: 0.88rem;
@@ -401,29 +429,38 @@ button.btn:disabled {
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #000;
-    --ink: #f2f2f2;
-    --muted: #999;
-    --line: #333;
-    --fill: #141414;
-    --danger: #ff7a7a;
-    --focus: #f2f2f2;
+    --bg: #0b1220;
+    --surface: #121a2b;
+    --ink: #e8eefc;
+    --muted: #93a0b8;
+    --line: #273349;
+    --fill: #182338;
+    --accent: #5b8cff;
+    --accent-ink: #9bbbff;
+    --accent-soft: #1a2742;
+    --danger: #ff8b82;
+    --danger-soft: #3a1d1d;
+    --focus: #5b8cff;
   }
 
-  .btn,
-  button.btn {
-    background: var(--ink);
-    color: #000;
-    border-color: var(--ink);
+  code {
+    border-color: #314868;
+  }
+
+  .error {
+    border-color: #6a3030;
   }
 
   .btn-secondary {
-    background: var(--bg);
-    color: var(--ink);
+    border-color: #3d547a;
   }
 
-  .toast {
-    background: #f2f2f2;
-    color: #000;
+  .btn-danger {
+    border-color: #6a3030;
+  }
+
+  .synk-link-list a:hover,
+  .btn-secondary:hover {
+    border-color: #4d6a99;
   }
 }
