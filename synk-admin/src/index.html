@@ -22,7 +22,7 @@
     <main id="unlock-view" class="screen">
       <section class="card">
         <h1>Synk Admin</h1>
-        <p class="lede">Sign in with username, password, and authenticator code.</p>
+        <p class="lede">Enter your username, password, and authenticator code.</p>
         <p id="unlock-error" class="error hidden"></p>
         <form id="unlock-form" autocomplete="off">
           <div class="field">
@@ -67,14 +67,14 @@
             <span>
               <strong style="font-weight:600;">Stay signed in on this device</strong>
               <span class="muted" style="display:block;font-size:0.82rem;margin-top:2px;">
-                Phone-friendly: keep access for about 2 months. Turn off on shared tablets so each visit needs a fresh sign-in.
+                Keeps this device signed in for about 2 months. Disable on shared devices.
               </span>
             </span>
           </label>
           <button class="btn" type="submit" id="unlock-btn">Sign in</button>
         </form>
         <p class="muted" style="margin-top:14px;font-size:0.82rem;">
-          Protected with 2FA. Manual Lock always signs out. No idle auto-lock.
+          Two-factor authentication required. Use Lock to sign out.
         </p>
       </section>
     </main>
@@ -101,7 +101,7 @@
           <div class="synk-stat-card">
             <div class="muted">Apps</div>
             <strong id="stat-apps">—</strong>
-            <div class="muted">connected</div>
+            <div class="muted">registered</div>
           </div>
           <div class="synk-stat-card">
             <div class="muted">Activity</div>
@@ -111,18 +111,18 @@
           <div class="synk-stat-card">
             <div class="muted">Passes</div>
             <strong id="stat-passes">—</strong>
-            <div class="muted">active now</div>
+            <div class="muted">active</div>
           </div>
         </div>
 
         <section class="panel">
           <h2>Quick actions</h2>
           <div class="btn-row">
-            <button class="btn btn-compact" type="button" data-jump="members">Enroll member</button>
+            <button class="btn btn-compact" type="button" data-jump="members">Add member</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="requests">Review requests</button>
-            <button class="btn btn-secondary btn-compact" type="button" data-jump="apps">Add app</button>
-            <button class="btn btn-secondary btn-compact" type="button" data-jump="activity">Activity</button>
-            <button class="btn btn-secondary btn-compact" type="button" data-jump="settings">Security</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-jump="apps">Manage apps</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-jump="activity">View activity</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-jump="settings">Settings</button>
           </div>
         </section>
 
@@ -130,7 +130,7 @@
           <div class="admin-header" style="padding:0;margin:0 0 12px;">
             <div>
               <h2 style="margin:0;">Active passes</h2>
-              <p class="muted" style="margin:4px 0 0;">Short-lived tokens from face verify. Revoke if leaked.</p>
+              <p class="muted" style="margin:4px 0 0;">Temporary verification tokens. Revoke if compromised.</p>
             </div>
             <div class="admin-header-actions">
               <button class="btn btn-secondary btn-compact" type="button" id="refresh-passes-btn">Refresh</button>
@@ -141,7 +141,7 @@
         </section>
 
         <section class="panel">
-          <h2>Join requests</h2>
+          <h2>Membership requests</h2>
           <div id="overview-requests" class="synk-sessions"></div>
           <p id="overview-requests-empty" class="chat-empty-note">No pending requests.</p>
         </section>
@@ -157,31 +157,31 @@
         <header class="admin-header">
           <div>
             <h1>Members</h1>
-            <p class="muted">Enroll people. Face verify issues a short Synk pass.</p>
+            <p class="muted">Add members and manage verification credentials.</p>
           </div>
         </header>
 
         <section class="panel">
-          <h2>Enroll</h2>
+          <h2>Add member</h2>
           <form id="synk-enroll-form" class="synk-enroll-form" autocomplete="off">
             <div class="field">
               <label for="synk-enroll-name">Legal name</label>
-              <input id="synk-enroll-name" type="text" maxlength="100" required placeholder="Full name" />
+              <input id="synk-enroll-name" type="text" maxlength="100" required placeholder="Full legal name" />
             </div>
             <div class="field">
               <label for="synk-enroll-dob">Date of birth</label>
               <input id="synk-enroll-dob" type="date" required />
             </div>
             <div class="field">
-              <label for="synk-enroll-policy">Default verification action</label>
+              <label for="synk-enroll-policy">API action after verify</label>
               <select id="synk-enroll-policy">
                 <option value="pending" selected>Require approval</option>
                 <option value="autofill">Prefill name only</option>
-                <option value="auto_admit">Admit automatically</option>
-                <option value="auto_deny">Deny automatically</option>
+                <option value="auto_admit">Approve automatically</option>
+                <option value="auto_deny">Decline automatically</option>
               </select>
               <p class="muted" style="margin:6px 0 0;font-size:0.82rem;">
-                Used by connected apps that call the Synk API after a successful verify.
+                Applied when a registered app redeems a Synk verification pass.
               </p>
             </div>
             <div class="field">
@@ -189,23 +189,23 @@
               <input id="synk-enroll-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
             </div>
             <div class="field">
-              <label for="synk-enroll-secret">Backup secret <span class="muted">(optional)</span></label>
+              <label for="synk-enroll-secret">Recovery passphrase <span class="muted">(optional)</span></label>
               <input id="synk-enroll-secret" type="password" maxlength="200" autocomplete="new-password" />
             </div>
-            <button class="btn" type="submit" id="synk-enroll-btn">Enroll</button>
+            <button class="btn" type="submit" id="synk-enroll-btn">Add member</button>
             <p id="synk-enroll-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
           </form>
         </section>
 
         <section class="panel">
-          <h2>Member list</h2>
+          <h2>Directory</h2>
           <p class="muted" style="margin:0 0 10px;font-size:0.85rem;" id="members-count-label">0 members</p>
           <div class="field">
             <label for="member-search">Search</label>
             <input id="member-search" type="search" placeholder="Name or Synk code" autocomplete="off" />
           </div>
           <div id="synk-profiles" class="synk-profiles"></div>
-          <p id="synk-profiles-empty" class="chat-empty-note">No Synk members yet.</p>
+          <p id="synk-profiles-empty" class="chat-empty-note">No members yet.</p>
         </section>
       </div>
 
@@ -213,25 +213,25 @@
         <header class="admin-header">
           <div>
             <h1>Apps</h1>
-            <p class="muted">API keys for redeeming Synk passes.</p>
+            <p class="muted">Registered applications and API keys.</p>
           </div>
         </header>
 
         <section class="panel">
           <form id="synk-app-form" class="synk-enroll-form" autocomplete="off">
             <div class="field">
-              <label for="synk-app-name">App name</label>
-              <input id="synk-app-name" type="text" maxlength="100" required placeholder="Door access" />
+              <label for="synk-app-name">Application name</label>
+              <input id="synk-app-name" type="text" maxlength="100" required placeholder="Access control" />
             </div>
             <div class="field">
               <label for="synk-app-slug">Slug</label>
-              <input id="synk-app-slug" type="text" maxlength="60" placeholder="door-access" />
+              <input id="synk-app-slug" type="text" maxlength="60" placeholder="access-control" />
             </div>
-            <button class="btn btn-secondary" type="submit" id="synk-app-btn">Add app</button>
+            <button class="btn btn-secondary" type="submit" id="synk-app-btn">Register app</button>
             <p id="synk-app-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
           </form>
           <div id="synk-apps" class="synk-apps" style="margin-top:14px;"></div>
-          <p id="synk-apps-empty" class="chat-empty-note">No apps yet.</p>
+          <p id="synk-apps-empty" class="chat-empty-note">No applications registered.</p>
         </section>
       </div>
 
@@ -239,7 +239,7 @@
         <header class="admin-header">
           <div>
             <h1>Activity</h1>
-            <p class="muted">Verifies, passes, rate limits, key events.</p>
+            <p class="muted">Verification events and administrative actions.</p>
           </div>
           <div class="admin-header-actions">
             <button class="btn btn-secondary btn-compact" type="button" id="export-activity-btn">Export CSV</button>
@@ -269,7 +269,7 @@
         <header class="admin-header">
           <div>
             <h1>Requests</h1>
-            <p class="muted">People who asked to join Synk. Accept to enroll them.</p>
+            <p class="muted">Pending membership requests awaiting review.</p>
           </div>
           <div class="admin-header-actions">
             <button class="btn btn-secondary btn-compact" type="button" id="refresh-requests-btn">Refresh</button>
@@ -277,7 +277,7 @@
         </header>
         <section class="panel">
           <div id="synk-requests" class="synk-sessions"></div>
-          <p id="synk-requests-empty" class="chat-empty-note">No pending join requests.</p>
+          <p id="synk-requests-empty" class="chat-empty-note">No pending requests.</p>
         </section>
       </div>
 
@@ -285,38 +285,38 @@
         <header class="admin-header">
           <div>
             <h1>Settings</h1>
-            <p class="muted">Camera framing and session.</p>
+            <p class="muted">Verification preferences and account security.</p>
           </div>
         </header>
 
         <section class="panel">
           <h2>Camera framing</h2>
           <p class="muted" style="margin:0 0 12px;">
-            Default framing for Synk verification.
+            Preferred framing for Synk face verification.
           </p>
           <div class="field">
-            <label for="camera-side">Side</label>
+            <label for="camera-side">Position</label>
             <select id="camera-side">
-              <option value="left">Left edge</option>
-              <option value="right">Right edge</option>
-              <option value="center">Centered / portrait</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+              <option value="center">Center</option>
             </select>
           </div>
           <p id="camera-side-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
         </section>
 
         <section class="panel">
-          <h2>Links</h2>
+          <h2>Public pages</h2>
           <div class="synk-link-list">
-            <a href="https://synkid.netlify.app/verify" target="_blank" rel="noopener">Member verification</a>
-            <a href="https://synkid.netlify.app/" target="_blank" rel="noopener">Membership request</a>
+            <a href="https://synkid.netlify.app/verify" target="_blank" rel="noopener">Verification</a>
+            <a href="https://synkid.netlify.app/" target="_blank" rel="noopener">Access request</a>
           </div>
         </section>
 
         <section class="panel">
           <h2>Security</h2>
           <p class="muted" style="margin:0 0 12px;">
-            Sessions are server-tracked and can be revoked from any signed-in device.
+            Active sessions can be revoked from any signed-in device.
           </p>
           <p id="security-session-meta" class="muted" style="margin:0 0 12px;font-size:0.85rem;">
             Not signed in.
@@ -713,7 +713,7 @@
                       DOB ${escapeHtml(formatDob(profile.dateOfBirth))}
                       · ${escapeHtml(synkPolicyLabel(profile.policy))}
                       · ${profile.hasBiometrics ? "Face enrolled" : "Needs face photo"}
-                      ${profile.hasSecret ? " · Backup secret" : ""}
+                      ${profile.hasSecret ? " · Recovery passphrase" : ""}
                       ${profile.enabled ? "" : " · paused"}
                     </div>
                   </div>
@@ -728,7 +728,7 @@
                   </label>
                   <label class="field" style="margin:0;">
                     <span class="muted" style="font-size:0.78rem;">Reset secret (optional)</span>
-                    <input type="password" data-synk-action="secret" placeholder="New secret" maxlength="200" autocomplete="new-password" />
+                    <input type="password" data-synk-action="secret" placeholder="New passphrase" maxlength="200" autocomplete="new-password" />
                   </label>
                   <div class="synk-profile-actions">
                     <label class="btn btn-secondary btn-compact" style="cursor:pointer;">
@@ -1374,13 +1374,13 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
         if (!name || !dateOfBirth || !file) return;
 
         synkEnrollBtn.disabled = true;
-        synkEnrollStatus.textContent = "Reading face biometrics…";
+        synkEnrollStatus.textContent = "Processing photo…";
         try {
           if (!window.KioskFace) throw new Error("Face library still loading — wait a second");
           await window.KioskFace.ensureFaceApi();
           const uploaded = await uploadSynkPhoto(file);
           const descriptor = await window.KioskFace.descriptorFromImage(uploaded.canvas);
-          synkEnrollStatus.textContent = "Creating Synk member…";
+          synkEnrollStatus.textContent = "Saving member…";
           const res = await fetch("/api/synk-profiles", {
             method: "POST",
             headers: adminHeaders(),
@@ -1394,17 +1394,17 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
             }),
           });
           const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not enroll Synk member");
+          if (!res.ok) throw new Error(data.error || "Could not add member");
           synkEnrollForm.reset();
           synkEnrollStatus.textContent = data.profile
-            ? `Enrolled ${data.profile.synkCode}`
-            : "Enrolled";
-          showToast(data.profile ? `Synk member ${data.profile.synkCode}` : "Synk member enrolled");
+            ? `Added ${data.profile.synkCode}`
+            : "Member added";
+          showToast(data.profile ? `Added ${data.profile.synkCode}` : "Member added");
           await refreshSynkProfiles();
           await refreshSettings();
         } catch (err) {
-          synkEnrollStatus.textContent = err.message || "Could not enroll";
-          showToast(err.message || "Could not enroll Synk member");
+          synkEnrollStatus.textContent = err.message || "Could not add member";
+          showToast(err.message || "Could not add member");
         } finally {
           synkEnrollBtn.disabled = false;
         }

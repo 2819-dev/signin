@@ -1,7 +1,7 @@
 {
-  "name": "Synk ID",
-  "short_name": "Synk ID",
-  "description": "Request Synk membership",
+  "name": "Synk",
+  "short_name": "Synk",
+  "description": "Synk identity verification and access requests",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f9fc",

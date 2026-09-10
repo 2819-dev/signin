@@ -11,12 +11,12 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#f7f9fc" />
     <meta name="color-scheme" content="light" />
-    <meta name="description" content="Verify your Synk membership." />
+    <meta name="description" content="Verify your Synk identity." />
     <meta name="format-detection" content="telephone=no" />
-    <title>Synk Verify</title>
+    <title>Synk — Verify</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid2" />
-    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid2" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid3" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid3" />
     <link rel="stylesheet" href="/join.css" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js" defer></script>
@@ -28,45 +28,45 @@
           <img src="/synk-logo.svg" alt="" width="48" height="48" />
         </div>
         <div>
-          <p class="eyebrow">Synk ID</p>
-          <h1>Member verification</h1>
+          <p class="eyebrow">Synk</p>
+          <h1>Verify identity</h1>
           <p class="subtitle">
-            Confirm your identity with face recognition, or use your Synk code.
+            Use face verification, or enter your Synk code and recovery passphrase.
           </p>
           <p class="footer-note muted" style="text-align:left;margin-top:10px;">
-            Need an account?
-            <a href="/">Request membership</a>
+            Need access?
+            <a href="/">Request access</a>
           </p>
         </div>
       </header>
 
       <section class="card" id="synk-pod-view">
-        <p class="section-label">Verify</p>
-        <h2>Position your face in the frame</h2>
+        <p class="section-label">Face verification</p>
+        <h2>Center your face in the frame</h2>
         <p class="muted" id="synk-pod-hint">
-          Face the camera and keep your head inside the circle.
+          Look at the camera. Keep your face inside the circle.
         </p>
         <div class="pod-frame">
           <video id="synk-video" class="pod-video" playsinline muted autoplay></video>
           <div class="pod-ring" aria-hidden="true"></div>
         </div>
-        <p id="synk-status" class="status muted">Tap Verify to begin</p>
+        <p id="synk-status" class="status muted">Select Start camera to begin</p>
         <p id="synk-error" class="error hidden" role="alert"></p>
         <div class="btn-row">
           <button class="btn btn-secondary" type="button" id="synk-start-btn">Start camera</button>
           <button class="btn btn-primary" type="button" id="synk-scan-btn" disabled>Verify</button>
         </div>
         <button class="btn btn-secondary" type="button" id="synk-use-code-btn" style="width:100%;margin-top:10px;">
-          Use Synk code instead
+          Use Synk code
         </button>
       </section>
 
       <section class="card hidden" id="synk-code-view">
-        <p class="section-label">Backup</p>
-        <h2>Synk code verification</h2>
+        <p class="section-label">Code verification</p>
+        <h2>Synk code</h2>
         <form id="synk-signin-form" class="form" autocomplete="off">
           <div class="field">
-            <label for="synk-code-input">Synk ID or legal name</label>
+            <label for="synk-code-input">Synk code or legal name</label>
             <input id="synk-code-input" type="text" maxlength="100" required placeholder="SK-XXXX-XXXX" />
           </div>
           <div class="field">
@@ -74,33 +74,33 @@
             <input id="synk-dob-input" type="date" required />
           </div>
           <div class="field">
-            <label for="synk-secret-input">Backup secret</label>
+            <label for="synk-secret-input">Recovery passphrase</label>
             <input id="synk-secret-input" type="password" maxlength="200" required />
           </div>
           <p id="synk-code-error" class="error hidden" role="alert"></p>
           <div class="btn-row">
-            <button class="btn btn-secondary" type="button" id="synk-back-pod-btn">Back to camera</button>
+            <button class="btn btn-secondary" type="button" id="synk-back-pod-btn">Back</button>
             <button class="btn btn-primary" type="submit">Verify</button>
           </div>
         </form>
       </section>
 
       <section class="card hidden" id="synk-success-view">
-        <p class="section-label">Complete</p>
+        <p class="section-label">Result</p>
         <h2 id="synk-success-title">Verified</h2>
         <p class="muted" id="synk-success-copy">
-          Verification succeeded. Your Synk pass is active.
+          Identity confirmed. Your verification pass is active.
         </p>
         <div class="pass-box">
           <div class="muted" style="font-size:0.78rem;">Member</div>
           <strong id="synk-success-name">—</strong>
           <div class="code" id="synk-success-code">—</div>
           <div class="muted" style="margin-top:12px;font-size:0.82rem;">
-            Pass expires in <span id="synk-pass-ttl">120</span>s
+            Pass expires in <span id="synk-pass-ttl">120</span> seconds
           </div>
         </div>
         <button class="btn btn-secondary" type="button" id="synk-again-btn" style="width:100%;margin-top:14px;">
-          Verify another member
+          Verify another person
         </button>
       </section>
     </main>
@@ -144,7 +144,7 @@
       async function startCamera() {
         errorEl.classList.add("hidden");
         if (!window.KioskFace) {
-          errorEl.textContent = "Camera library is still loading. Please try again.";
+          errorEl.textContent = "Camera support is still loading. Please try again.";
           errorEl.classList.remove("hidden");
           return;
         }
@@ -154,8 +154,8 @@
           await window.KioskFace.ensureFaceApi();
           window.KioskFace.setCameraSide(cameraSide);
           stream = await window.KioskFace.startCamera(video, { side: cameraSide });
-          statusEl.textContent = "Hold still, then tap Verify";
-          hintEl.textContent = "Face the camera and keep your head inside the circle.";
+          statusEl.textContent = "Ready. Select Verify when prepared.";
+          hintEl.textContent = "Look at the camera. Keep your face inside the circle.";
           scanBtn.disabled = false;
         } catch (err) {
           errorEl.textContent = err.message || "Could not open camera";
@@ -166,7 +166,7 @@
 
       async function dualDescriptors() {
         const a = await window.KioskFace.descriptorFromVideo(video);
-        statusEl.textContent = "Confirming live match…";
+        statusEl.textContent = "Confirming live presence…";
         await new Promise((r) => setTimeout(r, 380));
         const b = await window.KioskFace.descriptorFromVideo(video);
         return [a, b];
@@ -181,7 +181,7 @@
         document.getElementById("synk-pass-ttl").textContent =
           (data.pass && data.pass.ttlSeconds) || 120;
         document.getElementById("synk-success-copy").textContent =
-          "Verification succeeded. Your Synk pass is active.";
+          "Identity confirmed. Your verification pass is active.";
         show("success");
 
         if (returnUrl && data.pass && data.pass.token) {
@@ -203,7 +203,7 @@
           body: JSON.stringify({ ...payload, appSlug, intent }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "Could not verify Synk ID");
+        if (!res.ok) throw new Error(data.error || "Verification failed");
         showSuccess(data);
       }
 
@@ -219,7 +219,7 @@
           statusEl.textContent = "Checking membership…";
           await verifyPayload({ descriptors });
         } catch (err) {
-          errorEl.textContent = err.message || "Could not verify";
+          errorEl.textContent = err.message || "Verification failed";
           errorEl.classList.remove("hidden");
           statusEl.textContent = "Try again";
           scanBtn.disabled = false;
@@ -251,7 +251,7 @@
             secret: document.getElementById("synk-secret-input").value,
           });
         } catch (err) {
-          codeError.textContent = err.message || "Could not verify";
+          codeError.textContent = err.message || "Verification failed";
           codeError.classList.remove("hidden");
         }
       });

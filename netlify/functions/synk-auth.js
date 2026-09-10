@@ -82,7 +82,7 @@ async function applyVisitorIntent(sql, matched) {
   if (policy === "auto_admit") {
     const inserted = await sql`
       INSERT INTO visitor_requests (name, reason, status, urgent, resolved_at)
-      VALUES (${matched.name}, 'Synk ID', 'admitted', FALSE, NOW())
+      VALUES (${matched.name}, 'Synk', 'admitted', FALSE, NOW())
       RETURNING id, name, reason, status, decline_reason, urgent, created_at, resolved_at
     `;
     const request = mapRow(inserted[0]);
@@ -104,7 +104,7 @@ async function applyVisitorIntent(sql, matched) {
   if (policy === "auto_deny") {
     const inserted = await sql`
       INSERT INTO visitor_requests (name, reason, status, decline_reason, urgent, resolved_at)
-      VALUES (${matched.name}, 'Synk ID', 'declined', 'Access denied', FALSE, NOW())
+      VALUES (${matched.name}, 'Synk', 'declined', 'Access denied', FALSE, NOW())
       RETURNING id, name, reason, status, decline_reason, urgent, created_at, resolved_at
     `;
     const request = mapRow(inserted[0]);
@@ -125,7 +125,7 @@ async function applyVisitorIntent(sql, matched) {
 
   const inserted = await sql`
     INSERT INTO visitor_requests (name, reason, status, urgent)
-    VALUES (${matched.name}, 'Synk ID', 'pending', FALSE)
+    VALUES (${matched.name}, 'Synk', 'pending', FALSE)
     RETURNING id, name, reason, status, decline_reason, urgent, created_at, resolved_at
   `;
   const request = mapRow(inserted[0]);
@@ -194,7 +194,7 @@ exports.handler = async (event) => {
             detail: "unstable biometrics",
           });
           await sleep(350);
-          return json(401, { error: "Could not verify Synk ID" });
+          return json(401, { error: "Verification failed" });
         }
       }
 
@@ -238,7 +238,7 @@ exports.handler = async (event) => {
       if (!lookup || !secret || !dateOfBirth) {
         await logSynkEvent(sql, { eventType: "verify_fail", appSlug, ip, detail: "missing backup fields" });
         await sleep(250);
-        return json(400, { error: "Could not verify Synk ID" });
+        return json(400, { error: "Verification failed" });
       }
 
       const codeLookup = lookup.toUpperCase();
@@ -267,7 +267,7 @@ exports.handler = async (event) => {
     if (!matched) {
       await logSynkEvent(sql, { eventType: "verify_fail", appSlug, ip, detail: method || "no match" });
       await sleep(400);
-      return json(401, { error: "Could not verify Synk ID" });
+      return json(401, { error: "Verification failed" });
     }
 
     const pass = await issuePass(sql, {

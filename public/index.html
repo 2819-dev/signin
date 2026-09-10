@@ -110,10 +110,10 @@
             <div id="more-options-panel" class="more-options-panel hidden">
               <button class="btn btn-secondary synk-signin-btn" type="button" id="synk-signin-btn">
                 <span class="synk-mark" aria-hidden="true"><img src="/synk-logo.svg" alt="" /></span>
-                Sign in with Synk ID
+                Sign in with Synk
               </button>
               <button class="btn btn-secondary" type="button" id="face-signin-btn">
-                Sign in with Face
+                Sign in with face
               </button>
             </div>
           </div>
@@ -183,11 +183,11 @@
               <img src="/synk-logo.svg" alt="" />
             </div>
             <div>
-              <p class="eyebrow">Synk ID</p>
-              <h2 id="synk-modal-title" style="margin:0;">Look at the camera</h2>
+              <p class="eyebrow">Synk</p>
+              <h2 id="synk-modal-title" style="margin:0;">Verify with Synk</h2>
             </div>
           </div>
-          <p class="subtitle" id="synk-pod-hint" style="margin-top:0;">Verify membership with your face.</p>
+          <p class="subtitle" id="synk-pod-hint" style="margin-top:0;">Center your face in the frame.</p>
           <div class="synk-pod-frame">
             <video id="synk-video" class="face-video synk-video" playsinline muted autoplay></video>
             <div class="synk-pod-ring" aria-hidden="true"></div>
@@ -199,7 +199,7 @@
             <button class="btn btn-primary" type="button" id="synk-scan-btn">Verify</button>
           </div>
           <button class="btn btn-secondary btn-compact" type="button" id="synk-use-code-btn" style="margin-top:10px;width:100%;">
-            Use Synk code instead
+            Use Synk code
           </button>
         </div>
 
@@ -209,28 +209,28 @@
               <img src="/synk-logo.svg" alt="" />
             </div>
             <div>
-              <p class="eyebrow">Backup</p>
-              <h2 style="margin:0;">Synk code sign-in</h2>
+              <p class="eyebrow">Synk</p>
+              <h2 style="margin:0;">Code verification</h2>
             </div>
           </div>
-          <p class="subtitle" style="margin-top:0;">Use if the camera can’t verify you.</p>
+          <p class="subtitle" style="margin-top:0;">Use your Synk code if the camera is unavailable.</p>
           <form id="synk-signin-form" autocomplete="off">
             <div class="field">
-              <label for="synk-code-input">Synk ID or name</label>
-              <input id="synk-code-input" type="text" maxlength="100" required placeholder="SK-XXXX-XXXX or name" autocomplete="off" />
+              <label for="synk-code-input">Synk code or legal name</label>
+              <input id="synk-code-input" type="text" maxlength="100" required placeholder="SK-XXXX-XXXX" autocomplete="off" />
             </div>
             <div class="field">
               <label for="synk-dob-input">Date of birth</label>
               <input id="synk-dob-input" type="date" required />
             </div>
             <div class="field">
-              <label for="synk-secret-input">Backup secret</label>
-              <input id="synk-secret-input" type="password" maxlength="200" required placeholder="Your secret" autocomplete="off" />
+              <label for="synk-secret-input">Recovery passphrase</label>
+              <input id="synk-secret-input" type="password" maxlength="200" required placeholder="Passphrase" autocomplete="off" />
             </div>
             <p id="synk-code-error" class="error hidden"></p>
             <div class="btn-row" style="margin-top: 4px;">
-              <button class="btn btn-secondary" type="button" id="synk-back-pod-btn">Back to camera</button>
-              <button class="btn btn-primary" type="submit" id="synk-submit-btn">Sign in</button>
+              <button class="btn btn-secondary" type="button" id="synk-back-pod-btn">Back</button>
+              <button class="btn btn-primary" type="submit" id="synk-submit-btn">Verify</button>
             </div>
           </form>
         </div>
@@ -1144,13 +1144,13 @@
         stopSynkCamera();
         showSynkPod();
         synkStatus.textContent = "Camera stopped";
-        synkPodHint.textContent = "Verify membership with your face.";
+        synkPodHint.textContent = "Center your face in the frame.";
         synkModal.classList.remove("synk-verified");
       }
 
       async function openSynkModal() {
         if (!window.KioskFace) {
-          formError.textContent = "Synk camera is still loading. Try again in a moment.";
+          formError.textContent = "Synk is still loading. Please try again shortly.";
           formError.classList.remove("hidden");
           return;
         }
@@ -1159,13 +1159,13 @@
         showSynkPod();
         synkError.classList.add("hidden");
         synkStatus.textContent = "Starting camera…";
-        synkPodHint.textContent = "Look at the screen center — keep your face in the ring.";
+        synkPodHint.textContent = "Look at the camera. Keep your face inside the circle.";
         synkScanBtn.disabled = true;
         synkBusy = false;
         try {
           await window.KioskFace.ensureFaceApi();
           synkStream = await window.KioskFace.startCamera(synkVideo, { side: cameraSide });
-          synkStatus.textContent = "Hold still — verifying…";
+          synkStatus.textContent = "Ready. Select Verify when prepared.";
           synkScanBtn.disabled = false;
           synkAutoTimer = setTimeout(() => {
             runSynkScan().catch(() => {});
@@ -1173,7 +1173,7 @@
         } catch (err) {
           synkError.textContent = err.message || "Could not open camera";
           synkError.classList.remove("hidden");
-          synkStatus.textContent = "Camera unavailable — use Synk code";
+          synkStatus.textContent = "Camera unavailable. Use Synk code.";
         }
       }
 
@@ -1184,21 +1184,21 @@
         stopSynkCamera();
 
         if (policy === "autofill") {
-          synkPodHint.textContent = `Welcome, ${name}`;
-          synkStatus.textContent = "Name filled — continue on the form";
+          synkPodHint.textContent = name;
+          synkStatus.textContent = "Name filled. Continue on the form.";
           await new Promise((r) => setTimeout(r, 600));
           closeSynkModal();
           document.getElementById("name").value = name;
           if (!document.getElementById("reason").value.trim()) {
-            document.getElementById("reason").value = "Synk ID member";
+            document.getElementById("reason").value = "Synk member";
           }
           formError.classList.add("hidden");
           return;
         }
 
         if (policy === "auto_admit" && data.request) {
-          synkPodHint.textContent = `Welcome, ${name}`;
-          synkStatus.textContent = "Verified — you’re cleared";
+          synkPodHint.textContent = name;
+          synkStatus.textContent = "Verified. Access granted.";
           await new Promise((r) => setTimeout(r, 700));
           closeSynkModal();
           clearTimers();
@@ -1222,14 +1222,14 @@
         }
 
         // Default: pending — wait for accept / deny
-        if (!data.request) throw new Error("Sign-in failed");
-        synkPodHint.textContent = `Welcome, ${name}`;
-        synkStatus.textContent = "Verified — waiting for approval";
+        if (!data.request) throw new Error("Verification failed");
+        synkPodHint.textContent = name;
+        synkStatus.textContent = "Verified. Waiting for approval.";
         await new Promise((r) => setTimeout(r, 700));
         closeSynkModal();
         clearTimers();
         currentRequestId = data.request.id;
-        waitingText.textContent = `Thanks, ${name}. Please wait…`;
+        waitingText.textContent = `${name}, please wait…`;
         show(waitingView);
         pollTimer = setInterval(pollRequestStatus, 2000);
         pollRequestStatus();
@@ -1250,7 +1250,7 @@
           synkStatus.textContent = "Confirming live match…";
           await new Promise((r) => setTimeout(r, 380));
           const second = await window.KioskFace.descriptorFromVideo(synkVideo);
-          synkStatus.textContent = "Checking Synk registry…";
+          synkStatus.textContent = "Checking membership…";
           const res = await fetch("/api/synk-auth", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1261,12 +1261,12 @@
             }),
           });
           const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not verify Synk ID");
+          if (!res.ok) throw new Error(data.error || "Could not verify");
           await finishSynkResult(data);
         } catch (err) {
           synkError.textContent = err.message || "Could not verify";
           synkError.classList.remove("hidden");
-          synkStatus.textContent = "Try again or use Synk code";
+          synkStatus.textContent = "Try again, or use Synk code";
           synkScanBtn.disabled = false;
           synkBusy = false;
         }
@@ -1301,10 +1301,10 @@
             }),
           });
           const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not verify Synk ID");
+          if (!res.ok) throw new Error(data.error || "Could not verify");
           await finishSynkResult(data);
         } catch (err) {
-          synkCodeError.textContent = err.message || "Could not verify Synk ID";
+          synkCodeError.textContent = err.message || "Could not verify";
           synkCodeError.classList.remove("hidden");
           synkSubmitBtn.disabled = false;
         }
