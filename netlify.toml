@@ -22,6 +22,16 @@
   status = 200
 
 [[redirects]]
+  from = "/synk-join"
+  to = "/synk-join.html"
+  status = 200
+
+[[redirects]]
+  from = "/join"
+  to = "/synk-join.html"
+  status = 200
+
+[[redirects]]
   from = "/synk-admin"
   to = "https://synk-admin.netlify.app/"
   status = 302

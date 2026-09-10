@@ -9,8 +9,10 @@ const {
 } = require("crypto");
 const { hashSecret, verifySecret } = require("./synk");
 
-const SESSION_TTL_SEC = 60 * 60 * 12; // 12 hours
-const IDLE_TTL_SEC = 60 * 30; // client idle lock guidance
+const SESSION_TTL_REMEMBER_SEC = 60 * 60 * 24 * 60; // ~2 months when "stay signed in"
+const SESSION_TTL_EPHEMERAL_SEC = 60 * 60 * 12; // same-day session when not remembered
+const SESSION_TTL_SEC = SESSION_TTL_REMEMBER_SEC; // default / export for callers
+const IDLE_TTL_SEC = 60 * 30; // unused by UI; kept for API compatibility
 const SCRYPT_KEYLEN = 64;
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
@@ -217,10 +219,11 @@ function extractSessionToken(event) {
   return raw.trim();
 }
 
-async function createAdminSession(sql, { username, ip = "", userAgent = "" }) {
+async function createAdminSession(sql, { username, ip = "", userAgent = "", remember = true } = {}) {
   await ensureAdminSessionTables(sql);
   const now = Math.floor(Date.now() / 1000);
-  const expiresAt = new Date((now + SESSION_TTL_SEC) * 1000);
+  const ttlSec = remember ? SESSION_TTL_REMEMBER_SEC : SESSION_TTL_EPHEMERAL_SEC;
+  const expiresAt = new Date((now + ttlSec) * 1000);
   const sidRows = await sql`
     INSERT INTO synk_admin_sessions (username, token_hash, ip, user_agent, expires_at)
     VALUES (
@@ -238,7 +241,8 @@ async function createAdminSession(sql, { username, ip = "", userAgent = "" }) {
     sub: String(username),
     sid: String(sid),
     iat: now,
-    exp: now + SESSION_TTL_SEC,
+    exp: now + ttlSec,
+    rem: remember ? 1 : 0,
   });
   await sql`
     UPDATE synk_admin_sessions
@@ -248,9 +252,10 @@ async function createAdminSession(sql, { username, ip = "", userAgent = "" }) {
   return {
     token,
     expiresAt: expiresAt.toISOString(),
-    expiresIn: SESSION_TTL_SEC,
+    expiresIn: ttlSec,
     idleTimeoutSec: IDLE_TTL_SEC,
     sessionId: sid,
+    remember: Boolean(remember),
   };
 }
 
@@ -334,7 +339,10 @@ function otpauthUrl({ username, secret, issuer = "Synk Admin" }) {
   return `otpauth://totp/${label}?${q.toString()}`;
 }
 
-async function loginWithPasswordAndTotp(sql, { username, password, totp, ip = "", userAgent = "" }) {
+async function loginWithPasswordAndTotp(
+  sql,
+  { username, password, totp, ip = "", userAgent = "", remember = true } = {}
+) {
   if (!authConfigured()) {
     const err = new Error("Synk Admin login is not configured");
     err.statusCode = 500;
@@ -355,6 +363,7 @@ async function loginWithPasswordAndTotp(sql, { username, password, totp, ip = ""
     username: expectedUsername(),
     ip,
     userAgent,
+    remember: remember !== false,
   });
 }
 
@@ -419,6 +428,8 @@ module.exports = {
   verifyMediaToken,
   signedPhotoUrl,
   SESSION_TTL_SEC,
+  SESSION_TTL_REMEMBER_SEC,
+  SESSION_TTL_EPHEMERAL_SEC,
   IDLE_TTL_SEC,
   expectedUsername,
 };

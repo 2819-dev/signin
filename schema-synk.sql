@@ -68,6 +68,25 @@ CREATE TABLE IF NOT EXISTS synk_admin_sessions (
 CREATE INDEX IF NOT EXISTS synk_admin_sessions_user_idx
   ON synk_admin_sessions (username, revoked_at, expires_at DESC);
 
+CREATE TABLE IF NOT EXISTS synk_join_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  date_of_birth DATE NOT NULL,
+  secret_hash TEXT,
+  photo_url TEXT NOT NULL DEFAULT '',
+  descriptor JSONB,
+  note TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  ip TEXT,
+  reviewed_at TIMESTAMPTZ,
+  profile_id UUID,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS synk_join_requests_status_idx
+  ON synk_join_requests (status, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS synk_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_type TEXT NOT NULL,

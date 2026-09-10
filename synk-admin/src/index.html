@@ -62,10 +62,19 @@
               placeholder="6-digit code"
             />
           </div>
+          <label class="field checkbox-field" style="display:flex;align-items:flex-start;gap:10px;margin:4px 0 14px;">
+            <input id="stay-signed-in" type="checkbox" checked style="margin-top:3px;" />
+            <span>
+              <strong style="font-weight:600;">Stay signed in on this device</strong>
+              <span class="muted" style="display:block;font-size:0.82rem;margin-top:2px;">
+                Phone-friendly: keep access for about 2 months. Turn off on shared tablets so each visit needs a fresh sign-in.
+              </span>
+            </span>
+          </label>
           <button class="btn" type="submit" id="unlock-btn">Sign in</button>
         </form>
         <p class="muted" style="margin-top:14px;font-size:0.82rem;">
-          Protected with 2FA and revocable server sessions. Your session stays on this device.
+          Protected with 2FA. Manual Lock always signs out. No idle auto-lock.
         </p>
       </section>
     </main>
@@ -110,6 +119,7 @@
           <h2>Quick actions</h2>
           <div class="btn-row">
             <button class="btn btn-compact" type="button" data-jump="members">Enroll member</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-jump="requests">Review requests</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="apps">Add app</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="activity">Activity</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="settings">Security</button>
@@ -128,6 +138,12 @@
           </div>
           <div id="overview-passes" class="synk-sessions"></div>
           <p id="overview-passes-empty" class="chat-empty-note">No active passes.</p>
+        </section>
+
+        <section class="panel">
+          <h2>Join requests</h2>
+          <div id="overview-requests" class="synk-sessions"></div>
+          <p id="overview-requests-empty" class="chat-empty-note">No pending requests.</p>
         </section>
 
         <section class="panel">
@@ -245,6 +261,23 @@
         </section>
       </div>
 
+
+      <div id="pane-requests" class="admin-pane hidden">
+        <header class="admin-header">
+          <div>
+            <h1>Requests</h1>
+            <p class="muted">People who asked to join Synk. Accept to enroll them.</p>
+          </div>
+          <div class="admin-header-actions">
+            <button class="btn btn-secondary btn-compact" type="button" id="refresh-requests-btn">Refresh</button>
+          </div>
+        </header>
+        <section class="panel">
+          <div id="synk-requests" class="synk-sessions"></div>
+          <p id="synk-requests-empty" class="chat-empty-note">No pending join requests.</p>
+        </section>
+      </div>
+
       <div id="pane-settings" class="admin-pane hidden">
         <header class="admin-header">
           <div>
@@ -273,6 +306,7 @@
           <h2>Links</h2>
           <div class="synk-link-list">
             <a href="/synk" target="_blank" rel="noopener">Public Synk verify</a>
+            <a href="/synk-join" target="_blank" rel="noopener">Member join request</a>
             <a href="/admin" target="_blank" rel="noopener">Visitor Admin</a>
           </div>
         </section>
@@ -295,17 +329,28 @@
         </section>
 
         <section class="panel">
-          <h2>Session</h2>
+          <h2>This device</h2>
           <p class="muted" style="margin:0 0 12px;">
-            Lock signs you out on this device and revokes the current server session. Your session is otherwise kept on this device for easy return.
+            Choose whether Synk Admin should remember you here. Shared tablets should leave this off.
           </p>
-          <button class="btn btn-danger" type="button" id="lock-btn-settings">Lock</button>
+          <label class="field checkbox-field" style="display:flex;align-items:flex-start;gap:10px;margin:0 0 14px;">
+            <input id="settings-stay-signed-in" type="checkbox" style="margin-top:3px;" />
+            <span>
+              <strong style="font-weight:600;">Stay signed in on this device</strong>
+              <span class="muted" style="display:block;font-size:0.82rem;margin-top:2px;">
+                Applies the next time you sign in. Remembered sessions last about 2 months.
+              </span>
+            </span>
+          </label>
+          <p id="device-session-status" class="muted" style="margin:0 0 12px;font-size:0.85rem;"></p>
+          <button class="btn btn-danger" type="button" id="lock-btn-settings">Lock now</button>
         </section>
       </div>
 
       <nav class="admin-tabbar" aria-label="Synk Admin sections">
         <button type="button" class="admin-tab active" data-pane="overview" id="tab-overview">Home</button>
         <button type="button" class="admin-tab" data-pane="members" id="tab-members">Members</button>
+        <button type="button" class="admin-tab" data-pane="requests" id="tab-requests">Requests</button>
         <button type="button" class="admin-tab" data-pane="apps" id="tab-apps">Apps</button>
         <button type="button" class="admin-tab" data-pane="activity" id="tab-activity">Activity</button>
         <button type="button" class="admin-tab" data-pane="settings" id="tab-settings">Settings</button>
@@ -323,6 +368,7 @@
       const panes = {
         overview: document.getElementById("pane-overview"),
         members: document.getElementById("pane-members"),
+        requests: document.getElementById("pane-requests"),
         apps: document.getElementById("pane-apps"),
         activity: document.getElementById("pane-activity"),
         settings: document.getElementById("pane-settings"),
@@ -330,6 +376,7 @@
       const tabs = {
         overview: document.getElementById("tab-overview"),
         members: document.getElementById("tab-members"),
+        requests: document.getElementById("tab-requests"),
         apps: document.getElementById("tab-apps"),
         activity: document.getElementById("tab-activity"),
         settings: document.getElementById("tab-settings"),
@@ -370,6 +417,7 @@
       const synkSessionsEmpty = document.getElementById("synk-sessions-empty");
 
       const STORAGE_KEY = "synk_admin_session";
+      const REMEMBER_KEY = "synk_admin_remember";
       const PANE_KEY = "synk_admin_pane";
 
       let sessionToken = "";
@@ -381,6 +429,7 @@
       let synkEventsCache = [];
       let synkEventTypesCache = [];
       let synkSessionsCache = [];
+      let synkPassesCache = [];
       let pollTimer = null;
       let locking = false;
 
@@ -420,7 +469,28 @@
         return `${m}/${d}/${y}`;
       }
 
+      function getRememberPref() {
+        const raw = localStorage.getItem(REMEMBER_KEY);
+        if (raw === null) return true;
+        return raw === "1" || raw === "true";
+      }
+
+      function setRememberPref(value) {
+        localStorage.setItem(REMEMBER_KEY, value ? "1" : "0");
+        const loginBox = document.getElementById("stay-signed-in");
+        const settingsBox = document.getElementById("settings-stay-signed-in");
+        if (loginBox) loginBox.checked = Boolean(value);
+        if (settingsBox) settingsBox.checked = Boolean(value);
+        const status = document.getElementById("device-session-status");
+        if (status) {
+          status.textContent = value
+            ? "This device will keep you signed in for about 2 months after login."
+            : "This device will require sign-in every time (nothing saved locally).";
+        }
+      }
+
       function readStoredSession() {
+        if (!getRememberPref()) return null;
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return null;
         try {
@@ -437,7 +507,13 @@
         return { token: raw, expiresAt: "" };
       }
 
-      function writeStoredSession({ token, expiresAt }) {
+      function writeStoredSession({ token, expiresAt, remember }) {
+        const keep = remember == null ? getRememberPref() : Boolean(remember);
+        setRememberPref(keep);
+        if (!keep) {
+          localStorage.removeItem(STORAGE_KEY);
+          return;
+        }
         localStorage.setItem(
           STORAGE_KEY,
           JSON.stringify({
@@ -480,6 +556,12 @@
         }
         if (next === "activity") {
           refreshSynkActivity().catch(() => {});
+        }
+        if (next === "requests") {
+          refreshSynkRequests().catch(() => {});
+        }
+        if (next === "settings") {
+          setRememberPref(getRememberPref());
         }
       }
 
@@ -907,6 +989,71 @@
         return data;
       }
 
+      let synkRequestsCache = [];
+
+      function renderSynkRequests(requests) {
+        synkRequestsCache = requests || [];
+        const listEl = document.getElementById("synk-requests");
+        const emptyEl = document.getElementById("synk-requests-empty");
+        const overviewEl = document.getElementById("overview-requests");
+        const overviewEmpty = document.getElementById("overview-requests-empty");
+        const pending = synkRequestsCache.filter((r) => (r.status || "pending") === "pending");
+
+        function rowsHtml(items) {
+          if (!items.length) return "";
+          return items
+            .map((req) => {
+              const photo = req.photoUrl
+                ? `<img src="${escapeHtml(req.photoUrl)}" alt="" style="width:56px;height:56px;object-fit:cover;border:1px solid var(--line);" />`
+                : `<div style="width:56px;height:56px;background:var(--fill,#eef3fb);border:1px solid var(--line);"></div>`;
+              return `
+                <article class="synk-session-row" data-request-id="${escapeHtml(req.id)}">
+                  <div style="display:grid;grid-template-columns:56px 1fr;gap:12px;">
+                    ${photo}
+                    <div>
+                      <div class="synk-session-top">
+                        <strong>${escapeHtml(req.name || "Applicant")}</strong>
+                        <span class="synk-badge">${escapeHtml(req.status || "pending")}</span>
+                      </div>
+                      <div class="synk-session-meta">
+                        DOB ${escapeHtml(formatDob(req.dateOfBirth))}
+                        ${req.note ? ` · ${escapeHtml(req.note)}` : ""}
+                        · ${escapeHtml(req.createdAt ? formatTime(req.createdAt) : "")}
+                      </div>
+                      ${
+                        (req.status || "pending") === "pending"
+                          ? `<div class="btn-row" style="margin-top:8px;">
+                              <button class="btn btn-compact" type="button" data-request-action="approve">Accept</button>
+                              <button class="btn btn-danger btn-compact" type="button" data-request-action="deny">Deny</button>
+                            </div>`
+                          : ""
+                      }
+                    </div>
+                  </div>
+                </article>
+              `;
+            })
+            .join("");
+        }
+
+        if (listEl) {
+          listEl.innerHTML = rowsHtml(synkRequestsCache);
+          if (emptyEl) emptyEl.classList.toggle("hidden", synkRequestsCache.length > 0);
+        }
+        if (overviewEl) {
+          overviewEl.innerHTML = rowsHtml(pending.slice(0, 5));
+          if (overviewEmpty) overviewEmpty.classList.toggle("hidden", pending.length > 0);
+        }
+      }
+
+      async function refreshSynkRequests() {
+        const res = await fetch("/api/synk-join?limit=50", { headers: adminHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load join requests");
+        renderSynkRequests(data.requests || []);
+        return data;
+      }
+
       async function refreshSettings() {
         const res = await fetch("/api/synk-settings", { headers: adminHeaders() });
         const data = await res.json().catch(() => ({}));
@@ -938,6 +1085,7 @@
           refreshSynkApps(),
           refreshSynkActivity(),
           refreshSynkPasses().catch(() => {}),
+          refreshSynkRequests().catch(() => {}),
           refreshSettings(),
         ]);
       }
@@ -969,6 +1117,7 @@
         writeStoredSession({
           token: sessionToken,
           expiresAt: sessionExpiresAt,
+          remember: meta.remember,
         });
         unlockView.classList.add("hidden");
         panelView.classList.remove("hidden");
@@ -976,6 +1125,8 @@
         setAdminPane(localStorage.getItem(PANE_KEY) || "overview");
         await Promise.all([refreshSynkProfiles(), refreshSynkApps(), refreshSynkActivity()]);
         refreshSessions().catch(() => {});
+        refreshSynkRequests().catch(() => {});
+        refreshSynkPasses().catch(() => {});
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(() => {
           refreshSynkApps().catch(() => {});
@@ -984,11 +1135,11 @@
         }, 15000);
       }
 
-      async function loginWithCredentials({ username, password, totp }) {
+      async function loginWithCredentials({ username, password, totp, remember }) {
         const res = await fetch("/api/synk-admin-login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password, totp }),
+          body: JSON.stringify({ username, password, totp, remember: Boolean(remember) }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Could not sign in");
@@ -997,6 +1148,7 @@
         sessionId = data.sessionId || "";
         await openAdminSession(data.token, {
           expiresAt: data.expiresAt || "",
+          remember: data.remember != null ? data.remember : Boolean(remember),
         });
       }
 
@@ -1006,10 +1158,14 @@
         const unlockBtn = document.getElementById("unlock-btn");
         if (unlockBtn) unlockBtn.disabled = true;
         try {
+          const stayBox = document.getElementById("stay-signed-in");
+          const remember = stayBox ? stayBox.checked : getRememberPref();
+          setRememberPref(remember);
           await loginWithCredentials({
             username: document.getElementById("username").value.trim(),
             password: document.getElementById("password").value,
             totp: document.getElementById("totp").value.trim(),
+            remember,
           });
           document.getElementById("password").value = "";
           document.getElementById("totp").value = "";
@@ -1026,6 +1182,76 @@
 
       document.getElementById("lock-btn").addEventListener("click", () => lockAdmin({ remote: true }));
       document.getElementById("lock-btn-settings").addEventListener("click", () => lockAdmin({ remote: true }));
+
+      const settingsStayBox = document.getElementById("settings-stay-signed-in");
+      if (settingsStayBox) {
+        settingsStayBox.addEventListener("change", () => {
+          setRememberPref(settingsStayBox.checked);
+          if (!settingsStayBox.checked) {
+            clearStoredSession();
+            showToast("This device will ask for sign-in next time");
+          } else {
+            showToast("Stay signed in enabled for next login");
+          }
+        });
+      }
+
+      const refreshRequestsBtn = document.getElementById("refresh-requests-btn");
+      if (refreshRequestsBtn) {
+        refreshRequestsBtn.addEventListener("click", async () => {
+          try {
+            await refreshSynkRequests();
+            showToast("Requests refreshed");
+          } catch (err) {
+            showToast(err.message || "Could not refresh requests");
+          }
+        });
+      }
+
+      async function handleRequestAction(requestId, action) {
+        const res = await fetch("/api/synk-join", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({ action, id: requestId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not update request");
+        return data;
+      }
+
+      function bindRequestListClicks(root) {
+        if (!root) return;
+        root.addEventListener("click", async (e) => {
+          const btn = e.target.closest("[data-request-action]");
+          const row = e.target.closest("[data-request-id]");
+          if (!btn || !row) return;
+          const action = btn.getAttribute("data-request-action");
+          const id = row.getAttribute("data-request-id");
+          if (!id || (action !== "approve" && action !== "deny")) return;
+          const label = action === "approve" ? "Accept this join request?" : "Deny this join request?";
+          if (!confirm(label)) return;
+          try {
+            const data = await handleRequestAction(id, action);
+            showToast(
+              action === "approve"
+                ? data.profile
+                  ? `Accepted ${data.profile.synkCode || data.profile.name}`
+                  : "Accepted"
+                : "Denied"
+            );
+            await refreshSynkRequests();
+            if (action === "approve") {
+              await refreshSynkProfiles();
+              await refreshSettings();
+            }
+          } catch (err) {
+            showToast(err.message || "Could not update request");
+          }
+        });
+      }
+      bindRequestListClicks(document.getElementById("synk-requests"));
+      bindRequestListClicks(document.getElementById("overview-requests"));
+
       document.getElementById("refresh-activity-btn").addEventListener("click", async () => {
         try {
           await refreshSynkActivity();
@@ -1473,11 +1699,14 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
         })
         .catch(() => {});
 
+      setRememberPref(getRememberPref());
+
       const stored = readStoredSession();
       if (stored && stored.token) {
         sessionExpiresAt = stored.expiresAt || "";
         openAdminSession(stored.token, {
           expiresAt: sessionExpiresAt,
+          remember: true,
         }).catch(() => {
           lockAdmin({ remote: false });
         });

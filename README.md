@@ -73,8 +73,10 @@ Synk Admin is deployed as its own Netlify project:
 - Site: https://synk-admin.netlify.app
 - Source: `synk-admin/` in this repo
 - APIs still run on the visitor kiosk site; Synk Admin proxies `/api/*` there
-- Auth: username + password + TOTP 2FA on the **visitor** site; Synk Admin stores a signed, **revocable** server session locally
-- Sessions are kept on this device for easy return, expire after 12 hours on the server, and can be revoked from Settings
+- Auth: username + password + TOTP 2FA on the **visitor** site; Synk Admin keeps a signed, **revocable** session locally
+- **Stay signed in** is per device (about 2 months). Turn it off on shared tablets so each visit needs a fresh login
+- Manual Lock always signs out; there is no idle auto-lock and no short forced expiry while remembered
+- Public member join requests: `/synk-join` → review/accept in Synk Admin → Requests
 - Member photos are served with short-lived signed URLs
 - Active Synk passes can be listed and revoked from Overview / Members
 - Activity is filterable and exportable as CSV

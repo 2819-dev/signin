@@ -177,6 +177,25 @@ async function ensureSynkCoreTables(sql) {
   await sql`CREATE INDEX IF NOT EXISTS synk_events_created_idx ON synk_events (created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS synk_events_ip_created_idx ON synk_events (ip, created_at DESC)`;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_join_requests (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      date_of_birth DATE NOT NULL,
+      secret_hash TEXT,
+      photo_url TEXT NOT NULL DEFAULT '',
+      descriptor JSONB,
+      note TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      ip TEXT,
+      reviewed_at TIMESTAMPTZ,
+      profile_id UUID,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS synk_join_requests_status_idx ON synk_join_requests (status, created_at DESC)`;
+
   // Seed the visitor-signin bridge app if missing (key only known via admin reset).
   const apps = await sql`SELECT id FROM synk_apps WHERE slug = 'visitor-signin' LIMIT 1`;
   if (!apps[0]) {
