@@ -187,26 +187,57 @@
 
       function showSuccess(data) {
         stopCamera();
-        document.getElementById("synk-success-name").textContent =
-          (data.profile && data.profile.name) || "Member";
-        document.getElementById("synk-success-code").textContent =
-          (data.profile && data.profile.synkCode) || "";
-        document.getElementById("synk-pass-ttl").textContent =
-          (data.pass && data.pass.ttlSeconds) || 120;
+        const profile = (data && data.profile) || {};
+        const pass = (data && data.pass) || {};
+        const expiresAt =
+          pass.expiresAt ||
+          (pass.ttlSeconds ? Date.now() + Number(pass.ttlSeconds) * 1000 : Date.now() + 120000);
+
+        try {
+          localStorage.setItem(
+            "synk_member_session",
+            JSON.stringify({
+              profile: {
+                id: profile.id || null,
+                name: profile.name || "Member",
+                synkCode: profile.synkCode || "",
+                photoUrl: profile.photoUrl || "",
+              },
+              pass: {
+                token: pass.token || "",
+                assertion: pass.assertion || "",
+                ttlSeconds: pass.ttlSeconds || 120,
+              },
+              verifiedAt: Date.now(),
+              expiresAt: new Date(expiresAt).getTime
+                ? new Date(expiresAt).getTime()
+                : Number(expiresAt),
+            })
+          );
+        } catch (_) {}
+
+        document.getElementById("synk-success-name").textContent = profile.name || "Member";
+        document.getElementById("synk-success-code").textContent = profile.synkCode || "";
+        document.getElementById("synk-pass-ttl").textContent = pass.ttlSeconds || 120;
         document.getElementById("synk-success-copy").textContent =
-          "Identity confirmed. Your verification pass is active.";
+          "Identity confirmed. Opening your Synk hub…";
         show("success");
 
-        if (returnUrl && data.pass && data.pass.token) {
+        if (returnUrl && pass.token) {
           try {
             const url = new URL(returnUrl, location.origin);
-            url.searchParams.set("synk_pass", data.pass.token);
-            if (data.pass.assertion) url.searchParams.set("synk_assertion", data.pass.assertion);
+            url.searchParams.set("synk_pass", pass.token);
+            if (pass.assertion) url.searchParams.set("synk_assertion", pass.assertion);
             setTimeout(() => {
               location.href = url.toString();
             }, 900);
+            return;
           } catch (_) {}
         }
+
+        setTimeout(() => {
+          location.href = "/hub";
+        }, 700);
       }
 
       async function verifyPayload(payload) {

@@ -169,18 +169,6 @@
               <input id="synk-enroll-dob" type="date" required />
             </div>
             <div class="field">
-              <label for="synk-enroll-policy">API action after verify</label>
-              <select id="synk-enroll-policy">
-                <option value="pending" selected>Require approval</option>
-                <option value="autofill">Prefill name only</option>
-                <option value="auto_admit">Approve automatically</option>
-                <option value="auto_deny">Decline automatically</option>
-              </select>
-              <p class="muted" style="margin:6px 0 0;font-size:0.82rem;">
-                Applied when a registered app redeems a Synk verification pass.
-              </p>
-            </div>
-            <div class="field">
               <label for="synk-enroll-file">Face photo</label>
               <input id="synk-enroll-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
             </div>
@@ -209,7 +197,11 @@
         <header class="admin-header">
           <div>
             <h1>Apps</h1>
-            <p class="muted">Registered applications and API keys.</p>
+            <p class="muted">
+              Registered API apps. Verify actions (auto-admit, autofill, etc.) are owned by each
+              <a href="https://synkid.netlify.app/business" target="_blank" rel="noopener">Synk Business</a>
+              account.
+            </p>
           </div>
         </header>
 
@@ -265,15 +257,24 @@
         <header class="admin-header">
           <div>
             <h1>Requests</h1>
-            <p class="muted">Pending membership requests awaiting review.</p>
+            <p class="muted">Membership and Synk Business API access requests.</p>
           </div>
           <div class="admin-header-actions">
             <button class="btn btn-secondary btn-compact" type="button" id="refresh-requests-btn">Refresh</button>
           </div>
         </header>
         <section class="panel">
+          <h2>Membership</h2>
           <div id="synk-requests" class="synk-sessions"></div>
-          <p id="synk-requests-empty" class="chat-empty-note">No pending requests.</p>
+          <p id="synk-requests-empty" class="chat-empty-note">No pending membership requests.</p>
+        </section>
+        <section class="panel">
+          <h2>Synk Business</h2>
+          <p class="muted" style="margin:0 0 12px;font-size:0.85rem;">
+            Approving creates API access. Visitor Sign-In is preconnected.
+          </p>
+          <div id="synk-businesses" class="synk-sessions"></div>
+          <p id="synk-businesses-empty" class="chat-empty-note">No business accounts yet.</p>
         </section>
       </div>
 
@@ -306,8 +307,10 @@
         <section class="panel">
           <h2>Public pages</h2>
           <div class="synk-link-list">
-            <a href="https://synkid.netlify.app/verify" target="_blank" rel="noopener">Verification</a>
+            <a href="https://synkid.netlify.app/verify" target="_blank" rel="noopener">Member log in</a>
+            <a href="https://synkid.netlify.app/hub" target="_blank" rel="noopener">Member hub</a>
             <a href="https://synkid.netlify.app/join" target="_blank" rel="noopener">Get Synk</a>
+            <a href="https://synkid.netlify.app/business" target="_blank" rel="noopener">Synk Business</a>
           </div>
         </section>
 
@@ -378,7 +381,6 @@
       const synkEnrollForm = document.getElementById("synk-enroll-form");
       const synkEnrollName = document.getElementById("synk-enroll-name");
       const synkEnrollDob = document.getElementById("synk-enroll-dob");
-      const synkEnrollPolicy = document.getElementById("synk-enroll-policy");
       const synkEnrollSecret = document.getElementById("synk-enroll-secret");
       const synkEnrollFile = document.getElementById("synk-enroll-file");
       const synkEnrollBtn = document.getElementById("synk-enroll-btn");
@@ -394,6 +396,9 @@
       const synkAppStatus = document.getElementById("synk-app-status");
       const synkAppsEl = document.getElementById("synk-apps");
       const synkAppsEmpty = document.getElementById("synk-apps-empty");
+      const synkBusinessesEl = document.getElementById("synk-businesses");
+      const synkBusinessesEmpty = document.getElementById("synk-businesses-empty");
+      let synkBusinessesCache = [];
       const synkEventsEl = document.getElementById("synk-events");
       const synkEventsEmpty = document.getElementById("synk-events-empty");
       const overviewEventsEl = document.getElementById("overview-events");
@@ -565,11 +570,11 @@
         }
       }
 
-      function synkPolicyLabel(policy) {
-        if (policy === "auto_admit") return "Auto-admit";
-        if (policy === "auto_deny") return "Auto-deny";
-        if (policy === "autofill") return "Auto-fill name";
-        return "Needs accept / deny";
+      function synkVerifyActionLabel(action) {
+        if (action === "auto_admit") return "Auto-admit visitors";
+        if (action === "auto_deny") return "Auto-deny visitors";
+        if (action === "autofill") return "Prefill name only";
+        return "Require staff approval";
       }
 
       function fileToDataUrl(file) {
@@ -668,21 +673,11 @@
                     </div>
                     <div class="muted" style="font-size:0.82rem;margin-top:4px;">
                       DOB ${escapeHtml(formatDob(profile.dateOfBirth))}
-                      · ${escapeHtml(synkPolicyLabel(profile.policy))}
                       · ${profile.hasBiometrics ? "Face enrolled" : "Needs face photo"}
                       ${profile.hasSecret ? " · Recovery passphrase" : ""}
                       ${profile.enabled ? "" : " · paused"}
                     </div>
                   </div>
-                  <label class="field" style="margin:0;">
-                    <span class="muted" style="font-size:0.78rem;">When verified</span>
-                    <select data-synk-action="policy">
-                      <option value="pending" ${profile.policy === "pending" || !profile.policy ? "selected" : ""}>Needs accept / deny</option>
-                      <option value="autofill" ${profile.policy === "autofill" ? "selected" : ""}>Auto-fill name only</option>
-                      <option value="auto_admit" ${profile.policy === "auto_admit" ? "selected" : ""}>Auto-admit</option>
-                      <option value="auto_deny" ${profile.policy === "auto_deny" ? "selected" : ""}>Auto-deny</option>
-                    </select>
-                  </label>
                   <label class="field" style="margin:0;">
                     <span class="muted" style="font-size:0.78rem;">Reset secret (optional)</span>
                     <input type="password" data-synk-action="secret" placeholder="New passphrase" maxlength="200" autocomplete="new-password" />
@@ -719,7 +714,9 @@
               <strong>${escapeHtml(app.name)}</strong>
               <div class="muted" style="font-size:0.82rem;margin:4px 0 10px;">
                 <code>${escapeHtml(app.slug)}</code>
+                · ${escapeHtml(synkVerifyActionLabel(app.verifyAction || "pending"))}
                 ${app.enabled ? "" : " · paused"}
+                ${app.slug === "visitor-signin" ? " · preconnected" : ""}
               </div>
               <div class="synk-profile-actions">
                 <button class="btn btn-secondary btn-compact" type="button" data-synk-app-action="rotate">Rotate API key</button>
@@ -1007,6 +1004,53 @@
         return data;
       }
 
+      function renderSynkBusinesses(businesses) {
+        synkBusinessesCache = businesses || [];
+        if (!synkBusinessesEl) return;
+        if (!synkBusinessesCache.length) {
+          synkBusinessesEl.innerHTML = "";
+          if (synkBusinessesEmpty) synkBusinessesEmpty.classList.remove("hidden");
+          return;
+        }
+        if (synkBusinessesEmpty) synkBusinessesEmpty.classList.add("hidden");
+        synkBusinessesEl.innerHTML = synkBusinessesCache
+          .map((biz) => {
+            const pending = (biz.status || "") === "pending";
+            return `
+              <article class="synk-session-row" data-business-id="${escapeHtml(biz.id)}">
+                <div class="synk-session-top">
+                  <strong>${escapeHtml(biz.name || "Business")}</strong>
+                  <span class="synk-badge">${escapeHtml(biz.status || "pending")}</span>
+                </div>
+                <div class="synk-session-meta">
+                  ${escapeHtml(biz.contactName || "")}
+                  · ${escapeHtml(biz.email || "")}
+                  ${biz.note ? ` · ${escapeHtml(biz.note)}` : ""}
+                  ${biz.hasPassword ? "" : " · needs portal password"}
+                </div>
+                <div class="btn-row" style="margin-top:8px;">
+                  ${
+                    pending
+                      ? `<button class="btn btn-compact" type="button" data-business-action="approve">Approve API access</button>
+                         <button class="btn btn-danger btn-compact" type="button" data-business-action="deny">Deny</button>`
+                      : ""
+                  }
+                  <button class="btn btn-secondary btn-compact" type="button" data-business-action="set-password">Set portal password</button>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      async function refreshSynkBusinesses() {
+        const res = await fetch("/api/synk-business", { headers: adminHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load business accounts");
+        renderSynkBusinesses(data.businesses || []);
+        return data;
+      }
+
       async function refreshSettings() {
         const res = await fetch("/api/synk-settings", { headers: adminHeaders() });
         const data = await res.json().catch(() => ({}));
@@ -1039,6 +1083,7 @@
           refreshSynkActivity(),
           refreshSynkPasses().catch(() => {}),
           refreshSynkRequests().catch(() => {}),
+          refreshSynkBusinesses().catch(() => {}),
           refreshSettings(),
         ]);
       }
@@ -1128,7 +1173,7 @@
       if (refreshRequestsBtn) {
         refreshRequestsBtn.addEventListener("click", async () => {
           try {
-            await refreshSynkRequests();
+            await Promise.all([refreshSynkRequests(), refreshSynkBusinesses()]);
             showToast("Requests refreshed");
           } catch (err) {
             showToast(err.message || "Could not refresh requests");
@@ -1145,6 +1190,59 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Could not update request");
         return data;
+      }
+
+      if (synkBusinessesEl) {
+        synkBusinessesEl.addEventListener("click", async (e) => {
+          const btn = e.target.closest("[data-business-action]");
+          const row = e.target.closest("[data-business-id]");
+          if (!btn || !row) return;
+          const action = btn.getAttribute("data-business-action");
+          const id = row.getAttribute("data-business-id");
+          if (!id) return;
+          try {
+            if (action === "approve") {
+              if (!confirm("Approve this Synk Business account and issue API access?")) return;
+              const res = await fetch("/api/synk-business", {
+                method: "POST",
+                headers: adminHeaders(),
+                body: JSON.stringify({ action: "approve", id }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not approve");
+              if (data.apiKey) {
+                window.prompt("API key (copy now — shown once):", data.apiKey);
+              }
+              showToast("Business approved");
+              await Promise.all([refreshSynkBusinesses(), refreshSynkApps()]);
+            } else if (action === "deny") {
+              if (!confirm("Deny this Synk Business request?")) return;
+              const res = await fetch("/api/synk-business", {
+                method: "POST",
+                headers: adminHeaders(),
+                body: JSON.stringify({ action: "deny", id }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not deny");
+              showToast("Business denied");
+              await refreshSynkBusinesses();
+            } else if (action === "set-password") {
+              const password = window.prompt("New Synk Business portal password (min 8 characters):");
+              if (!password) return;
+              const res = await fetch("/api/synk-business", {
+                method: "POST",
+                headers: adminHeaders(),
+                body: JSON.stringify({ action: "set-password", id, password }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not set password");
+              showToast("Portal password updated");
+              await refreshSynkBusinesses();
+            }
+          } catch (err) {
+            showToast(err.message || "Could not update business");
+          }
+        });
       }
 
       function bindRequestListClicks(root) {
@@ -1314,7 +1412,7 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
               name,
               dateOfBirth,
               secret: backupSecret || undefined,
-              policy: synkEnrollPolicy.value || "pending",
+              policy: "pending",
               photoUrl: uploaded.url,
               descriptor,
             }),
@@ -1337,29 +1435,10 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
       });
 
       synkProfilesEl.addEventListener("change", async (e) => {
-        const policySelect = e.target.closest('[data-synk-action="policy"]');
         const photoInput = e.target.closest('[data-synk-action="photo"]');
         const card = e.target.closest("[data-synk-id]");
         if (!card) return;
         const id = card.getAttribute("data-synk-id");
-
-        if (policySelect) {
-          try {
-            const res = await fetch("/api/synk-profiles", {
-              method: "PATCH",
-              headers: adminHeaders(),
-              body: JSON.stringify({ id, policy: policySelect.value }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not update policy");
-            showToast("Policy updated");
-            await refreshSynkProfiles();
-          } catch (err) {
-            showToast(err.message || "Could not update policy");
-            await refreshSynkProfiles();
-          }
-          return;
-        }
 
         if (!photoInput) return;
         const file = photoInput.files && photoInput.files[0];

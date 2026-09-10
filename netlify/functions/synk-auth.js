@@ -8,6 +8,8 @@ const {
   logSynkEvent,
   assertNotRateLimited,
   issuePass,
+  getAppVerifyAction,
+  normalizeVerifyAction,
 } = require("./lib/synk");
 const { signedPhotoUrl } = require("./lib/synk-admin-auth");
 
@@ -72,8 +74,8 @@ function publicProfile(row) {
   };
 }
 
-async function applyVisitorIntent(sql, matched) {
-  const policy = normalizePolicy(matched.policy);
+async function applyVisitorIntent(sql, matched, verifyAction) {
+  const policy = normalizeVerifyAction(verifyAction);
 
   if (policy === "autofill") {
     return { request: null, policy };
@@ -287,9 +289,12 @@ exports.handler = async (event) => {
     const profile = publicProfile(matched);
     let request = null;
     if (intent === "visitor" || appSlug === "visitor-signin") {
-      const bridge = await applyVisitorIntent(sql, matched);
+      const verifyAction = await getAppVerifyAction(sql, appSlug);
+      const bridge = await applyVisitorIntent(sql, matched, verifyAction);
       request = bridge.request;
       profile.policy = bridge.policy;
+    } else {
+      profile.policy = "pending";
     }
 
     return json(200, {

@@ -140,6 +140,49 @@ async function ensureSynkCoreTables(sql) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE synk_apps ADD COLUMN IF NOT EXISTS business_id UUID`;
+  await sql`ALTER TABLE synk_apps ADD COLUMN IF NOT EXISTS verify_action TEXT NOT NULL DEFAULT 'pending'`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_business_accounts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      contact_name TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL,
+      password_hash TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      note TEXT NOT NULL DEFAULT '',
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_business_accounts_email_idx
+    ON synk_business_accounts (email)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_business_accounts_status_idx
+    ON synk_business_accounts (status, created_at DESC)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_business_sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      business_id UUID NOT NULL REFERENCES synk_business_accounts(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      ip TEXT,
+      user_agent TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_business_sessions_business_idx
+    ON synk_business_sessions (business_id, revoked_at, expires_at DESC)
+  `;
 
   await sql`
     CREATE TABLE IF NOT EXISTS synk_passes (
@@ -196,15 +239,126 @@ async function ensureSynkCoreTables(sql) {
   `;
   await sql`CREATE INDEX IF NOT EXISTS synk_join_requests_status_idx ON synk_join_requests (status, created_at DESC)`;
 
-  // Seed the visitor-signin bridge app if missing (key only known via admin reset).
-  const apps = await sql`SELECT id FROM synk_apps WHERE slug = 'visitor-signin' LIMIT 1`;
+  await seedVisitorSignInBusiness(sql);
+}
+
+function normalizeVerifyAction(value) {
+  const action = String(value || "")
+    .trim()
+    .toLowerCase();
+  return ["pending", "autofill", "auto_admit", "auto_deny"].includes(action)
+    ? action
+    : "pending";
+}
+
+async function seedVisitorSignInBusiness(sql) {
+  const email = String(
+    process.env.SYNK_VISITOR_BUSINESS_EMAIL || "visitor-signin@synk.local"
+  )
+    .trim()
+    .toLowerCase()
+    .slice(0, 160);
+  const password = String(process.env.SYNK_VISITOR_BUSINESS_PASSWORD || "").trim();
+
+  let businessRows = await sql`
+    SELECT id, email, password_hash, status
+    FROM synk_business_accounts
+    WHERE LOWER(email) = ${email}
+    LIMIT 1
+  `;
+  if (!businessRows[0]) {
+    businessRows = await sql`
+      SELECT id, email, password_hash, status
+      FROM synk_business_accounts
+      WHERE name = 'Visitor Sign-In'
+      LIMIT 1
+    `;
+  }
+
+  let businessId = businessRows[0] && businessRows[0].id;
+  if (!businessId) {
+    const inserted = await sql`
+      INSERT INTO synk_business_accounts (
+        name, contact_name, email, password_hash, status, note, reviewed_at
+      )
+      VALUES (
+        'Visitor Sign-In',
+        'Visitor Sign-In',
+        ${email},
+        ${password ? hashSecret(password) : null},
+        'approved',
+        'Preconnected Synk Business account for the Visitor Sign-In product.',
+        NOW()
+      )
+      RETURNING id
+    `;
+    businessId = inserted[0].id;
+  } else {
+    if (businessRows[0].status !== "approved") {
+      await sql`
+        UPDATE synk_business_accounts
+        SET status = 'approved', reviewed_at = COALESCE(reviewed_at, NOW()), updated_at = NOW()
+        WHERE id = ${businessId}
+      `;
+    }
+    if (password) {
+      await sql`
+        UPDATE synk_business_accounts
+        SET password_hash = ${hashSecret(password)}, updated_at = NOW()
+        WHERE id = ${businessId}
+      `;
+    }
+    if (String(businessRows[0].email || "").toLowerCase() !== email) {
+      await sql`
+        UPDATE synk_business_accounts
+        SET email = ${email}, updated_at = NOW()
+        WHERE id = ${businessId}
+      `;
+    }
+  }
+
+  const apps = await sql`
+    SELECT id, business_id, verify_action
+    FROM synk_apps
+    WHERE slug = 'visitor-signin'
+    LIMIT 1
+  `;
   if (!apps[0]) {
     const bootstrapKey = generateApiKey();
     await sql`
-      INSERT INTO synk_apps (slug, name, api_key_hash)
-      VALUES ('visitor-signin', 'Visitor Sign-In', ${hashSecret(bootstrapKey)})
+      INSERT INTO synk_apps (slug, name, api_key_hash, business_id, verify_action)
+      VALUES (
+        'visitor-signin',
+        'Visitor Sign-In',
+        ${hashSecret(bootstrapKey)},
+        ${businessId},
+        'pending'
+      )
+    `;
+  } else {
+    await sql`
+      UPDATE synk_apps
+      SET
+        business_id = COALESCE(business_id, ${businessId}),
+        verify_action = COALESCE(NULLIF(verify_action, ''), 'pending'),
+        updated_at = NOW()
+      WHERE id = ${apps[0].id}
     `;
   }
+}
+
+async function getAppVerifyAction(sql, appSlug) {
+  const slug = String(appSlug || "")
+    .trim()
+    .slice(0, 80);
+  if (!slug) return "pending";
+  const rows = await sql`
+    SELECT verify_action
+    FROM synk_apps
+    WHERE slug = ${slug}
+    LIMIT 1
+  `;
+  return normalizeVerifyAction(rows[0] && rows[0].verify_action);
 }
 
 async function logSynkEvent(sql, { eventType, profileId = null, appSlug = null, ip = null, detail = "" }) {
@@ -393,13 +547,13 @@ async function requireSynkApp(sql, event, body = {}) {
 
   const rows = slug
     ? await sql`
-        SELECT id, slug, name, api_key_hash, enabled
+        SELECT id, slug, name, api_key_hash, enabled, verify_action, business_id
         FROM synk_apps
         WHERE slug = ${slug}
         LIMIT 1
       `
     : await sql`
-        SELECT id, slug, name, api_key_hash, enabled
+        SELECT id, slug, name, api_key_hash, enabled, verify_action, business_id
         FROM synk_apps
         WHERE enabled = TRUE
         ORDER BY created_at ASC
@@ -409,7 +563,16 @@ async function requireSynkApp(sql, event, body = {}) {
   for (const row of rows) {
     if (!row.enabled) continue;
     if (verifySecret(key, row.api_key_hash)) {
-      return { ok: true, app: { id: row.id, slug: row.slug, name: row.name } };
+      return {
+        ok: true,
+        app: {
+          id: row.id,
+          slug: row.slug,
+          name: row.name,
+          verifyAction: normalizeVerifyAction(row.verify_action),
+          businessId: row.business_id || null,
+        },
+      };
     }
   }
   return { ok: false, error: "Unauthorized Synk app" };
@@ -434,6 +597,9 @@ module.exports = {
   listActivePasses,
   revokePass,
   requireSynkApp,
+  normalizeVerifyAction,
+  getAppVerifyAction,
+  seedVisitorSignInBusiness,
   PASS_TTL_MS,
   RATE_MAX_ATTEMPTS,
 };

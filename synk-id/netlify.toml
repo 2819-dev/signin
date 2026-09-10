@@ -29,6 +29,21 @@
   status = 200
 
 [[redirects]]
+  from = "/hub"
+  to = "/hub.html"
+  status = 200
+
+[[redirects]]
+  from = "/business"
+  to = "/business.html"
+  status = 200
+
+[[redirects]]
+  from = "/business/*"
+  to = "/business.html"
+  status = 200
+
+[[redirects]]
   from = "/synk"
   to = "/verify"
   status = 302

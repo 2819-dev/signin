@@ -29,9 +29,47 @@ CREATE TABLE IF NOT EXISTS synk_apps (
   name TEXT NOT NULL,
   api_key_hash TEXT NOT NULL,
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  business_id UUID,
+  verify_action TEXT NOT NULL DEFAULT 'pending',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE synk_apps ADD COLUMN IF NOT EXISTS business_id UUID;
+ALTER TABLE synk_apps ADD COLUMN IF NOT EXISTS verify_action TEXT NOT NULL DEFAULT 'pending';
+
+CREATE TABLE IF NOT EXISTS synk_business_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  contact_name TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL,
+  password_hash TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  note TEXT NOT NULL DEFAULT '',
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS synk_business_accounts_email_idx
+  ON synk_business_accounts (email);
+CREATE INDEX IF NOT EXISTS synk_business_accounts_status_idx
+  ON synk_business_accounts (status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS synk_business_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES synk_business_accounts(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  ip TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS synk_business_sessions_business_idx
+  ON synk_business_sessions (business_id, revoked_at, expires_at DESC);
 
 CREATE TABLE IF NOT EXISTS synk_passes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

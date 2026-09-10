@@ -904,3 +904,64 @@ body.marketing {
   }
 }
 
+/* Member hub + business portal */
+.hub-identity-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 14px;
+  align-items: center;
+}
+
+.hub-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #041a55;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 1.4rem;
+  background-size: cover;
+  background-position: center;
+  border: 2px solid var(--line);
+}
+
+.hub-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.hub-tile {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--fill);
+  text-decoration: none;
+  color: inherit;
+}
+
+.hub-tile strong {
+  font-size: 0.98rem;
+}
+
+.hub-tile span,
+.hub-tile-static span {
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.hub-tile-static {
+  cursor: default;
+}
+
+@media (min-width: 640px) {
+  .hub-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+

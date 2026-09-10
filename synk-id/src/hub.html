@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#f7f9fc" />
+    <meta name="color-scheme" content="light" />
+    <meta name="description" content="Your Synk hub — identity, passes, and connected places." />
+    <title>Synk — Hub</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid11" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
+    <link rel="stylesheet" href="/join.css?v=hub1" />
+    <script src="/force-refresh.js" defer></script>
+  </head>
+  <body>
+    <header class="site-nav site-nav-light">
+      <a class="brand" href="/hub" aria-label="Synk hub">
+        <img src="/synk-logo.svg?v=circles2" alt="" width="28" height="28" />
+        <span>Synk</span>
+      </a>
+      <nav class="nav-actions" aria-label="Account">
+        <a class="nav-link" href="/business">Business</a>
+        <button class="btn btn-secondary btn-nav" type="button" id="hub-signout">Sign out</button>
+      </nav>
+    </header>
+
+    <main class="shell shell-app">
+      <header class="header">
+        <div>
+          <p class="eyebrow">Member hub</p>
+          <h1 id="hub-greeting">Welcome</h1>
+          <p class="subtitle" id="hub-subtitle">Your Synk identity tools in one place.</p>
+        </div>
+      </header>
+
+      <section class="card hub-identity" id="hub-identity-card">
+        <p class="section-label">Your Synk ID</p>
+        <div class="hub-identity-row">
+          <div class="hub-avatar" id="hub-avatar" aria-hidden="true"></div>
+          <div>
+            <strong id="hub-name">—</strong>
+            <div class="code" id="hub-code">—</div>
+            <p class="muted" id="hub-pass-meta" style="margin:8px 0 0;font-size:0.82rem;"></p>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:14px;">
+          <button class="btn btn-secondary" type="button" id="hub-copy-code">Copy code</button>
+          <a class="btn btn-primary" href="/verify?autostart=1">Re-verify</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <p class="section-label">Features</p>
+        <h2>What you can do</h2>
+        <div class="hub-grid">
+          <a class="hub-tile" href="/verify?autostart=1">
+            <strong>Face check-in</strong>
+            <span>Verify again with the camera for a fresh pass.</span>
+          </a>
+          <a class="hub-tile" href="#hub-identity-card">
+            <strong>Show Synk code</strong>
+            <span>Use your code plus recovery passphrase as a backup.</span>
+          </a>
+          <a class="hub-tile" href="/business">
+            <strong>Synk Business</strong>
+            <span>Get an API key and connect products like Visitor Sign-In.</span>
+          </a>
+          <a class="hub-tile" href="/join">
+            <strong>Invite someone</strong>
+            <span>Send people to Get Synk so they can request membership.</span>
+          </a>
+          <div class="hub-tile hub-tile-static">
+            <strong>Connected places</strong>
+            <span>Wherever Synk is offered, check in without filling forms again.</span>
+          </div>
+          <div class="hub-tile hub-tile-static">
+            <strong>Security</strong>
+            <span>Passes expire quickly. Re-verify anytime from this hub.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="hub-locked" hidden>
+        <p class="section-label">Session</p>
+        <h2>Sign in to open your hub</h2>
+        <p class="muted">Verify with face or Synk code to unlock these tools.</p>
+        <div class="btn-row" style="margin-top:14px;">
+          <a class="btn btn-primary" href="/verify?autostart=1">Log in</a>
+          <a class="btn btn-secondary" href="/join">Get Synk</a>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "synk_member_session";
+      const greeting = document.getElementById("hub-greeting");
+      const subtitle = document.getElementById("hub-subtitle");
+      const nameEl = document.getElementById("hub-name");
+      const codeEl = document.getElementById("hub-code");
+      const passMeta = document.getElementById("hub-pass-meta");
+      const avatar = document.getElementById("hub-avatar");
+      const identityCard = document.getElementById("hub-identity-card");
+      const locked = document.getElementById("hub-locked");
+      const features = document.querySelectorAll(".hub-grid, .hub-grid + *");
+
+      function readSession() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          const data = JSON.parse(raw);
+          if (!data || !data.profile) return null;
+          if (data.expiresAt && Date.now() > Number(data.expiresAt)) {
+            localStorage.removeItem(STORAGE_KEY);
+            return null;
+          }
+          return data;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function clearSession() {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+
+      function render() {
+        const session = readSession();
+        const signedIn = Boolean(session);
+        identityCard.hidden = !signedIn;
+        locked.hidden = signedIn;
+        document.querySelectorAll(".hub-grid").forEach((el) => {
+          el.closest(".card").hidden = !signedIn;
+        });
+
+        if (!signedIn) {
+          greeting.textContent = "Your Synk hub";
+          subtitle.textContent = "Log in to see your ID, passes, and tools.";
+          return;
+        }
+
+        const profile = session.profile || {};
+        const first = String(profile.name || "Member").split(/\s+/)[0];
+        greeting.textContent = `Hi, ${first}`;
+        subtitle.textContent = "You’re verified. Use the tools below.";
+        nameEl.textContent = profile.name || "Member";
+        codeEl.textContent = profile.synkCode || "—";
+        const ttl = session.pass && session.pass.ttlSeconds;
+        const exp = session.expiresAt ? new Date(session.expiresAt) : null;
+        passMeta.textContent = exp
+          ? `Pass active until ${exp.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+          : ttl
+            ? `Pass lasts about ${ttl} seconds from verify`
+            : "Verified on this device";
+        if (profile.photoUrl) {
+          avatar.style.backgroundImage = `url("${profile.photoUrl}")`;
+          avatar.textContent = "";
+        } else {
+          avatar.style.backgroundImage = "";
+          avatar.textContent = (profile.name || "S").slice(0, 1).toUpperCase();
+        }
+      }
+
+      document.getElementById("hub-copy-code").addEventListener("click", async () => {
+        const code = codeEl.textContent.trim();
+        if (!code || code === "—") return;
+        try {
+          await navigator.clipboard.writeText(code);
+          passMeta.textContent = "Synk code copied";
+        } catch (_) {
+          window.prompt("Copy Synk code", code);
+        }
+      });
+
+      document.getElementById("hub-signout").addEventListener("click", () => {
+        clearSession();
+        location.href = "/verify";
+      });
+
+      render();
+    </script>
+  </body>
+</html>

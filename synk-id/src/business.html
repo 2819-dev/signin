@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#f7f9fc" />
+    <meta name="color-scheme" content="light" />
+    <meta name="description" content="Synk Business — request API access and manage verify actions." />
+    <title>Synk Business</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid11" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
+    <link rel="stylesheet" href="/join.css?v=hub1" />
+    <script src="/force-refresh.js" defer></script>
+  </head>
+  <body>
+    <header class="site-nav site-nav-light">
+      <a class="brand" href="/" aria-label="Synk home">
+        <img src="/synk-logo.svg?v=circles2" alt="" width="28" height="28" />
+        <span>Synk</span>
+      </a>
+      <nav class="nav-actions" aria-label="Account">
+        <a class="nav-link" href="/hub">Member hub</a>
+        <a class="btn btn-primary btn-nav" href="/verify">Log in</a>
+      </nav>
+    </header>
+
+    <main class="shell shell-app">
+      <header class="header">
+        <div>
+          <p class="eyebrow">Synk Business</p>
+          <h1>API access for your product</h1>
+          <p class="subtitle">
+            Create a Synk Business account to get an API key. Configure how verified members are handled in your app — for example Visitor Sign-In auto-admit vs staff approval.
+          </p>
+        </div>
+      </header>
+
+      <section class="card" id="biz-gate">
+        <div class="btn-row">
+          <button class="btn btn-primary" type="button" id="show-login">Portal sign in</button>
+          <button class="btn btn-secondary" type="button" id="show-request">Request access</button>
+        </div>
+      </section>
+
+      <section class="card hidden" id="biz-login-card">
+        <p class="section-label">Portal</p>
+        <h2>Sign in</h2>
+        <form id="biz-login-form" class="form" autocomplete="on">
+          <div class="field">
+            <label for="login-email">Work email</label>
+            <input id="login-email" type="email" required autocomplete="username" />
+          </div>
+          <div class="field">
+            <label for="login-password">Password</label>
+            <input id="login-password" type="password" required autocomplete="current-password" />
+          </div>
+          <p id="login-error" class="error hidden" role="alert"></p>
+          <button class="btn btn-primary" type="submit">Open portal</button>
+        </form>
+      </section>
+
+      <section class="card hidden" id="biz-request-card">
+        <p class="section-label">Get approved</p>
+        <h2>Request a Synk Business account</h2>
+        <p class="muted">We’ll review your request. Once approved, you can sign in here for your API key and verify settings.</p>
+        <form id="biz-request-form" class="form" autocomplete="on">
+          <div class="field">
+            <label for="req-name">Business / product name</label>
+            <input id="req-name" type="text" maxlength="120" required placeholder="Visitor Sign-In" />
+          </div>
+          <div class="field">
+            <label for="req-contact">Contact name</label>
+            <input id="req-contact" type="text" maxlength="120" required />
+          </div>
+          <div class="field">
+            <label for="req-email">Work email</label>
+            <input id="req-email" type="email" required />
+          </div>
+          <div class="field">
+            <label for="req-password">Portal password</label>
+            <input id="req-password" type="password" minlength="8" required autocomplete="new-password" />
+          </div>
+          <div class="field">
+            <label for="req-note">How you’ll use Synk</label>
+            <textarea id="req-note" maxlength="500" rows="3" placeholder="Door access, visitor desk, event check-in…"></textarea>
+          </div>
+          <p id="req-error" class="error hidden" role="alert"></p>
+          <p id="req-status" class="muted" style="font-size:0.85rem;"></p>
+          <button class="btn btn-primary" type="submit">Submit request</button>
+        </form>
+      </section>
+
+      <section class="card hidden" id="biz-portal-card">
+        <p class="section-label">Portal</p>
+        <div class="admin-header" style="padding:0;margin:0 0 12px;">
+          <div>
+            <h2 style="margin:0;" id="portal-name">Business</h2>
+            <p class="muted" id="portal-email" style="margin:4px 0 0;"></p>
+          </div>
+          <button class="btn btn-secondary btn-compact" type="button" id="biz-logout">Sign out</button>
+        </div>
+
+        <div id="portal-apps"></div>
+
+        <div class="field" style="margin-top:16px;">
+          <label for="verify-action">After a member verifies in your product</label>
+          <select id="verify-action">
+            <option value="pending">Require staff approval</option>
+            <option value="autofill">Prefill name only</option>
+            <option value="auto_admit">Approve automatically</option>
+            <option value="auto_deny">Decline automatically</option>
+          </select>
+          <p class="muted" style="margin:6px 0 0;font-size:0.82rem;">
+            This is owned by your Synk Business app — not by individual Synk members.
+          </p>
+        </div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="btn btn-primary" type="button" id="save-settings">Save settings</button>
+          <button class="btn btn-secondary" type="button" id="rotate-key">Rotate API key</button>
+        </div>
+        <p id="portal-status" class="muted" style="margin-top:10px;font-size:0.85rem;"></p>
+        <p id="portal-key" class="code hidden" style="margin-top:12px;word-break:break-all;"></p>
+      </section>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "synk_business_session";
+      const gate = document.getElementById("biz-gate");
+      const loginCard = document.getElementById("biz-login-card");
+      const requestCard = document.getElementById("biz-request-card");
+      const portalCard = document.getElementById("biz-portal-card");
+      const portalStatus = document.getElementById("portal-status");
+      const portalKey = document.getElementById("portal-key");
+      const verifyAction = document.getElementById("verify-action");
+      let sessionToken = localStorage.getItem(STORAGE_KEY) || "";
+      let currentAppId = "";
+
+      function show(view) {
+        gate.classList.toggle("hidden", view !== "gate");
+        loginCard.classList.toggle("hidden", view !== "login");
+        requestCard.classList.toggle("hidden", view !== "request");
+        portalCard.classList.toggle("hidden", view !== "portal");
+      }
+
+      function bizHeaders() {
+        return {
+          "Content-Type": "application/json",
+          "X-Synk-Business-Session": sessionToken,
+        };
+      }
+
+      async function loadPortal() {
+        const res = await fetch("/api/synk-business", { headers: bizHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not open portal");
+        document.getElementById("portal-name").textContent = data.business.name;
+        document.getElementById("portal-email").textContent = data.business.email;
+        const apps = data.apps || [];
+        const app = apps[0];
+        currentAppId = app ? app.id : "";
+        document.getElementById("portal-apps").innerHTML = apps.length
+          ? apps
+              .map(
+                (a) =>
+                  `<div class="pass-box" style="margin-top:0;"><div class="muted" style="font-size:0.78rem;">API app</div><strong>${a.name}</strong><div class="code">${a.slug}</div></div>`
+              )
+              .join("")
+          : `<p class="muted">No API app yet — ask Synk Admin to approve your account.</p>`;
+        if (app) verifyAction.value = app.verifyAction || "pending";
+        show("portal");
+      }
+
+      document.getElementById("show-login").addEventListener("click", () => show("login"));
+      document.getElementById("show-request").addEventListener("click", () => show("request"));
+
+      document.getElementById("biz-login-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const err = document.getElementById("login-error");
+        err.classList.add("hidden");
+        try {
+          const res = await fetch("/api/synk-business", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "login",
+              email: document.getElementById("login-email").value,
+              password: document.getElementById("login-password").value,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Sign in failed");
+          sessionToken = data.sessionToken;
+          localStorage.setItem(STORAGE_KEY, sessionToken);
+          await loadPortal();
+        } catch (ex) {
+          err.textContent = ex.message || "Sign in failed";
+          err.classList.remove("hidden");
+        }
+      });
+
+      document.getElementById("biz-request-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const err = document.getElementById("req-error");
+        const status = document.getElementById("req-status");
+        err.classList.add("hidden");
+        status.textContent = "Submitting…";
+        try {
+          const res = await fetch("/api/synk-business", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "request",
+              name: document.getElementById("req-name").value,
+              contactName: document.getElementById("req-contact").value,
+              email: document.getElementById("req-email").value,
+              password: document.getElementById("req-password").value,
+              note: document.getElementById("req-note").value,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not submit");
+          status.textContent = data.message || "Request submitted.";
+          e.target.reset();
+        } catch (ex) {
+          status.textContent = "";
+          err.textContent = ex.message || "Could not submit";
+          err.classList.remove("hidden");
+        }
+      });
+
+      document.getElementById("save-settings").addEventListener("click", async () => {
+        portalStatus.textContent = "Saving…";
+        portalKey.classList.add("hidden");
+        try {
+          const res = await fetch("/api/synk-business", {
+            method: "POST",
+            headers: bizHeaders(),
+            body: JSON.stringify({
+              action: "save-settings",
+              appId: currentAppId,
+              verifyAction: verifyAction.value,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not save");
+          portalStatus.textContent = "Settings saved";
+        } catch (ex) {
+          portalStatus.textContent = ex.message || "Could not save";
+        }
+      });
+
+      document.getElementById("rotate-key").addEventListener("click", async () => {
+        if (!confirm("Rotate API key? The old key stops working immediately.")) return;
+        portalStatus.textContent = "Rotating…";
+        try {
+          const res = await fetch("/api/synk-business", {
+            method: "POST",
+            headers: bizHeaders(),
+            body: JSON.stringify({ action: "rotate-key", appId: currentAppId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not rotate");
+          portalStatus.textContent = "New API key — copy it now. It won’t be shown again.";
+          portalKey.textContent = data.apiKey || "";
+          portalKey.classList.remove("hidden");
+        } catch (ex) {
+          portalStatus.textContent = ex.message || "Could not rotate";
+        }
+      });
+
+      document.getElementById("biz-logout").addEventListener("click", async () => {
+        try {
+          await fetch("/api/synk-business", {
+            method: "POST",
+            headers: bizHeaders(),
+            body: JSON.stringify({ action: "logout" }),
+          });
+        } catch (_) {}
+        localStorage.removeItem(STORAGE_KEY);
+        sessionToken = "";
+        show("gate");
+      });
+
+      if (sessionToken) {
+        loadPortal().catch(() => {
+          localStorage.removeItem(STORAGE_KEY);
+          sessionToken = "";
+          show("gate");
+        });
+      } else {
+        show("gate");
+      }
+    </script>
+  </body>
+</html>

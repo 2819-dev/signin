@@ -4,6 +4,7 @@ const {
   generateApiKey,
   hashSecret,
   logSynkEvent,
+  normalizeVerifyAction,
 } = require("./lib/synk");
 
 function normalizeSlug(value) {
@@ -28,6 +29,8 @@ function mapApp(row) {
     slug: row.slug,
     name: row.name,
     enabled: row.enabled !== false,
+    verifyAction: normalizeVerifyAction(row.verify_action),
+    businessId: row.business_id || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -47,7 +50,7 @@ exports.handler = async (event) => {
 
     if (event.httpMethod === "GET") {
       const rows = await sql`
-        SELECT id, slug, name, enabled, created_at, updated_at
+        SELECT id, slug, name, enabled, verify_action, business_id, created_at, updated_at
         FROM synk_apps
         ORDER BY created_at ASC
         LIMIT 100
@@ -88,7 +91,7 @@ exports.handler = async (event) => {
           UPDATE synk_apps
           SET api_key_hash = ${hashSecret(apiKey)}, updated_at = NOW()
           WHERE id = ${id}
-          RETURNING id, slug, name, enabled, created_at, updated_at
+          RETURNING id, slug, name, enabled, verify_action, business_id, created_at, updated_at
         `;
         if (!rows[0]) return json(404, { error: "App not found" });
         await logSynkEvent(sql, {
@@ -99,6 +102,20 @@ exports.handler = async (event) => {
         return json(200, { app: mapApp(rows[0]), apiKey });
       }
 
+      if (body.action === "set-verify-action") {
+        const id = String(body.id || "").trim();
+        const verifyAction = normalizeVerifyAction(body.verifyAction || body.policy);
+        if (!id) return json(400, { error: "id is required" });
+        const rows = await sql`
+          UPDATE synk_apps
+          SET verify_action = ${verifyAction}, updated_at = NOW()
+          WHERE id = ${id}
+          RETURNING id, slug, name, enabled, verify_action, business_id, created_at, updated_at
+        `;
+        if (!rows[0]) return json(404, { error: "App not found" });
+        return json(200, { app: mapApp(rows[0]) });
+      }
+
       const name = normalizeName(body.name);
       const slug = normalizeSlug(body.slug || name);
       if (!name) return json(400, { error: "Name is required" });
@@ -107,9 +124,9 @@ exports.handler = async (event) => {
       const apiKey = generateApiKey();
       try {
         const rows = await sql`
-          INSERT INTO synk_apps (slug, name, api_key_hash)
-          VALUES (${slug}, ${name}, ${hashSecret(apiKey)})
-          RETURNING id, slug, name, enabled, created_at, updated_at
+          INSERT INTO synk_apps (slug, name, api_key_hash, verify_action)
+          VALUES (${slug}, ${name}, ${hashSecret(apiKey)}, 'pending')
+          RETURNING id, slug, name, enabled, verify_action, business_id, created_at, updated_at
         `;
         await logSynkEvent(sql, {
           eventType: "app_create",
@@ -150,7 +167,7 @@ exports.handler = async (event) => {
         UPDATE synk_apps
         SET name = ${name}, enabled = ${enabled}, updated_at = NOW()
         WHERE id = ${id}
-        RETURNING id, slug, name, enabled, created_at, updated_at
+        RETURNING id, slug, name, enabled, verify_action, business_id, created_at, updated_at
       `;
       return json(200, { app: mapApp(rows[0]) });
     }
