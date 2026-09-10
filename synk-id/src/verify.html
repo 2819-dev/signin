@@ -19,7 +19,7 @@
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
     <link rel="stylesheet" href="/join.css?v=layout4" />
     <script src="/force-refresh.js" defer></script>
-    <script src="/face.js" defer></script>
+    <script src="/face.js?v=facefix1" defer></script>
   </head>
   <body>
     <header class="site-nav site-nav-light">
@@ -163,17 +163,24 @@
           // Camera first (iOS user-gesture), then warm face models.
           window.KioskFace.setCameraSide(cameraSide);
           stream = await window.KioskFace.startCamera(video, { side: cameraSide });
-          statusEl.textContent = "Loading face check…";
+          statusEl.textContent = "Camera on. Loading face check…";
+          hintEl.textContent = "Look straight at the circle on screen — not the camera hole.";
           await window.KioskFace.ensureFaceApi();
           statusEl.textContent = "Ready. Select Verify when prepared.";
-          hintEl.textContent = "Look straight at the circle on screen — not the camera hole.";
           scanBtn.disabled = false;
         } catch (err) {
-          stopCamera();
-          errorEl.textContent = err.message || "Could not open camera";
+          // Keep preview if camera opened but models failed — user can retry Verify path.
+          const msg = err && err.message ? err.message : "Could not open camera";
+          errorEl.textContent = msg;
           errorEl.classList.remove("hidden");
-          statusEl.textContent = "Camera unavailable";
-          scanBtn.disabled = true;
+          if (!stream) {
+            stopCamera();
+            statusEl.textContent = "Camera unavailable";
+            scanBtn.disabled = true;
+          } else {
+            statusEl.textContent = "Camera on — face check failed. Tap Start camera to retry.";
+            scanBtn.disabled = true;
+          }
         }
       }
 

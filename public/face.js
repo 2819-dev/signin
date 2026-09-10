@@ -1,18 +1,30 @@
-/* Shared face detection helpers for admin enroll + kiosk match.
-   Uses @vladmandic/face-api from CDN (not Apple Face ID — browser face match). */
+/* Shared face detection helpers for admin enroll + kiosk/Synk match.
+   Uses @vladmandic/face-api from CDN (browser face match — not Apple Face ID). */
 
 (function (global) {
   const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/model";
   const SCRIPT_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/dist/face-api.js";
+  const LOAD_TIMEOUT_MS = 25000;
 
   let loading = null;
   let ready = false;
   // Preferred physical camera edge on a landscape-mounted iPad.
   // Portrait auto-uses center (camera is usually top-center).
-  // We digitally reframe so standing at screen-center looks camera-centered.
   let cameraSide = "left";
   let activePreviewVideo = null;
   let orientationHooked = false;
+
+  function withTimeout(promise, ms, message) {
+    let timer = null;
+    return Promise.race([
+      Promise.resolve(promise).finally(() => {
+        if (timer) clearTimeout(timer);
+      }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      }),
+    ]);
+  }
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -20,20 +32,62 @@
         resolve();
         return;
       }
-      const existing = document.querySelector(`script[data-face-api="1"]`);
+
+      const existing = document.querySelector('script[data-face-api="1"]');
       if (existing) {
-        existing.addEventListener("load", () => resolve());
-        existing.addEventListener("error", () => reject(new Error("Could not load face library")));
+        // Already finished: the load event will never fire again.
+        if (existing.dataset.loaded === "1") {
+          if (global.faceapi) resolve();
+          else reject(new Error("Face library failed to initialize. Refresh and try again."));
+          return;
+        }
+        const onLoad = () => {
+          existing.dataset.loaded = "1";
+          resolve();
+        };
+        const onError = () => reject(new Error("Could not load face library"));
+        existing.addEventListener("load", onLoad, { once: true });
+        existing.addEventListener("error", onError, { once: true });
+        if (global.faceapi) {
+          existing.dataset.loaded = "1";
+          resolve();
+        }
         return;
       }
+
       const script = document.createElement("script");
       script.src = src;
       script.async = true;
       script.dataset.faceApi = "1";
-      script.onload = () => resolve();
+      script.onload = () => {
+        script.dataset.loaded = "1";
+        resolve();
+      };
       script.onerror = () => reject(new Error("Could not load face library"));
       document.head.appendChild(script);
     });
+  }
+
+  async function pickTfBackend(faceapi) {
+    const tf = faceapi.tf || global.tf;
+    if (!tf || typeof tf.setBackend !== "function") return;
+    const backends = ["wasm", "webgl", "cpu"];
+    for (const backend of backends) {
+      try {
+        const ok = await withTimeout(
+          tf.setBackend(backend),
+          6000,
+          `Face backend ${backend} timed out`
+        );
+        if (ok === false) continue;
+        if (typeof tf.ready === "function") {
+          await withTimeout(tf.ready(), 6000, `Face backend ${backend} not ready`);
+        }
+        return;
+      } catch (_) {
+        /* try next */
+      }
+    }
   }
 
   async function ensureFaceApi() {
@@ -41,14 +95,25 @@
     if (loading) return loading;
 
     loading = (async () => {
-      await loadScript(SCRIPT_URL);
+      await withTimeout(
+        loadScript(SCRIPT_URL),
+        LOAD_TIMEOUT_MS,
+        "Face library is taking too long to load. Check your connection and try again."
+      );
       const faceapi = global.faceapi;
       if (!faceapi) throw new Error("Face library unavailable");
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-        faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-      ]);
+
+      await pickTfBackend(faceapi);
+
+      await withTimeout(
+        Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+        ]),
+        LOAD_TIMEOUT_MS,
+        "Face models are taking too long to load. Check your connection and try again."
+      );
       ready = true;
       return faceapi;
     })();
@@ -57,6 +122,7 @@
       return await loading;
     } catch (err) {
       loading = null;
+      ready = false;
       throw err;
     }
   }
@@ -108,8 +174,6 @@
     return Boolean(window.innerHeight > window.innerWidth);
   }
 
-  // In portrait the front camera is almost always top-center — ignore left/right.
-  // Landscape keeps the configured edge so a counter-mounted iPad can reframe.
   function effectiveCameraSide(side = cameraSide) {
     const resolved = normalizeCameraSide(side);
     if (resolved === "center") return "center";
@@ -117,9 +181,6 @@
     return resolved;
   }
 
-  // Zoom + pan so a person standing at screen center lands in the middle of the view.
-  // panRawX shifts the crop in the unmirrored camera buffer.
-  // Left-edge camera: screen-centered subject sits toward the right of the raw frame.
   function reframeParams(side = cameraSide) {
     const resolved = effectiveCameraSide(side);
     if (resolved === "left") return { zoom: 1.55, panRawX: 0.24 };
@@ -133,7 +194,6 @@
     const { zoom, panRawX } = reframeParams(cameraSide);
     videoEl.dataset.cameraSide = side;
     videoEl.dataset.cameraRotation = "0";
-    // Mirror for selfie feel. Pan is flipped vs raw because of scaleX(-1).
     const panCss = (-panRawX * 100).toFixed(2);
     videoEl.style.transformOrigin = "center center";
     videoEl.style.transform = `scaleX(-1) scale(${zoom}) translateX(${panCss}%)`;
@@ -149,7 +209,6 @@
     target.querySelectorAll(".synk-pod-frame, .face-video-wrap, .pod-frame").forEach((el) => {
       el.dataset.cameraSide = resolved;
     });
-    // Ring stays centered — framing is done by reframing the video, not moving the guide.
     target.querySelectorAll(".synk-pod-ring, .face-guide-ring, .pod-ring").forEach((el) => {
       el.dataset.cameraSide = "center";
     });
@@ -183,11 +242,11 @@
 
   async function descriptorFromImage(input) {
     const faceapi = await ensureFaceApi();
-    const detection = await faceapi
-      .detectSingleFace(input, detectorOptions())
-      .withFaceLandmarks(true)
-      .withFaceDescriptor();
-
+    const detection = await withTimeout(
+      faceapi.detectSingleFace(input, detectorOptions()).withFaceLandmarks(true).withFaceDescriptor(),
+      12000,
+      "Face check timed out. Move into better light and try again."
+    );
     if (!detection || !detection.descriptor) {
       throw new Error("No clear face found. Keep looking at the screen and stay in the ring.");
     }
@@ -235,14 +294,8 @@
           height: { ideal: 720 },
         },
       },
-      {
-        audio: false,
-        video: { facingMode },
-      },
-      {
-        audio: false,
-        video: true,
-      },
+      { audio: false, video: { facingMode } },
+      { audio: false, video: true },
     ];
     let lastErr = null;
     for (const constraints of attempts) {
@@ -269,8 +322,7 @@
     if (side != null) setCameraSide(side);
     else if (rotation != null) setCameraSide(rotation);
     ensureOrientationHook();
-    // Open the camera immediately (must stay inside the user-gesture window on iOS).
-    // Callers should NOT await ensureFaceApi() before this.
+    // Open camera immediately (must stay inside the user-gesture window on iOS).
     const stream = await requestUserMedia(facingMode);
     videoEl.srcObject = stream;
     videoEl.setAttribute("playsinline", "true");
@@ -304,9 +356,7 @@
     if (stream && stream.getTracks) {
       stream.getTracks().forEach((track) => track.stop());
     }
-    if (videoEl) {
-      videoEl.srcObject = null;
-    }
+    if (videoEl) videoEl.srcObject = null;
     if (activePreviewVideo === videoEl) activePreviewVideo = null;
   }
 
@@ -320,7 +370,6 @@
     const cy = height * 0.5;
     const sx = Math.max(0, Math.min(width - cropW, cx - cropW / 2));
     const sy = Math.max(0, Math.min(height - cropH, cy - cropH / 2));
-
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(cropW);
     canvas.height = Math.round(cropH);
@@ -331,8 +380,7 @@
 
   async function descriptorFromVideo(videoEl) {
     await waitForVideoDimensions(videoEl);
-    const frame = captureVideoFrame(videoEl);
-    return descriptorFromImage(frame);
+    return descriptorFromImage(captureVideoFrame(videoEl));
   }
 
   global.KioskFace = {

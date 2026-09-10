@@ -22,7 +22,7 @@
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
     <link rel="stylesheet" href="/join.css?v=layout4" />
     <script src="/force-refresh.js" defer></script>
-    <script src="/face.js" defer></script>
+    <script src="/face.js?v=facefix1" defer></script>
   </head>
   <body>
     <header class="site-nav site-nav-light">
@@ -305,6 +305,14 @@
           btn.disabled = false;
         }
       });
+      function warmFaceModels() {
+        if (window.KioskFace) window.KioskFace.ensureFaceApi().catch(() => {});
+      }
+      if (document.readyState === "loading") {
+        window.addEventListener("DOMContentLoaded", warmFaceModels, { once: true });
+      } else {
+        warmFaceModels();
+      }
     </script>
   </body>
 </html>
