@@ -1,11 +1,11 @@
 {
   "name": "Synk",
   "short_name": "Synk",
-  "description": "Synk secure identity — enroll, then verify you are you",
+  "description": "Synk helps you check in faster with your face",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#041a55",
+  "theme_color": "#ffffff",
   "icons": [
     {
       "src": "/apple-touch-icon.png",
