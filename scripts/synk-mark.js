@@ -1,11 +1,11 @@
 "use strict";
 
 /**
- * Shared Synk mark — solid single-color S monogram.
- * One color only. No gradients, glass, or multi-tone splits.
+ * Shared Synk mark — abstract concentric arcs.
+ * Single color. No letters, gradients, glass, or multi-tone.
  */
 const INK = "#041A55";
-const ACCENT = "#041A55"; // API compat; mark is monochrome
+const ACCENT = "#041A55";
 
 function synkLogoSvg({
   size = 128,
@@ -15,32 +15,40 @@ function synkLogoSvg({
 } = {}) {
   void accent;
   const s = size / 128;
+  const cx = 64 * s;
+  const cy = 64 * s;
+  const stroke = 12 * s;
 
-  // Solid geometric S — single fill, no stroke tricks
-  const path =
-    `M ${(64 * s).toFixed(2)} ${(12 * s).toFixed(2)} ` +
-    `C ${(45.5 * s).toFixed(2)} ${(12 * s).toFixed(2)} ${(32 * s).toFixed(2)} ${(24.5 * s).toFixed(2)} ${(32 * s).toFixed(2)} ${(41 * s).toFixed(2)} ` +
-    `H ${(49.5 * s).toFixed(2)} ` +
-    `C ${(49.5 * s).toFixed(2)} ${(34 * s).toFixed(2)} ${(55.5 * s).toFixed(2)} ${(28 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(28 * s).toFixed(2)} ` +
-    `C ${(73.5 * s).toFixed(2)} ${(28 * s).toFixed(2)} ${(79 * s).toFixed(2)} ${(33.5 * s).toFixed(2)} ${(79 * s).toFixed(2)} ${(41 * s).toFixed(2)} ` +
-    `C ${(79 * s).toFixed(2)} ${(48 * s).toFixed(2)} ${(74 * s).toFixed(2)} ${(52.5 * s).toFixed(2)} ${(61.5 * s).toFixed(2)} ${(56.5 * s).toFixed(2)} ` +
-    `L ${(49 * s).toFixed(2)} ${(60.5 * s).toFixed(2)} ` +
-    `C ${(36.5 * s).toFixed(2)} ${(64.5 * s).toFixed(2)} ${(30 * s).toFixed(2)} ${(73 * s).toFixed(2)} ${(30 * s).toFixed(2)} ${(85 * s).toFixed(2)} ` +
-    `C ${(30 * s).toFixed(2)} ${(104 * s).toFixed(2)} ${(44 * s).toFixed(2)} ${(116 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(116 * s).toFixed(2)} ` +
-    `C ${(84.5 * s).toFixed(2)} ${(116 * s).toFixed(2)} ${(98 * s).toFixed(2)} ${(103 * s).toFixed(2)} ${(98 * s).toFixed(2)} ${(85 * s).toFixed(2)} ` +
-    `H ${(80.5 * s).toFixed(2)} ` +
-    `C ${(80.5 * s).toFixed(2)} ${(94.5 * s).toFixed(2)} ${(74 * s).toFixed(2)} ${(100.5 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(100.5 * s).toFixed(2)} ` +
-    `C ${(53.5 * s).toFixed(2)} ${(100.5 * s).toFixed(2)} ${(47.5 * s).toFixed(2)} ${(94.5 * s).toFixed(2)} ${(47.5 * s).toFixed(2)} ${(86 * s).toFixed(2)} ` +
-    `C ${(47.5 * s).toFixed(2)} ${(78.5 * s).toFixed(2)} ${(52.5 * s).toFixed(2)} ${(74 * s).toFixed(2)} ${(64.5 * s).toFixed(2)} ${(70 * s).toFixed(2)} ` +
-    `L ${(77 * s).toFixed(2)} ${(66 * s).toFixed(2)} ` +
-    `C ${(90 * s).toFixed(2)} ${(61.5 * s).toFixed(2)} ${(96.5 * s).toFixed(2)} ${(52.5 * s).toFixed(2)} ${(96.5 * s).toFixed(2)} ${(40 * s).toFixed(2)} ` +
-    `C ${(96.5 * s).toFixed(2)} ${(23.5 * s).toFixed(2)} ${(83.5 * s).toFixed(2)} ${(12 * s).toFixed(2)} ${(64 * s).toFixed(2)} ${(12 * s).toFixed(2)} ` +
-    `Z`;
+  // Alternating open sides: outer left, middle right, inner left
+  const arcs = [
+    { r: 48 * s, gapAt: 180 }, // gap faces left
+    { r: 31 * s, gapAt: 0 }, // gap faces right
+    { r: 14 * s, gapAt: 180 }, // gap faces left
+  ];
+  const sweep = 268; // leave ~92° open
+
+  function arcPath(r, gapAtDeg) {
+    const startDeg = gapAtDeg + (360 - sweep) / 2;
+    const start = (startDeg * Math.PI) / 180;
+    const end = ((startDeg + sweep) * Math.PI) / 180;
+    const x1 = cx + r * Math.cos(start);
+    const y1 = cy + r * Math.sin(start);
+    const x2 = cx + r * Math.cos(end);
+    const y2 = cy + r * Math.sin(end);
+    return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r.toFixed(2)} ${r.toFixed(2)} 0 1 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+  }
+
+  const paths = arcs
+    .map(
+      (a) =>
+        `<path d="${arcPath(a.r, a.gapAt)}" fill="none" stroke="${ink}" stroke-width="${stroke.toFixed(2)}" stroke-linecap="round"/>`
+    )
+    .join("\n  ");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="${title}">
   <title>${title}</title>
-  <path d="${path}" fill="${ink}"/>
+  ${paths}
 </svg>
 `;
 }
