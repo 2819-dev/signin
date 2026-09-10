@@ -6,8 +6,7 @@ const path = require("path");
 const root = path.join(__dirname, "..");
 const publicDir = path.join(root, "public");
 const sourcePublic = path.join(root, "..", "public");
-const sourceHtml = path.join(root, "src", "index.html");
-const sourceVerify = path.join(root, "src", "verify.html");
+const pages = ["index.html", "join.html", "verify.html"];
 const sourceCss = path.join(root, "src", "join.css");
 const sourceManifest = path.join(root, "src", "manifest.webmanifest");
 const touchIconSrc = path.join(root, "src", "apple-touch-icon.png");
@@ -37,10 +36,10 @@ fs.copyFileSync(touchIconSrc, path.join(publicDir, "apple-touch-icon.png"));
 if (!fs.existsSync(sourceManifest)) throw new Error(`Missing manifest: ${sourceManifest}`);
 fs.copyFileSync(sourceManifest, path.join(publicDir, "manifest.webmanifest"));
 
-if (!fs.existsSync(sourceHtml)) throw new Error(`Missing page: ${sourceHtml}`);
-fs.copyFileSync(sourceHtml, path.join(publicDir, "index.html"));
-
-if (!fs.existsSync(sourceVerify)) throw new Error(`Missing page: ${sourceVerify}`);
-fs.copyFileSync(sourceVerify, path.join(publicDir, "verify.html"));
+for (const page of pages) {
+  const from = path.join(root, "src", page);
+  if (!fs.existsSync(from)) throw new Error(`Missing page: ${from}`);
+  fs.copyFileSync(from, path.join(publicDir, page));
+}
 
 console.log("Prepared Synk ID public/");

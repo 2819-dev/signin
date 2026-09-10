@@ -39,7 +39,7 @@ const synkIdOrigin = process.env.SYNK_ID_ORIGIN || "https://synkid.netlify.app";
 
 html = html
   .replace(/href="\/synk"/g, `href="${synkIdOrigin}/verify"`)
-  .replace(/href="\/synk-join"/g, `href="${synkIdOrigin}/"`);
+  .replace(/href="\/synk-join"/g, `href="${synkIdOrigin}/join"`);
 
 fs.writeFileSync(path.join(publicDir, "index.html"), html);
 console.log(`Prepared Synk Admin public/ (synk id origin: ${synkIdOrigin})`);

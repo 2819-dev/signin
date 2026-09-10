@@ -11,31 +11,39 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#f7f9fc" />
     <meta name="color-scheme" content="light" />
-    <meta name="description" content="Verify your Synk identity." />
+    <meta name="description" content="Log in to Synk — verify your identity with face or Synk code." />
     <meta name="format-detection" content="telephone=no" />
-    <title>Synk — Verify</title>
+    <title>Synk — Log in</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid9" />
-    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid9" />
-    <link rel="stylesheet" href="/join.css?v=navy-sky1" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid10" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid10" />
+    <link rel="stylesheet" href="/join.css?v=marketing1" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js" defer></script>
   </head>
   <body>
-    <main class="shell">
+    <header class="site-nav site-nav-light">
+      <a class="brand" href="/" aria-label="Synk home">
+        <img src="/synk-logo.svg?v=bars1" alt="" width="28" height="28" />
+        <span>Synk</span>
+      </a>
+      <nav class="nav-actions" aria-label="Account">
+        <a class="nav-link" href="/verify">Log in</a>
+        <a class="btn btn-primary btn-nav" href="/join">Get Synk</a>
+      </nav>
+    </header>
+
+    <main class="shell shell-app">
       <header class="header">
-        <div class="logo" aria-hidden="true">
-          <img src="/synk-logo.svg?v=abstract1" alt="" width="48" height="48" />
-        </div>
         <div>
-          <p class="eyebrow">Synk</p>
+          <p class="eyebrow">Log in</p>
           <h1>Verify identity</h1>
           <p class="subtitle">
             Use face verification, or enter your Synk code and recovery passphrase.
           </p>
           <p class="footer-note muted" style="text-align:left;margin-top:10px;">
             Need access?
-            <a href="/">Request access</a>
+            <a href="/join">Get Synk</a>
           </p>
         </div>
       </header>
@@ -100,7 +108,7 @@
           </div>
         </div>
         <button class="btn btn-secondary" type="button" id="synk-again-btn" style="width:100%;margin-top:14px;">
-          Verify another person
+          Verify again
         </button>
       </section>
     </main>

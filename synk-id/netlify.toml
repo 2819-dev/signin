@@ -14,18 +14,28 @@
   status = 200
 
 [[redirects]]
+  from = "/login"
+  to = "/verify.html"
+  status = 200
+
+[[redirects]]
+  from = "/join"
+  to = "/join.html"
+  status = 200
+
+[[redirects]]
+  from = "/signup"
+  to = "/join.html"
+  status = 200
+
+[[redirects]]
   from = "/synk"
   to = "/verify"
   status = 302
 
 [[redirects]]
   from = "/synk-join"
-  to = "/"
-  status = 302
-
-[[redirects]]
-  from = "/join"
-  to = "/"
+  to = "/join"
   status = 302
 
 [[redirects]]

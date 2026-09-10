@@ -9,313 +9,133 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#f7f9fc" />
+    <meta name="theme-color" content="#041a55" />
     <meta name="color-scheme" content="light" />
     <meta
       name="description"
-      content="Request Synk membership. An administrator will review your submission."
+      content="Synk is secure identity verification. Enroll once, then verify you are you in seconds."
     />
     <meta name="format-detection" content="telephone=no" />
-    <title>Synk — Request access</title>
+    <title>Synk — Secure identity</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid9" />
-    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid9" />
-    <link rel="stylesheet" href="/join.css?v=navy-sky1" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid10" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid10" />
+    <link rel="stylesheet" href="/join.css?v=marketing1" />
     <script src="/force-refresh.js" defer></script>
-    <script src="/face.js" defer></script>
   </head>
-  <body>
-    <main class="shell">
-      <header class="header">
-        <div class="logo" aria-hidden="true">
-          <img src="/synk-logo.svg?v=abstract1" alt="" width="48" height="48" />
-        </div>
-        <div>
-          <p class="eyebrow">Synk</p>
-          <h1>Request access</h1>
-          <p class="subtitle">
-            Provide your details and a clear face photo. An administrator will review your request.
+  <body class="marketing">
+    <header class="site-nav">
+      <a class="brand" href="/" aria-label="Synk home">
+        <img src="/synk-logo.svg?v=bars1" alt="" width="28" height="28" />
+        <span>Synk</span>
+      </a>
+      <nav class="nav-actions" aria-label="Account">
+        <a class="nav-link" href="/verify">Log in</a>
+        <a class="btn btn-primary btn-nav" href="/join">Get Synk</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Secure identity</p>
+          <h1>Verify you are you — in seconds</h1>
+          <p class="lead">
+            Synk is a membership identity you can use at partner locations.
+            Enroll once with a face photo, get approved, then verify instantly.
           </p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="/join">Get Synk</a>
+            <a class="btn btn-secondary" href="/verify">Already have an account? Log in</a>
+          </div>
         </div>
-      </header>
-
-      <section class="card" id="join-form-card">
-        <div class="steps" aria-hidden="true">
-          <span class="step-pill active">1 · Details</span>
-          <span class="step-pill active">2 · Photo</span>
-          <span class="step-pill">3 · Review</span>
+        <div class="hero-panel" aria-hidden="true">
+          <div class="hero-card">
+            <img src="/synk-logo.svg?v=bars1" alt="" width="48" height="48" />
+            <p class="hero-card-kicker">Synk ID</p>
+            <p class="hero-card-title">Your identity, ready when you are</p>
+            <ul class="hero-card-list">
+              <li>Face verification</li>
+              <li>Recovery passphrase backup</li>
+              <li>Short-lived verification pass</li>
+            </ul>
+          </div>
         </div>
-
-        <form id="join-form" class="form" autocomplete="off" novalidate>
-          <div class="row-2">
-            <div class="field">
-              <label for="join-name">Legal name</label>
-              <input
-                id="join-name"
-                name="name"
-                type="text"
-                maxlength="100"
-                required
-                enterkeyhint="next"
-                autocapitalize="words"
-                autocomplete="name"
-                placeholder="Full legal name"
-              />
-            </div>
-            <div class="field">
-              <label for="join-dob">Date of birth</label>
-              <input id="join-dob" name="dob" type="date" required />
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="join-note">Note <span class="muted">(optional)</span></label>
-            <input
-              id="join-note"
-              name="note"
-              type="text"
-              maxlength="300"
-              enterkeyhint="next"
-              placeholder="Optional context for the reviewer"
-            />
-          </div>
-
-          <div class="field">
-            <label for="join-secret">Recovery passphrase <span class="muted">(optional)</span></label>
-            <input
-              id="join-secret"
-              name="secret"
-              type="password"
-              maxlength="200"
-              autocomplete="new-password"
-              placeholder="Minimum 4 characters"
-            />
-            <p class="hint">Used only if face verification is unavailable.</p>
-          </div>
-
-          <div class="field">
-            <span id="photo-label">Face photo</span>
-            <div class="photo-box" role="group" aria-labelledby="photo-label">
-              <div class="photo-preview" id="photo-preview">
-                <div class="placeholder" id="photo-placeholder">
-                  Front-facing photo<br />plain background preferred
-                </div>
-                <img id="photo-img" class="hidden" alt="Selected face photo preview" />
-              </div>
-              <div>
-                <div class="photo-actions">
-                  <label class="file-btn">
-                    Take photo
-                    <input
-                      id="join-photo-camera"
-                      type="file"
-                      accept="image/*"
-                      capture="user"
-                      aria-label="Take face photo with camera"
-                    />
-                  </label>
-                  <label class="file-btn">
-                    Upload
-                    <input
-                      id="join-photo-file"
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                      aria-label="Upload face photo"
-                    />
-                  </label>
-                </div>
-                <p class="hint" style="margin-top:10px;">
-                  Accepted formats: JPG, PNG, WebP.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <p id="join-error" class="error hidden" role="alert"></p>
-          <p id="join-status" class="status muted" aria-live="polite"></p>
-          <button class="btn btn-primary" type="submit" id="join-btn">
-            Submit request
-          </button>
-        </form>
-
-        <p class="footer-note muted">
-          Already enrolled?
-          <a href="/verify">Verify identity</a>
-        </p>
       </section>
 
-      <section class="card hidden" id="join-done-card">
-        <p class="section-label">Submitted</p>
-        <h2>Request received</h2>
-        <p class="muted" id="join-done-copy">
-          Your request is pending review. After approval, you can verify your identity here.
-        </p>
-        <div class="done-actions">
-          <a class="btn btn-primary" href="/verify">Go to verification</a>
-          <button class="btn btn-secondary" type="button" id="join-another">
-            Submit another request
-          </button>
+      <section class="band" id="how">
+        <div class="band-inner">
+          <p class="section-label">How it works</p>
+          <h2>Three steps to Synk</h2>
+          <div class="feature-grid">
+            <article class="feature">
+              <div class="feature-num">1</div>
+              <h3>Request access</h3>
+              <p>Submit your legal name, date of birth, and a clear face photo.</p>
+            </article>
+            <article class="feature">
+              <div class="feature-num">2</div>
+              <h3>Get approved</h3>
+              <p>An administrator reviews your request and activates your Synk ID.</p>
+            </article>
+            <article class="feature">
+              <div class="feature-num">3</div>
+              <h3>Verify in seconds</h3>
+              <p>Log in with your face — or Synk code and recovery passphrase.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="band band-alt" id="why">
+        <div class="band-inner">
+          <p class="section-label">Why Synk</p>
+          <h2>Built for trusted check-in</h2>
+          <div class="feature-grid feature-grid-2">
+            <article class="feature">
+              <h3>Fast verification</h3>
+              <p>Confirm identity at the door without paperwork every visit.</p>
+            </article>
+            <article class="feature">
+              <h3>Admin-reviewed members</h3>
+              <p>Only approved people get a Synk ID — requests are reviewed before activation.</p>
+            </article>
+            <article class="feature">
+              <h3>Backup when needed</h3>
+              <p>Optional recovery passphrase works if the camera is unavailable.</p>
+            </article>
+            <article class="feature">
+              <h3>Works with partners</h3>
+              <p>Use Synk at connected locations that accept Synk verification.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta-band">
+        <div class="cta-inner">
+          <h2>Ready to get Synk?</h2>
+          <p>Create your request now, or log in if you already have a Synk ID.</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="/join">Get Synk</a>
+            <a class="btn btn-secondary btn-on-dark" href="/verify">Log in</a>
+          </div>
         </div>
       </section>
     </main>
 
-    <script>
-      const form = document.getElementById("join-form");
-      const errorEl = document.getElementById("join-error");
-      const statusEl = document.getElementById("join-status");
-      const btn = document.getElementById("join-btn");
-      const formCard = document.getElementById("join-form-card");
-      const doneCard = document.getElementById("join-done-card");
-      const photoImg = document.getElementById("photo-img");
-      const photoPlaceholder = document.getElementById("photo-placeholder");
-      const cameraInput = document.getElementById("join-photo-camera");
-      const fileInput = document.getElementById("join-photo-file");
-      let selectedFile = null;
-
-      function showError(message) {
-        errorEl.textContent = message || "Something went wrong";
-        errorEl.classList.remove("hidden");
-      }
-
-      function clearError() {
-        errorEl.classList.add("hidden");
-        errorEl.textContent = "";
-      }
-
-      function setPhotoPreview(file) {
-        selectedFile = file || null;
-        if (!selectedFile) {
-          photoImg.removeAttribute("src");
-          photoImg.classList.add("hidden");
-          photoPlaceholder.classList.remove("hidden");
-          return;
-        }
-        const url = URL.createObjectURL(selectedFile);
-        photoImg.onload = () => URL.revokeObjectURL(url);
-        photoImg.src = url;
-        photoImg.classList.remove("hidden");
-        photoPlaceholder.classList.add("hidden");
-      }
-
-      function onPhotoPicked(input) {
-        const file = input.files && input.files[0];
-        if (!file) return;
-        clearError();
-        setPhotoPreview(file);
-        if (input !== cameraInput) cameraInput.value = "";
-        if (input !== fileInput) fileInput.value = "";
-      }
-
-      cameraInput.addEventListener("change", () => onPhotoPicked(cameraInput));
-      fileInput.addEventListener("change", () => onPhotoPicked(fileInput));
-
-      function fileToDataUrl(file) {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(new Error("Could not read photo"));
-          reader.readAsDataURL(file);
-        });
-      }
-
-      function loadImage(src) {
-        return new Promise((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => resolve(img);
-          img.onerror = () => reject(new Error("Could not load photo"));
-          img.src = src;
-        });
-      }
-
-      async function optimizePhoto(file) {
-        const type = (file.type || "").toLowerCase();
-        const okType =
-          ["image/jpeg", "image/png", "image/webp"].includes(type) ||
-          /\.(jpe?g|png|webp)$/i.test(file.name || "");
-        if (!okType) throw new Error("Please use a JPG, PNG, or WebP image");
-
-        const original = await fileToDataUrl(file);
-        const img = await loadImage(original);
-        const maxSide = 960;
-        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-        const width = Math.max(1, Math.round(img.width * scale));
-        const height = Math.max(1, Math.round(img.height * scale));
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d", { alpha: false });
-        ctx.drawImage(img, 0, 0, width, height);
-        return {
-          dataUrl: canvas.toDataURL("image/jpeg", 0.88),
-          contentType: "image/jpeg",
-          canvas,
-          fileName: (file.name || "photo.jpg").replace(/\.\w+$/, "") + ".jpg",
-        };
-      }
-
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        clearError();
-        const name = document.getElementById("join-name").value.trim();
-        const dateOfBirth = document.getElementById("join-dob").value;
-        const note = document.getElementById("join-note").value.trim();
-        const secret = document.getElementById("join-secret").value.trim();
-
-        if (!name) return showError("Enter your legal name");
-        if (!dateOfBirth) return showError("Enter your date of birth");
-        if (!selectedFile) return showError("Add a clear face photo");
-        if (secret && secret.length < 4) {
-          return showError("Recovery passphrase must be at least 4 characters");
-        }
-
-        btn.disabled = true;
-        statusEl.textContent = "Processing photo…";
-        try {
-          if (!window.KioskFace) {
-            throw new Error("Verification library is still loading. Please wait a moment and try again.");
-          }
-          await window.KioskFace.ensureFaceApi();
-          const optimized = await optimizePhoto(selectedFile);
-          const descriptor = await window.KioskFace.descriptorFromImage(optimized.canvas);
-          statusEl.textContent = "Submitting request…";
-          const res = await fetch("/api/synk-join", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "create",
-              name,
-              dateOfBirth,
-              note: note || undefined,
-              secret: secret || undefined,
-              descriptor,
-              photoData: optimized.dataUrl,
-              contentType: optimized.contentType,
-              fileName: optimized.fileName,
-            }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not submit request");
-          formCard.classList.add("hidden");
-          doneCard.classList.remove("hidden");
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        } catch (err) {
-          showError(err.message || "Could not submit request");
-          statusEl.textContent = "";
-        } finally {
-          btn.disabled = false;
-        }
-      });
-
-      document.getElementById("join-another").addEventListener("click", () => {
-        form.reset();
-        selectedFile = null;
-        setPhotoPreview(null);
-        clearError();
-        statusEl.textContent = "";
-        doneCard.classList.add("hidden");
-        formCard.classList.remove("hidden");
-        document.getElementById("join-name").focus();
-      });
-    </script>
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <a class="brand brand-footer" href="/">
+          <img src="/synk-logo.svg?v=bars1" alt="" width="22" height="22" />
+          <span>Synk</span>
+        </a>
+        <div class="footer-links">
+          <a href="/join">Get Synk</a>
+          <a href="/verify">Log in</a>
+        </div>
+        <p class="footer-note muted">Secure identity for trusted access.</p>
+      </div>
+    </footer>
   </body>
 </html>
