@@ -402,8 +402,9 @@ a:hover {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scaleX(-1);
+  /* Mirroring / zoom is applied by face.js (inline transform). */
   display: block;
+  background: #111111;
 }
 
 .pod-ring {

@@ -994,8 +994,9 @@
         faceModalHint.textContent = "Hold still for a moment.";
         faceScanBtn.disabled = true;
         try {
-          await window.KioskFace.ensureFaceApi();
           faceStream = await window.KioskFace.startCamera(faceVideo, { side: cameraSide });
+          faceStatus.textContent = "Loading face check…";
+          await window.KioskFace.ensureFaceApi();
           faceStatus.textContent = "Camera ready — tap Scan face";
           faceModalHint.textContent = "Look at the screen — stay in the center.";
           faceScanBtn.disabled = false;
@@ -1163,8 +1164,9 @@
         synkScanBtn.disabled = true;
         synkBusy = false;
         try {
-          await window.KioskFace.ensureFaceApi();
           synkStream = await window.KioskFace.startCamera(synkVideo, { side: cameraSide });
+          synkStatus.textContent = "Loading face check…";
+          await window.KioskFace.ensureFaceApi();
           synkStatus.textContent = "Ready. Select Verify when prepared.";
           synkScanBtn.disabled = false;
           synkAutoTimer = setTimeout(() => {

@@ -160,16 +160,20 @@
         statusEl.textContent = "Starting camera…";
         scanBtn.disabled = true;
         try {
-          await window.KioskFace.ensureFaceApi();
+          // Camera first (iOS user-gesture), then warm face models.
           window.KioskFace.setCameraSide(cameraSide);
           stream = await window.KioskFace.startCamera(video, { side: cameraSide });
+          statusEl.textContent = "Loading face check…";
+          await window.KioskFace.ensureFaceApi();
           statusEl.textContent = "Ready. Select Verify when prepared.";
           hintEl.textContent = "Look straight at the circle on screen — not the camera hole.";
           scanBtn.disabled = false;
         } catch (err) {
+          stopCamera();
           errorEl.textContent = err.message || "Could not open camera";
           errorEl.classList.remove("hidden");
           statusEl.textContent = "Camera unavailable";
+          scanBtn.disabled = true;
         }
       }
 
@@ -265,7 +269,24 @@
         }
       });
 
-      if (params.get("autostart") === "1") startCamera();
+      // Warm models in the background so Verify is faster after the camera opens.
+      function warmFaceModels() {
+        if (window.KioskFace) window.KioskFace.ensureFaceApi().catch(() => {});
+      }
+      if (document.readyState === "loading") {
+        window.addEventListener("DOMContentLoaded", warmFaceModels, { once: true });
+      } else {
+        warmFaceModels();
+      }
+
+      if (params.get("autostart") === "1") {
+        const boot = () => startCamera();
+        if (document.readyState === "loading") {
+          window.addEventListener("DOMContentLoaded", boot, { once: true });
+        } else {
+          boot();
+        }
+      }
     </script>
   </body>
 </html>

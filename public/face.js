@@ -146,11 +146,11 @@
   function applyCameraGuide(rootEl, side = cameraSide) {
     const target = rootEl || document;
     const resolved = effectiveCameraSide(side);
-    target.querySelectorAll(".synk-pod-frame, .face-video-wrap").forEach((el) => {
+    target.querySelectorAll(".synk-pod-frame, .face-video-wrap, .pod-frame").forEach((el) => {
       el.dataset.cameraSide = resolved;
     });
     // Ring stays centered — framing is done by reframing the video, not moving the guide.
-    target.querySelectorAll(".synk-pod-ring, .face-guide-ring").forEach((el) => {
+    target.querySelectorAll(".synk-pod-ring, .face-guide-ring, .pod-ring").forEach((el) => {
       el.dataset.cameraSide = "center";
     });
   }
@@ -194,29 +194,108 @@
     return Array.from(detection.descriptor);
   }
 
-  async function startCamera(videoEl, { facingMode = "user", side, rotation } = {}) {
+  function waitForVideoDimensions(videoEl, timeoutMs = 8000) {
+    if (!videoEl) return Promise.reject(new Error("Camera is not available"));
+    if (videoEl.videoWidth > 0 && videoEl.readyState >= 2) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        videoEl.removeEventListener("loadeddata", onReady);
+        videoEl.removeEventListener("loadedmetadata", onReady);
+        videoEl.removeEventListener("playing", onReady);
+        if (err) reject(err);
+        else resolve();
+      };
+      const onReady = () => {
+        if (videoEl.videoWidth > 0) finish();
+      };
+      const timer = setTimeout(() => {
+        finish(new Error("Camera is taking too long to start. Try again."));
+      }, timeoutMs);
+      videoEl.addEventListener("loadeddata", onReady);
+      videoEl.addEventListener("loadedmetadata", onReady);
+      videoEl.addEventListener("playing", onReady);
+      onReady();
+    });
+  }
+
+  async function requestUserMedia(facingMode = "user") {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error("Camera is not available in this browser");
     }
+    const attempts = [
+      {
+        audio: false,
+        video: {
+          facingMode: { ideal: facingMode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      },
+      {
+        audio: false,
+        video: { facingMode },
+      },
+      {
+        audio: false,
+        video: true,
+      },
+    ];
+    let lastErr = null;
+    for (const constraints of attempts) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    const name = lastErr && lastErr.name;
+    if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+      throw new Error("Camera permission is blocked. Allow camera access for Synk and try again.");
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      throw new Error("No camera was found on this device.");
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      throw new Error("Camera is busy in another app. Close it and try again.");
+    }
+    throw new Error((lastErr && lastErr.message) || "Could not open camera");
+  }
+
+  async function startCamera(videoEl, { facingMode = "user", side, rotation } = {}) {
     if (side != null) setCameraSide(side);
     else if (rotation != null) setCameraSide(rotation);
     ensureOrientationHook();
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        facingMode,
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
-    });
+    // Open the camera immediately (must stay inside the user-gesture window on iOS).
+    // Callers should NOT await ensureFaceApi() before this.
+    const stream = await requestUserMedia(facingMode);
     videoEl.srcObject = stream;
+    videoEl.setAttribute("playsinline", "true");
+    videoEl.muted = true;
     activePreviewVideo = videoEl;
     applyPreviewTransform(videoEl);
     applyCameraGuide(
-      videoEl.closest(".synk-pod-frame, .face-video-wrap, .face-modal-card, .synk-modal-card, body") ||
-        document
+      videoEl.closest(
+        ".synk-pod-frame, .face-video-wrap, .face-modal-card, .synk-modal-card, .pod-frame, body"
+      ) || document
     );
-    await videoEl.play();
+    try {
+      await videoEl.play();
+    } catch (_) {
+      await waitForVideoDimensions(videoEl).catch(() => {});
+      try {
+        await videoEl.play();
+      } catch (playErr) {
+        stopCamera(videoEl);
+        throw new Error(
+          (playErr && playErr.message) || "Could not start the camera preview. Try again."
+        );
+      }
+    }
+    await waitForVideoDimensions(videoEl);
     return stream;
   }
 
@@ -251,6 +330,7 @@
   }
 
   async function descriptorFromVideo(videoEl) {
+    await waitForVideoDimensions(videoEl);
     const frame = captureVideoFrame(videoEl);
     return descriptorFromImage(frame);
   }
@@ -262,6 +342,7 @@
     startCamera,
     stopCamera,
     captureVideoFrame,
+    waitForVideoDimensions,
     setCameraSide,
     getCameraSide,
     effectiveCameraSide,
