@@ -35,15 +35,11 @@ fs.copyFileSync(touchIconSrc, path.join(publicDir, "apple-touch-icon.png"));
 if (!fs.existsSync(sourceHtml)) throw new Error(`Missing page: ${sourceHtml}`);
 let html = fs.readFileSync(sourceHtml, "utf8");
 
-const visitorOrigin =
-  process.env.VISITOR_SITE_ORIGIN || "https://visitor-signin-kiosk.netlify.app";
-
 const synkIdOrigin = process.env.SYNK_ID_ORIGIN || "https://synkid.netlify.app";
 
 html = html
-  .replace(/href="\/synk"/g, `href="${visitorOrigin}/synk"`)
-  .replace(/href="\/admin"/g, `href="${visitorOrigin}/admin"`)
+  .replace(/href="\/synk"/g, `href="${synkIdOrigin}/verify"`)
   .replace(/href="\/synk-join"/g, `href="${synkIdOrigin}/"`);
 
 fs.writeFileSync(path.join(publicDir, "index.html"), html);
-console.log(`Prepared Synk Admin public/ (visitor origin: ${visitorOrigin})`);
+console.log(`Prepared Synk Admin public/ (synk id origin: ${synkIdOrigin})`);

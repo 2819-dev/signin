@@ -88,8 +88,8 @@ async function applyVisitorIntent(sql, matched) {
     const request = mapRow(inserted[0]);
     try {
       await notifyAdmins({
-        title: "Synk ID auto-admit",
-        body: `${request.name} cleared with Synk ID`,
+        title: "Synk auto-admit",
+        body: `${request.name} was admitted via Synk`,
         url: "/admin",
         tag: `visitor-${request.id}`,
         name: request.name,
@@ -110,7 +110,7 @@ async function applyVisitorIntent(sql, matched) {
     const request = mapRow(inserted[0]);
     try {
       await notifyAdmins({
-        title: "Synk ID auto-deny",
+        title: "Synk auto-deny",
         body: `${request.name} was denied by Synk policy`,
         url: "/admin",
         tag: `visitor-${request.id}`,
@@ -131,7 +131,7 @@ async function applyVisitorIntent(sql, matched) {
   const request = mapRow(inserted[0]);
   try {
     await notifyAdmins({
-      title: "Synk ID request",
+      title: "Synk verification request",
       body: `${request.name} verified with Synk ID — needs approval`,
       url: "/admin",
       tag: `visitor-${request.id}`,

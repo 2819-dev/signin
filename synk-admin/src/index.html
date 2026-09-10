@@ -87,7 +87,7 @@
             <p class="muted" id="overview-subtitle">Synk Admin</p>
           </div>
           <div class="admin-header-actions">
-            <a class="btn btn-secondary btn-compact" href="/synk" target="_blank" rel="noopener">Verify</a>
+            <a class="btn btn-secondary btn-compact" href="https://synkid.netlify.app/verify" target="_blank" rel="noopener">Verify</a>
             <button class="btn btn-secondary btn-compact" type="button" id="lock-btn">Lock</button>
           </div>
         </header>
@@ -173,13 +173,16 @@
               <input id="synk-enroll-dob" type="date" required />
             </div>
             <div class="field">
-              <label for="synk-enroll-policy">When verified (visitor bridge)</label>
+              <label for="synk-enroll-policy">Default verification action</label>
               <select id="synk-enroll-policy">
-                <option value="pending" selected>Needs accept / deny</option>
-                <option value="autofill">Auto-fill name only</option>
-                <option value="auto_admit">Auto-admit</option>
-                <option value="auto_deny">Auto-deny</option>
+                <option value="pending" selected>Require approval</option>
+                <option value="autofill">Prefill name only</option>
+                <option value="auto_admit">Admit automatically</option>
+                <option value="auto_deny">Deny automatically</option>
               </select>
+              <p class="muted" style="margin:6px 0 0;font-size:0.82rem;">
+                Used by connected apps that call the Synk API after a successful verify.
+              </p>
             </div>
             <div class="field">
               <label for="synk-enroll-file">Face photo</label>
@@ -287,9 +290,9 @@
         </header>
 
         <section class="panel">
-          <h2>Camera side</h2>
+          <h2>Camera framing</h2>
           <p class="muted" style="margin:0 0 12px;">
-            Used by Synk verify and the visitor kiosk face flow.
+            Default framing for Synk verification.
           </p>
           <div class="field">
             <label for="camera-side">Side</label>
@@ -305,9 +308,8 @@
         <section class="panel">
           <h2>Links</h2>
           <div class="synk-link-list">
-            <a href="/synk" target="_blank" rel="noopener">Public Synk verify</a>
-            <a href="https://synkid.netlify.app/" target="_blank" rel="noopener">Member join request</a>
-            <a href="/admin" target="_blank" rel="noopener">Visitor Admin</a>
+            <a href="https://synkid.netlify.app/verify" target="_blank" rel="noopener">Member verification</a>
+            <a href="https://synkid.netlify.app/" target="_blank" rel="noopener">Membership request</a>
           </div>
         </section>
 
@@ -1690,13 +1692,8 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
       });
 
 
-      fetch("/api/kiosk-status")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && data.settings && data.settings.theme === "dark") {
-            document.documentElement.setAttribute("data-theme", "dark");
-          }
-        })
+      fetch("/api/synk-settings")
+        .then(() => {})
         .catch(() => {});
 
       setRememberPref(getRememberPref());

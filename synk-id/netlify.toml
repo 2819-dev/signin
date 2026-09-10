@@ -9,8 +9,13 @@
   force = true
 
 [[redirects]]
+  from = "/verify"
+  to = "/verify.html"
+  status = 200
+
+[[redirects]]
   from = "/synk"
-  to = "https://visitor-signin-kiosk.netlify.app/synk"
+  to = "/verify"
   status = 302
 
 [[redirects]]

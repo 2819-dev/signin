@@ -187,7 +187,7 @@
               <h2 id="synk-modal-title" style="margin:0;">Look at the camera</h2>
             </div>
           </div>
-          <p class="subtitle" id="synk-pod-hint" style="margin-top:0;">Face-first verification for members.</p>
+          <p class="subtitle" id="synk-pod-hint" style="margin-top:0;">Verify membership with your face.</p>
           <div class="synk-pod-frame">
             <video id="synk-video" class="face-video synk-video" playsinline muted autoplay></video>
             <div class="synk-pod-ring" aria-hidden="true"></div>
@@ -1086,7 +1086,7 @@
         if (e.target === faceModal) closeFaceModal();
       });
 
-      // Synk ID — CLEAR-style face-first verification
+      // Synk ID verification (API-connected)
       const synkSigninBtn = document.getElementById("synk-signin-btn");
       const synkModal = document.getElementById("synk-modal");
       const synkCloseBtn = document.getElementById("synk-close-btn");
@@ -1144,7 +1144,7 @@
         stopSynkCamera();
         showSynkPod();
         synkStatus.textContent = "Camera stopped";
-        synkPodHint.textContent = "Face-first verification for members.";
+        synkPodHint.textContent = "Verify membership with your face.";
         synkModal.classList.remove("synk-verified");
       }
 

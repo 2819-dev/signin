@@ -18,8 +18,15 @@
 
 [[redirects]]
   from = "/synk"
-  to = "/synk.html"
-  status = 200
+  to = "https://synkid.netlify.app/verify"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/synk.html"
+  to = "https://synkid.netlify.app/verify"
+  status = 302
+  force = true
 
 [[redirects]]
   from = "/synk-join"

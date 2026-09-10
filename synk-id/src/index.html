@@ -13,10 +13,10 @@
     <meta name="color-scheme" content="light" />
     <meta
       name="description"
-      content="Request Synk membership. Send your details for admin review."
+      content="Submit a Synk membership request for administrator review."
     />
     <meta name="format-detection" content="telephone=no" />
-    <title>Join Synk</title>
+    <title>Synk membership request</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid2" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid2" />
@@ -32,9 +32,9 @@
         </div>
         <div>
           <p class="eyebrow">Synk ID</p>
-          <h1>Request membership</h1>
+          <h1>Membership request</h1>
           <p class="subtitle">
-            Fill in your details and a face photo. An admin reviews the request.
+            Submit your details and a face photo for administrator review.
           </p>
         </div>
       </header>
@@ -42,8 +42,8 @@
       <section class="card" id="join-form-card">
         <div class="steps" aria-hidden="true">
           <span class="step-pill active">1 · Details</span>
-          <span class="step-pill active">2 · Face photo</span>
-          <span class="step-pill">3 · Admin review</span>
+          <span class="step-pill active">2 · Photo</span>
+          <span class="step-pill">3 · Review</span>
         </div>
 
         <form id="join-form" class="form" autocomplete="off" novalidate>
@@ -76,7 +76,7 @@
               type="text"
               maxlength="300"
               enterkeyhint="next"
-              placeholder="Why you need Synk access"
+              placeholder="Reason for access (optional)"
             />
           </div>
 
@@ -90,7 +90,7 @@
               autocomplete="new-password"
               placeholder="At least 4 characters"
             />
-            <p class="hint">Used if face verify isn’t available on a device.</p>
+            <p class="hint">Used when face verification is unavailable.</p>
           </div>
 
           <div class="field">
@@ -98,7 +98,7 @@
             <div class="photo-box" role="group" aria-labelledby="photo-label">
               <div class="photo-preview" id="photo-preview">
                 <div class="placeholder" id="photo-placeholder">
-                  Clear, front-facing photo<br />for Synk face verify
+                  Clear, front-facing photo<br />required for verification
                 </div>
                 <img id="photo-img" class="hidden" alt="Selected face photo preview" />
               </div>
@@ -134,24 +134,24 @@
           <p id="join-error" class="error hidden" role="alert"></p>
           <p id="join-status" class="status muted" aria-live="polite"></p>
           <button class="btn btn-primary" type="submit" id="join-btn">
-            Send join request
+            Submit request
           </button>
         </form>
 
         <p class="footer-note muted">
-          Already enrolled?
-          <a href="/synk">Verify with Synk</a>
+          Already a member?
+          <a href="/verify">Go to verification</a>
         </p>
       </section>
 
       <section class="card hidden" id="join-done-card">
         <p class="section-label">Submitted</p>
-        <h2>Request sent</h2>
+        <h2>Request received</h2>
         <p class="muted" id="join-done-copy">
-          An admin will review your request in Synk Admin. You’ll be able to verify once accepted.
+          An administrator will review your request. You can verify after approval.
         </p>
         <div class="done-actions">
-          <a class="btn btn-primary" href="/synk">Go to Synk verify</a>
+          <a class="btn btn-primary" href="/verify">Go to verification</a>
           <button class="btn btn-secondary" type="button" id="join-another">
             Submit another request
           </button>
