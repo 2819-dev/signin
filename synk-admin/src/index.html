@@ -14,7 +14,7 @@
     <title>Synk Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synk-admin12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin12" />
-    <link rel="stylesheet" href="/admin.css?v=mobile4" />
+    <link rel="stylesheet" href="/admin.css?v=mobile5" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js?v=facefix2" defer></script>
   </head>
@@ -443,25 +443,20 @@
       </div>
 
       <nav class="admin-tabbar" aria-label="Synk Admin sections">
-        <button type="button" class="admin-tab active" data-pane="overview" id="tab-overview">
-          <span class="admin-tab-icon" aria-hidden="true">⌂</span>
-          <span class="admin-tab-label">Home</span>
+        <button type="button" class="admin-tab active" data-pane="overview" id="tab-overview" aria-label="Home" title="Home">
+          <svg class="admin-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3.2 3.5 10.2c-.3.25-.3.7 0 .95l.7.55c.3.24.73.22 1-.05L12 5.9l6.8 5.75c.27.27.7.29 1 .05l.7-.55c.3-.25.3-.7 0-.95L12 3.2Zm6.5 8.1h-2.2V19c0 .4-.3.7-.7.7h-2.9v-4.4h-3.4V19.7H6.4c-.4 0-.7-.3-.7-.7v-7.7H3.5V19c0 1.5 1.2 2.7 2.7 2.7h11.6c1.5 0 2.7-1.2 2.7-2.7v-7.7Z"/></svg>
         </button>
-        <button type="button" class="admin-tab" data-pane="members" id="tab-members">
-          <span class="admin-tab-icon" aria-hidden="true">☺</span>
-          <span class="admin-tab-label">Members</span>
+        <button type="button" class="admin-tab" data-pane="members" id="tab-members" aria-label="Members" title="Members">
+          <svg class="admin-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 12.2a3.6 3.6 0 1 0 0-7.2 3.6 3.6 0 0 0 0 7.2Zm0 1.8c-3.4 0-7 1.7-7 4.1V19c0 .6.4 1 1 1h12c.6 0 1-.4 1-1v-.9c0-2.4-3.6-4.1-7-4.1Z"/></svg>
         </button>
-        <button type="button" class="admin-tab" data-pane="requests" id="tab-requests">
-          <span class="admin-tab-icon" aria-hidden="true">✉</span>
-          <span class="admin-tab-label">Requests</span>
+        <button type="button" class="admin-tab" data-pane="requests" id="tab-requests" aria-label="Requests" title="Requests">
+          <svg class="admin-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4h14c.6 0 1 .4 1 1v11.2c0 .6-.4 1-1 1h-4.2L12 20.8 9.2 17.2H5c-.6 0-1-.4-1-1V5c0-.6.4-1 1-1Zm2 3.2v1.6h10V7.2H7Zm0 3.5v1.6h7V10.7H7Z"/></svg>
         </button>
-        <button type="button" class="admin-tab" data-pane="business" id="tab-business">
-          <span class="admin-tab-icon" aria-hidden="true">▣</span>
-          <span class="admin-tab-label">Business</span>
+        <button type="button" class="admin-tab" data-pane="business" id="tab-business" aria-label="Business" title="Business">
+          <svg class="admin-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.8 20.2V9.4c0-.6.4-1 1-1h5.2V5.8c0-.6.4-1 1-1h6.2c.6 0 1 .4 1 1v14.4H3.8Zm7.2-11.8h5.2V6.8h-5.2v1.6Zm-5.2 3.1v1.5h2.1v-1.5H5.8Zm3.6 0v1.5h2.1v-1.5H9.4Zm3.6 0v1.5h2.1v-1.5H13Zm3.6 0v1.5h2.1v-1.5H16.6Zm-10.8 3.4v1.5h2.1v-1.5H5.8Zm3.6 0v1.5h2.1v-1.5H9.4Zm3.6 0v1.5h2.1v-1.5H13Zm3.6 0v1.5h2.1v-1.5H16.6Z"/></svg>
         </button>
-        <button type="button" class="admin-tab" data-pane="more" id="tab-more">
-          <span class="admin-tab-icon" aria-hidden="true">•••</span>
-          <span class="admin-tab-label">More</span>
+        <button type="button" class="admin-tab" data-pane="more" id="tab-more" aria-label="More" title="More">
+          <svg class="admin-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6.5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="17.5" cy="12" r="1.8" fill="currentColor"/></svg>
         </button>
       </nav>
     </div>
@@ -1217,8 +1212,8 @@
                 <div class="synk-session-meta">
                   ${escapeHtml(biz.contactName || "")}
                   · ${escapeHtml(biz.email || "")}
-                  ${biz.note ? ` · ${escapeHtml(biz.note)}` : ""}
-                  ${biz.hasPassword ? "" : " · needs portal password"}
+                  ${/visitor sign-?in/i.test(biz.name || "") ? " · system" : ""}
+                  ${biz.hasPassword || /visitor sign-?in/i.test(biz.name || "") ? "" : " · needs portal password"}
                 </div>
                 <div class="btn-row" style="margin-top:8px;">
                   ${

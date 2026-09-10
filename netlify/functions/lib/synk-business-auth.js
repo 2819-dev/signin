@@ -149,4 +149,5 @@ module.exports = {
   createBusinessSession,
   requireBusinessSession,
   extractBusinessToken,
+  verifyBusinessToken,
 };

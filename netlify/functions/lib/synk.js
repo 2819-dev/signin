@@ -351,7 +351,7 @@ async function seedVisitorSignInBusiness(sql) {
         ${email},
         ${password ? hashSecret(password) : null},
         'approved',
-        'Preconnected Synk Business account for the Visitor Sign-In product.',
+        'Built-in business account for the Visitor Sign-In product.',
         NOW()
       )
       RETURNING id

@@ -3,6 +3,7 @@
 const { getSql, json, requireSynkAdmin } = require("./lib/db");
 const {
   ensureSynkCoreTables,
+  seedVisitorSignInBusiness,
   generateApiKey,
   hashSecret,
   verifySecret,
@@ -17,6 +18,7 @@ const {
   createBusinessSession,
   requireBusinessSession,
   extractBusinessToken,
+  verifyBusinessToken,
 } = require("./lib/synk-business-auth");
 
 function normalizeName(value) {
@@ -280,8 +282,14 @@ exports.handler = async (event) => {
       "update-device",
       "delete-device",
     ]);
+    // Only treat Authorization as a business session when the token is actually a
+    // business JWT. Synk Admin also sends Bearer tokens on GET /synk-business.
+    const bearerOrBusinessToken = extractBusinessToken(event);
+    const verifiedBusinessToken = bearerOrBusinessToken
+      ? verifyBusinessToken(bearerOrBusinessToken)
+      : null;
     const wantsBusinessPortal =
-      (event.httpMethod === "GET" && Boolean(extractBusinessToken(event))) ||
+      (event.httpMethod === "GET" && Boolean(verifiedBusinessToken)) ||
       (event.httpMethod === "POST" && businessPortalActions.has(action));
 
     if (wantsBusinessPortal) {
@@ -426,6 +434,7 @@ exports.handler = async (event) => {
     if (!admin.ok) return admin.response;
 
     if (event.httpMethod === "GET") {
+      await seedVisitorSignInBusiness(sql);
       const rows = await sql`
         SELECT id, name, contact_name, email, password_hash, status, note, created_at, updated_at, reviewed_at
         FROM synk_business_accounts
