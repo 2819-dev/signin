@@ -4,7 +4,9 @@
 (function (global) {
   const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/model";
   const SCRIPT_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/dist/face-api.js";
-  const LOAD_TIMEOUT_MS = 25000;
+  const LOAD_TIMEOUT_MS = 20000;
+  const DETECT_TIMEOUT_MS = 10000;
+  const DETECT_MAX_SIDE = 416;
 
   let loading = null;
   let ready = false;
@@ -13,6 +15,10 @@
   let cameraSide = "left";
   let activePreviewVideo = null;
   let orientationHooked = false;
+
+  function yieldToEventLoop() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
 
   function withTimeout(promise, ms, message) {
     let timer = null;
@@ -24,6 +30,18 @@
         timer = setTimeout(() => reject(new Error(message)), ms);
       }),
     ]);
+  }
+
+  function isAppleTouchDevice() {
+    try {
+      const ua = String(navigator.userAgent || "");
+      if (/iPad|iPhone|iPod/i.test(ua)) return true;
+      // iPadOS desktop UA
+      if (navigator.platform === "MacIntel" && Number(navigator.maxTouchPoints || 0) > 1) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 
   function loadScript(src) {
@@ -48,6 +66,7 @@
         const onError = () => reject(new Error("Could not load face library"));
         existing.addEventListener("load", onLoad, { once: true });
         existing.addEventListener("error", onError, { once: true });
+        // Script may have finished between query and listener attach.
         if (global.faceapi) {
           existing.dataset.loaded = "1";
           resolve();
@@ -71,23 +90,30 @@
   async function pickTfBackend(faceapi) {
     const tf = faceapi.tf || global.tf;
     if (!tf || typeof tf.setBackend !== "function") return;
-    const backends = ["wasm", "webgl", "cpu"];
+
+    // Avoid wasm: on iOS Safari it often hangs or fails without explicit wasm paths,
+    // and a hung setBackend blocks the UI while the camera preview still looks "fine".
+    const backends = isAppleTouchDevice() ? ["webgl", "cpu"] : ["webgl", "cpu"];
+
     for (const backend of backends) {
       try {
+        await yieldToEventLoop();
         const ok = await withTimeout(
           tf.setBackend(backend),
-          6000,
+          5000,
           `Face backend ${backend} timed out`
         );
         if (ok === false) continue;
         if (typeof tf.ready === "function") {
-          await withTimeout(tf.ready(), 6000, `Face backend ${backend} not ready`);
+          await withTimeout(tf.ready(), 5000, `Face backend ${backend} not ready`);
         }
-        return;
+        await yieldToEventLoop();
+        return backend;
       } catch (_) {
         /* try next */
       }
     }
+    return null;
   }
 
   async function ensureFaceApi() {
@@ -100,20 +126,33 @@
         LOAD_TIMEOUT_MS,
         "Face library is taking too long to load. Check your connection and try again."
       );
+      await yieldToEventLoop();
+
       const faceapi = global.faceapi;
       if (!faceapi) throw new Error("Face library unavailable");
 
       await pickTfBackend(faceapi);
+      await yieldToEventLoop();
 
+      // Load models one-by-one so timeouts can fire between each network/parse step.
       await withTimeout(
-        Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-        ]),
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
         LOAD_TIMEOUT_MS,
-        "Face models are taking too long to load. Check your connection and try again."
+        "Face detector is taking too long to load. Check your connection and try again."
       );
+      await yieldToEventLoop();
+      await withTimeout(
+        faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+        LOAD_TIMEOUT_MS,
+        "Face landmarks are taking too long to load. Check your connection and try again."
+      );
+      await yieldToEventLoop();
+      await withTimeout(
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+        LOAD_TIMEOUT_MS,
+        "Face recognition is taking too long to load. Check your connection and try again."
+      );
+
       ready = true;
       return faceapi;
     })();
@@ -129,9 +168,26 @@
 
   function detectorOptions() {
     return new global.faceapi.TinyFaceDetectorOptions({
-      inputSize: 416,
+      inputSize: 320,
       scoreThreshold: 0.4,
     });
+  }
+
+  function downscaleForDetection(input) {
+    const width = input.width || input.videoWidth || input.naturalWidth || 0;
+    const height = input.height || input.videoHeight || input.naturalHeight || 0;
+    if (!width || !height) return input;
+
+    const maxSide = Math.max(width, height);
+    if (maxSide <= DETECT_MAX_SIDE) return input;
+
+    const scale = DETECT_MAX_SIDE / maxSide;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    const ctx = canvas.getContext("2d", { alpha: false });
+    ctx.drawImage(input, 0, 0, canvas.width, canvas.height);
+    return canvas;
   }
 
   function normalizeCameraSide(value) {
@@ -242,9 +298,11 @@
 
   async function descriptorFromImage(input) {
     const faceapi = await ensureFaceApi();
+    await yieldToEventLoop();
+    const sized = downscaleForDetection(input);
     const detection = await withTimeout(
-      faceapi.detectSingleFace(input, detectorOptions()).withFaceLandmarks(true).withFaceDescriptor(),
-      12000,
+      faceapi.detectSingleFace(sized, detectorOptions()).withFaceLandmarks(true).withFaceDescriptor(),
+      DETECT_TIMEOUT_MS,
       "Face check timed out. Move into better light and try again."
     );
     if (!detection || !detection.descriptor) {
@@ -290,8 +348,8 @@
         audio: false,
         video: {
           facingMode: { ideal: facingMode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 640 },
+          height: { ideal: 480 },
         },
       },
       { audio: false, video: { facingMode } },
@@ -373,7 +431,7 @@
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(cropW);
     canvas.height = Math.round(cropH);
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     ctx.drawImage(videoEl, sx, sy, cropW, cropH, 0, 0, canvas.width, canvas.height);
     return canvas;
   }

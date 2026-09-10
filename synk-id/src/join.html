@@ -22,7 +22,7 @@
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
     <link rel="stylesheet" href="/join.css?v=layout4" />
     <script src="/force-refresh.js" defer></script>
-    <script src="/face.js?v=facefix1" defer></script>
+    <script src="/face.js?v=facefix2" defer></script>
   </head>
   <body>
     <header class="site-nav site-nav-light">
@@ -236,7 +236,7 @@
 
         const original = await fileToDataUrl(file);
         const img = await loadImage(original);
-        const maxSide = 960;
+        const maxSide = 720;
         const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
         const width = Math.max(1, Math.round(img.width * scale));
         const height = Math.max(1, Math.round(img.height * scale));
@@ -269,12 +269,20 @@
         }
 
         btn.disabled = true;
-        statusEl.textContent = "Loading face check…";
+        statusEl.textContent = "Preparing face check…";
+        let heartbeat = null;
         try {
           if (!window.KioskFace) {
             throw new Error("Face check is still loading. Wait a moment and try again.");
           }
+          const startedAt = Date.now();
+          heartbeat = setInterval(() => {
+            const secs = Math.round((Date.now() - startedAt) / 1000);
+            statusEl.textContent = `Preparing face check… (${secs}s)`;
+          }, 1000);
           await window.KioskFace.ensureFaceApi();
+          clearInterval(heartbeat);
+          heartbeat = null;
           statusEl.textContent = "Reading face from photo…";
           const optimized = await optimizePhoto(selectedFile);
           const descriptor = await window.KioskFace.descriptorFromImage(optimized.canvas);
@@ -300,9 +308,11 @@
           doneCard.classList.remove("hidden");
           window.scrollTo({ top: 0, behavior: "smooth" });
         } catch (err) {
+          if (heartbeat) clearInterval(heartbeat);
           showError(err.message || "Could not submit request");
           statusEl.textContent = "";
         } finally {
+          if (heartbeat) clearInterval(heartbeat);
           btn.disabled = false;
         }
       });

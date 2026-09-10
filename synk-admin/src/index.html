@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin12" />
     <link rel="stylesheet" href="/admin.css?v=layout2" />
     <script src="/force-refresh.js" defer></script>
-    <script src="/face.js?v=facefix1" defer></script>
+    <script src="/face.js?v=facefix2" defer></script>
   </head>
   <body class="synk-admin">
     <main id="unlock-view" class="screen">
@@ -1655,10 +1655,11 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
         if (!name || !dateOfBirth || !file) return;
 
         synkEnrollBtn.disabled = true;
-        synkEnrollStatus.textContent = "Processing photo…";
+        synkEnrollStatus.textContent = "Preparing face check…";
         try {
           if (!window.KioskFace) throw new Error("Face library still loading — wait a second");
           await window.KioskFace.ensureFaceApi();
+          synkEnrollStatus.textContent = "Reading face from photo…";
           const uploaded = await uploadSynkPhoto(file);
           const descriptor = await window.KioskFace.descriptorFromImage(uploaded.canvas);
           synkEnrollStatus.textContent = "Saving member…";

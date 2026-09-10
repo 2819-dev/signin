@@ -19,7 +19,7 @@
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
     <link rel="stylesheet" href="/join.css?v=layout4" />
     <script src="/force-refresh.js" defer></script>
-    <script src="/face.js?v=facefix1" defer></script>
+    <script src="/face.js?v=facefix2" defer></script>
   </head>
   <body>
     <header class="site-nav site-nav-light">
@@ -159,26 +159,40 @@
         }
         statusEl.textContent = "Starting camera…";
         scanBtn.disabled = true;
+        let heartbeat = null;
         try {
           // Camera first (iOS user-gesture), then warm face models.
           window.KioskFace.setCameraSide(cameraSide);
           stream = await window.KioskFace.startCamera(video, { side: cameraSide });
-          statusEl.textContent = "Camera on. Loading face check…";
+          statusEl.textContent = "Camera on. Preparing face check…";
           hintEl.textContent = "Look straight at the circle on screen — not the camera hole.";
+
+          const startedAt = Date.now();
+          heartbeat = setInterval(() => {
+            const secs = Math.round((Date.now() - startedAt) / 1000);
+            statusEl.textContent = `Camera on. Preparing face check… (${secs}s)`;
+          }, 1000);
+
           await window.KioskFace.ensureFaceApi();
-          statusEl.textContent = "Ready. Select Verify when prepared.";
+          clearInterval(heartbeat);
+          heartbeat = null;
+          statusEl.textContent = "Ready. Tap Verify when prepared.";
           scanBtn.disabled = false;
         } catch (err) {
-          // Keep preview if camera opened but models failed — user can retry Verify path.
+          if (heartbeat) clearInterval(heartbeat);
+          // Keep preview if camera opened but models failed — recovery code still works.
           const msg = err && err.message ? err.message : "Could not open camera";
-          errorEl.textContent = msg;
+          errorEl.textContent =
+            stream
+              ? `${msg} You can retry, or use your Synk code below.`
+              : msg;
           errorEl.classList.remove("hidden");
           if (!stream) {
             stopCamera();
             statusEl.textContent = "Camera unavailable";
             scanBtn.disabled = true;
           } else {
-            statusEl.textContent = "Camera on — face check failed. Tap Start camera to retry.";
+            statusEl.textContent = "Camera on — face check unavailable. Use Synk code or retry.";
             scanBtn.disabled = true;
           }
         }
