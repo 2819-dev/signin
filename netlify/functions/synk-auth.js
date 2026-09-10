@@ -132,7 +132,7 @@ async function applyVisitorIntent(sql, matched) {
   try {
     await notifyAdmins({
       title: "Synk verification request",
-      body: `${request.name} verified with Synk ID — needs approval`,
+      body: `${request.name} verified with Synk and needs approval`,
       url: "/admin",
       tag: `visitor-${request.id}`,
       name: request.name,
