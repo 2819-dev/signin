@@ -122,6 +122,32 @@
         </div>
         <p id="portal-status" class="muted" style="margin-top:10px;font-size:0.85rem;"></p>
         <p id="portal-key" class="code hidden" style="margin-top:12px;word-break:break-all;"></p>
+
+        <hr style="border:0;border-top:1px solid var(--line);margin:20px 0;" />
+
+        <p class="section-label">Devices</p>
+        <h2 style="margin:0 0 6px;">Camera framing by device</h2>
+        <p class="muted" style="margin:0 0 12px;font-size:0.88rem;">
+          Each tablet or kiosk can have its own camera position. Add a device, set framing, then open that tablet’s sign-in page once with
+          <span class="code">?pair=CODE</span>.
+        </p>
+        <div id="device-list" class="device-list"></div>
+        <form id="add-device-form" class="form" style="margin-top:14px;" autocomplete="off">
+          <div class="field">
+            <label for="device-name">Device name</label>
+            <input id="device-name" type="text" maxlength="80" required placeholder="Lobby iPad" />
+          </div>
+          <div class="field">
+            <label for="device-camera">Camera framing</label>
+            <select id="device-camera">
+              <option value="left">Landscape — camera on left</option>
+              <option value="right">Landscape — camera on right</option>
+              <option value="center">Portrait / centered</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" type="submit">Add device</button>
+          <p id="device-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
+        </form>
       </section>
     </main>
 
@@ -164,16 +190,137 @@
           ? apps
               .map(
                 (a) =>
-                  `<div class="pass-box" style="margin-top:0;"><div class="muted" style="font-size:0.78rem;">API app</div><strong>${a.name}</strong><div class="code">${a.slug}</div></div>`
+                  `<div class="pass-box" style="margin-top:0;"><div class="muted" style="font-size:0.78rem;">API app</div><strong>${escapeHtml(a.name)}</strong><div class="code">${escapeHtml(a.slug)}</div></div>`
               )
               .join("")
           : `<p class="muted">No API app yet — ask Synk Admin to approve your account.</p>`;
         if (app) verifyAction.value = app.verifyAction || "pending";
+        renderDevices(data.devices || []);
         show("portal");
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function cameraLabel(side) {
+        if (side === "right") return "Landscape — camera on right";
+        if (side === "center") return "Portrait / centered";
+        return "Landscape — camera on left";
+      }
+
+      function renderDevices(devices) {
+        const list = document.getElementById("device-list");
+        if (!devices.length) {
+          list.innerHTML = `<p class="muted" style="margin:0;">No devices yet. Add each tablet your business uses.</p>`;
+          return;
+        }
+        list.innerHTML = devices
+          .map((device) => {
+            const side = device.cameraSide || "left";
+            return `
+              <article class="pass-box device-card" data-device-id="${escapeHtml(device.id)}">
+                <div class="muted" style="font-size:0.78rem;">Device</div>
+                <strong>${escapeHtml(device.name)}</strong>
+                <div class="field" style="margin-top:10px;">
+                  <label>Camera framing</label>
+                  <select class="device-camera-select">
+                    <option value="left" ${side === "left" ? "selected" : ""}>Landscape — camera on left</option>
+                    <option value="right" ${side === "right" ? "selected" : ""}>Landscape — camera on right</option>
+                    <option value="center" ${side === "center" ? "selected" : ""}>Portrait / centered</option>
+                  </select>
+                </div>
+                <p class="muted" style="margin:8px 0 0;font-size:0.82rem;">
+                  Pairing code: <span class="code">${escapeHtml(device.pairingCode)}</span>
+                </p>
+                <p class="muted" style="margin:4px 0 0;font-size:0.8rem;">
+                  On that tablet open your sign-in page with <span class="code">?pair=${escapeHtml(device.pairingCode)}</span>
+                </p>
+                <div class="btn-row" style="margin-top:10px;">
+                  <button class="btn btn-secondary btn-compact device-save" type="button">Save framing</button>
+                  <button class="btn btn-secondary btn-compact device-delete" type="button">Remove</button>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
       }
 
       document.getElementById("show-login").addEventListener("click", () => show("login"));
       document.getElementById("show-request").addEventListener("click", () => show("request"));
+
+      document.getElementById("add-device-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const status = document.getElementById("device-status");
+        status.textContent = "Adding…";
+        try {
+          const res = await fetch("/api/synk-business", {
+            method: "POST",
+            headers: bizHeaders(),
+            body: JSON.stringify({
+              action: "create-device",
+              name: document.getElementById("device-name").value,
+              cameraSide: document.getElementById("device-camera").value,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not add device");
+          document.getElementById("device-name").value = "";
+          status.textContent = `Added. Pair with ?pair=${data.device.pairingCode}`;
+          await loadPortal();
+        } catch (ex) {
+          status.textContent = ex.message || "Could not add device";
+        }
+      });
+
+      document.getElementById("device-list").addEventListener("click", async (e) => {
+        const card = e.target.closest("[data-device-id]");
+        if (!card) return;
+        const deviceId = card.getAttribute("data-device-id");
+        const status = document.getElementById("device-status");
+        if (e.target.classList.contains("device-save")) {
+          const cameraSide = card.querySelector(".device-camera-select").value;
+          status.textContent = "Saving device…";
+          try {
+            const res = await fetch("/api/synk-business", {
+              method: "POST",
+              headers: bizHeaders(),
+              body: JSON.stringify({
+                action: "update-device",
+                deviceId,
+                cameraSide,
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not save device");
+            status.textContent = "Device framing saved";
+            await loadPortal();
+          } catch (ex) {
+            status.textContent = ex.message || "Could not save device";
+          }
+        }
+        if (e.target.classList.contains("device-delete")) {
+          if (!confirm("Remove this device?")) return;
+          status.textContent = "Removing…";
+          try {
+            const res = await fetch("/api/synk-business", {
+              method: "POST",
+              headers: bizHeaders(),
+              body: JSON.stringify({ action: "delete-device", deviceId }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not remove device");
+            status.textContent = "Device removed";
+            await loadPortal();
+          } catch (ex) {
+            status.textContent = ex.message || "Could not remove device";
+          }
+        }
+      });
 
       document.getElementById("biz-login-form").addEventListener("submit", async (e) => {
         e.preventDefault();

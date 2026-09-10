@@ -124,19 +124,12 @@
           </div>
           <div class="settings-row" style="align-items:flex-start;">
             <div style="flex:1;min-width:0;">
-              <strong>Tablet camera side</strong>
+              <strong>Tablet camera framing</strong>
               <div class="muted" style="font-size: 0.85rem;">
-                <strong>Use landscape for the kiosk overall</strong> — more room for the form, buttons, and Synk flow.
-                The front camera sits on a short edge in landscape, so pick which edge it is on; we zoom/pan so people can look at the
-                <em>center of the screen</em> (the ring), not the physical camera.
-                Portrait is better for face-only capture (camera on top) and auto-switches to centered framing.
-                People should not need to slide sideways.
+                Camera framing is set per device in the Synk Business portal.
+                Add each tablet there, then open this kiosk once with
+                <code>?pair=CODE</code> using that device’s pairing code.
               </div>
-              <select id="camera-side" style="margin-top:10px;max-width:100%;">
-                <option value="left">Landscape — camera on left edge</option>
-                <option value="right">Landscape — camera on right edge</option>
-                <option value="center">Portrait / camera centered</option>
-              </select>
             </div>
           </div>
           <div id="closed-editor">
@@ -426,7 +419,6 @@
       const urgentToggle = document.getElementById("urgent-toggle");
       const chatToggle = document.getElementById("chat-toggle");
       const themeToggle = document.getElementById("theme-toggle");
-      const cameraSideSelect = document.getElementById("camera-side");
       const openLabel = document.getElementById("open-label");
       const openHint = document.getElementById("open-hint");
       const urgentLabel = document.getElementById("urgent-label");
@@ -849,7 +841,6 @@
         urgentToggle.checked = currentSettings.urgentEnabled;
         chatToggle.checked = currentSettings.chatEnabled;
         themeToggle.checked = currentSettings.theme === "dark";
-        cameraSideSelect.value = currentSettings.cameraSide;
         closedTitleInput.value = currentSettings.closedTitle;
         closedMessageInput.value = currentSettings.closedMessage;
         displayTitleInput.value = currentSettings.displayTitle;
@@ -967,7 +958,7 @@
           cameraSide:
             partial.cameraSide != null
               ? String(partial.cameraSide)
-              : cameraSideSelect.value || currentSettings.cameraSide || "left",
+              : currentSettings.cameraSide || "left",
         };
         const res = await fetch("/api/kiosk-status", {
           method: "POST",
@@ -1684,19 +1675,8 @@
         }
       });
 
-      cameraSideSelect.addEventListener("change", async () => {
-        const next = cameraSideSelect.value;
-        cameraSideSelect.disabled = true;
-        try {
-          await saveSettings({ cameraSide: next });
           showToast("Tablet camera side saved");
         } catch (err) {
-          cameraSideSelect.value = currentSettings.cameraSide || "left";
-          showToast(err.message || "Could not update");
-        } finally {
-          cameraSideSelect.disabled = false;
-        }
-      });
 
       saveClosedBtn.addEventListener("click", async () => {
         saveClosedBtn.disabled = true;

@@ -285,24 +285,6 @@
         </header>
 
         <section class="panel">
-          <h2>Camera framing</h2>
-          <p class="muted" style="margin:0 0 12px;">
-            For a counter iPad, prefer <strong>landscape</strong> and set which short edge has the camera.
-            Portrait (camera on top) is best for face alignment alone; the app auto-centers framing in portrait.
-            Ask people to look at the on-screen ring, not the camera hole.
-          </p>
-          <div class="field">
-            <label for="camera-side">Position</label>
-            <select id="camera-side">
-              <option value="left">Landscape — camera on left</option>
-              <option value="right">Landscape — camera on right</option>
-              <option value="center">Portrait / centered</option>
-            </select>
-          </div>
-          <p id="camera-side-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
-        </section>
-
-        <section class="panel">
           <h2>Public pages</h2>
           <div class="synk-link-list">
             <a href="https://synkid.netlify.app/verify" target="_blank" rel="noopener">Member log in</a>
@@ -482,8 +464,6 @@
       const overviewPassesEmpty = document.getElementById("overview-passes-empty");
       const activityFilter = document.getElementById("activity-filter");
       const activityTypeSelect = document.getElementById("activity-type");
-      const cameraSideSelect = document.getElementById("camera-side");
-      const cameraSideStatus = document.getElementById("camera-side-status");
       const overviewSubtitle = document.getElementById("overview-subtitle");
       const securitySessionMeta = document.getElementById("security-session-meta");
       const synkSessionsEl = document.getElementById("synk-sessions");
@@ -1197,10 +1177,6 @@
           err.status = res.status;
           throw err;
         }
-        const side = ["left", "right", "center"].includes(String(data.cameraSide || "").toLowerCase())
-          ? String(data.cameraSide).toLowerCase()
-          : "left";
-        cameraSideSelect.value = side;
         const stats = data.stats || {};
         document.getElementById("stat-members").textContent = String(stats.members ?? "—");
         document.getElementById("stat-members-sub").textContent =
@@ -1667,31 +1643,6 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
         } catch (err) {
           showToast(err.message || "Could not filter activity");
           renderSynkEvents();
-        }
-      });
-
-      cameraSideSelect.addEventListener("change", async () => {
-        const next = cameraSideSelect.value;
-        cameraSideSelect.disabled = true;
-        cameraSideStatus.textContent = "Saving…";
-        try {
-          const res = await fetch("/api/synk-settings", {
-            method: "POST",
-            headers: adminHeaders(),
-            body: JSON.stringify({ cameraSide: next }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not save");
-          cameraSideStatus.textContent = "Saved";
-          showToast("Camera framing saved");
-        } catch (err) {
-          cameraSideStatus.textContent = err.message || "Could not save";
-          showToast(err.message || "Could not save");
-          try {
-            await refreshSettings();
-          } catch (_) {}
-        } finally {
-          cameraSideSelect.disabled = false;
         }
       });
 

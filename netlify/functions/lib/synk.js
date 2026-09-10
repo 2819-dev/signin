@@ -186,6 +186,27 @@ async function ensureSynkCoreTables(sql) {
   `;
 
   await sql`
+    CREATE TABLE IF NOT EXISTS synk_business_devices (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      business_id UUID NOT NULL REFERENCES synk_business_accounts(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      camera_side TEXT NOT NULL DEFAULT 'left',
+      pairing_code TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_business_devices_business_idx
+    ON synk_business_devices (business_id, created_at DESC)
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_business_devices_code_idx
+    ON synk_business_devices (pairing_code)
+  `;
+
+  await sql`
     CREATE TABLE IF NOT EXISTS synk_passes (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       token_hash TEXT NOT NULL UNIQUE,
@@ -697,6 +718,36 @@ function normalizePublicUsername(value) {
     .slice(0, 24);
 }
 
+function normalizeCameraSide(value) {
+  const side = String(value || "")
+    .trim()
+    .toLowerCase();
+  return ["left", "right", "center"].includes(side) ? side : "left";
+}
+
+function generateDevicePairingCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = randomBytes(8);
+  let out = "";
+  for (let i = 0; i < 8; i += 1) {
+    out += alphabet[bytes[i] % alphabet.length];
+  }
+  return out;
+}
+
+function mapBusinessDevice(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    cameraSide: normalizeCameraSide(row.camera_side),
+    pairingCode: row.pairing_code,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastSeenAt: row.last_seen_at || null,
+  };
+}
+
 module.exports = {
   hashSecret,
   verifySecret,
@@ -720,6 +771,9 @@ module.exports = {
   requireHubSession,
   extractHubSessionToken,
   normalizePublicUsername,
+  normalizeCameraSide,
+  generateDevicePairingCode,
+  mapBusinessDevice,
   normalizeVerifyAction,
   getAppVerifyAction,
   seedVisitorSignInBusiness,

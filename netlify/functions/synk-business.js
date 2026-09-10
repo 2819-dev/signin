@@ -9,6 +9,9 @@ const {
   logSynkEvent,
   normalizeVerifyAction,
   clientIp,
+  normalizeCameraSide,
+  generateDevicePairingCode,
+  mapBusinessDevice,
 } = require("./lib/synk");
 const {
   createBusinessSession,
@@ -72,6 +75,42 @@ function mapApp(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function normalizeDeviceName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 80);
+}
+
+function normalizePairingCode(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 12);
+}
+
+async function listBusinessDevices(sql, businessId) {
+  const rows = await sql`
+    SELECT id, name, camera_side, pairing_code, created_at, updated_at, last_seen_at
+    FROM synk_business_devices
+    WHERE business_id = ${businessId}
+    ORDER BY created_at ASC
+  `;
+  return rows.map(mapBusinessDevice);
+}
+
+async function createUniquePairingCode(sql) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const code = generateDevicePairingCode();
+    const clash = await sql`
+      SELECT id FROM synk_business_devices WHERE pairing_code = ${code} LIMIT 1
+    `;
+    if (!clash[0]) return code;
+  }
+  throw new Error("Could not allocate a pairing code");
 }
 
 function userAgent(event) {
@@ -198,8 +237,49 @@ exports.handler = async (event) => {
       });
     }
 
+    // Public: look up a paired device's camera framing (used by kiosk tablets).
+    if (event.httpMethod === "GET" && action === "device-config") {
+      const code = normalizePairingCode(
+        (event.queryStringParameters &&
+          (event.queryStringParameters.code || event.queryStringParameters.pair)) ||
+          ""
+      );
+      if (!code || code.length < 6) {
+        return json(400, { error: "A valid device pairing code is required" });
+      }
+      const rows = await sql`
+        SELECT d.id, d.name, d.camera_side, d.pairing_code, d.created_at, d.updated_at, d.last_seen_at,
+               b.status AS business_status
+        FROM synk_business_devices d
+        JOIN synk_business_accounts b ON b.id = d.business_id
+        WHERE d.pairing_code = ${code}
+        LIMIT 1
+      `;
+      const row = rows[0];
+      if (!row || row.business_status !== "approved") {
+        return json(404, { error: "Device not found" });
+      }
+      await sql`
+        UPDATE synk_business_devices
+        SET last_seen_at = NOW()
+        WHERE id = ${row.id}
+      `;
+      return json(200, {
+        ok: true,
+        device: mapBusinessDevice(row),
+      });
+    }
+
     // Business portal session routes (member-facing dashboard).
-    const businessPortalActions = new Set(["logout", "rotate-key", "save-settings", "session"]);
+    const businessPortalActions = new Set([
+      "logout",
+      "rotate-key",
+      "save-settings",
+      "session",
+      "create-device",
+      "update-device",
+      "delete-device",
+    ]);
     const wantsBusinessPortal =
       (event.httpMethod === "GET" && Boolean(extractBusinessToken(event))) ||
       (event.httpMethod === "POST" && businessPortalActions.has(action));
@@ -264,10 +344,80 @@ exports.handler = async (event) => {
         return json(200, { ok: true, app: mapApp(rows[0]) });
       }
 
+      if (event.httpMethod === "POST" && action === "create-device") {
+        const name = normalizeDeviceName(body.name || body.deviceName || "Front desk");
+        if (!name) return json(400, { error: "Device name is required" });
+        const cameraSide = normalizeCameraSide(body.cameraSide || body.camera);
+        const pairingCode = await createUniquePairingCode(sql);
+        const rows = await sql`
+          INSERT INTO synk_business_devices (business_id, name, camera_side, pairing_code)
+          VALUES (${auth.business.id}, ${name}, ${cameraSide}, ${pairingCode})
+          RETURNING id, name, camera_side, pairing_code, created_at, updated_at, last_seen_at
+        `;
+        await logSynkEvent(sql, {
+          eventType: "business_device_create",
+          ip: clientIp(event),
+          detail: `${name}:${pairingCode}`,
+        });
+        return json(201, { ok: true, device: mapBusinessDevice(rows[0]) });
+      }
+
+      if (event.httpMethod === "POST" && action === "update-device") {
+        const deviceId = String(body.deviceId || body.id || "").trim();
+        if (!deviceId) return json(400, { error: "deviceId is required" });
+        const existing = await sql`
+          SELECT id, name, camera_side, pairing_code, created_at, updated_at, last_seen_at
+          FROM synk_business_devices
+          WHERE id = ${deviceId} AND business_id = ${auth.business.id}
+          LIMIT 1
+        `;
+        if (!existing[0]) return json(404, { error: "Device not found" });
+        const name =
+          body.name != null || body.deviceName != null
+            ? normalizeDeviceName(body.name || body.deviceName)
+            : existing[0].name;
+        if (!name) return json(400, { error: "Device name is required" });
+        const cameraSide =
+          body.cameraSide != null || body.camera != null
+            ? normalizeCameraSide(body.cameraSide || body.camera)
+            : normalizeCameraSide(existing[0].camera_side);
+        const rows = await sql`
+          UPDATE synk_business_devices
+          SET name = ${name}, camera_side = ${cameraSide}, updated_at = NOW()
+          WHERE id = ${deviceId} AND business_id = ${auth.business.id}
+          RETURNING id, name, camera_side, pairing_code, created_at, updated_at, last_seen_at
+        `;
+        await logSynkEvent(sql, {
+          eventType: "business_device_update",
+          ip: clientIp(event),
+          detail: `${name}:${cameraSide}`,
+        });
+        return json(200, { ok: true, device: mapBusinessDevice(rows[0]) });
+      }
+
+      if (event.httpMethod === "POST" && action === "delete-device") {
+        const deviceId = String(body.deviceId || body.id || "").trim();
+        if (!deviceId) return json(400, { error: "deviceId is required" });
+        const rows = await sql`
+          DELETE FROM synk_business_devices
+          WHERE id = ${deviceId} AND business_id = ${auth.business.id}
+          RETURNING id, name, pairing_code
+        `;
+        if (!rows[0]) return json(404, { error: "Device not found" });
+        await logSynkEvent(sql, {
+          eventType: "business_device_delete",
+          ip: clientIp(event),
+          detail: rows[0].name,
+        });
+        return json(200, { ok: true });
+      }
+
+      const devices = await listBusinessDevices(sql, auth.business.id);
       return json(200, {
         ok: true,
         business: auth.business,
         apps: apps.map(mapApp),
+        devices,
       });
     }
 

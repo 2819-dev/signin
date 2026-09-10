@@ -354,6 +354,48 @@
       let urgentEnabled = true;
       let chatEnabled = true;
       let cameraSide = "left";
+      const DEVICE_PAIR_KEY = "synk_device_pair_code";
+      const pairParams = new URLSearchParams(location.search);
+      if (pairParams.get("pair") || pairParams.get("device")) {
+        const code = String(pairParams.get("pair") || pairParams.get("device") || "")
+          .trim()
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, "");
+        if (code.length >= 6) {
+          try {
+            localStorage.setItem(DEVICE_PAIR_KEY, code);
+          } catch (_) {}
+          pairParams.delete("pair");
+          pairParams.delete("device");
+          const next = pairParams.toString();
+          history.replaceState({}, "", location.pathname + (next ? `?${next}` : "") + location.hash);
+        }
+      }
+
+      function pairedDeviceCode() {
+        try {
+          return String(localStorage.getItem(DEVICE_PAIR_KEY) || "")
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
+        } catch (_) {
+          return "";
+        }
+      }
+
+      async function refreshPairedDeviceCamera() {
+        const code = pairedDeviceCode();
+        if (!code) return null;
+        try {
+          const res = await fetch(`/api/synk-business?action=device-config&code=${encodeURIComponent(code)}`);
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) return null;
+          const side = String((data.device && data.device.cameraSide) || "").toLowerCase();
+          if (["left", "right", "center"].includes(side)) return side;
+        } catch (_) {}
+        return null;
+      }
+
       let urgentMode = false;
       let activeView = "form";
       let displayMode = "signin";
@@ -871,9 +913,11 @@
           isOpen = settings.isOpen !== false;
           urgentEnabled = settings.urgentEnabled !== false;
           chatEnabled = settings.chatEnabled !== false;
-          cameraSide = ["left", "right", "center"].includes(String(settings.cameraSide || "").toLowerCase())
-            ? String(settings.cameraSide).toLowerCase()
-            : "left";
+          const pairedSide = await refreshPairedDeviceCamera();
+          cameraSide = pairedSide
+            || (["left", "right", "center"].includes(String(settings.cameraSide || "").toLowerCase())
+              ? String(settings.cameraSide).toLowerCase()
+              : "left");
           if (window.KioskFace) {
             window.KioskFace.setCameraSide(cameraSide);
             window.KioskFace.applyCameraGuide(document);

@@ -453,6 +453,15 @@ a:hover {
   background: var(--fill);
 }
 
+.device-list {
+  display: grid;
+  gap: 10px;
+}
+
+.device-card {
+  margin-top: 0;
+}
+
 .pass-box .code,
 .code {
   margin-top: 8px;

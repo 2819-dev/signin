@@ -184,3 +184,21 @@ CREATE TABLE IF NOT EXISTS synk_community_posts (
 CREATE INDEX IF NOT EXISTS synk_community_posts_created_idx
   ON synk_community_posts (created_at DESC);
 
+CREATE TABLE IF NOT EXISTS synk_business_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES synk_business_accounts(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  camera_side TEXT NOT NULL DEFAULT 'left',
+  pairing_code TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS synk_business_devices_business_idx
+  ON synk_business_devices (business_id, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS synk_business_devices_code_idx
+  ON synk_business_devices (pairing_code);
+
+
