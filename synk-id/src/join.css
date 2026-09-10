@@ -1,17 +1,18 @@
 :root {
-  color-scheme: dark;
-  --bg: #070b14;
-  --bg-elevated: rgba(255, 255, 255, 0.045);
-  --line: rgba(122, 162, 255, 0.22);
-  --text: #eef3ff;
-  --muted: rgba(190, 205, 255, 0.72);
-  --blue: #2b6bff;
-  --blue-deep: #1e4fd6;
-  --danger: #ff6b7a;
-  --radius: 18px;
+  color-scheme: light;
+  --bg: #f7f9fc;
+  --surface: #ffffff;
+  --ink: #152033;
+  --muted: #5b6b82;
+  --line: #d7e0ee;
+  --fill: #eef3fb;
+  --accent: #2b6bff;
+  --accent-ink: #1e4fd6;
+  --accent-soft: #e8f0ff;
+  --danger: #c62828;
+  --danger-soft: #fdeceb;
   --tap: 48px;
-  --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, Helvetica, Arial, sans-serif;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
 *,
@@ -30,7 +31,7 @@ body {
   min-height: 100dvh;
   font-family: var(--font);
   background: var(--bg);
-  color: var(--text);
+  color: var(--ink);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
@@ -42,32 +43,17 @@ label {
 }
 
 a {
-  color: #9bbcff;
+  color: var(--accent-ink);
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
 }
 
 a:hover {
-  color: #c5d7ff;
+  color: var(--accent);
 }
 
 .sand-waves {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.sand-waves svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.sand-waves path {
-  fill: none;
-  stroke: var(--blue);
+  display: none;
 }
 
 .shell {
@@ -81,37 +67,37 @@ a:hover {
     calc(28px + env(safe-area-inset-bottom, 0px))
     max(16px, env(safe-area-inset-left, 0px));
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .header {
   display: grid;
-  grid-template-columns: 64px 1fr;
+  grid-template-columns: 56px 1fr;
   gap: 14px;
   align-items: center;
 }
 
 .logo {
-  width: 64px;
-  height: 64px;
-  border-radius: 18px;
-  background: rgba(43, 107, 255, 0.12);
-  border: 1px solid rgba(43, 107, 255, 0.28);
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  border: 1px solid #c9daf8;
   display: grid;
   place-items: center;
   overflow: hidden;
 }
 
 .logo img {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   display: block;
 }
 
 .eyebrow {
   margin: 0 0 4px;
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 600;
@@ -119,9 +105,10 @@ a:hover {
 
 .header h1 {
   margin: 0 0 6px;
-  font-size: clamp(1.35rem, 4.5vw, 1.7rem);
+  font-size: clamp(1.25rem, 4vw, 1.45rem);
   letter-spacing: -0.02em;
-  line-height: 1.15;
+  line-height: 1.2;
+  font-weight: 600;
 }
 
 .subtitle {
@@ -131,23 +118,23 @@ a:hover {
 }
 
 .card {
-  background: var(--bg-elevated);
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 0;
   padding: 18px;
-  backdrop-filter: blur(8px);
 }
 
 .card h2 {
   margin: 0 0 8px;
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   letter-spacing: -0.01em;
+  font-weight: 600;
 }
 
 .section-label {
   margin: 0 0 6px;
   font-size: 0.75rem;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 600;
@@ -163,9 +150,11 @@ a:hover {
   gap: 6px;
 }
 
-.field label {
+.field label,
+.field > span {
   font-size: 0.9rem;
   font-weight: 560;
+  color: var(--ink);
 }
 
 .muted {
@@ -186,11 +175,11 @@ a:hover {
   width: 100%;
   min-height: var(--tap);
   padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(122, 162, 255, 0.28);
-  background: rgba(7, 11, 20, 0.72);
-  color: var(--text);
-  font-size: 16px; /* iOS: avoid auto-zoom */
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
   outline: none;
   appearance: none;
   -webkit-appearance: none;
@@ -198,12 +187,12 @@ a:hover {
 
 .field input:focus,
 .field textarea:focus {
-  border-color: rgba(43, 107, 255, 0.85);
-  box-shadow: 0 0 0 3px rgba(43, 107, 255, 0.22);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .field input::placeholder {
-  color: rgba(190, 205, 255, 0.45);
+  color: #93a0b4;
 }
 
 .row-2 {
@@ -222,12 +211,10 @@ a:hover {
   aspect-ratio: 1 / 1;
   max-width: 220px;
   margin: 0 auto;
-  border-radius: 20px;
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid rgba(122, 162, 255, 0.28);
-  background:
-    radial-gradient(circle at 50% 40%, rgba(43, 107, 255, 0.22), transparent 55%),
-    rgba(7, 11, 20, 0.9);
+  border: 1px solid var(--line);
+  background: var(--fill);
   display: grid;
   place-items: center;
 }
@@ -259,10 +246,10 @@ a:hover {
   justify-content: center;
   min-height: var(--tap);
   padding: 0 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(122, 162, 255, 0.35);
-  background: rgba(43, 107, 255, 0.1);
-  color: var(--text);
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent-ink);
   font-weight: 600;
   cursor: pointer;
   text-align: center;
@@ -280,8 +267,8 @@ a:hover {
 
 .file-btn:focus-within,
 .file-btn:hover {
-  border-color: rgba(43, 107, 255, 0.8);
-  background: rgba(43, 107, 255, 0.16);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .btn {
@@ -291,9 +278,9 @@ a:hover {
   gap: 8px;
   min-height: var(--tap);
   padding: 0 16px;
-  border-radius: 14px;
+  border-radius: 0;
   border: 1px solid transparent;
-  font-weight: 650;
+  font-weight: 600;
   font-size: 1rem;
   cursor: pointer;
   text-decoration: none;
@@ -302,40 +289,40 @@ a:hover {
 }
 
 .btn:disabled {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .btn-primary {
   width: 100%;
-  background: linear-gradient(180deg, #4a86ff, var(--blue-deep));
+  background: var(--accent);
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 24px rgba(30, 79, 214, 0.28);
+  border-color: var(--accent);
 }
 
 .btn-primary:hover:not(:disabled) {
-  filter: brightness(1.05);
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text);
+  background: var(--surface);
+  color: var(--accent-ink);
   border-color: var(--line);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text);
+  background: var(--fill);
+  color: var(--accent-ink);
 }
 
 .error {
   margin: 0;
   padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(255, 107, 122, 0.12);
-  border: 1px solid rgba(255, 107, 122, 0.35);
-  color: #ffd0d6;
+  border-radius: 0;
+  background: var(--danger-soft);
+  border: 1px solid #f3c4c0;
+  color: var(--danger);
   font-size: 0.9rem;
 }
 
@@ -364,7 +351,7 @@ a:hover {
 .steps {
   display: none;
   gap: 8px;
-  margin: 0 0 4px;
+  margin: 0 0 12px;
 }
 
 .step-pill {
@@ -372,22 +359,23 @@ a:hover {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(122, 162, 255, 0.22);
+  border-radius: 0;
+  border: 1px solid var(--line);
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 600;
+  background: var(--surface);
 }
 
 .step-pill.active {
-  color: #fff;
-  background: rgba(43, 107, 255, 0.22);
-  border-color: rgba(43, 107, 255, 0.55);
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border-color: #c9daf8;
 }
 
-/* Phones in landscape: keep form usable */
 @media (max-height: 520px) and (orientation: landscape) {
   .shell {
+    display: grid;
     width: min(920px, 100%);
     grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1.1fr);
     align-items: start;
@@ -396,7 +384,7 @@ a:hover {
 
   .header {
     grid-column: 1;
-    grid-template-columns: 56px 1fr;
+    grid-template-columns: 48px 1fr;
   }
 
   .card {
@@ -409,7 +397,6 @@ a:hover {
   }
 }
 
-/* Larger phones / small tablets */
 @media (min-width: 480px) {
   .row-2 {
     grid-template-columns: 1fr 1fr;
@@ -420,12 +407,11 @@ a:hover {
   }
 }
 
-/* Tablets / desktops */
 @media (min-width: 768px) {
   .shell {
     width: min(640px, 100%);
     padding-top: max(40px, env(safe-area-inset-top, 0px));
-    gap: 22px;
+    gap: 20px;
   }
 
   .steps {
@@ -434,18 +420,17 @@ a:hover {
   }
 
   .header {
-    grid-template-columns: 72px 1fr;
+    grid-template-columns: 64px 1fr;
   }
 
   .logo {
-    width: 72px;
-    height: 72px;
-    border-radius: 20px;
+    width: 64px;
+    height: 64px;
   }
 
   .logo img {
-    width: 48px;
-    height: 48px;
+    width: 42px;
+    height: 42px;
   }
 
   .photo-box {
@@ -475,12 +460,5 @@ a:hover {
   *::after {
     animation: none !important;
     transition: none !important;
-  }
-}
-
-@supports (padding: max(0px)) {
-  .shell {
-    padding-left: max(16px, env(safe-area-inset-left));
-    padding-right: max(16px, env(safe-area-inset-right));
   }
 }
