@@ -15,7 +15,6 @@ const assets = [
   "face.js",
   "force-refresh.js",
   "synk-logo.svg",
-  "apple-touch-icon.png",
   "version.json",
 ];
 
@@ -27,6 +26,14 @@ for (const name of assets) {
   }
   fs.copyFileSync(from, to);
 }
+
+// Synk-branded home-screen icon (not the visitor kiosk icon).
+const touchIconSrc = path.join(root, "src", "apple-touch-icon.png");
+const touchIconDest = path.join(publicDir, "apple-touch-icon.png");
+if (!fs.existsSync(touchIconSrc)) {
+  throw new Error(`Missing Synk Admin touch icon: ${touchIconSrc}`);
+}
+fs.copyFileSync(touchIconSrc, touchIconDest);
 
 if (!fs.existsSync(sourceHtml)) {
   throw new Error(`Missing Synk Admin page: ${sourceHtml}`);
