@@ -269,12 +269,13 @@
         }
 
         btn.disabled = true;
-        statusEl.textContent = "Processing photo…";
+        statusEl.textContent = "Loading face check…";
         try {
           if (!window.KioskFace) {
-            throw new Error("Verification library is still loading. Please wait a moment and try again.");
+            throw new Error("Face check is still loading. Wait a moment and try again.");
           }
           await window.KioskFace.ensureFaceApi();
+          statusEl.textContent = "Reading face from photo…";
           const optimized = await optimizePhoto(selectedFile);
           const descriptor = await window.KioskFace.descriptorFromImage(optimized.canvas);
           statusEl.textContent = "Submitting request…";
