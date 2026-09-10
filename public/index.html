@@ -1585,7 +1585,7 @@
       kioskChatForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const body = kioskChatInput.value.trim();
-        if (!body || !chatSessionId) return;
+        if (!body || !chatSessionId || kioskChatForm.classList.contains("hidden") || kioskChatInput.disabled) return;
         const btn = kioskChatForm.querySelector("button[type='submit']");
         btn.disabled = true;
         try {
