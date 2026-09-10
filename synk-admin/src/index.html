@@ -65,7 +65,7 @@
           <button class="btn" type="submit" id="unlock-btn">Sign in</button>
         </form>
         <p class="muted" style="margin-top:14px;font-size:0.82rem;">
-          Protected with 2FA, revocable server sessions, and idle auto-lock.
+          Protected with 2FA and revocable server sessions. Your session stays on this device.
         </p>
       </section>
     </main>
@@ -297,7 +297,7 @@
         <section class="panel">
           <h2>Session</h2>
           <p class="muted" style="margin:0 0 12px;">
-            Lock signs you out on this device and revokes the current server session. Idle time also auto-locks.
+            Lock signs you out on this device and revokes the current server session. Your session is otherwise kept on this device for easy return.
           </p>
           <button class="btn btn-danger" type="button" id="lock-btn-settings">Lock</button>
         </section>
@@ -371,11 +371,9 @@
 
       const STORAGE_KEY = "synk_admin_session";
       const PANE_KEY = "synk_admin_pane";
-      const DEFAULT_IDLE_SEC = 30 * 60;
 
       let sessionToken = "";
       let sessionExpiresAt = "";
-      let sessionIdleTimeoutSec = DEFAULT_IDLE_SEC;
       let sessionUsername = "";
       let sessionId = "";
       let synkProfilesCache = [];
@@ -384,7 +382,6 @@
       let synkEventTypesCache = [];
       let synkSessionsCache = [];
       let pollTimer = null;
-      let idleTimer = null;
       let locking = false;
 
       function showToast(message) {
@@ -432,22 +429,20 @@
             return {
               token: String(parsed.token),
               expiresAt: parsed.expiresAt || "",
-              idleTimeoutSec: Number(parsed.idleTimeoutSec) || DEFAULT_IDLE_SEC,
             };
           }
         } catch (_) {
           /* legacy plain token string */
         }
-        return { token: raw, expiresAt: "", idleTimeoutSec: DEFAULT_IDLE_SEC };
+        return { token: raw, expiresAt: "" };
       }
 
-      function writeStoredSession({ token, expiresAt, idleTimeoutSec }) {
+      function writeStoredSession({ token, expiresAt }) {
         localStorage.setItem(
           STORAGE_KEY,
           JSON.stringify({
             token: String(token || ""),
             expiresAt: expiresAt || null,
-            idleTimeoutSec: Number(idleTimeoutSec) || DEFAULT_IDLE_SEC,
           })
         );
       }
@@ -488,37 +483,15 @@
         }
       }
 
-      function stopIdleWatch() {
-        if (idleTimer) {
-          clearTimeout(idleTimer);
-          idleTimer = null;
-        }
-      }
-
-      function resetIdleTimer() {
-        if (!sessionToken) return;
-        stopIdleWatch();
-        const ms = Math.max(60, Number(sessionIdleTimeoutSec) || DEFAULT_IDLE_SEC) * 1000;
-        idleTimer = setTimeout(() => {
-          showToast("Locked after idle");
-          lockAdmin({ remote: true });
-        }, ms);
-      }
-
-      function startIdleWatch() {
-        resetIdleTimer();
-      }
 
       async function lockAdmin({ remote = true } = {}) {
         if (locking) return;
         locking = true;
         const token = sessionToken;
-        stopIdleWatch();
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = null;
         sessionToken = "";
         sessionExpiresAt = "";
-        sessionIdleTimeoutSec = DEFAULT_IDLE_SEC;
         sessionUsername = "";
         sessionId = "";
         clearStoredSession();
@@ -880,11 +853,7 @@
           writeStoredSession({
             token: sessionToken,
             expiresAt: sessionExpiresAt,
-            idleTimeoutSec: sessionIdleTimeoutSec,
           });
-        }
-        if (data.idleTimeoutSec) {
-          sessionIdleTimeoutSec = Number(data.idleTimeoutSec) || DEFAULT_IDLE_SEC;
         }
         synkSessionsCache = data.sessions || [];
         updateOverviewSubtitle();
@@ -996,14 +965,10 @@
         sessionToken = String(token || "").trim();
         if (!sessionToken) throw new Error("Missing session");
         if (meta.expiresAt) sessionExpiresAt = meta.expiresAt;
-        if (meta.idleTimeoutSec) {
-          sessionIdleTimeoutSec = Number(meta.idleTimeoutSec) || DEFAULT_IDLE_SEC;
-        }
         await refreshSettings();
         writeStoredSession({
           token: sessionToken,
           expiresAt: sessionExpiresAt,
-          idleTimeoutSec: sessionIdleTimeoutSec,
         });
         unlockView.classList.add("hidden");
         panelView.classList.remove("hidden");
@@ -1011,7 +976,6 @@
         setAdminPane(localStorage.getItem(PANE_KEY) || "overview");
         await Promise.all([refreshSynkProfiles(), refreshSynkApps(), refreshSynkActivity()]);
         refreshSessions().catch(() => {});
-        startIdleWatch();
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(() => {
           refreshSynkApps().catch(() => {});
@@ -1033,7 +997,6 @@
         sessionId = data.sessionId || "";
         await openAdminSession(data.token, {
           expiresAt: data.expiresAt || "",
-          idleTimeoutSec: data.idleTimeoutSec || DEFAULT_IDLE_SEC,
         });
       }
 
@@ -1500,15 +1463,6 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
         }
       });
 
-      ["pointerdown", "keydown"].forEach((evt) => {
-        document.addEventListener(
-          evt,
-          () => {
-            if (sessionToken) resetIdleTimer();
-          },
-          { passive: true }
-        );
-      });
 
       fetch("/api/kiosk-status")
         .then((res) => res.json())
@@ -1522,10 +1476,8 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
       const stored = readStoredSession();
       if (stored && stored.token) {
         sessionExpiresAt = stored.expiresAt || "";
-        sessionIdleTimeoutSec = Number(stored.idleTimeoutSec) || DEFAULT_IDLE_SEC;
         openAdminSession(stored.token, {
           expiresAt: sessionExpiresAt,
-          idleTimeoutSec: sessionIdleTimeoutSec,
         }).catch(() => {
           lockAdmin({ remote: false });
         });
@@ -1533,7 +1485,6 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
 
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && sessionToken) {
-          resetIdleTimer();
           refreshAll().catch(() => {});
           refreshSessions().catch(() => {});
         }
