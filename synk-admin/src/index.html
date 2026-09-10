@@ -14,7 +14,7 @@
     <title>Synk Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synk-admin12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin12" />
-    <link rel="stylesheet" href="/admin.css?v=layout2" />
+    <link rel="stylesheet" href="/admin.css?v=mobile4" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js?v=facefix2" defer></script>
   </head>
@@ -114,6 +114,7 @@
           <div class="btn-row">
             <button class="btn btn-compact" type="button" data-jump="members">Add member</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="requests">Review requests</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-jump="business">Business accounts</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="apps">Manage apps</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="activity">View activity</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="settings">Settings</button>
@@ -194,6 +195,7 @@
       <div id="pane-apps" class="admin-pane hidden">
         <header class="admin-header">
           <div>
+            <button type="button" class="text-back" data-jump="more">← More</button>
             <h1>Apps</h1>
             <p class="muted">
               Registered API apps. Verify actions (auto-admit, autofill, etc.) are owned by each
@@ -224,6 +226,7 @@
       <div id="pane-activity" class="admin-pane hidden">
         <header class="admin-header">
           <div>
+            <button type="button" class="text-back" data-jump="more">← More</button>
             <h1>Activity</h1>
             <p class="muted">Verification events and administrative actions.</p>
           </div>
@@ -255,7 +258,7 @@
         <header class="admin-header">
           <div>
             <h1>Requests</h1>
-            <p class="muted">Membership and Synk Business API access requests.</p>
+            <p class="muted">Pending Synk membership applications.</p>
           </div>
           <div class="admin-header-actions">
             <button class="btn btn-secondary btn-compact" type="button" id="refresh-requests-btn">Refresh</button>
@@ -266,19 +269,61 @@
           <div id="synk-requests" class="synk-sessions"></div>
           <p id="synk-requests-empty" class="chat-empty-note">No pending membership requests.</p>
         </section>
+      </div>
+
+      <div id="pane-business" class="admin-pane hidden">
+        <header class="admin-header">
+          <div>
+            <h1>Business</h1>
+            <p class="muted">Approve accounts and manage Synk Business portal access.</p>
+          </div>
+          <div class="admin-header-actions">
+            <button class="btn btn-secondary btn-compact" type="button" id="refresh-business-btn">Refresh</button>
+          </div>
+        </header>
         <section class="panel">
-          <h2>Synk Business</h2>
+          <h2>Accounts</h2>
           <p class="muted" style="margin:0 0 12px;font-size:0.85rem;">
-            Approving creates API access. Visitor Sign-In is preconnected.
+            Approving a business issues API access and lets them use the Synk Business portal.
           </p>
           <div id="synk-businesses" class="synk-sessions"></div>
           <p id="synk-businesses-empty" class="chat-empty-note">No business accounts yet.</p>
         </section>
       </div>
 
+      <div id="pane-more" class="admin-pane hidden">
+        <header class="admin-header">
+          <div>
+            <h1>More</h1>
+            <p class="muted">Apps, activity, and admin settings.</p>
+          </div>
+        </header>
+        <section class="panel">
+          <div class="more-nav">
+            <button type="button" class="more-nav-item" data-jump="apps">
+              <span class="more-nav-title">Apps</span>
+              <span class="more-nav-meta">Registered API applications</span>
+            </button>
+            <button type="button" class="more-nav-item" data-jump="activity">
+              <span class="more-nav-title">Activity</span>
+              <span class="more-nav-meta">Events, filters, and CSV export</span>
+            </button>
+            <button type="button" class="more-nav-item" data-jump="settings">
+              <span class="more-nav-title">Settings</span>
+              <span class="more-nav-meta">Account, admins, and sessions</span>
+            </button>
+            <button type="button" class="more-nav-item more-nav-danger" id="more-lock-btn">
+              <span class="more-nav-title">Lock</span>
+              <span class="more-nav-meta">Sign out on this device</span>
+            </button>
+          </div>
+        </section>
+      </div>
+
       <div id="pane-settings" class="admin-pane hidden">
         <header class="admin-header">
           <div>
+            <button type="button" class="text-back" data-jump="more">← More</button>
             <h1>Settings</h1>
             <p class="muted">Verification preferences and account security.</p>
           </div>
@@ -398,12 +443,26 @@
       </div>
 
       <nav class="admin-tabbar" aria-label="Synk Admin sections">
-        <button type="button" class="admin-tab active" data-pane="overview" id="tab-overview">Home</button>
-        <button type="button" class="admin-tab" data-pane="members" id="tab-members">Members</button>
-        <button type="button" class="admin-tab" data-pane="requests" id="tab-requests">Requests</button>
-        <button type="button" class="admin-tab" data-pane="apps" id="tab-apps">Apps</button>
-        <button type="button" class="admin-tab" data-pane="activity" id="tab-activity">Activity</button>
-        <button type="button" class="admin-tab" data-pane="settings" id="tab-settings">Settings</button>
+        <button type="button" class="admin-tab active" data-pane="overview" id="tab-overview">
+          <span class="admin-tab-icon" aria-hidden="true">⌂</span>
+          <span class="admin-tab-label">Home</span>
+        </button>
+        <button type="button" class="admin-tab" data-pane="members" id="tab-members">
+          <span class="admin-tab-icon" aria-hidden="true">☺</span>
+          <span class="admin-tab-label">Members</span>
+        </button>
+        <button type="button" class="admin-tab" data-pane="requests" id="tab-requests">
+          <span class="admin-tab-icon" aria-hidden="true">✉</span>
+          <span class="admin-tab-label">Requests</span>
+        </button>
+        <button type="button" class="admin-tab" data-pane="business" id="tab-business">
+          <span class="admin-tab-icon" aria-hidden="true">▣</span>
+          <span class="admin-tab-label">Business</span>
+        </button>
+        <button type="button" class="admin-tab" data-pane="more" id="tab-more">
+          <span class="admin-tab-icon" aria-hidden="true">•••</span>
+          <span class="admin-tab-label">More</span>
+        </button>
       </nav>
     </div>
 
@@ -419,6 +478,8 @@
         overview: document.getElementById("pane-overview"),
         members: document.getElementById("pane-members"),
         requests: document.getElementById("pane-requests"),
+        business: document.getElementById("pane-business"),
+        more: document.getElementById("pane-more"),
         apps: document.getElementById("pane-apps"),
         activity: document.getElementById("pane-activity"),
         settings: document.getElementById("pane-settings"),
@@ -427,10 +488,11 @@
         overview: document.getElementById("tab-overview"),
         members: document.getElementById("tab-members"),
         requests: document.getElementById("tab-requests"),
-        apps: document.getElementById("tab-apps"),
-        activity: document.getElementById("tab-activity"),
-        settings: document.getElementById("tab-settings"),
+        business: document.getElementById("tab-business"),
+        more: document.getElementById("tab-more"),
       };
+      const MORE_PANES = new Set(["apps", "activity", "settings", "more"]);
+      const TAB_PANES = new Set(["overview", "members", "requests", "business", "more"]);
 
       const synkEnrollForm = document.getElementById("synk-enroll-form");
       const synkEnrollName = document.getElementById("synk-enroll-name");
@@ -569,7 +631,12 @@
         const next = panes[pane] ? pane : "overview";
         Object.keys(panes).forEach((key) => {
           panes[key].classList.toggle("hidden", key !== next);
-          tabs[key].classList.toggle("active", key === next);
+        });
+        Object.keys(tabs).forEach((key) => {
+          const active =
+            key === next ||
+            (key === "more" && (next === "apps" || next === "activity" || next === "settings"));
+          tabs[key].classList.toggle("active", Boolean(active));
         });
         localStorage.setItem(PANE_KEY, next);
         if (next === "settings") {
@@ -586,6 +653,13 @@
         if (next === "requests") {
           refreshSynkRequests().catch(() => {});
         }
+        if (next === "business") {
+          refreshSynkBusinesses().catch(() => {});
+        }
+        if (next === "apps") {
+          refreshSynkApps().catch(() => {});
+        }
+        window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
       }
 
 
@@ -776,7 +850,7 @@
                 <code>${escapeHtml(app.slug)}</code>
                 · ${escapeHtml(synkVerifyActionLabel(app.verifyAction || "pending"))}
                 ${app.enabled ? "" : " · paused"}
-                ${app.slug === "visitor-signin" ? " · preconnected" : ""}
+                
               </div>
               <div class="synk-profile-actions">
                 <button class="btn btn-secondary btn-compact" type="button" data-synk-app-action="rotate">Rotate API key</button>
@@ -1452,10 +1526,28 @@
       }
 
       const refreshRequestsBtn = document.getElementById("refresh-requests-btn");
+      const refreshBusinessBtn = document.getElementById("refresh-business-btn");
+      if (refreshBusinessBtn) {
+        refreshBusinessBtn.addEventListener("click", async () => {
+          try {
+            await refreshSynkBusinesses();
+            showToast("Business accounts refreshed");
+          } catch (err) {
+            showToast(err.message || "Could not refresh business accounts");
+          }
+        });
+      }
+      const moreLockBtn = document.getElementById("more-lock-btn");
+      if (moreLockBtn) {
+        moreLockBtn.addEventListener("click", () => {
+          lockAdmin().catch(() => {});
+        });
+      }
+
       if (refreshRequestsBtn) {
         refreshRequestsBtn.addEventListener("click", async () => {
           try {
-            await Promise.all([refreshSynkRequests(), refreshSynkBusinesses()]);
+            await refreshSynkRequests();
             showToast("Requests refreshed");
           } catch (err) {
             showToast(err.message || "Could not refresh requests");
