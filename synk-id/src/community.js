@@ -598,11 +598,18 @@
                 ${tagChip(author.pinnedTag, { compact: true })}
                 <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
               </div>
-              <div class="reddit-post-title">${escapeHtml(post.body || "")}</div>
+              <h3 class="reddit-post-title">${escapeHtml((String(post.body || "").trim().split("\n")[0] || "Post").slice(0, 180))}</h3>
+              ${
+                String(post.body || "").trim().includes("\n")
+                  ? `<div class="reddit-post-body">${escapeHtml(String(post.body || "").trim().split("\n").slice(1).join("\n").trim())}</div>`
+                  : String(post.body || "").trim().length > 180
+                    ? `<div class="reddit-post-body">${escapeHtml(String(post.body || "").trim().slice(180))}</div>`
+                    : ""
+              }
               <div class="reddit-post-actions">
-                <span class="reddit-action">💬 Comment</span>
-                <span class="reddit-action">↗ Share</span>
-                <span class="reddit-action">☆ Save</span>
+                <button class="reddit-action" type="button" disabled>Comments</button>
+                <button class="reddit-action" type="button" data-share="${escapeHtml(group && group.slug ? group.slug : "")}">Share</button>
+                <button class="reddit-action" type="button" disabled>Save</button>
               </div>
             </div>
           </article>
