@@ -14,7 +14,7 @@
     <title>Synk Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synk-admin12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin12" />
-    <link rel="stylesheet" href="/admin.css?v=member-badges1" />
+    <link rel="stylesheet" href="/admin.css?v=member-detail2" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js?v=facefix4" defer></script>
   </head>
@@ -153,7 +153,7 @@
         <header class="admin-header">
           <div>
             <h1>Members</h1>
-            <p class="muted">Add members and manage verification credentials.</p>
+            <p class="muted">Browse members here. Open one to moderate, remove badges, or log in as them.</p>
           </div>
         </header>
 
@@ -184,12 +184,18 @@
         <section class="panel">
           <h2>Directory</h2>
           <p class="muted" style="margin:0 0 10px;font-size:0.85rem;" id="members-count-label">0 members</p>
+          <p class="muted" style="margin:0 0 10px;font-size:0.85rem;">Tap a member to open moderation actions.</p>
           <div class="field">
             <label for="member-search">Search</label>
             <input id="member-search" type="search" placeholder="Name or Synk code" autocomplete="off" />
           </div>
-          <div id="synk-profiles" class="synk-profiles"></div>
-          <p id="synk-profiles-empty" class="chat-empty-note">No members yet.</p>
+          <div class="synk-directory-layout">
+            <div class="synk-directory-list-wrap">
+              <div id="synk-profiles" class="synk-profiles"></div>
+              <p id="synk-profiles-empty" class="chat-empty-note">No members yet.</p>
+            </div>
+            <aside id="synk-member-detail" class="synk-member-detail hidden" aria-live="polite"></aside>
+          </div>
         </section>
       </div>
 
@@ -627,6 +633,7 @@
       const synkEnrollStatus = document.getElementById("synk-enroll-status");
       const synkProfilesEl = document.getElementById("synk-profiles");
       const synkProfilesEmpty = document.getElementById("synk-profiles-empty");
+      const synkMemberDetailEl = document.getElementById("synk-member-detail");
       const memberSearch = document.getElementById("member-search");
       const membersCountLabel = document.getElementById("members-count-label");
       const synkAppForm = document.getElementById("synk-app-form");
@@ -683,6 +690,7 @@
       let sessionUsername = "";
       let sessionId = "";
       let synkProfilesCache = [];
+      let selectedSynkProfileId = "";
       let synkAppsCache = [];
       let synkEventsCache = [];
       let synkEventTypesCache = [];
@@ -940,6 +948,18 @@
         });
       }
 
+      function closeMemberDetail() {
+        selectedSynkProfileId = "";
+        if (synkMemberDetailEl) {
+          synkMemberDetailEl.classList.add("hidden");
+          synkMemberDetailEl.innerHTML = "";
+        }
+        synkProfilesEl.querySelectorAll(".synk-profile-row.is-selected").forEach((el) => {
+          el.classList.remove("is-selected");
+          el.setAttribute("aria-selected", "false");
+        });
+      }
+
       function renderMemberBadges(profile) {
         const badges = Array.isArray(profile.badges) ? profile.badges : [];
         if (!badges.length) {
@@ -954,10 +974,10 @@
                   const color = escapeHtml(badge.color || "#6366f1");
                   const name = escapeHtml(badge.name || "Badge");
                   const username = escapeHtml(badge.username || "");
-                  const pinned = badge.pinned ? " · pinned" : "";
+                  const pinned = badge.pinned ? "pinned" : "";
                   const account =
                     badge.account === "alt" ? "alt" : badge.account === "primary" ? "primary" : "";
-                  const meta = [username ? `@${username}` : "", account, pinned.replace(/^ · /, "")]
+                  const meta = [username ? `@${username}` : "", account, pinned]
                     .filter(Boolean)
                     .join(" · ");
                   const icon = badge.iconUrl
@@ -987,6 +1007,97 @@
         `;
       }
 
+      function renderMemberDetail(profile) {
+        if (!synkMemberDetailEl) return;
+        if (!profile) {
+          closeMemberDetail();
+          return;
+        }
+        const photo = profile.photoUrl
+          ? `<img src="${escapeHtml(profile.photoUrl)}" alt="" />`
+          : `<img alt="" style="background:#ddd" />`;
+        const code = profile.synkCode || "";
+        synkMemberDetailEl.classList.remove("hidden");
+        synkMemberDetailEl.innerHTML = `
+          <div class="synk-member-detail-card" data-synk-id="${escapeHtml(profile.id)}">
+            <div class="synk-member-detail-top">
+              <button class="btn btn-secondary btn-compact" type="button" data-synk-action="close-detail">Close</button>
+              <div class="synk-member-detail-identity">
+                ${photo}
+                <div>
+                  <strong>${escapeHtml(profile.name || "Member")}</strong>
+                  <div class="synk-code-row">
+                    <div class="synk-code">${escapeHtml(code)}</div>
+                    ${
+                      code
+                        ? `<button class="btn btn-secondary btn-compact" type="button" data-synk-action="copy-code" data-synk-code="${escapeHtml(code)}">Copy</button>`
+                        : ""
+                    }
+                  </div>
+                  <div class="muted" style="font-size:0.82rem;margin-top:4px;">
+                    DOB ${escapeHtml(formatDob(profile.dateOfBirth))}
+                    · ${profile.hasBiometrics ? "Face enrolled" : "Needs face photo"}
+                    ${profile.hasSecret ? " · Recovery passphrase" : ""}
+                    ${profile.enabled ? "" : " · paused"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="synk-member-detail-section">
+              <h3>Log in as</h3>
+              <div class="synk-profile-actions">
+                <button class="btn btn-primary btn-compact" type="button" data-synk-action="act-as">Open as member</button>
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-action="act-as-hub">Open hub as them</button>
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-action="act-as-community">Open community as them</button>
+              </div>
+            </div>
+
+            <div class="synk-member-detail-section">
+              <h3>Badges</h3>
+              ${renderMemberBadges(profile)}
+            </div>
+
+            <div class="synk-member-detail-section">
+              <h3>Moderation</h3>
+              <label class="field" style="margin:0 0 10px;">
+                <span class="muted" style="font-size:0.78rem;">Reset secret (optional)</span>
+                <input type="password" data-synk-action="secret" placeholder="New passphrase" maxlength="200" autocomplete="new-password" />
+              </label>
+              <div class="synk-profile-actions">
+                <label class="btn btn-secondary btn-compact" style="cursor:pointer;">
+                  Update face
+                  <input type="file" accept="image/jpeg,image/png,image/webp" data-synk-action="photo" hidden />
+                </label>
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-action="save-secret">Save secret</button>
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-action="toggle">${profile.enabled ? "Pause" : "Enable"}</button>
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-action="revoke-passes">Revoke passes</button>
+                <button class="btn btn-danger btn-compact" type="button" data-synk-action="delete">Remove member</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function selectMember(profileId, { scrollDetail = true } = {}) {
+        const id = String(profileId || "");
+        const profile = synkProfilesCache.find((p) => p.id === id);
+        if (!profile) {
+          closeMemberDetail();
+          return;
+        }
+        selectedSynkProfileId = id;
+        synkProfilesEl.querySelectorAll(".synk-profile-row").forEach((el) => {
+          const on = el.getAttribute("data-synk-id") === id;
+          el.classList.toggle("is-selected", on);
+          el.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        renderMemberDetail(profile);
+        if (scrollDetail && synkMemberDetailEl) {
+          synkMemberDetailEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }
+
       function renderSynkProfiles() {
         const profiles = filteredProfiles();
         membersCountLabel.textContent = `${synkProfilesCache.length} member${synkProfilesCache.length === 1 ? "" : "s"}`;
@@ -996,6 +1107,7 @@
           synkProfilesEmpty.textContent = synkProfilesCache.length
             ? "No members match that search."
             : "No Synk members yet.";
+          if (selectedSynkProfileId) closeMemberDetail();
           return;
         }
         synkProfilesEmpty.classList.add("hidden");
@@ -1005,52 +1117,35 @@
               ? `<img src="${escapeHtml(profile.photoUrl)}" alt="" />`
               : `<img alt="" style="background:#ddd" />`;
             const code = profile.synkCode || "";
+            const selected = profile.id === selectedSynkProfileId;
             return `
-              <article class="synk-profile-card ${profile.enabled ? "" : "disabled"}" data-synk-id="${escapeHtml(profile.id)}">
+              <button
+                class="synk-profile-row ${profile.enabled ? "" : "disabled"} ${selected ? "is-selected" : ""}"
+                type="button"
+                data-synk-id="${escapeHtml(profile.id)}"
+                aria-selected="${selected ? "true" : "false"}"
+              >
                 ${photo}
-                <div class="synk-profile-meta">
-                  <div>
-                    <strong>${escapeHtml(profile.name)}</strong>
-                    <div class="synk-code-row">
-                      <div class="synk-code">${escapeHtml(code)}</div>
-                      ${
-                        code
-                          ? `<button class="btn btn-secondary btn-compact" type="button" data-synk-action="copy-code" data-synk-code="${escapeHtml(code)}">Copy</button>`
-                          : ""
-                      }
-                    </div>
-                    <div class="muted" style="font-size:0.82rem;margin-top:4px;">
-                      DOB ${escapeHtml(formatDob(profile.dateOfBirth))}
-                      · ${profile.hasBiometrics ? "Face enrolled" : "Needs face photo"}
-                      ${profile.hasSecret ? " · Recovery passphrase" : ""}
-                      ${profile.enabled ? "" : " · paused"}
-                    </div>
-                  </div>
-                  ${renderMemberBadges(profile)}
-                  <label class="field" style="margin:0;">
-                    <span class="muted" style="font-size:0.78rem;">Reset secret (optional)</span>
-                    <input type="password" data-synk-action="secret" placeholder="New passphrase" maxlength="200" autocomplete="new-password" />
-                  </label>
-                  <div class="synk-profile-actions">
-                    <label class="btn btn-secondary btn-compact" style="cursor:pointer;">
-                      Update face
-                      <input type="file" accept="image/jpeg,image/png,image/webp" data-synk-action="photo" hidden />
-                    </label>
-                    <button class="btn btn-secondary btn-compact" type="button" data-synk-action="save-secret">Save secret</button>
-                    <button class="btn btn-secondary btn-compact" type="button" data-synk-action="toggle">${profile.enabled ? "Pause" : "Enable"}</button>
-                    <button class="btn btn-secondary btn-compact" type="button" data-synk-action="revoke-passes">Revoke passes</button>
-                    <button class="btn btn-primary btn-compact" type="button" data-synk-action="act-as" title="Open Synk ID and Community as this member">Open as member</button>
-                    <div class="synk-act-as-links" style="display:flex;flex-wrap:wrap;gap:6px;width:100%;">
-                      <button class="btn btn-secondary btn-compact" type="button" data-synk-action="act-as-hub">Open hub as them</button>
-                      <button class="btn btn-secondary btn-compact" type="button" data-synk-action="act-as-community">Open community as them</button>
-                    </div>
-                    <button class="btn btn-danger btn-compact" type="button" data-synk-action="delete">Remove</button>
-                  </div>
-                </div>
-              </article>
+                <span class="synk-profile-row-meta">
+                  <strong>${escapeHtml(profile.name || "Member")}</strong>
+                  <span class="synk-code">${escapeHtml(code)}</span>
+                </span>
+              </button>
             `;
           })
           .join("");
+
+        if (selectedSynkProfileId) {
+          const stillVisible = profiles.some((p) => p.id === selectedSynkProfileId);
+          const stillExists = synkProfilesCache.some((p) => p.id === selectedSynkProfileId);
+          if (!stillExists) closeMemberDetail();
+          else if (stillVisible) selectMember(selectedSynkProfileId, { scrollDetail: false });
+          else {
+            // Keep detail open even if filtered out of the list.
+            const profile = synkProfilesCache.find((p) => p.id === selectedSynkProfileId);
+            renderMemberDetail(profile);
+          }
+        }
       }
 
       function renderSynkApps(apps) {
@@ -2584,205 +2679,230 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
         }
       });
 
-      synkProfilesEl.addEventListener("change", async (e) => {
-        const photoInput = e.target.closest('[data-synk-action="photo"]');
-        const card = e.target.closest("[data-synk-id]");
-        if (!card) return;
-        const id = card.getAttribute("data-synk-id");
+      /* photo updates now handled in member detail panel */
 
-        if (!photoInput) return;
-        const file = photoInput.files && photoInput.files[0];
-        if (!file) return;
-        try {
-          showToast("Updating biometrics…");
-          if (!window.KioskFace) throw new Error("Face library still loading");
-          await window.KioskFace.ensureFaceApi();
-          const uploaded = await uploadSynkPhoto(file);
-          const descriptor = await window.KioskFace.descriptorFromImage(uploaded.canvas);
-          const res = await fetch("/api/synk-profiles", {
-            method: "PATCH",
-            headers: adminHeaders(),
-            body: JSON.stringify({ id, photoUrl: uploaded.url, descriptor }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not update photo");
-          showToast("Biometrics updated");
-          await refreshSynkProfiles();
-        } catch (err) {
-          showToast(err.message || "Could not update photo");
-        } finally {
-          photoInput.value = "";
-        }
-      });
+      
 
-      synkProfilesEl.addEventListener("click", async (e) => {
-        const btn = e.target.closest("[data-synk-action]");
-        const card = e.target.closest("[data-synk-id]");
-        if (!btn || !card) return;
-        const action = btn.getAttribute("data-synk-action");
-        if (action === "photo" || action === "secret" || action === "policy") return;
-
-        if (action === "copy-code") {
-          const code = btn.getAttribute("data-synk-code") || "";
-          if (!code) return;
-          try {
-            await navigator.clipboard.writeText(code);
-            showToast("Synk code copied");
-          } catch (_) {
-            showToast(code);
-          }
+      synkProfilesEl.addEventListener("click", (e) => {
+        const row = e.target.closest(".synk-profile-row[data-synk-id]");
+        if (!row || !synkProfilesEl.contains(row)) return;
+        const id = row.getAttribute("data-synk-id");
+        if (!id) return;
+        if (id === selectedSynkProfileId) {
+          // toggle closed if already selected
+          closeMemberDetail();
           return;
         }
+        selectMember(id);
+      });
 
-        const id = card.getAttribute("data-synk-id");
-        const profile = synkProfilesCache.find((p) => p.id === id);
-        if (!profile) return;
+      if (synkMemberDetailEl) {
+        synkMemberDetailEl.addEventListener("click", async (e) => {
+          const btn = e.target.closest("[data-synk-action]");
+          const card = e.target.closest("[data-synk-id]");
+          if (!btn || !card) return;
+          const action = btn.getAttribute("data-synk-action");
+          if (action === "photo" || action === "secret" || action === "policy") return;
 
-        if (action === "remove-badge") {
-          const tagId = btn.getAttribute("data-tag-id") || "";
-          const username = btn.getAttribute("data-badge-username") || "";
-          if (!tagId) return;
-          const badge = (profile.badges || []).find(
-            (b) => String(b.id) === String(tagId) && (!username || String(b.username || "") === username)
-          );
-          const label = (badge && badge.name) || "this badge";
-          const where = username ? ` from @${username}` : "";
-          if (!confirm(`Remove ${label}${where} from ${profile.name}?`)) return;
-          btn.disabled = true;
-          try {
-            const res = await fetch("/api/synk-profiles", {
-              method: "PATCH",
-              headers: adminHeaders(),
-              body: JSON.stringify({
-                id,
-                action: "remove-badge",
-                tagId,
-                username: username || undefined,
-              }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not remove badge");
-            if (data.profile) {
-              synkProfilesCache = synkProfilesCache.map((p) =>
-                p.id === id ? { ...p, badges: data.profile.badges || [] } : p
-              );
-              renderSynkProfiles();
-            } else {
-              await refreshSynkProfiles();
+          if (action === "close-detail") {
+            closeMemberDetail();
+            return;
+          }
+
+          if (action === "copy-code") {
+            const code = btn.getAttribute("data-synk-code") || "";
+            if (!code) return;
+            try {
+              await navigator.clipboard.writeText(code);
+              showToast("Synk code copied");
+            } catch (_) {
+              showToast(code);
             }
-            showToast("Badge removed");
-          } catch (err) {
-            showToast(err.message || "Could not remove badge");
-            btn.disabled = false;
-          }
-          return;
-        }
-
-        if (action === "save-secret") {
-          const secretInput = card.querySelector('[data-synk-action="secret"]');
-          const nextSecret = secretInput ? secretInput.value.trim() : "";
-          if (!nextSecret) {
-            showToast("Enter a new secret first");
             return;
           }
+
+          const id = card.getAttribute("data-synk-id");
+          const profile = synkProfilesCache.find((p) => p.id === id);
+          if (!profile) return;
+
+          if (action === "remove-badge") {
+            const tagId = btn.getAttribute("data-tag-id") || "";
+            const username = btn.getAttribute("data-badge-username") || "";
+            if (!tagId) return;
+            const badge = (profile.badges || []).find(
+              (b) => String(b.id) === String(tagId) && (!username || String(b.username || "") === username)
+            );
+            const label = (badge && badge.name) || "this badge";
+            const where = username ? ` from @${username}` : "";
+            if (!confirm(`Remove ${label}${where} from ${profile.name}?`)) return;
+            btn.disabled = true;
+            try {
+              const res = await fetch("/api/synk-profiles", {
+                method: "PATCH",
+                headers: adminHeaders(),
+                body: JSON.stringify({
+                  id,
+                  action: "remove-badge",
+                  tagId,
+                  username: username || undefined,
+                }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not remove badge");
+              if (data.profile) {
+                synkProfilesCache = synkProfilesCache.map((p) =>
+                  p.id === id ? { ...p, badges: data.profile.badges || [] } : p
+                );
+                renderSynkProfiles();
+              } else {
+                await refreshSynkProfiles();
+              }
+              showToast("Badge removed");
+            } catch (err) {
+              showToast(err.message || "Could not remove badge");
+              btn.disabled = false;
+            }
+            return;
+          }
+
+          if (action === "save-secret") {
+            const secretInput = card.querySelector('[data-synk-action="secret"]');
+            const nextSecret = secretInput ? secretInput.value.trim() : "";
+            if (!nextSecret) {
+              showToast("Enter a new secret first");
+              return;
+            }
+            try {
+              const res = await fetch("/api/synk-profiles", {
+                method: "PATCH",
+                headers: adminHeaders(),
+                body: JSON.stringify({ id, secret: nextSecret }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not update secret");
+              if (secretInput) secretInput.value = "";
+              showToast("Secret updated");
+              await refreshSynkProfiles();
+            } catch (err) {
+              showToast(err.message || "Could not update secret");
+            }
+            return;
+          }
+
+          if (action === "toggle") {
+            try {
+              const res = await fetch("/api/synk-profiles", {
+                method: "PATCH",
+                headers: adminHeaders(),
+                body: JSON.stringify({ id, enabled: !profile.enabled }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not update");
+              showToast(profile.enabled ? "Paused" : "Enabled");
+              await refreshSynkProfiles();
+              await refreshSettings();
+            } catch (err) {
+              showToast(err.message || "Could not update");
+            }
+            return;
+          }
+
+          if (action === "revoke-passes") {
+            if (!confirm(`Revoke active passes for ${profile.name}?`)) return;
+            try {
+              const res = await fetch("/api/synk-passes", {
+                method: "POST",
+                headers: adminHeaders(),
+                body: JSON.stringify({ action: "revoke-member", profileId: id }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not revoke passes");
+              showToast(data.revoked ? `Revoked ${data.revoked} pass${data.revoked === 1 ? "" : "es"}` : "No active passes");
+              await refreshSynkPasses();
+              await refreshSynkActivity().catch(() => {});
+            } catch (err) {
+              showToast(err.message || "Could not revoke passes");
+            }
+            return;
+          }
+
+          if (action === "act-as" || action === "act-as-hub" || action === "act-as-community") {
+            const nextPath = action === "act-as-community" ? "/community" : "/hub";
+            const label = profile.name || profile.synkCode || "this member";
+            if (!confirm(`Open Synk as ${label}?\n\nYou'll use the app as them for about an hour. A banner will show that you're acting as them.`)) {
+              return;
+            }
+            try {
+              showToast("Starting member session…");
+              const res = await fetch("/api/synk-admin-act-as", {
+                method: "POST",
+                headers: adminHeaders(),
+                body: JSON.stringify({
+                  action: "start",
+                  profileId: id,
+                  nextPath,
+                  synkIdOrigin: window.SYNK_ID_ORIGIN || undefined,
+                }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not start act-as session");
+              if (!data.url) throw new Error("No act-as URL returned");
+              window.open(data.url, "_blank", "noopener,noreferrer");
+              showToast(`Opened as ${data.profile && data.profile.name ? data.profile.name : label}`);
+            } catch (err) {
+              showToast(err.message || "Could not open as member");
+            }
+            return;
+          }
+
+          if (action === "delete") {
+            if (!confirm(`Remove Synk ID for ${profile.name}?`)) return;
+            try {
+              const res = await fetch(`/api/synk-profiles?id=${encodeURIComponent(id)}`, {
+                method: "DELETE",
+                headers: adminHeaders(),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not remove");
+              showToast("Removed");
+              selectedSynkProfileId = "";
+              await refreshSynkProfiles();
+              await refreshSettings();
+            } catch (err) {
+              showToast(err.message || "Could not remove");
+            }
+          }
+        });
+
+        synkMemberDetailEl.addEventListener("change", async (e) => {
+          const photoInput = e.target.closest('[data-synk-action="photo"]');
+          const card = e.target.closest("[data-synk-id]");
+          if (!photoInput || !card) return;
+          const id = card.getAttribute("data-synk-id");
+          const file = photoInput.files && photoInput.files[0];
+          if (!file) return;
           try {
+            showToast("Updating biometrics…");
+            if (!window.KioskFace) throw new Error("Face library still loading");
+            await window.KioskFace.ensureFaceApi();
+            const uploaded = await uploadSynkPhoto(file);
+            const descriptor = await window.KioskFace.descriptorFromImage(uploaded.canvas);
             const res = await fetch("/api/synk-profiles", {
               method: "PATCH",
               headers: adminHeaders(),
-              body: JSON.stringify({ id, secret: nextSecret }),
+              body: JSON.stringify({ id, photoUrl: uploaded.url, descriptor }),
             });
             const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not update secret");
-            if (secretInput) secretInput.value = "";
-            showToast("Secret updated");
+            if (!res.ok) throw new Error(data.error || "Could not update photo");
+            showToast("Biometrics updated");
             await refreshSynkProfiles();
           } catch (err) {
-            showToast(err.message || "Could not update secret");
+            showToast(err.message || "Could not update photo");
+          } finally {
+            photoInput.value = "";
           }
-        }
-
-        if (action === "toggle") {
-          try {
-            const res = await fetch("/api/synk-profiles", {
-              method: "PATCH",
-              headers: adminHeaders(),
-              body: JSON.stringify({ id, enabled: !profile.enabled }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not update");
-            showToast(profile.enabled ? "Paused" : "Enabled");
-            await refreshSynkProfiles();
-            await refreshSettings();
-          } catch (err) {
-            showToast(err.message || "Could not update");
-          }
-        }
-
-        if (action === "revoke-passes") {
-          if (!confirm(`Revoke active passes for ${profile.name}?`)) return;
-          try {
-            const res = await fetch("/api/synk-passes", {
-              method: "POST",
-              headers: adminHeaders(),
-              body: JSON.stringify({ action: "revoke-member", profileId: id }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not revoke passes");
-            showToast(data.revoked ? `Revoked ${data.revoked} pass${data.revoked === 1 ? "" : "es"}` : "No active passes");
-            await refreshSynkPasses();
-            await refreshSynkActivity().catch(() => {});
-          } catch (err) {
-            showToast(err.message || "Could not revoke passes");
-          }
-        }
-
-
-        if (action === "act-as" || action === "act-as-hub" || action === "act-as-community") {
-          const nextPath = action === "act-as-community" ? "/community" : "/hub";
-          const label = profile.name || profile.synkCode || "this member";
-          if (!confirm(`Open Synk as ${label}?\n\nYou'll use the app as them for about an hour. A banner will show that you're acting as them.`)) {
-            return;
-          }
-          try {
-            showToast("Starting member session…");
-            const res = await fetch("/api/synk-admin-act-as", {
-              method: "POST",
-              headers: adminHeaders(),
-              body: JSON.stringify({
-                action: "start",
-                profileId: id,
-                nextPath,
-                synkIdOrigin: window.SYNK_ID_ORIGIN || undefined,
-              }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not start act-as session");
-            if (!data.url) throw new Error("No act-as URL returned");
-            window.open(data.url, "_blank", "noopener,noreferrer");
-            showToast(`Opened as ${data.profile && data.profile.name ? data.profile.name : label}`);
-          } catch (err) {
-            showToast(err.message || "Could not open as member");
-          }
-          return;
-        }
-
-        if (action === "delete") {
-          if (!confirm(`Remove Synk ID for ${profile.name}?`)) return;
-          try {
-            const res = await fetch(`/api/synk-profiles?id=${encodeURIComponent(id)}`, {
-              method: "DELETE",
-              headers: adminHeaders(),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not remove");
-            showToast("Removed");
-            await refreshSynkProfiles();
-            await refreshSettings();
-          } catch (err) {
-            showToast(err.message || "Could not remove");
-          }
-        }
-      });
+        });
+      }
 
       synkSessionsEl.addEventListener("click", async (e) => {
         const btn = e.target.closest("[data-session-action]");
