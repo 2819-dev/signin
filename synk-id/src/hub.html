@@ -14,10 +14,40 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=places1" />
+    <link rel="stylesheet" href="/join.css?v=act-as1" />
     <script src="/force-refresh.js" defer></script>
-  </head>
+  
+    <style>
+      .act-as-banner {
+        position: sticky;
+        top: 0;
+        z-index: 80;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 14px;
+        background: #7c2d12;
+        color: #fff7ed;
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+      .act-as-banner[hidden] { display: none !important; }
+      .act-as-banner .muted { color: #ffedd5; font-weight: 500; }
+      .act-as-banner button {
+        border: 1px solid rgba(255,255,255,.35);
+        background: transparent;
+        color: inherit;
+        border-radius: 999px;
+        padding: 4px 10px;
+        cursor: pointer;
+        font: inherit;
+      }
+    </style>
+</head>
   <body>
+    <div id="act-as-banner" class="act-as-banner" hidden role="status"></div>
+
     <header class="site-nav site-nav-light">
       <a class="brand" href="/hub" aria-label="Synk hub">
         <img src="/synk-logo.svg?v=circles2" alt="" width="28" height="28" />
@@ -302,6 +332,35 @@
 
       render();
       loadFeatureFlags();
+
+      (function showActAsBanner() {
+        const ACT_AS_KEY = "synk_admin_act_as";
+        const STORAGE_KEY = "synk_member_session";
+        let act = null;
+        try {
+          act = JSON.parse(sessionStorage.getItem(ACT_AS_KEY) || "null");
+        } catch (_) {}
+        const banner = document.getElementById("act-as-banner");
+        if (!banner || !act) return;
+        const session = (typeof readSession === "function" && readSession()) || null;
+        const name = (act && act.memberName) || (session && session.profile && session.profile.name) || "member";
+        const code = (act && act.memberCode) || (session && session.profile && session.profile.synkCode) || "";
+        banner.hidden = false;
+        banner.innerHTML = `<span>Acting as <strong>${name}</strong>${code ? ` <span class="muted">(${code})</span>` : ""} <span class="muted">· Synk Admin</span></span>
+          <button type="button" id="act-as-exit">Exit</button>`;
+        const exit = document.getElementById("act-as-exit");
+        if (exit) {
+          exit.addEventListener("click", () => {
+            try {
+              localStorage.removeItem(STORAGE_KEY);
+              sessionStorage.removeItem(STORAGE_KEY);
+              sessionStorage.removeItem(ACT_AS_KEY);
+            } catch (_) {}
+            location.href = "/verify";
+          });
+        }
+      })();
+
     </script>
       <script src="/support-chat.js?v=support4" defer></script>
   </body>

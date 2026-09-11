@@ -589,6 +589,7 @@
     <div id="toast" class="toast" role="status"></div>
 
     <script>
+      window.SYNK_ID_ORIGIN = "__SYNK_ID_ORIGIN__";
       const unlockView = document.getElementById("unlock-view");
       const panelView = document.getElementById("panel-view");
       const unlockForm = document.getElementById("unlock-form");
@@ -987,6 +988,11 @@
                     <button class="btn btn-secondary btn-compact" type="button" data-synk-action="save-secret">Save secret</button>
                     <button class="btn btn-secondary btn-compact" type="button" data-synk-action="toggle">${profile.enabled ? "Pause" : "Enable"}</button>
                     <button class="btn btn-secondary btn-compact" type="button" data-synk-action="revoke-passes">Revoke passes</button>
+                    <button class="btn btn-primary btn-compact" type="button" data-synk-action="act-as" title="Open Synk ID and Community as this member">Open as member</button>
+                    <div class="synk-act-as-links" style="display:flex;flex-wrap:wrap;gap:6px;width:100%;">
+                      <button class="btn btn-secondary btn-compact" type="button" data-synk-action="act-as-hub">Open hub as them</button>
+                      <button class="btn btn-secondary btn-compact" type="button" data-synk-action="act-as-community">Open community as them</button>
+                    </div>
                     <button class="btn btn-danger btn-compact" type="button" data-synk-action="delete">Remove</button>
                   </div>
                 </div>
@@ -2637,6 +2643,36 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
           } catch (err) {
             showToast(err.message || "Could not revoke passes");
           }
+        }
+
+
+        if (action === "act-as" || action === "act-as-hub" || action === "act-as-community") {
+          const nextPath = action === "act-as-community" ? "/community" : "/hub";
+          const label = profile.name || profile.synkCode || "this member";
+          if (!confirm(`Open Synk as ${label}?\n\nYou'll use the app as them for about an hour. A banner will show that you're acting as them.`)) {
+            return;
+          }
+          try {
+            showToast("Starting member session…");
+            const res = await fetch("/api/synk-admin-act-as", {
+              method: "POST",
+              headers: adminHeaders(),
+              body: JSON.stringify({
+                action: "start",
+                profileId: id,
+                nextPath,
+                synkIdOrigin: window.SYNK_ID_ORIGIN || undefined,
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not start act-as session");
+            if (!data.url) throw new Error("No act-as URL returned");
+            window.open(data.url, "_blank", "noopener,noreferrer");
+            showToast(`Opened as ${data.profile && data.profile.name ? data.profile.name : label}`);
+          } catch (err) {
+            showToast(err.message || "Could not open as member");
+          }
+          return;
         }
 
         if (action === "delete") {

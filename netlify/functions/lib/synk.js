@@ -1486,6 +1486,24 @@ async function ensureSynkCoreTables(sql) {
   `;
 
   await sql`
+    CREATE TABLE IF NOT EXISTS synk_admin_act_as_tokens (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      token_hash TEXT NOT NULL UNIQUE,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      hub_session_token TEXT NOT NULL,
+      hub_expires_at TIMESTAMPTZ NOT NULL,
+      admin_username TEXT NOT NULL DEFAULT '',
+      next_path TEXT NOT NULL DEFAULT '/hub',
+      expires_at TIMESTAMPTZ NOT NULL,
+      consumed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS synk_admin_act_as_expires_idx ON synk_admin_act_as_tokens (expires_at)`;
+  await sql`ALTER TABLE synk_admin_act_as_tokens ADD COLUMN IF NOT EXISTS hub_session_token TEXT`;
+  await sql`ALTER TABLE synk_admin_act_as_tokens ADD COLUMN IF NOT EXISTS hub_expires_at TIMESTAMPTZ`;
+
+  await sql`
     CREATE TABLE IF NOT EXISTS synk_community_profiles (
       synk_profile_id UUID PRIMARY KEY REFERENCES synk_profiles(id) ON DELETE CASCADE,
       public_username TEXT NOT NULL,
@@ -2300,10 +2318,12 @@ async function requireSynkApp(sql, event, body = {}) {
   return { ok: false, error: "Unauthorized Synk app" };
 }
 
-async function issueHubSession(sql, { profileId, staySignedIn = true }) {
+async function issueHubSession(sql, { profileId, staySignedIn = true, ttlMs: ttlMsOverride = null } = {}) {
   const token = mintPassToken();
   const tokenHash = hashToken(token);
-  const ttlMs = staySignedIn ? HUB_SESSION_TTL_MS : HUB_SESSION_SHORT_TTL_MS;
+  const ttlMs = Number.isFinite(Number(ttlMsOverride)) && Number(ttlMsOverride) > 0
+    ? Math.min(Math.round(Number(ttlMsOverride)), HUB_SESSION_TTL_MS)
+    : (staySignedIn ? HUB_SESSION_TTL_MS : HUB_SESSION_SHORT_TTL_MS);
   const expiresAt = new Date(Date.now() + ttlMs).toISOString();
   await sql`
     INSERT INTO synk_hub_sessions (synk_profile_id, token_hash, expires_at)
@@ -2972,6 +2992,193 @@ async function updateSynkProfilePhoto(sql, profileId, photoUrl) {
 }
 
 
+const ADMIN_ACT_AS_TTL_MS = 60 * 60 * 1000; // 1 hour acting session
+const ADMIN_ACT_AS_HANDOFF_TTL_MS = 2 * 60 * 1000; // 2 minutes to open the link
+
+function normalizeActAsNextPath(value) {
+  const raw = String(value || "/hub").trim() || "/hub";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/hub";
+  if (raw.includes("://")) return "/hub";
+  return raw.slice(0, 200);
+}
+
+async function createAdminActAsHandoff(sql, {
+  profileId,
+  adminUsername = "",
+  nextPath = "/hub",
+  synkIdOrigin = "",
+} = {}) {
+  await ensureSynkCoreTables(sql);
+  const profileRows = await sql`
+    SELECT id, synk_code, name, photo_url, enabled
+    FROM synk_profiles
+    WHERE id = ${profileId}
+    LIMIT 1
+  `;
+  const profile = profileRows[0];
+  if (!profile) {
+    const err = new Error("Member not found");
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+  if (profile.enabled === false) {
+    const err = new Error("This membership is paused — enable it before acting as them");
+    err.code = "DISABLED";
+    throw err;
+  }
+
+  const hubSession = await issueHubSession(sql, {
+    profileId: profile.id,
+    staySignedIn: false,
+    ttlMs: ADMIN_ACT_AS_TTL_MS,
+  });
+
+  const handoffToken = mintPassToken();
+  const handoffHash = hashToken(handoffToken);
+  const handoffExpiresAt = new Date(Date.now() + ADMIN_ACT_AS_HANDOFF_TTL_MS).toISOString();
+  const next = normalizeActAsNextPath(nextPath);
+  const adminName = String(adminUsername || "").trim().slice(0, 80);
+
+  await sql`
+    INSERT INTO synk_admin_act_as_tokens (
+      token_hash, synk_profile_id, hub_session_token, hub_expires_at, admin_username, next_path, expires_at
+    )
+    VALUES (
+      ${handoffHash},
+      ${profile.id},
+      ${hubSession.token},
+      ${hubSession.expiresAt}::timestamptz,
+      ${adminName},
+      ${next},
+      ${handoffExpiresAt}::timestamptz
+    )
+  `;
+
+  await logSynkEvent(sql, {
+    eventType: "admin_act_as_start",
+    profileId: profile.id,
+    detail: `${adminName || "admin"} → ${profile.synk_code || profile.id}`,
+  });
+
+  const origin = String(synkIdOrigin || process.env.SYNK_ID_ORIGIN || "https://synkid.netlify.app")
+    .trim()
+    .replace(/\/$/, "");
+  const url = `${origin}/act-as?token=${encodeURIComponent(handoffToken)}&next=${encodeURIComponent(next)}`;
+
+  return {
+    url,
+    expiresAt: hubSession.expiresAt,
+    handoffExpiresAt,
+    profile: {
+      id: profile.id,
+      name: profile.name,
+      synkCode: profile.synk_code,
+      photoUrl: profile.photo_url || "",
+    },
+    nextPath: next,
+  };
+}
+
+async function claimAdminActAsHandoff(sql, { token } = {}) {
+  await ensureSynkCoreTables(sql);
+  const handoffToken = String(token || "").trim();
+  if (!handoffToken) {
+    const err = new Error("Missing act-as token");
+    err.code = "BAD_TOKEN";
+    throw err;
+  }
+  const handoffHash = hashToken(handoffToken);
+  const rows = await sql`
+    SELECT
+      t.id,
+      t.synk_profile_id,
+      t.hub_session_token,
+      t.hub_expires_at,
+      t.admin_username,
+      t.next_path,
+      t.expires_at,
+      t.consumed_at,
+      p.synk_code,
+      p.name,
+      p.photo_url,
+      p.enabled
+    FROM synk_admin_act_as_tokens t
+    JOIN synk_profiles p ON p.id = t.synk_profile_id
+    WHERE t.token_hash = ${handoffHash}
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) {
+    const err = new Error("This act-as link is invalid or already used");
+    err.code = "BAD_TOKEN";
+    throw err;
+  }
+  if (row.consumed_at) {
+    const err = new Error("This act-as link was already used");
+    err.code = "USED";
+    throw err;
+  }
+  if (new Date(row.expires_at).getTime() <= Date.now()) {
+    const err = new Error("This act-as link expired — start again from Synk Admin");
+    err.code = "EXPIRED";
+    throw err;
+  }
+  if (row.enabled === false) {
+    const err = new Error("This membership is paused");
+    err.code = "DISABLED";
+    throw err;
+  }
+  if (!row.hub_session_token || new Date(row.hub_expires_at).getTime() <= Date.now()) {
+    const err = new Error("The act-as session expired — start again from Synk Admin");
+    err.code = "EXPIRED";
+    throw err;
+  }
+
+  const hubTokenPlain = String(row.hub_session_token || "");
+  const consumed = await sql`
+    UPDATE synk_admin_act_as_tokens
+    SET consumed_at = NOW(), hub_session_token = ''
+    WHERE id = ${row.id} AND consumed_at IS NULL
+    RETURNING id
+  `;
+  if (!consumed[0]) {
+    const err = new Error("This act-as link was already used");
+    err.code = "USED";
+    throw err;
+  }
+
+  await logSynkEvent(sql, {
+    eventType: "admin_act_as_claim",
+    profileId: row.synk_profile_id,
+    detail: `${String(row.admin_username || "admin").slice(0, 40)} claimed ${row.synk_code || row.synk_profile_id}`,
+  });
+
+  const hubExpiresAt = new Date(row.hub_expires_at).toISOString();
+  const ttlSeconds = Math.max(60, Math.round((new Date(row.hub_expires_at).getTime() - Date.now()) / 1000));
+
+  return {
+    profile: {
+      id: row.synk_profile_id,
+      name: row.name,
+      synkCode: row.synk_code,
+      photoUrl: row.photo_url || "",
+    },
+    hubSession: {
+      token: hubTokenPlain,
+      expiresAt: hubExpiresAt,
+      ttlSeconds,
+      staySignedIn: false,
+    },
+    actAs: {
+      adminUsername: row.admin_username || "",
+      expiresAt: hubExpiresAt,
+    },
+    nextPath: normalizeActAsNextPath(row.next_path),
+    expiresAt: new Date(row.hub_expires_at).getTime(),
+  };
+}
+
+
 module.exports = {
   hashSecret,
   verifySecret,
@@ -2993,6 +3200,10 @@ module.exports = {
   revokePass,
   requireSynkApp,
   issueHubSession,
+  ADMIN_ACT_AS_TTL_MS,
+  normalizeActAsNextPath,
+  claimAdminActAsHandoff,
+  createAdminActAsHandoff,
   requireHubSession,
   extractHubSessionToken,
   normalizePublicUsername,

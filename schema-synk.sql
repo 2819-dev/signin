@@ -547,3 +547,18 @@ CREATE TABLE IF NOT EXISTS synk_places (
 
 CREATE INDEX IF NOT EXISTS synk_places_enabled_sort_idx
   ON synk_places (enabled, sort_order ASC, name ASC);
+
+
+CREATE TABLE IF NOT EXISTS synk_admin_act_as_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  token_hash TEXT NOT NULL UNIQUE,
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  hub_session_token TEXT NOT NULL DEFAULT '',
+  hub_expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  admin_username TEXT NOT NULL DEFAULT '',
+  next_path TEXT NOT NULL DEFAULT '/hub',
+  expires_at TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS synk_admin_act_as_expires_idx ON synk_admin_act_as_tokens (expires_at);

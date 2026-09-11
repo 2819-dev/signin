@@ -29,6 +29,16 @@
   status = 200
 
 [[redirects]]
+  from = "/act-as"
+  to = "/act-as.html"
+  status = 200
+
+[[redirects]]
+  from = "/act-as/*"
+  to = "/act-as.html"
+  status = 200
+
+[[redirects]]
   from = "/hub"
   to = "/hub.html"
   status = 200

@@ -44,5 +44,6 @@ html = html
   .replace(/href="\/synk"/g, `href="${synkIdOrigin}/verify"`)
   .replace(/href="\/synk-join"/g, `href="${synkIdOrigin}/join"`);
 
+html = html.replace(/__SYNK_ID_ORIGIN__/g, synkIdOrigin);
 fs.writeFileSync(path.join(publicDir, "index.html"), html);
 console.log(`Prepared Synk Admin public/ (synk id origin: ${synkIdOrigin})`);

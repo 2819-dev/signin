@@ -7059,3 +7059,31 @@ body.reddit-nav-open main {
   border-radius: 10px;
 }
 .mod-learn-more-edit select { width: 100%; }
+
+
+/* Admin act-as banner */
+.act-as-banner {
+  position: sticky;
+  top: 0;
+  z-index: 10070;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #7c2d12;
+  color: #fff7ed;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.act-as-banner[hidden] { display: none !important; }
+.act-as-banner .muted { color: #ffedd5; font-weight: 500; }
+.act-as-banner button {
+  border: 1px solid rgba(255,255,255,.35);
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font: inherit;
+}

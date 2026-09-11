@@ -1616,6 +1616,7 @@
     updateInboxBadge();
     applyUsernameState();
     applyStaffState();
+    setupActAsBanner();
     if (route.type !== "inbox") renderGroups();
     renderMyTags();
 
@@ -2940,6 +2941,37 @@
   const navToggle = document.getElementById("nav-toggle");
   const backdrop = document.getElementById("nav-backdrop");
   const leftNav = document.getElementById("left-nav");
+
+  function setupActAsBanner() {
+    const ACT_AS_KEY = "synk_admin_act_as";
+    let act = null;
+    try { act = JSON.parse(sessionStorage.getItem(ACT_AS_KEY) || "null"); } catch (_) {}
+    if (!act) return;
+    let bar = document.getElementById("act-as-banner");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "act-as-banner";
+      bar.className = "act-as-banner";
+      document.body.prepend(bar);
+    }
+    const name = act.memberName || (session && session.profile && session.profile.name) || "member";
+    const code = act.memberCode || (session && session.profile && session.profile.synkCode) || "";
+    bar.hidden = false;
+    bar.innerHTML = `<span>Acting as <strong>${escapeHtml(name)}</strong>${code ? ` <span class="muted">(${escapeHtml(code)})</span>` : ""} <span class="muted">· Synk Admin</span></span>
+      <button type="button" id="act-as-exit">Exit</button>`;
+    const exit = document.getElementById("act-as-exit");
+    if (exit) {
+      exit.addEventListener("click", () => {
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+          sessionStorage.removeItem(STORAGE_KEY);
+          sessionStorage.removeItem(ACT_AS_KEY);
+        } catch (_) {}
+        location.href = "/verify";
+      });
+    }
+  }
+
   function setNavOpen(open) {
     const next = !!open;
     document.body.classList.toggle("reddit-nav-open", next);
@@ -3753,5 +3785,8 @@
     };
   }
 
+
+
+  
 
 })();
