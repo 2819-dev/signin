@@ -316,8 +316,9 @@
     } else {
       tagCatalog.innerHTML = tags
         .map((tag) => {
+          const id = escapeHtml(tag.id);
           return `
-            <div class="community-staff-row">
+            <div class="community-staff-row synk-tag-mod-item" data-tag-mod-id="${id}">
               <div class="synk-tag-mod-row">
                 ${tagChip(tag)}
                 <div>
@@ -326,9 +327,13 @@
                 </div>
               </div>
               <div class="synk-tag-mod-actions">
-                <button class="btn btn-secondary btn-compact" type="button" data-upload-tag-icon="${escapeHtml(tag.id)}">Icon</button>
-                ${tag.iconUrl ? `<button class="btn btn-secondary btn-compact" type="button" data-clear-tag-icon="${escapeHtml(tag.id)}">Clear icon</button>` : ""}
-                <button class="btn btn-secondary btn-compact" type="button" data-delete-tag="${escapeHtml(tag.id)}">Delete</button>
+                <button class="btn btn-secondary btn-compact" type="button" data-edit-tag="${id}" aria-expanded="false">Edit</button>
+                <div class="synk-tag-mod-edit-panel" hidden>
+                  <button class="btn btn-secondary btn-compact" type="button" data-upload-tag-icon="${id}">Icon</button>
+                  ${tag.iconUrl ? `<button class="btn btn-secondary btn-compact" type="button" data-clear-tag-icon="${id}">Clear icon</button>` : ""}
+                  <button class="btn btn-secondary btn-compact" type="button" data-delete-tag="${id}">Delete</button>
+                  <button class="btn btn-secondary btn-compact" type="button" data-edit-tag-done="${id}">Done</button>
+                </div>
               </div>
             </div>
           `;
@@ -1912,6 +1917,43 @@
 
   if (tagCatalog) {
     tagCatalog.addEventListener("click", async (e) => {
+      const editBtn = e.target.closest("[data-edit-tag]");
+      if (editBtn) {
+        e.preventDefault();
+        const row = editBtn.closest(".synk-tag-mod-item");
+        if (!row) return;
+        const panel = row.querySelector(".synk-tag-mod-edit-panel");
+        const opening = !panel || panel.hidden;
+        tagCatalog.querySelectorAll(".synk-tag-mod-item").forEach((item) => {
+          const otherPanel = item.querySelector(".synk-tag-mod-edit-panel");
+          const otherEdit = item.querySelector("[data-edit-tag]");
+          if (otherPanel) otherPanel.hidden = true;
+          if (otherEdit) {
+            otherEdit.hidden = false;
+            otherEdit.setAttribute("aria-expanded", "false");
+          }
+        });
+        if (panel && opening) {
+          panel.hidden = false;
+          editBtn.hidden = true;
+          editBtn.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
+      const doneBtn = e.target.closest("[data-edit-tag-done]");
+      if (doneBtn) {
+        e.preventDefault();
+        const row = doneBtn.closest(".synk-tag-mod-item");
+        if (!row) return;
+        const panel = row.querySelector(".synk-tag-mod-edit-panel");
+        const edit = row.querySelector("[data-edit-tag]");
+        if (panel) panel.hidden = true;
+        if (edit) {
+          edit.hidden = false;
+          edit.setAttribute("aria-expanded", "false");
+        }
+        return;
+      }
       const uploadBtn = e.target.closest("[data-upload-tag-icon]");
       if (uploadBtn) {
         e.preventDefault();

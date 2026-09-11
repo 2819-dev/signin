@@ -3676,6 +3676,27 @@ textarea {
   gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
+}
+.synk-tag-mod-edit-panel {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+}
+.synk-tag-mod-edit-panel[hidden] {
+  display: none !important;
+}
+.synk-tag-mod-item {
+  align-items: flex-start;
+}
+@media (max-width: 720px) {
+  .synk-tag-mod-actions,
+  .synk-tag-mod-edit-panel {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
 
