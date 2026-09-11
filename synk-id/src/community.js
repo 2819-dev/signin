@@ -886,7 +886,7 @@
                     ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>`
                     : ""
                 }
-                <span class="muted">Posted by</span>
+                <span class="muted">by</span>
                 <a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(username)}</a>
                 ${tagChip(author.pinnedTag, { compact: true })}
                 <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
@@ -936,7 +936,7 @@
         <div class="reddit-post-main">
           <div class="reddit-post-meta">
             ${group.slug ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>` : ""}
-            <span class="muted">Posted by</span>
+            <span class="muted">by</span>
             <a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(username)}</a>
             ${tagChip(author.pinnedTag, { compact: true })}
             <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
