@@ -427,10 +427,35 @@ async function getAppVerifyAction(sql, appSlug) {
   return normalizeVerifyAction(rows[0] && rows[0].verify_action);
 }
 
+function isFirstPartySynkApp(slug) {
+  const value = String(slug || "")
+    .trim()
+    .toLowerCase();
+  // Main Synk ID app (profile / hub / member login) — never requires business pairing.
+  return !value || value === "synk" || value === "synk-id" || value === "synkid";
+}
+
 async function getAppSynkStatus(sql, appSlug) {
   const slug = String(appSlug || "")
     .trim()
     .slice(0, 80);
+  if (isFirstPartySynkApp(slug)) {
+    return {
+      ok: true,
+      paired: true,
+      enabled: true,
+      code: "ok",
+      error: null,
+      firstParty: true,
+      app: {
+        id: null,
+        slug: slug || "synk",
+        name: "Synk",
+        verifyAction: "pending",
+      },
+      business: null,
+    };
+  }
   if (!slug) {
     return {
       ok: false,
@@ -861,6 +886,7 @@ module.exports = {
   normalizeVerifyAction,
   getAppVerifyAction,
   getAppSynkStatus,
+  isFirstPartySynkApp,
   seedVisitorSignInBusiness,
   PASS_TTL_MS,
   HUB_SESSION_TTL_MS,

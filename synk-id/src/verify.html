@@ -323,7 +323,14 @@
       }
 
       
+      function isMainSynkApp() {
+        const slug = String(appSlug || "synk").trim().toLowerCase();
+        return !slug || slug === "synk" || slug === "synk-id" || slug === "synkid";
+      }
+
       async function checkAppPairing() {
+        // Main Synk member app (profile / hub login) does not need business pairing.
+        if (isMainSynkApp()) return true;
         try {
           const res = await fetch("/api/synk-business?action=app-status&app=" + encodeURIComponent(appSlug));
           const data = await res.json().catch(() => ({}));
