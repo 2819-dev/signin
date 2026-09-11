@@ -558,20 +558,20 @@
     if (route.type === "group") {
       const group = (data && data.group) || groups.find((g) => g.slug === route.slug) || null;
       if (aboutTitle) aboutTitle.textContent = group ? `About ${group.slug}` : "About community";
-      if (aboutBlurb) aboutBlurb.textContent = (group && group.description) || "A Synk Community group.";
+      if (aboutBlurb) aboutBlurb.textContent = (group && group.description) || "A community group.";
       if (statPostsLabel) statPostsLabel.textContent = "Posts";
       if (statPosts) statPosts.textContent = String(group && group.postCount != null ? group.postCount : posts.length);
       return;
     }
     if (route.type === "popular") {
       if (aboutTitle) aboutTitle.textContent = "Popular";
-      if (aboutBlurb) aboutBlurb.textContent = "Trending posts across Synk communities.";
+      if (aboutBlurb) aboutBlurb.textContent = "Trending posts across communities.";
       if (statPostsLabel) statPostsLabel.textContent = "Visible posts";
       if (statPosts) statPosts.textContent = String(posts.length);
       return;
     }
-    if (aboutTitle) aboutTitle.textContent = "Home";
-    if (aboutBlurb) aboutBlurb.textContent = "Your Synk Community feed across all groups.";
+    if (aboutTitle) aboutTitle.textContent = "Feed";
+    if (aboutBlurb) aboutBlurb.textContent = "Your community feed across all groups.";
     if (statPostsLabel) statPostsLabel.textContent = "Visible posts";
     if (statPosts) statPosts.textContent = String(posts.length);
   }

@@ -7,27 +7,27 @@
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#dae0e6" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1416" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="Synk Community — groups and profiles for Synk members." />
-    <title>Synk Community</title>
+    <meta name="description" content="Community — groups and profiles for members." />
+    <title>Community</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community14" />
+    <link rel="stylesheet" href="/join.css?v=community15" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
     <header class="reddit-topnav">
       <button class="reddit-nav-toggle" type="button" id="nav-toggle" aria-label="Open menu">☰</button>
       <a class="reddit-brand" href="/community" id="brand-home">
-        <img src="/synk-logo.svg?v=circles2" alt="" width="32" height="32" />
-        <span class="reddit-brand-text">synk</span>
+        <span class="reddit-brand-mark" aria-hidden="true">C</span>
+        <span class="reddit-brand-text">community</span>
       </a>
       <form class="reddit-search" id="jump-form" autocomplete="off" role="search">
-        <label class="sr-only" for="jump-input">Search Synk Community</label>
+        <label class="sr-only" for="jump-input">Search Community</label>
         <svg class="reddit-search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5A6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14Z"/>
         </svg>
-        <input id="jump-input" type="search" placeholder="Search Synk Community" spellcheck="false" autocapitalize="none" />
+        <input id="jump-input" type="search" placeholder="Search Community" spellcheck="false" autocapitalize="none" />
       </form>
       <nav class="reddit-top-actions" aria-label="Quick actions">
         <a class="reddit-create-top" href="/community/submit" id="create-top-link" title="Create post">
@@ -38,7 +38,6 @@
           <span class="sr-only">Notifications</span>
           <span class="reddit-inbox-badge" id="inbox-badge" hidden>0</span>
         </a>
-        <a class="reddit-icon-btn" href="/hub" title="Hub"><span class="reddit-ico" aria-hidden="true">⌂</span><span class="reddit-hub-label">Hub</span></a>
         <div class="reddit-user-menu" id="user-menu">
           <button class="reddit-user-chip" type="button" id="user-menu-btn" aria-haspopup="menu" aria-expanded="false">
             <span class="reddit-user-avatar" id="user-menu-avatar" aria-hidden="true">S</span>
@@ -83,7 +82,7 @@
     <main class="shell shell-app shell-wide community-shell reddit-shell">
       <section class="card" id="locked-card" hidden>
         <h2>Log in to browse Community</h2>
-        <p class="muted" id="locked-help">Verify with your face or Synk code, then come back here.</p>
+        <p class="muted" id="locked-help">Verify with your face or member code, then come back here.</p>
         <div class="btn-row" style="margin-top: 14px">
           <a class="btn btn-primary" href="/verify?autostart=1">Log in</a>
         </div>
@@ -93,7 +92,7 @@
         <section class="card community-username-gate" id="username-card" hidden>
           <p class="section-label">Almost there</p>
           <h2 id="username-title">Pick a public username</h2>
-          <p class="muted" id="username-help">This is how you appear in Community. Separate from your legal Synk name.</p>
+          <p class="muted" id="username-help">This is how you appear in Community. Separate from your legal name.</p>
           <form id="username-form" class="form" autocomplete="off">
             <div class="field">
               <label for="public-username">Username</label>
@@ -112,8 +111,8 @@
               <nav class="reddit-nav-block" aria-label="Feeds">
                 <p class="reddit-nav-heading">Feeds</p>
                 <a class="reddit-nav-item is-active" href="/community" id="home-link">
-                  <span class="reddit-nav-ico" aria-hidden="true">⌂</span>
-                  <span>Home</span>
+                  <span class="reddit-nav-ico" aria-hidden="true">▣</span>
+                  <span>Feed</span>
                 </a>
                 <a class="reddit-nav-item" href="/community/popular" id="popular-link">
                   <span class="reddit-nav-ico" aria-hidden="true">◆</span>
@@ -151,6 +150,12 @@
                 </a>
               </div>
             </div>
+            <div class="reddit-leftnav-foot">
+              <a class="reddit-nav-item reddit-nav-home-exit" href="/hub" id="exit-home-link" title="Back to your profile">
+                <span class="reddit-nav-ico" aria-hidden="true">⌂</span>
+                <span>Home</span>
+              </a>
+            </div>
           </aside>
 
           <div class="community-main-col reddit-main">
@@ -160,7 +165,7 @@
                 <div class="reddit-community-head">
                   <div class="reddit-community-icon" id="view-icon" aria-hidden="true">S</div>
                   <div class="reddit-community-titles">
-                    <h1 id="view-title">Home</h1>
+                    <h1 id="view-title">Feed</h1>
                     <p class="reddit-community-sub" id="view-sub">general</p>
                   </div>
                   <div class="reddit-community-actions">
@@ -271,7 +276,7 @@
                   </div>
                   <div class="field" id="submit-text-fields">
                     <label for="post-body">Text</label>
-                    <textarea id="post-body" rows="8" maxlength="1000" required placeholder="Share tips, questions, or notes about Synk security…"></textarea>
+                    <textarea id="post-body" rows="8" maxlength="1000" required placeholder="Share tips, questions, or notes…"></textarea>
                   </div>
                   <div class="field" id="submit-link-fields" hidden>
                     <label for="post-link-url">Link URL</label>
@@ -306,7 +311,7 @@
                 </nav>
                 <p class="section-label">Profile settings</p>
                 <h2>Username &amp; tags</h2>
-                <p class="muted">Change how you appear. Your legal Synk name stays private.</p>
+                <p class="muted">Change how you appear. Your legal name stays private.</p>
                 <form id="settings-username-form" class="form" style="margin-top: 16px" autocomplete="off">
                   <div class="field">
                     <label for="settings-username">Public username</label>
@@ -456,9 +461,9 @@
             <section class="reddit-widget">
               <h2 class="reddit-widget-title">Community rules</h2>
               <ol class="reddit-rules">
-                <li>Be respectful — this is a Synk member space.</li>
-                <li>No sharing legal names or private Synk data.</li>
-                <li>Keep posts relevant to security and Synk.</li>
+                <li>Be respectful — this is a member space.</li>
+                <li>No sharing legal names or private account data.</li>
+                <li>Keep posts relevant to security and community topics.</li>
               </ol>
             </section>
             <section class="reddit-widget" id="mods-widget">
@@ -467,13 +472,13 @@
             </section>
             <section class="reddit-widget reddit-widget-soft">
               <h2 class="reddit-widget-title">Tips</h2>
-              <p class="muted">Browse Home or Popular, open a post for details, and create from Submit. Mod Tools stay off the feed.</p>
+              <p class="muted">Browse Feed or Popular, open a post for details, and create from Submit. Mod Tools stay off the feed.</p>
             </section>
           </aside>
         </div>
       </div>
     </main>
 
-    <script src="/community.js?v=reddit14"></script>
+    <script src="/community.js?v=reddit15"></script>
   </body>
 </html>
