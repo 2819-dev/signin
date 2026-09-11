@@ -214,8 +214,180 @@ async function ensureSynkCommunityExtras(sql) {
     ON synk_community_posts (group_id, created_at DESC)
   `;
 
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS author_username TEXT`;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_posts_author_username_idx
+    ON synk_community_posts (author_username)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_alt_accounts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      owner_synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      public_username TEXT NOT NULL,
+      label TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_community_alt_accounts_username_idx
+    ON synk_community_alt_accounts (public_username)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_alt_accounts_owner_idx
+    ON synk_community_alt_accounts (owner_synk_profile_id, created_at ASC)
+  `;
+
+  // Backfill author_username from each member's primary community username.
+  await sql`
+    UPDATE synk_community_posts p
+    SET author_username = c.public_username
+    FROM synk_community_profiles c
+    WHERE p.synk_profile_id = c.synk_profile_id
+      AND (p.author_username IS NULL OR btrim(p.author_username) = '')
+  `;
+
   await ensureCommunityOwner(sql);
   await ensureDefaultCommunityGroup(sql);
+}
+
+async function isCommunityUsernameTaken(sql, username, { exceptProfileId = null, exceptAltId = null } = {}) {
+  const name = normalizePublicUsername(username);
+  if (!name) return false;
+  const profiles = await sql`
+    SELECT synk_profile_id
+    FROM synk_community_profiles
+    WHERE public_username = ${name}
+    LIMIT 1
+  `;
+  if (profiles[0] && profiles[0].synk_profile_id !== exceptProfileId) return true;
+  const alts = await sql`
+    SELECT id
+    FROM synk_community_alt_accounts
+    WHERE public_username = ${name}
+    LIMIT 1
+  `;
+  if (alts[0] && alts[0].id !== exceptAltId) return true;
+  return false;
+}
+
+async function listOwnerAltAccounts(sql, ownerProfileId) {
+  if (!ownerProfileId) return [];
+  const rows = await sql`
+    SELECT id, owner_synk_profile_id, public_username, label, created_at, updated_at
+    FROM synk_community_alt_accounts
+    WHERE owner_synk_profile_id = ${ownerProfileId}
+    ORDER BY created_at ASC
+  `;
+  return rows.map((row) => ({
+    id: row.id,
+    username: row.public_username,
+    label: row.label || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    isAlt: true,
+  }));
+}
+
+async function findCommunityAltAccount(sql, { id, username, ownerProfileId } = {}) {
+  const altId = String(id || "").trim();
+  const name = normalizePublicUsername(username);
+  if (altId) {
+    const rows = await sql`
+      SELECT id, owner_synk_profile_id, public_username, label, created_at, updated_at
+      FROM synk_community_alt_accounts
+      WHERE id = ${altId}
+      LIMIT 1
+    `;
+    if (!rows[0]) return null;
+    if (ownerProfileId && rows[0].owner_synk_profile_id !== ownerProfileId) return null;
+    return {
+      id: rows[0].id,
+      ownerProfileId: rows[0].owner_synk_profile_id,
+      username: rows[0].public_username,
+      label: rows[0].label || "",
+      createdAt: rows[0].created_at,
+      updatedAt: rows[0].updated_at,
+      isAlt: true,
+    };
+  }
+  if (name) {
+    const rows = await sql`
+      SELECT id, owner_synk_profile_id, public_username, label, created_at, updated_at
+      FROM synk_community_alt_accounts
+      WHERE public_username = ${name}
+      LIMIT 1
+    `;
+    if (!rows[0]) return null;
+    if (ownerProfileId && rows[0].owner_synk_profile_id !== ownerProfileId) return null;
+    return {
+      id: rows[0].id,
+      ownerProfileId: rows[0].owner_synk_profile_id,
+      username: rows[0].public_username,
+      label: rows[0].label || "",
+      createdAt: rows[0].created_at,
+      updatedAt: rows[0].updated_at,
+      isAlt: true,
+    };
+  }
+  return null;
+}
+
+async function findCommunityPublicProfile(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return null;
+
+  const primary = await sql`
+    SELECT
+      c.synk_profile_id,
+      c.public_username,
+      c.created_at,
+      p.name,
+      s.role
+    FROM synk_community_profiles c
+    JOIN synk_profiles p ON p.id = c.synk_profile_id
+    LEFT JOIN synk_community_staff s ON s.synk_profile_id = c.synk_profile_id
+    WHERE c.public_username = ${name}
+    LIMIT 1
+  `;
+  if (primary[0]) {
+    const counts = await sql`
+      SELECT COUNT(*)::int AS post_count
+      FROM synk_community_posts p
+      LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
+      WHERE COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = ${name}
+    `;
+    return {
+      username: primary[0].public_username,
+      name: primary[0].name || "",
+      role: normalizeCommunityRole(primary[0].role),
+      isAlt: false,
+      joinedAt: primary[0].created_at,
+      postCount: counts[0] ? Number(counts[0].post_count) : 0,
+    };
+  }
+
+  const alt = await sql`
+    SELECT id, public_username, label, created_at
+    FROM synk_community_alt_accounts
+    WHERE public_username = ${name}
+    LIMIT 1
+  `;
+  if (!alt[0]) return null;
+  const counts = await sql`
+    SELECT COUNT(*)::int AS post_count
+    FROM synk_community_posts
+    WHERE author_username = ${name}
+  `;
+  return {
+    username: alt[0].public_username,
+    name: alt[0].label || "",
+    role: null,
+    isAlt: true,
+    joinedAt: alt[0].created_at,
+    postCount: counts[0] ? Number(counts[0].post_count) : 0,
+  };
 }
 
 async function ensureCommunityOwner(sql) {
@@ -1456,6 +1628,10 @@ module.exports = {
   listCommunityGroups,
   findCommunityGroup,
   mapCommunityGroup,
+  isCommunityUsernameTaken,
+  listOwnerAltAccounts,
+  findCommunityAltAccount,
+  findCommunityPublicProfile,
   normalizeCameraSide,
   generateDevicePairingCode,
   mapBusinessDevice,

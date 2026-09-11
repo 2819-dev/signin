@@ -39,6 +39,21 @@
   status = 200
 
 [[redirects]]
+  from = "/community/g/*"
+  to = "/community.html"
+  status = 200
+
+[[redirects]]
+  from = "/community/u/*"
+  to = "/community.html"
+  status = 200
+
+[[redirects]]
+  from = "/u/*"
+  to = "/community.html"
+  status = 200
+
+[[redirects]]
   from = "/business"
   to = "/business.html"
   status = 200

@@ -217,6 +217,26 @@ CREATE INDEX IF NOT EXISTS synk_community_posts_created_idx
 CREATE INDEX IF NOT EXISTS synk_community_posts_group_created_idx
   ON synk_community_posts (group_id, created_at DESC);
 
+ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS author_username TEXT;
+
+CREATE INDEX IF NOT EXISTS synk_community_posts_author_username_idx
+  ON synk_community_posts (author_username);
+
+CREATE TABLE IF NOT EXISTS synk_community_alt_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  public_username TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS synk_community_alt_accounts_username_idx
+  ON synk_community_alt_accounts (public_username);
+
+CREATE INDEX IF NOT EXISTS synk_community_alt_accounts_owner_idx
+  ON synk_community_alt_accounts (owner_synk_profile_id, created_at ASC);
+
 CREATE TABLE IF NOT EXISTS synk_business_devices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES synk_business_accounts(id) ON DELETE CASCADE,

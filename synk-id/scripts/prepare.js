@@ -10,6 +10,7 @@ const pages = ["index.html", "join.html", "verify.html", "hub.html", "business.h
 const sourceCss = path.join(root, "src", "join.css");
 const sourceManifest = path.join(root, "src", "manifest.webmanifest");
 const touchIconSrc = path.join(root, "src", "apple-touch-icon.png");
+const localAssets = ["community.js"];
 
 fs.mkdirSync(publicDir, { recursive: true });
 
@@ -29,6 +30,12 @@ for (const name of sharedAssets) {
 
 if (!fs.existsSync(sourceCss)) throw new Error(`Missing CSS: ${sourceCss}`);
 fs.copyFileSync(sourceCss, path.join(publicDir, "join.css"));
+
+for (const name of localAssets) {
+  const from = path.join(root, "src", name);
+  if (!fs.existsSync(from)) throw new Error(`Missing local asset: ${from}`);
+  fs.copyFileSync(from, path.join(publicDir, name));
+}
 
 if (!fs.existsSync(touchIconSrc)) throw new Error(`Missing touch icon: ${touchIconSrc}`);
 fs.copyFileSync(touchIconSrc, path.join(publicDir, "apple-touch-icon.png"));

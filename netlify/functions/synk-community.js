@@ -15,6 +15,10 @@ const {
   listCommunityStaff,
   listCommunityGroups,
   findCommunityGroup,
+  isCommunityUsernameTaken,
+  listOwnerAltAccounts,
+  findCommunityAltAccount,
+  findCommunityPublicProfile,
   logSynkEvent,
   clientIp,
 } = require("./lib/synk");
@@ -26,7 +30,18 @@ function normalizePostBody(value) {
     .slice(0, 1000);
 }
 
+function normalizeAltLabel(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 40);
+}
+
 function mapPost(row) {
+  const username =
+    String(row.author_username || "").trim() || row.public_username || "member";
+  const primaryUsername = row.public_username || "";
+  const isPrimary = !primaryUsername || username === primaryUsername;
   return {
     id: row.id,
     body: row.body,
@@ -39,14 +54,15 @@ function mapPost(row) {
         }
       : null,
     author: {
-      username: row.public_username || "member",
-      name: row.name || "",
-      role: row.author_role || null,
+      username,
+      name: isPrimary ? row.name || "" : "",
+      role: isPrimary ? row.author_role || null : null,
+      isAlt: Boolean(row.is_alt) || (!isPrimary && Boolean(username)),
     },
   };
 }
 
-function mePayload(auth, role) {
+function mePayload(auth, role, alts = []) {
   return {
     profileId: auth.profile.id,
     name: auth.profile.name,
@@ -56,28 +72,103 @@ function mePayload(auth, role) {
     isStaff: isCommunityStaffRole(role),
     isOwner: role === "owner",
     isAdmin: role === "admin" || role === "owner",
+    alts: role === "owner" ? alts : [],
   };
 }
 
-async function loadPosts(sql, { groupId = null, limit = 80 } = {}) {
+async function loadPosts(sql, { groupId = null, authorUsername = null, limit = 80 } = {}) {
   const capped = Math.min(Math.max(Number(limit) || 80, 1), 100);
-  if (groupId) {
+  const author = normalizePublicUsername(authorUsername);
+
+  const select = sql`
+    SELECT
+      p.id,
+      p.body,
+      p.created_at,
+      p.group_id,
+      p.author_username,
+      m.name,
+      c.public_username,
+      g.slug AS group_slug,
+      g.name AS group_name,
+      CASE
+        WHEN COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = c.public_username
+        THEN s.role
+        ELSE NULL
+      END AS author_role,
+      CASE WHEN a.id IS NOT NULL THEN TRUE ELSE FALSE END AS is_alt
+    FROM synk_community_posts p
+    JOIN synk_profiles m ON m.id = p.synk_profile_id
+    LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
+    LEFT JOIN synk_community_groups g ON g.id = p.group_id
+    LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
+    LEFT JOIN synk_community_alt_accounts a
+      ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
+  `;
+
+  // neon tagged templates can't easily compose; use three queries.
+  if (author && groupId) {
     return sql`
       SELECT
-        p.id,
-        p.body,
-        p.created_at,
-        p.group_id,
-        m.name,
-        c.public_username,
-        g.slug AS group_slug,
-        g.name AS group_name,
-        s.role AS author_role
+        p.id, p.body, p.created_at, p.group_id, p.author_username,
+        m.name, c.public_username, g.slug AS group_slug, g.name AS group_name,
+        CASE
+          WHEN COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = c.public_username
+          THEN s.role ELSE NULL
+        END AS author_role,
+        CASE WHEN a.id IS NOT NULL THEN TRUE ELSE FALSE END AS is_alt
       FROM synk_community_posts p
       JOIN synk_profiles m ON m.id = p.synk_profile_id
       LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
       LEFT JOIN synk_community_groups g ON g.id = p.group_id
       LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
+      LEFT JOIN synk_community_alt_accounts a
+        ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
+      WHERE p.group_id = ${groupId}
+        AND COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = ${author}
+      ORDER BY p.created_at DESC
+      LIMIT ${capped}
+    `;
+  }
+  if (author) {
+    return sql`
+      SELECT
+        p.id, p.body, p.created_at, p.group_id, p.author_username,
+        m.name, c.public_username, g.slug AS group_slug, g.name AS group_name,
+        CASE
+          WHEN COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = c.public_username
+          THEN s.role ELSE NULL
+        END AS author_role,
+        CASE WHEN a.id IS NOT NULL THEN TRUE ELSE FALSE END AS is_alt
+      FROM synk_community_posts p
+      JOIN synk_profiles m ON m.id = p.synk_profile_id
+      LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
+      LEFT JOIN synk_community_groups g ON g.id = p.group_id
+      LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
+      LEFT JOIN synk_community_alt_accounts a
+        ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
+      WHERE COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = ${author}
+      ORDER BY p.created_at DESC
+      LIMIT ${capped}
+    `;
+  }
+  if (groupId) {
+    return sql`
+      SELECT
+        p.id, p.body, p.created_at, p.group_id, p.author_username,
+        m.name, c.public_username, g.slug AS group_slug, g.name AS group_name,
+        CASE
+          WHEN COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = c.public_username
+          THEN s.role ELSE NULL
+        END AS author_role,
+        CASE WHEN a.id IS NOT NULL THEN TRUE ELSE FALSE END AS is_alt
+      FROM synk_community_posts p
+      JOIN synk_profiles m ON m.id = p.synk_profile_id
+      LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
+      LEFT JOIN synk_community_groups g ON g.id = p.group_id
+      LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
+      LEFT JOIN synk_community_alt_accounts a
+        ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
       WHERE p.group_id = ${groupId}
       ORDER BY p.created_at DESC
       LIMIT ${capped}
@@ -85,23 +176,45 @@ async function loadPosts(sql, { groupId = null, limit = 80 } = {}) {
   }
   return sql`
     SELECT
-      p.id,
-      p.body,
-      p.created_at,
-      p.group_id,
-      m.name,
-      c.public_username,
-      g.slug AS group_slug,
-      g.name AS group_name,
-      s.role AS author_role
+      p.id, p.body, p.created_at, p.group_id, p.author_username,
+      m.name, c.public_username, g.slug AS group_slug, g.name AS group_name,
+      CASE
+        WHEN COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = c.public_username
+        THEN s.role ELSE NULL
+      END AS author_role,
+      CASE WHEN a.id IS NOT NULL THEN TRUE ELSE FALSE END AS is_alt
     FROM synk_community_posts p
     JOIN synk_profiles m ON m.id = p.synk_profile_id
     LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
     LEFT JOIN synk_community_groups g ON g.id = p.group_id
     LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
+    LEFT JOIN synk_community_alt_accounts a
+      ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
     ORDER BY p.created_at DESC
     LIMIT ${capped}
   `;
+}
+
+async function resolvePostingPersona(sql, auth, role, requestedUsername) {
+  const primary = normalizePublicUsername(auth.profile.publicUsername);
+  const requested = normalizePublicUsername(requestedUsername) || primary;
+  if (!requested) {
+    return { ok: false, status: 400, error: "Choose a public username before posting" };
+  }
+  if (requested === primary) {
+    return { ok: true, username: primary, isAlt: false };
+  }
+  if (role !== "owner") {
+    return { ok: false, status: 403, error: "Only the owner can post as an alt account" };
+  }
+  const alt = await findCommunityAltAccount(sql, {
+    username: requested,
+    ownerProfileId: auth.profile.id,
+  });
+  if (!alt) {
+    return { ok: false, status: 403, error: "That alt account is not available" };
+  }
+  return { ok: true, username: alt.username, isAlt: true };
 }
 
 exports.handler = async (event) => {
@@ -128,23 +241,37 @@ exports.handler = async (event) => {
     const role = await getCommunityStaffRole(sql, auth.profile.id);
     const qs = event.queryStringParameters || {};
     const ip = clientIp(event);
+    const alts = role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
 
     if (event.httpMethod === "GET") {
       const groups = await listCommunityGroups(sql);
+      const profileUsername = normalizePublicUsername(qs.user || qs.username || qs.u || "");
       const groupSlug = normalizeGroupSlug(qs.group || qs.slug || "");
+
       let activeGroup = null;
-      if (groupSlug) {
-        activeGroup = await findCommunityGroup(sql, { slug: groupSlug });
-        if (!activeGroup) return json(404, { error: "Group not found" });
+      let profile = null;
+      let posts = [];
+
+      if (profileUsername) {
+        profile = await findCommunityPublicProfile(sql, profileUsername);
+        if (!profile) return json(404, { error: "Profile not found" });
+        posts = await loadPosts(sql, { authorUsername: profileUsername });
+      } else {
+        if (groupSlug) {
+          activeGroup = await findCommunityGroup(sql, { slug: groupSlug });
+          if (!activeGroup) return json(404, { error: "Group not found" });
+        }
+        posts = await loadPosts(sql, {
+          groupId: activeGroup ? activeGroup.id : null,
+        });
       }
-      const posts = await loadPosts(sql, {
-        groupId: activeGroup ? activeGroup.id : null,
-      });
+
       const payload = {
         ok: true,
-        me: mePayload(auth, role),
+        me: mePayload(auth, role, alts),
         groups,
         group: activeGroup,
+        profile,
         posts: posts.map(mapPost),
         ownerUsername: COMMUNITY_OWNER_USERNAME,
       };
@@ -169,6 +296,9 @@ exports.handler = async (event) => {
       }
       if (!/^[a-z0-9_]+$/.test(username)) {
         return json(400, { error: "Use only letters, numbers, and underscores" });
+      }
+      if (await isCommunityUsernameTaken(sql, username, { exceptProfileId: auth.profile.id })) {
+        return json(409, { error: "That username is already taken" });
       }
       try {
         await sql`
@@ -195,13 +325,104 @@ exports.handler = async (event) => {
         detail: username,
       });
       const nextRole = await getCommunityStaffRole(sql, auth.profile.id);
+      const nextAlts =
+        nextRole === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
       return json(200, {
         ok: true,
         publicUsername: username,
         me: mePayload(
           { ...auth, profile: { ...auth.profile, publicUsername: username } },
-          nextRole
+          nextRole,
+          nextAlts
         ),
+      });
+    }
+
+    if (action === "create-alt") {
+      if (role !== "owner") {
+        return json(403, { error: "Only the owner can create alt accounts" });
+      }
+      if (!auth.profile.publicUsername) {
+        return json(400, { error: "Set your primary username before creating alts" });
+      }
+      const username = normalizePublicUsername(body.username || body.publicUsername);
+      const label = normalizeAltLabel(body.label || body.name || "");
+      if (!username || username.length < 3) {
+        return json(400, {
+          error: "Alt username must be 3–24 letters, numbers, or underscores",
+        });
+      }
+      if (!/^[a-z0-9_]+$/.test(username)) {
+        return json(400, { error: "Use only letters, numbers, and underscores" });
+      }
+      if (
+        username === COMMUNITY_OWNER_USERNAME ||
+        username === auth.profile.publicUsername
+      ) {
+        return json(400, { error: "Pick a different username for this alt" });
+      }
+      if (await isCommunityUsernameTaken(sql, username)) {
+        return json(409, { error: "That username is already taken" });
+      }
+      if (alts.length >= 20) {
+        return json(400, { error: "You already have the maximum number of alt accounts" });
+      }
+      try {
+        const rows = await sql`
+          INSERT INTO synk_community_alt_accounts (owner_synk_profile_id, public_username, label)
+          VALUES (${auth.profile.id}, ${username}, ${label})
+          RETURNING id, public_username, label, created_at, updated_at
+        `;
+        await logSynkEvent(sql, {
+          eventType: "community_alt_create",
+          profileId: auth.profile.id,
+          ip,
+          detail: username,
+        });
+        return json(201, {
+          ok: true,
+          alt: {
+            id: rows[0].id,
+            username: rows[0].public_username,
+            label: rows[0].label || "",
+            createdAt: rows[0].created_at,
+            updatedAt: rows[0].updated_at,
+            isAlt: true,
+          },
+          alts: await listOwnerAltAccounts(sql, auth.profile.id),
+        });
+      } catch (err) {
+        if (String(err.message || "").includes("unique") || err.code === "23505") {
+          return json(409, { error: "That username is already taken" });
+        }
+        throw err;
+      }
+    }
+
+    if (action === "delete-alt") {
+      if (role !== "owner") {
+        return json(403, { error: "Only the owner can remove alt accounts" });
+      }
+      const alt = await findCommunityAltAccount(sql, {
+        id: body.altId || body.id,
+        username: body.username || body.publicUsername,
+        ownerProfileId: auth.profile.id,
+      });
+      if (!alt) return json(404, { error: "Alt account not found" });
+      await sql`
+        DELETE FROM synk_community_alt_accounts
+        WHERE id = ${alt.id}
+          AND owner_synk_profile_id = ${auth.profile.id}
+      `;
+      await logSynkEvent(sql, {
+        eventType: "community_alt_delete",
+        profileId: auth.profile.id,
+        ip,
+        detail: alt.username,
+      });
+      return json(200, {
+        ok: true,
+        alts: await listOwnerAltAccounts(sql, auth.profile.id),
       });
     }
 
@@ -266,7 +487,7 @@ exports.handler = async (event) => {
         return json(404, { error: "No community member with that username" });
       }
       if (member[0].public_username === COMMUNITY_OWNER_USERNAME) {
-        return json(400, { error: "@vision is already the owner" });
+        return json(400, { error: `@${COMMUNITY_OWNER_USERNAME} is already the owner` });
       }
       await sql`
         INSERT INTO synk_community_staff (synk_profile_id, role, created_by)
@@ -351,6 +572,16 @@ exports.handler = async (event) => {
         });
       }
 
+      const persona = await resolvePostingPersona(
+        sql,
+        auth,
+        role,
+        body.asUsername || body.authorUsername || body.persona
+      );
+      if (!persona.ok) {
+        return json(persona.status || 403, { error: persona.error || "Could not post" });
+      }
+
       let group = await findCommunityGroup(sql, {
         id: body.groupId || body.group_id,
         slug: body.group || body.groupSlug || body.slug,
@@ -363,15 +594,15 @@ exports.handler = async (event) => {
       }
 
       const rows = await sql`
-        INSERT INTO synk_community_posts (synk_profile_id, group_id, body)
-        VALUES (${auth.profile.id}, ${group.id}, ${text})
-        RETURNING id, body, created_at, group_id
+        INSERT INTO synk_community_posts (synk_profile_id, group_id, body, author_username)
+        VALUES (${auth.profile.id}, ${group.id}, ${text}, ${persona.username})
+        RETURNING id, body, created_at, group_id, author_username
       `;
       await logSynkEvent(sql, {
         eventType: "community_post",
         profileId: auth.profile.id,
         ip,
-        detail: `${group.slug}:${rows[0].id}`,
+        detail: `${group.slug}:${persona.username}:${rows[0].id}`,
       });
       return json(201, {
         ok: true,
@@ -381,9 +612,10 @@ exports.handler = async (event) => {
           createdAt: rows[0].created_at,
           group: { id: group.id, slug: group.slug, name: group.name },
           author: {
-            username: auth.profile.publicUsername,
-            name: auth.profile.name,
-            role: role || null,
+            username: persona.username,
+            name: persona.isAlt ? "" : auth.profile.name,
+            role: persona.isAlt ? null : role || null,
+            isAlt: persona.isAlt,
           },
         },
       });
