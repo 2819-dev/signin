@@ -271,10 +271,14 @@
         }, 2200);
       }
 
+      const STAY_PREF_KEY = "synk_stay_signed_in";
+      const MEMBER_SESSION_KEY = "synk_member_session";
+      const STAY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+      const SHORT_TTL_MS = 12 * 60 * 60 * 1000;
+
       function wantStaySignedIn() {
         const a = document.getElementById("stay-signed-in");
         const b = document.getElementById("stay-signed-in-code");
-        // Prefer the visible form's checkbox; both stay in sync.
         if (a && !a.closest(".hidden")) return !!a.checked;
         if (b && !b.closest(".hidden")) return !!b.checked;
         return !!(a && a.checked);
@@ -286,6 +290,30 @@
         const on = !!(source && source.checked);
         if (a && source !== a) a.checked = on;
         if (b && source !== b) b.checked = on;
+        try {
+          localStorage.setItem(STAY_PREF_KEY, on ? "1" : "0");
+        } catch (_) {}
+      }
+
+      function restoreStaySignedPreference() {
+        try {
+          const raw = localStorage.getItem(STAY_PREF_KEY);
+          if (raw !== "0" && raw !== "1") return;
+          const on = raw === "1";
+          const a = document.getElementById("stay-signed-in");
+          const b = document.getElementById("stay-signed-in-code");
+          if (a) a.checked = on;
+          if (b) b.checked = on;
+        } catch (_) {}
+      }
+
+      function hubExpiryMs(hubSession, staySignedIn) {
+        if (hubSession && hubSession.expiresAt) {
+          const ms = new Date(hubSession.expiresAt).getTime();
+          if (Number.isFinite(ms) && ms > Date.now()) return ms;
+        }
+        // Never fall back to the short face-pass TTL for member sessions.
+        return Date.now() + (staySignedIn ? STAY_TTL_MS : SHORT_TTL_MS);
       }
 
       function showSuccess(data) {
@@ -295,11 +323,10 @@
         const staySignedIn = data && data.hubSession && data.hubSession.staySignedIn != null
           ? !!data.hubSession.staySignedIn
           : wantStaySignedIn();
-        const expiresAt =
-          pass.expiresAt ||
-          (pass.ttlSeconds ? Date.now() + Number(pass.ttlSeconds) * 1000 : Date.now() + 120000);
 
         try {
+          localStorage.setItem(STAY_PREF_KEY, staySignedIn ? "1" : "0");
+          const expiresAt = hubExpiryMs(data.hubSession, staySignedIn);
           const session = {
             profile: {
               id: profile.id || null,
@@ -311,34 +338,33 @@
               token: pass.token || "",
               assertion: pass.assertion || "",
               ttlSeconds: pass.ttlSeconds || 120,
+              expiresAt: pass.expiresAt || null,
             },
             hubSession: data.hubSession
               ? {
                   token: data.hubSession.token || "",
-                  expiresAt: data.hubSession.expiresAt || null,
+                  expiresAt: data.hubSession.expiresAt || new Date(expiresAt).toISOString(),
                   ttlSeconds: data.hubSession.ttlSeconds || null,
                   staySignedIn,
                 }
               : null,
             staySignedIn,
             verifiedAt: Date.now(),
-            expiresAt: data.hubSession && data.hubSession.expiresAt
-              ? new Date(data.hubSession.expiresAt).getTime()
-              : Number(expiresAt) || Date.now() + 120000,
+            expiresAt,
           };
           const raw = JSON.stringify(session);
-          // Always clear both, then write to the chosen store.
-          localStorage.removeItem("synk_member_session");
-          sessionStorage.removeItem("synk_member_session");
-          if (staySignedIn) localStorage.setItem("synk_member_session", raw);
-          else sessionStorage.setItem("synk_member_session", raw);
+          localStorage.removeItem(MEMBER_SESSION_KEY);
+          sessionStorage.removeItem(MEMBER_SESSION_KEY);
+          if (staySignedIn) localStorage.setItem(MEMBER_SESSION_KEY, raw);
+          else sessionStorage.setItem(MEMBER_SESSION_KEY, raw);
         } catch (_) {}
 
         document.getElementById("synk-success-name").textContent = profile.name || "Member";
         document.getElementById("synk-success-code").textContent = profile.synkCode || "";
         document.getElementById("synk-pass-ttl").textContent = pass.ttlSeconds || 120;
-        document.getElementById("synk-success-copy").textContent =
-          "Identity confirmed. Opening your Synk hub…";
+        document.getElementById("synk-success-copy").textContent = staySignedIn
+          ? "Identity confirmed. You’ll stay signed in on this device."
+          : "Identity confirmed. Opening your Synk hub…";
         show("success");
 
         if (returnUrl && pass.token) {
@@ -503,6 +529,7 @@
 
       const stayPod = document.getElementById("stay-signed-in");
       const stayCode = document.getElementById("stay-signed-in-code");
+      restoreStaySignedPreference();
       if (stayPod) stayPod.addEventListener("change", () => syncStaySignedCheckboxes(stayPod));
       if (stayCode) stayCode.addEventListener("change", () => syncStaySignedCheckboxes(stayCode));
 

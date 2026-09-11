@@ -118,10 +118,38 @@
           if (!raw) return null;
           const data = JSON.parse(raw);
           if (!data || !data.profile) return null;
-          if (data.expiresAt && Date.now() > Number(data.expiresAt)) {
+
+          const stay = !!(data.staySignedIn || (data.hubSession && data.hubSession.staySignedIn));
+          let expiresAt = Number(data.expiresAt) || 0;
+          const hubExp = data.hubSession && data.hubSession.expiresAt
+            ? new Date(data.hubSession.expiresAt).getTime()
+            : 0;
+          if (hubExp && (!expiresAt || hubExp > expiresAt)) expiresAt = hubExp;
+
+          // Repair older sessions that accidentally used the short face-pass TTL.
+          if (stay && data.hubSession && data.hubSession.token) {
+            const verifiedAt = Number(data.verifiedAt || data.savedAt || 0) || 0;
+            const looksShort = !expiresAt || (verifiedAt && expiresAt - verifiedAt < 24 * 60 * 60 * 1000);
+            if (looksShort && (!hubExp || hubExp <= Date.now())) {
+              expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+            } else if (looksShort && hubExp > Date.now()) {
+              expiresAt = hubExp;
+            }
+            data.expiresAt = expiresAt;
+            data.staySignedIn = true;
+            try {
+              // Promote stay-signed-in sessions into localStorage after updates.
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+              if (store !== localStorage) sessionStorage.removeItem(STORAGE_KEY);
+              store = localStorage;
+            } catch (_) {}
+          }
+
+          if (expiresAt && Date.now() > expiresAt) {
             store.removeItem(STORAGE_KEY);
             return null;
           }
+          if (!data.hubSession || !data.hubSession.token) return null;
           return data;
         } catch (_) {
           return null;

@@ -49,10 +49,37 @@
       if (!raw) return null;
       const data = JSON.parse(raw);
       if (!data || !data.profile) return null;
-      if (data.expiresAt && Date.now() > Number(data.expiresAt)) {
+
+      const stay = !!(data.staySignedIn || (data.hubSession && data.hubSession.staySignedIn));
+      let expiresAt = Number(data.expiresAt) || 0;
+      const hubExp = data.hubSession && data.hubSession.expiresAt
+        ? new Date(data.hubSession.expiresAt).getTime()
+        : 0;
+      if (hubExp && (!expiresAt || hubExp > expiresAt)) expiresAt = hubExp;
+
+      // Repair older sessions that accidentally used the short face-pass TTL.
+      if (stay && data.hubSession && data.hubSession.token) {
+        const verifiedAt = Number(data.verifiedAt || data.savedAt || 0) || 0;
+        const looksShort = !expiresAt || (verifiedAt && expiresAt - verifiedAt < 24 * 60 * 60 * 1000);
+        if (looksShort && (!hubExp || hubExp <= Date.now())) {
+          expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+        } else if (looksShort && hubExp > Date.now()) {
+          expiresAt = hubExp;
+        }
+        data.expiresAt = expiresAt;
+        data.staySignedIn = true;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          if (store !== localStorage) sessionStorage.removeItem(STORAGE_KEY);
+          store = localStorage;
+        } catch (_) {}
+      }
+
+      if (expiresAt && Date.now() > expiresAt) {
         store.removeItem(STORAGE_KEY);
         return null;
       }
+      if (!data.hubSession || !data.hubSession.token) return null;
       return data;
     } catch (_) {
       return null;
@@ -246,7 +273,11 @@
 
   function readStoredPersona() {
     try {
-      return String(sessionStorage.getItem(PERSONA_KEY) || "").trim().toLowerCase();
+      return String(
+        localStorage.getItem(PERSONA_KEY) || sessionStorage.getItem(PERSONA_KEY) || ""
+      )
+        .trim()
+        .toLowerCase();
     } catch (_) {
       return "";
     }
@@ -255,6 +286,7 @@
   function storePersona(username) {
     activePersona = String(username || "").trim().toLowerCase();
     try {
+      localStorage.setItem(PERSONA_KEY, activePersona);
       sessionStorage.setItem(PERSONA_KEY, activePersona);
     } catch (_) {}
     syncPersonaUi();
@@ -423,9 +455,9 @@
         return `
           <article class="reddit-post">
             <div class="reddit-vote" aria-hidden="true">
-              <button class="reddit-vote-btn" type="button" tabindex="-1" disabled>▲</button>
+              <button class="reddit-vote-btn up" type="button" tabindex="-1" disabled>▲</button>
               <span class="reddit-vote-count">•</span>
-              <button class="reddit-vote-btn" type="button" tabindex="-1" disabled>▼</button>
+              <button class="reddit-vote-btn down" type="button" tabindex="-1" disabled>▼</button>
             </div>
             <div class="reddit-post-main">
               <div class="reddit-post-meta">
@@ -441,9 +473,9 @@
               </div>
               <div class="reddit-post-title">${escapeHtml(post.body || "")}</div>
               <div class="reddit-post-actions">
-                <span class="reddit-action muted">Comment</span>
-                <span class="reddit-action muted">Share</span>
-                <span class="reddit-action muted">Save</span>
+                <span class="reddit-action">💬 Comment</span>
+                <span class="reddit-action">↗ Share</span>
+                <span class="reddit-action">☆ Save</span>
               </div>
             </div>
           </article>
@@ -507,6 +539,8 @@
     }
     if (route.type === "user") {
       const profile = data.profile || { username: route.username };
+      const viewIcon = document.getElementById("view-icon");
+      if (viewIcon) viewIcon.textContent = "u";
       document.getElementById("view-eyebrow").textContent = "Profile";
       document.getElementById("view-title").textContent = `${profile.username || route.username}`;
       document.getElementById("view-blurb").textContent = "Member profile";
@@ -562,6 +596,8 @@
     }
     if (route.type === "group") {
       const group = data.group || groups.find((g) => g.slug === route.slug) || null;
+      const viewIcon = document.getElementById("view-icon");
+      if (viewIcon) viewIcon.textContent = (group && group.slug ? group.slug : "g").slice(0, 1).toUpperCase();
       document.getElementById("view-eyebrow").textContent = group ? group.slug : "Group";
       document.getElementById("view-title").textContent = group ? group.slug : route.slug;
       document.getElementById("view-blurb").textContent =
@@ -572,6 +608,8 @@
         : "Group posts";
       return;
     }
+    const viewIcon = document.getElementById("view-icon");
+    if (viewIcon) viewIcon.textContent = "⌂";
     document.getElementById("view-eyebrow").textContent = "Home feed";
     document.getElementById("view-title").textContent = "Home";
     document.getElementById("view-blurb").textContent = "Posts from every group, newest first.";
@@ -1049,6 +1087,7 @@
     localStorage.removeItem(STORAGE_KEY);
     sessionStorage.removeItem(STORAGE_KEY);
     try {
+      localStorage.removeItem(PERSONA_KEY);
       sessionStorage.removeItem(PERSONA_KEY);
     } catch (_) {}
     location.href = "/verify";
@@ -1063,10 +1102,26 @@
   } else {
     communityApp.hidden = false;
     loadCommunity().catch((err) => {
-      communityApp.hidden = true;
-      lockedCard.hidden = false;
-      document.getElementById("locked-help").textContent =
-        err.message || "Session expired. Log in again.";
+      const msg = String((err && err.message) || "");
+      const authDead = /sign in|session expired|unauthorized|log in again/i.test(msg);
+      if (authDead) {
+        communityApp.hidden = true;
+        lockedCard.hidden = false;
+        document.getElementById("locked-help").textContent =
+          msg || "Session expired. Log in again.";
+        return;
+      }
+      // Transient deploy/network blip — keep the stay-signed-in session and retry once.
+      communityApp.hidden = false;
+      lockedCard.hidden = true;
+      setTimeout(() => {
+        loadCommunity().catch((err2) => {
+          communityApp.hidden = true;
+          lockedCard.hidden = false;
+          document.getElementById("locked-help").textContent =
+            (err2 && err2.message) || msg || "Could not load community. Try again.";
+        });
+      }, 1200);
     });
   }
 })();
