@@ -507,7 +507,7 @@
       <div class="synk-tag-badge-row">
         ${myTags.map((tag) => tagChip(tag, { canPin: true })).join("")}
       </div>
-      <p class="muted" style="margin:8px 0 0;font-size:0.82rem;">Tap a badge for details. Only you can pin one next to your name.</p>
+      <p class="muted" style="margin:8px 0 0;font-size:0.82rem;">Select a badge for details. You can pin one badge next to your name.</p>
     `;
   }
 
@@ -1796,7 +1796,7 @@
         // Primary username can be renamed here; alt usernames are fixed at creation.
         settingsUsername.readOnly = Boolean(account.isAlt);
         settingsUsername.title = account.isAlt
-          ? "Alt usernames are set when the alt is created"
+          ? "Alt usernames are assigned when the account is created"
           : "";
       }
       const usernameBtn = document.getElementById("settings-username-btn");
@@ -1804,8 +1804,8 @@
       const settingsLead = document.querySelector(".reddit-settings-lead");
       if (settingsLead) {
         settingsLead.textContent = account.isAlt
-          ? `Editing settings for @${account.username}. Posts, messages, and this profile use this alt while it’s selected.`
-          : "Customize how you appear in Community. Your legal name stays private.";
+          ? `Managing settings for @${account.username}. Posts, messages, and this profile use this account while it is selected.`
+          : "Manage how you appear in Community. Your legal name remains private.";
       }
       const settingsDisplay = document.getElementById("settings-display-name");
       if (settingsDisplay) settingsDisplay.value = account.displayName || "";
@@ -2385,7 +2385,7 @@ function applyViewState(data) {
 
     const res = await fetch(url, { headers: hubHeaders() });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Couldn't load Community. Try again.");
+    if (!res.ok) throw new Error(data.error || "Unable to load Community. Please try again.");
     me = data.me || null;
     publicUsername = (me && me.publicUsername) || "";
     displayName = (me && me.displayName) || "";
@@ -2629,7 +2629,7 @@ function applyViewState(data) {
       body: JSON.stringify({ action: "set-username", username }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Couldn't save. Try again. username");
+    if (!res.ok) throw new Error(data.error || "Unable to save username. Please try again.");
     publicUsername = data.publicUsername;
     storePersona(publicUsername);
     statusEl.textContent = "Saved";
@@ -2647,7 +2647,7 @@ function applyViewState(data) {
     try {
       await saveUsername(document.getElementById("settings-username").value, status);
     } catch (err) {
-      status.textContent = err.message || "Couldn't save. Try again.";
+      status.textContent = err.message || "Unable to save. Please try again.";
     }
   });
 
@@ -2755,7 +2755,7 @@ function applyViewState(data) {
           }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "Couldn't save. Try again. display name");
+        if (!res.ok) throw new Error(data.error || "Unable to save display name. Please try again.");
         if (data.me) {
           me = data.me;
           publicUsername = (me && me.publicUsername) || publicUsername;
@@ -2781,7 +2781,7 @@ function applyViewState(data) {
         applyUsernameState();
         await loadCommunity();
       } catch (err) {
-        if (status) status.textContent = err.message || "Couldn't save. Try again.";
+        if (status) status.textContent = err.message || "Unable to save. Please try again.";
       }
     });
   }
@@ -2792,7 +2792,7 @@ function applyViewState(data) {
     try {
       await saveUsername(document.getElementById("public-username").value, status);
     } catch (err) {
-      status.textContent = err.message || "Couldn't save. Try again.";
+      status.textContent = err.message || "Unable to save. Please try again.";
     }
   });
 
@@ -2820,7 +2820,7 @@ function applyViewState(data) {
       if (channelPref) payload.channel = channelPref;
 
       if (type === "text") {
-        if (!body) throw new Error("Write some text for your post");
+        if (!body) throw new Error("Enter text for your post");
         payload.body = body;
       } else if (type === "link") {
         const linkUrl = String((document.getElementById("post-link-url") || {}).value || "").trim();
@@ -3340,7 +3340,7 @@ function applyViewState(data) {
         ),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Something went wrong. Try again. pin");
+      if (!res.ok) throw new Error(data.error || "Unable to update pinned tag. Please try again.");
       if (data.me) me = data.me;
       myTags = (data.tags || (me && me.tags) || []).map((tag) => ({
         ...tag,
@@ -3365,7 +3365,7 @@ function applyViewState(data) {
       await loadCommunity();
       if (status) status.textContent = data.pinnedTag ? `Pinned ${data.pinnedTag.name}` : "Pin cleared";
     } catch (err) {
-      if (status) status.textContent = err.message || "Something went wrong. Try again. pin";
+      if (status) status.textContent = err.message || "Unable to update pinned tag. Please try again.";
     }
   }
 
@@ -3527,7 +3527,7 @@ function applyViewState(data) {
         if (status) status.textContent = "Saved";
         applyUsernameState();
       } catch (err) {
-        if (status) status.textContent = err.message || "Couldn't save. Try again. bio";
+        if (status) status.textContent = err.message || "Unable to save bio. Please try again.";
       }
     });
   }
@@ -3561,7 +3561,7 @@ function applyViewState(data) {
         if (status) status.textContent = "Saved";
         applyUsernameState();
       } catch (err) {
-        if (status) status.textContent = err.message || "Couldn't save. Try again.";
+        if (status) status.textContent = err.message || "Unable to save. Please try again.";
       }
     });
   }
@@ -3572,7 +3572,7 @@ function applyViewState(data) {
     const offBtn = document.getElementById("settings-push-off-btn");
     const push = window.SynkPush;
     if (!push || !push.supportsPush()) {
-      if (status) status.textContent = "Browser notifications aren't supported here.";
+      if (status) status.textContent = "Browser notifications are not supported on this device.";
       if (onBtn) onBtn.hidden = true;
       if (offBtn) offBtn.hidden = true;
       return;
@@ -3582,18 +3582,18 @@ function applyViewState(data) {
     const enabled = pref === "on" && granted;
     if (onBtn) {
       onBtn.hidden = enabled;
-      onBtn.textContent = granted ? "Turn alerts on" : "Enable alerts";
+      onBtn.textContent = granted ? "Enable notifications" : "Enable notifications";
     }
     if (offBtn) offBtn.hidden = !enabled;
     if (status) {
       if (Notification.permission === "denied") {
-        status.textContent = "Blocked in browser settings. Allow notifications for this site, then try again.";
+        status.textContent = "Notifications are blocked in your browser settings. Allow notifications for this site, then try again.";
       } else if (enabled) {
-        status.textContent = "Alerts are on for messages and inbox updates.";
+        status.textContent = "Notifications are enabled for messages and inbox updates.";
       } else if (pref === "off") {
-        status.textContent = "Alerts are off on this device.";
+        status.textContent = "Notifications are disabled on this device.";
       } else {
-        status.textContent = "Optional — enable to get device alerts when Synk is closed.";
+        status.textContent = "Optional. Enable to receive device notifications when Synk is closed.";
       }
     }
   }
@@ -3604,16 +3604,16 @@ function applyViewState(data) {
       const status = document.getElementById("settings-push-status");
       const push = window.SynkPush;
       if (!push) return;
-      if (status) status.textContent = "Enabling…";
+      if (status) status.textContent = "Enabling notifications…";
       pushOnBtn.disabled = true;
       try {
         push.setPref("");
         const result = await push.ensureSubscription(hubHeaders(), { requestPermission: true });
-        if (!result.ok) throw new Error(result.reason === "denied" ? "Permission blocked" : "Couldn't enable alerts");
-        if (status) status.textContent = "Alerts enabled";
+        if (!result.ok) throw new Error(result.reason === "denied" ? "Notification permission denied" : "Unable to enable notifications");
+        if (status) status.textContent = "Notifications enabled";
         syncPushSettingsUi();
       } catch (err) {
-        if (status) status.textContent = err.message || "Couldn't enable alerts";
+        if (status) status.textContent = err.message || "Unable to enable notifications";
       } finally {
         pushOnBtn.disabled = false;
         syncPushSettingsUi();
@@ -3626,12 +3626,12 @@ function applyViewState(data) {
       const status = document.getElementById("settings-push-status");
       const push = window.SynkPush;
       if (!push) return;
-      if (status) status.textContent = "Turning off…";
+      if (status) status.textContent = "Disabling notifications…";
       try {
         await push.disablePush(hubHeaders());
-        if (status) status.textContent = "Alerts turned off on this device";
+        if (status) status.textContent = "Notifications disabled on this device";
       } catch (err) {
-        if (status) status.textContent = err.message || "Couldn't turn off";
+        if (status) status.textContent = err.message || "Unable to disable notifications";
       }
       syncPushSettingsUi();
     });
@@ -3790,7 +3790,7 @@ function applyViewState(data) {
     const cancel = document.getElementById("dm-compose-cancel");
     const sendBtn = document.getElementById("dm-compose-send");
     if (input) {
-      input.placeholder = "Write a message…";
+      input.placeholder = "Type a message…";
       input.removeAttribute("data-editing");
     }
     if (cancel) cancel.hidden = true;
@@ -4132,7 +4132,7 @@ function applyViewState(data) {
         await openDmThread(activeDmUser);
         await loadDmThreads();
       } catch (err) {
-        showToast(err.message || (editingDmMessageId ? "Could not edit message." : "Message not sent. Try again."));
+        showToast(err.message || (editingDmMessageId ? "Unable to edit message." : "Message could not be sent. Please try again."));
       } finally {
         if (sendBtn) sendBtn.disabled = false;
         if (input) input.focus();
@@ -4305,7 +4305,7 @@ function applyViewState(data) {
         showToast("Request sent");
       } else if (action === "accept-friend") {
         await communityAction({ action: "friend-accept", username });
-        showToast("You're friends now");
+        showToast("Friend request accepted");
       } else if (action === "decline-friend" || action === "cancel-friend" || action === "unfriend") {
         if (action === "decline-friend") {
           await communityAction({ action: "friend-decline", username });
@@ -4316,7 +4316,7 @@ function applyViewState(data) {
       }
       await loadCommunity();
     } catch (err) {
-      showToast(err.message || "Something went wrong. Try again.");
+      showToast(err.message || "An unexpected error occurred. Please try again.");
     }
   });
 
@@ -4439,7 +4439,7 @@ function applyViewState(data) {
     if (!list) return;
     notifCache = Array.isArray(notes) ? notes.slice() : [];
     if (!notifCache.length) {
-      list.innerHTML = `<p class="muted reddit-notif-empty" id="notif-empty">You're all caught up</p>`;
+      list.innerHTML = `<p class="muted reddit-notif-empty" id="notif-empty">No new notifications</p>`;
       return;
     }
     list.innerHTML = notifCache
@@ -4481,7 +4481,7 @@ function applyViewState(data) {
     try {
       const res = await fetch("/api/synk-community?inbox=1", { headers: hubHeaders() });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Couldn't load notifications");
+      if (!res.ok) throw new Error(data.error || "Unable to load notifications");
       if (typeof data.unreadCount === "number") {
         unreadCount = data.unreadCount;
         updateInboxBadge();
@@ -4507,7 +4507,7 @@ function applyViewState(data) {
       if (open) setNotifOpen(true);
     } catch (err) {
       const list = document.getElementById("notif-list");
-      if (list) list.innerHTML = `<p class="muted reddit-notif-empty">Couldn't load notifications</p>`;
+      if (list) list.innerHTML = `<p class="muted reddit-notif-empty">Unable to load notifications</p>`;
       if (open) setNotifOpen(true);
     }
   }
@@ -4554,7 +4554,7 @@ function applyViewState(data) {
           updateInboxBadge();
         }
       } catch (err) {
-        showToast(err.message || "Couldn't update");
+        showToast(err.message || "Unable to update");
       }
     });
   }
@@ -4687,7 +4687,7 @@ function applyViewState(data) {
         { headers: hubHeaders() }
       );
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Couldn't load release notes");
+      if (!res.ok) throw new Error(data.error || "Unable to load release notes");
       if (sub) {
         const short = String(data.version || ver).slice(0, 10);
         sub.textContent = data.isStaff
@@ -4696,7 +4696,7 @@ function applyViewState(data) {
       }
       body.innerHTML = renderReleaseNotesBlocks(data.blocks || []);
     } catch (err) {
-      body.innerHTML = `<p class="muted">${escapeHtml(err.message || "Couldn't load release notes")}</p>`;
+      body.innerHTML = `<p class="muted">${escapeHtml(err.message || "Unable to load release notes")}</p>`;
     }
   }
 
@@ -4777,7 +4777,7 @@ document.addEventListener("click", async (e) => {
       }
       if (route.type === "user") await loadCommunity();
     } catch (err) {
-      showToast(err.message || "Something went wrong. Try again.");
+      showToast(err.message || "An unexpected error occurred. Please try again.");
       sibling.forEach((btn) => { btn.disabled = false; });
     }
   });
@@ -5197,7 +5197,7 @@ document.addEventListener("click", async (e) => {
         communityApp.hidden = true;
         lockedCard.hidden = false;
         document.getElementById("locked-help").textContent =
-          msg || "Session expired. Log in again.";
+          msg || "Session expired. Sign in again.";
         return;
       }
       // Transient deploy/network blip — keep the stay-signed-in session and retry once.
@@ -5208,7 +5208,7 @@ document.addEventListener("click", async (e) => {
           communityApp.hidden = true;
           lockedCard.hidden = false;
           document.getElementById("locked-help").textContent =
-            (err2 && err2.message) || msg || "Couldn't load Community. Try again.. Try again.";
+            (err2 && err2.message) || msg || "Unable to load Community. Please try again.";
         });
       }, 1200);
     });

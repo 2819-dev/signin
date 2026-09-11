@@ -27,7 +27,7 @@
       <nav class="nav-actions" aria-label="Site">
         <a class="nav-link" href="/docs">Docs</a>
         <a class="nav-link" href="/business">Business</a>
-        <a class="btn btn-primary btn-nav" href="/verify">Log in</a>
+        <a class="btn btn-primary btn-nav" href="/verify">Sign in</a>
       </nav>
     </header>
 
@@ -37,7 +37,7 @@
         <h1>How Synk works</h1>
         <p class="subtitle">
           Synk is a simple identity membership. Members verify once with their face (or backup code),
-          then your product can trust who they are — without storing passwords for them.
+          then your product can trust their identity — without storing passwords for them.
         </p>
       </header>
 
@@ -84,8 +84,8 @@
             like <code>SK-XXXX-XXXX</code>.
           </li>
           <li>
-            <strong>Log in</strong> — verify with your face (or code + recovery passphrase) at
-            <a href="/verify">Log in</a>.
+            <strong>Sign in</strong> — verify with your face (or code + recovery passphrase) at
+            <a href="/verify">Sign in</a>.
           </li>
           <li>
             <strong>Use the hub</strong> — open <a href="/hub">Member hub</a> for your Synk ID,
@@ -146,7 +146,7 @@
         </ol>
 
         <div class="docs-callout docs-callout-warn">
-          <strong>Keep the key secret.</strong> Treat it like a password. If someone else gets it, they can
+          <strong>Keep the key confidential.</strong> Treat it like a password. If it is exposed, others can
           pretend to be your app. Rotate it in the Business portal as soon as you suspect exposure.
         </div>
 
@@ -162,8 +162,8 @@
         <h2>Verify &amp; passes</h2>
         <p>Typical integration:</p>
         <ol class="docs-steps">
-          <li>Member opens Synk Log in (or your screen that launches Synk verify).</li>
-          <li>They verify with face (or Synk code + recovery passphrase).</li>
+          <li>Member opens Synk Sign in (or your screen that launches Synk verify).</li>
+          <li>Members verify with face recognition (or Synk code and recovery passphrase).</li>
           <li>
             Synk issues a short-lived <strong>pass</strong> (about <strong>2 minutes</strong>).
             Pass tokens look like <code>skp_…</code>.
@@ -192,7 +192,7 @@
 
         <h3>1. Member verifies</h3>
         <p>
-          Members use the Synk Log in page, or you deep-link them there. After a successful verify, your
+          Members use the Synk Sign in page, or you deep-link them there. After a successful verify, your
           product receives a pass token (for example via redirect, QR handoff, or your own bridge).
         </p>
 
@@ -286,7 +286,7 @@ X-Synk-Key: sk_live_your_key_here
         <div class="footer-links">
           <a href="/docs">Docs</a>
           <a href="/join">Get Synk</a>
-          <a href="/verify">Log in</a>
+          <a href="/verify">Sign in</a>
           <a href="/hub">Hub</a>
           <a href="/business">Business</a>
         </div>

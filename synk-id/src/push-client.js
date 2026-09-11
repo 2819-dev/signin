@@ -125,9 +125,9 @@
       "background:#041A55;color:#fff;font:600 13px/1.35 system-ui,sans-serif;" +
       "box-shadow:0 12px 32px rgba(0,0,0,.28);";
     el.innerHTML =
-      '<span style="flex:1 1 180px;text-align:left;">Get alerts for messages &amp; notifications</span>' +
+      '<span style="flex:1 1 180px;text-align:left;">Enable notifications for messages and inbox updates</span>' +
       '<button type="button" id="synk-push-enable" style="border:0;border-radius:999px;padding:8px 12px;background:#fff;color:#041A55;font:700 12px system-ui,sans-serif;cursor:pointer;">Enable</button>' +
-      '<button type="button" id="synk-push-dismiss" style="border:0;border-radius:999px;padding:8px 10px;background:transparent;color:#c9d7ff;font:600 12px system-ui,sans-serif;cursor:pointer;">Not now</button>';
+      '<button type="button" id="synk-push-dismiss" style="border:0;border-radius:999px;padding:8px 10px;background:transparent;color:#c9d7ff;font:600 12px system-ui,sans-serif;cursor:pointer;">Dismiss</button>';
     document.body.appendChild(el);
     const enableBtn = document.getElementById("synk-push-enable");
     const dismissBtn = document.getElementById("synk-push-dismiss");
@@ -185,8 +185,8 @@
         if (!result.ok) throw new Error(result.reason || "Could not enable");
         try {
           const reg = await navigator.serviceWorker.ready;
-          await reg.showNotification("Notifications on", {
-            body: "You'll get alerts for messages and inbox updates.",
+          await reg.showNotification("Notifications enabled", {
+            body: "You will receive notifications for messages and inbox updates.",
             tag: "synk-push-enabled",
             icon: "/apple-touch-icon.png",
             badge: "/apple-touch-icon.png",

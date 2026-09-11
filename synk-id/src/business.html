@@ -24,7 +24,7 @@
       <nav class="nav-actions" aria-label="Account">
         <a class="nav-link" href="/docs">Docs</a>
         <a class="nav-link" href="/hub">Member hub</a>
-        <a class="btn btn-primary btn-nav" href="/verify">Log in</a>
+        <a class="btn btn-primary btn-nav" href="/verify">Sign in</a>
       </nav>
     </header>
 
@@ -218,7 +218,7 @@
       const PRODUCT_CATALOG = {
         account_login: {
           label: "Account login / identity",
-          blurb: "Synk confirms who they are so your product can open their account.",
+          blurb: "Synk confirms their identity so your product can open their account.",
           defaultAction: "identity",
           actions: ["identity"],
           usesDevices: false,
@@ -246,7 +246,7 @@
           defaultAction: "identity",
           actions: ["identity", "auto_admit", "pending"],
           usesDevices: true,
-          verifyHint: "Confirm they showed up, auto-admit, or require a host check for gated events.",
+          verifyHint: "Confirm attendance, auto-admit guests, or require a host check for gated events.",
         },
         custom: {
           label: "Custom product / API",
@@ -521,7 +521,7 @@
                   ${member.hasOverride ? "" : " · using app default"}
                 </div>
                 <div class="field" style="margin-top:10px;">
-                  <label>When they verify</label>
+                  <label>When a member verifies</label>
                   <select class="member-policy-select">
                     ${memberPolicyOptionsHtml(selected)}
                   </select>

@@ -50,7 +50,7 @@
               <button class="reddit-notif-mark" type="button" id="notif-mark-read">Clear all</button>
             </div>
             <div class="reddit-notif-list" id="notif-list">
-              <p class="muted reddit-notif-empty" id="notif-empty">You're all caught up</p>
+              <p class="muted reddit-notif-empty" id="notif-empty">No new notifications</p>
             </div>
             <a class="reddit-notif-footer" href="/community/inbox" id="notif-see-all">Open inbox</a>
           </div>
@@ -164,18 +164,18 @@
 
 <main class="shell shell-app shell-wide community-shell reddit-shell">
       <section class="card" id="locked-card" hidden>
-        <h2>Log in to browse Community</h2>
-        <p class="muted" id="locked-help">Verify with your face or member code, then come back here.</p>
+        <h2>Sign in to browse Community</h2>
+        <p class="muted" id="locked-help">Verify with face recognition or your member code, then return here.</p>
         <div class="btn-row" style="margin-top: 14px">
-          <a class="btn btn-primary" href="/verify?autostart=1">Log in</a>
+          <a class="btn btn-primary" href="/verify?autostart=1">Sign in</a>
         </div>
       </section>
 
       <div id="community-app" hidden>
         <section class="card community-username-gate" id="username-card" hidden>
-          <p class="section-label">Almost there</p>
-          <h2 id="username-title">Pick a public username</h2>
-          <p class="muted" id="username-help">This is how you appear in Community. Separate from your legal name.</p>
+          <p class="section-label">Complete your profile</p>
+          <h2 id="username-title">Choose a public username</h2>
+          <p class="muted" id="username-help">This is how you appear in Community. It is separate from your legal name.</p>
           <form id="username-form" class="form" autocomplete="off">
             <div class="field">
               <label for="public-username">Username</label>
@@ -302,7 +302,7 @@
                 </div>
                 <div id="inbox-notifications-pane">
                   <div id="inbox-list" class="reddit-inbox-list"></div>
-                  <p class="muted" id="inbox-empty" hidden>You're all caught up.</p>
+                  <p class="muted" id="inbox-empty" hidden>No new notifications.</p>
                 </div>
                 <div id="inbox-messages-pane" hidden>
                   <div class="community-dm-shell" id="dm-shell">
@@ -318,12 +318,12 @@
                         <label class="community-dm-new-label" for="dm-new-search">Start a chat</label>
                         <input id="dm-new-search" type="search" maxlength="40" placeholder="Search friends…" autocomplete="off" />
                         <div id="dm-friend-list" class="community-dm-friend-list" role="listbox" aria-label="Friends"></div>
-                        <p class="muted community-dm-new-empty" id="dm-friend-empty" hidden>No friends to message yet.</p>
+                        <p class="muted community-dm-new-empty" id="dm-friend-empty" hidden>No friends available to message.</p>
                       </div>
                       <div id="dm-thread-list" class="community-dm-thread-list" role="list"></div>
                       <div class="community-dm-empty" id="dm-thread-empty" hidden>
                         <strong>No conversations yet</strong>
-                        <p>Message a friend to start chatting.</p>
+                        <p>Message a friend to start a conversation.</p>
                         <button class="btn btn-secondary btn-compact" type="button" id="dm-empty-new-btn">New message</button>
                       </div>
                     </aside>
@@ -342,7 +342,7 @@
                       </div>
                       <div id="dm-message-list" class="community-dm-message-list" aria-live="polite"></div>
                       <form id="dm-compose-form" class="community-dm-compose" hidden autocomplete="off">
-                        <input id="dm-compose-input" type="text" maxlength="1000" required placeholder="Write a message…" enterkeyhint="send" aria-label="Message" />
+                        <input id="dm-compose-input" type="text" maxlength="1000" required placeholder="Type a message…" enterkeyhint="send" aria-label="Message" />
                         <button class="btn btn-secondary btn-compact community-dm-cancel-edit" type="button" id="dm-compose-cancel" hidden>Cancel</button>
                         <button class="community-dm-send" type="submit" id="dm-compose-send" aria-label="Send">
                           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg>
@@ -350,7 +350,7 @@
                       </form>
                       <div class="community-dm-empty-chat" id="dm-chat-hint">
                         <strong>Your messages</strong>
-                        <p>Pick a conversation on the left, or tap <em>New</em> to message a friend.</p>
+                        <p>Select a conversation, or choose <em>New</em> to message a friend.</p>
                       </div>
                     </section>
                   </div>
@@ -428,7 +428,7 @@
                   <span>settings</span>
                 </nav>
                 <h1 class="reddit-settings-title">Settings</h1>
-                <p class="muted reddit-settings-lead">Customize how you appear in Community. Your legal name stays private.</p>
+                <p class="muted reddit-settings-lead">Manage how you appear in Community. Your legal name remains private.</p>
 
                 <div class="reddit-settings-section">
                   <h2 class="reddit-settings-heading">Account</h2>
@@ -455,7 +455,7 @@
                   <div class="reddit-settings-row">
                     <div class="reddit-settings-copy">
                       <strong>Username</strong>
-                      <p class="muted">Pick a unique name. This is how people find you.</p>
+                      <p class="muted">Choose a unique username. This is how other members find you.</p>
                     </div>
                     <form id="settings-username-form" class="reddit-settings-form" autocomplete="off">
                       <div class="reddit-settings-username is-plain">
@@ -490,7 +490,7 @@
                         id="settings-bio"
                         maxlength="280"
                         rows="3"
-                        placeholder="Say something about yourself"
+                        placeholder="Add a short bio"
                       ></textarea>
                       <button class="btn btn-primary btn-compact" type="submit" id="settings-bio-btn">Save bio</button>
                     </form>
@@ -523,8 +523,8 @@
                       <p class="muted">Get real device notifications for messages and inbox updates, even when Synk is in the background.</p>
                     </div>
                     <div class="reddit-settings-form">
-                      <button class="btn btn-primary btn-compact" type="button" id="settings-push-btn">Enable alerts</button>
-                      <button class="btn btn-secondary btn-compact" type="button" id="settings-push-off-btn" hidden>Turn off</button>
+                      <button class="btn btn-primary btn-compact" type="button" id="settings-push-btn">Enable notifications</button>
+                      <button class="btn btn-secondary btn-compact" type="button" id="settings-push-off-btn" hidden>Disable</button>
                     </div>
                     <p id="settings-push-status" class="muted reddit-settings-status"></p>
                   </div>
@@ -536,7 +536,7 @@
                   <div class="reddit-settings-row">
                     <div class="reddit-settings-copy">
                       <strong>Community avatar</strong>
-                      <p class="muted">Shown on posts and your Community profile. Change your Synk login photo from Hub.</p>
+                      <p class="muted">Shown on posts and your Community profile. Update your Synk login photo from Hub.</p>
                     </div>
                     <div class="reddit-settings-photo">
                       <div class="settings-photo-preview" id="settings-avatar-preview" aria-hidden="true">S</div>
@@ -554,7 +554,7 @@
               <section class="card reddit-settings-card" id="my-tags-card" hidden>
                 <div class="reddit-settings-section">
                   <h2 class="reddit-settings-heading">Tags</h2>
-                  <p class="muted" style="margin:0 0 12px;">Tap a badge for its description. Only you can pin one next to your name.</p>
+                  <p class="muted" style="margin:0 0 12px;">Select a badge for its description. You can pin one badge next to your name.</p>
                   <div id="my-tags-list" class="community-tag-list"></div>
                   <p id="my-tags-status" class="muted" style="font-size: 0.85rem"></p>
                 </div>
@@ -888,7 +888,7 @@
       </div>
     </div>
 
-    <script src="/push-client.js?v=alt-persona1"></script>
-    <script src="/community.js?v=alt-persona1"></script>
+    <script src="/push-client.js?v=pro-copy1"></script>
+    <script src="/community.js?v=pro-copy1"></script>
   </body>
 </html>

@@ -537,7 +537,7 @@
           "common.startingOver": "Starting over…",
           "common.startingOverIn": "Starting over in {n} seconds…",
           "common.requestError": "Could not send request",
-          "common.genericError": "Something went wrong",
+          "common.genericError": "An unexpected error occurred",
           "chat.fab": "Chat",
           "chat.fabAria": "Open live chat",
         },
@@ -1369,7 +1369,7 @@
 
       async function openFaceModal() {
         if (!window.KioskFace) {
-          formError.textContent = "Face sign-in is still loading. Try again in a moment.";
+          formError.textContent = "Face sign-in is still loading. Please try again shortly.";
           formError.classList.remove("hidden");
           return;
         }
@@ -1382,7 +1382,7 @@
           faceStream = await window.KioskFace.startCamera(faceVideo, { side: cameraSide });
           faceStatus.textContent = "Loading face check…";
           await window.KioskFace.ensureFaceApi();
-          faceStatus.textContent = "Camera ready — tap Scan face";
+          faceStatus.textContent = "Camera ready — select Scan face";
           faceModalHint.textContent = "Look at the screen — stay in the center.";
           faceScanBtn.disabled = false;
         } catch (err) {
@@ -1451,7 +1451,7 @@
         } catch (err) {
           faceError.textContent = err.message || "Could not scan face";
           faceError.classList.remove("hidden");
-          faceStatus.textContent = "Try again";
+          faceStatus.textContent = "Please try again";
           faceScanBtn.disabled = false;
           faceBusy = false;
           return;
@@ -1741,7 +1741,7 @@
         } catch (err) {
           synkError.textContent = err.message || "Could not verify";
           synkError.classList.remove("hidden");
-          synkStatus.textContent = "Try again, or use Synk code";
+          synkStatus.textContent = "Please try again, or use your Synk code";
           synkScanBtn.disabled = false;
           synkBusy = false;
         }

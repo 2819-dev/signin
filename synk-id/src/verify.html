@@ -12,9 +12,9 @@
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f9fc" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="Log in to Synk — verify your identity with face or Synk code." />
+    <meta name="description" content="Sign in to Synk — verify your identity with face or Synk code." />
     <meta name="format-detection" content="telephone=no" />
-    <title>Synk — Log in</title>
+    <title>Synk — Sign in</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid11" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
@@ -29,7 +29,7 @@
         <span>Synk</span>
       </a>
       <nav class="nav-actions" aria-label="Account">
-        <a class="nav-link" href="/verify">Log in</a>
+        <a class="nav-link" href="/verify">Sign in</a>
         <a class="btn btn-primary btn-nav" href="/join">Get Synk</a>
       </nav>
     </header>
@@ -37,7 +37,7 @@
     <main class="shell shell-app">
       <header class="header">
         <div>
-          <p class="eyebrow">Log in</p>
+          <p class="eyebrow">Sign in</p>
           <h1>Verify identity</h1>
           <p class="subtitle">
             Use face verification, or enter your Synk code and recovery passphrase.
@@ -228,7 +228,7 @@
           await window.KioskFace.ensureFaceApi();
           clearInterval(heartbeat);
           heartbeat = null;
-          statusEl.textContent = "Ready. Tap Verify when prepared.";
+          statusEl.textContent = "Ready. Select Verify when you are prepared.";
           scanBtn.disabled = false;
         } catch (err) {
           if (heartbeat) clearInterval(heartbeat);
@@ -259,13 +259,13 @@
       }
 
       function startScanHeartbeat() {
-        const steps = ["Scanning…", "Looking for your face…", "Almost there…"];
+        const steps = ["Scanning…", "Looking for your face…", "Complete your profile…"];
         let i = 0;
         statusEl.textContent = steps[0];
         return setInterval(() => {
           i = (i + 1) % steps.length;
           // Don't overwrite later status messages mid-flow.
-          if (/Scanning|Looking for your face|Almost there/.test(statusEl.textContent || "")) {
+          if (/Scanning|Looking for your face|Complete your profile/.test(statusEl.textContent || "")) {
             statusEl.textContent = steps[i];
           }
         }, 2200);
@@ -492,7 +492,7 @@
           clearInterval(heartbeat);
           errorEl.textContent = err.message || "Verification failed";
           errorEl.classList.remove("hidden");
-          statusEl.textContent = "Try again";
+          statusEl.textContent = "Please try again";
           scanBtn.disabled = false;
         } finally {
           busy = false;
