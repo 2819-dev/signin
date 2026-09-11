@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6f8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Synk documentation — what Synk is, how members verify, and how to set up your API key."
+    />
+    <title>Synk — Documentation</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
+    <link rel="stylesheet" href="/join.css?v=docs1" />
+    <script src="/force-refresh.js" defer></script>
+  </head>
+  <body>
+    <header class="site-nav site-nav-light">
+      <a class="brand" href="/" aria-label="Synk home">
+        <img src="/synk-logo.svg?v=circles2" alt="" width="28" height="28" />
+        <span>Synk</span>
+      </a>
+      <nav class="nav-actions" aria-label="Site">
+        <a class="nav-link" href="/docs">Docs</a>
+        <a class="nav-link" href="/business">Business</a>
+        <a class="btn btn-primary btn-nav" href="/verify">Log in</a>
+      </nav>
+    </header>
+
+    <main class="shell shell-app shell-wide docs-shell">
+      <header class="page-head">
+        <p class="eyebrow">Documentation</p>
+        <h1>How Synk works</h1>
+        <p class="subtitle">
+          Synk is a simple identity membership. Members verify once with their face (or backup code),
+          then your product can trust who they are — without storing passwords for them.
+        </p>
+      </header>
+
+      <nav class="card docs-toc" aria-label="On this page">
+        <p class="section-label">On this page</p>
+        <div class="docs-toc-grid">
+          <a href="#what-is-synk">What Synk is</a>
+          <a href="#for-members">For members</a>
+          <a href="#for-business">For businesses</a>
+          <a href="#api-keys">Set up an API key</a>
+          <a href="#verify-flow">Verify &amp; passes</a>
+          <a href="#api-reference">API basics</a>
+          <a href="#glossary">Glossary</a>
+        </div>
+      </nav>
+
+      <section class="card docs-section" id="what-is-synk">
+        <p class="section-label">Overview</p>
+        <h2>What Synk is</h2>
+        <p>
+          Synk is a standalone membership for proving identity. A person joins Synk, gets approved,
+          and can later check in with their face. Your app or desk only needs to know:
+          <strong>this person just verified</strong>.
+        </p>
+        <p>
+          Synk does <strong>not</strong> decide what happens next. That’s your product’s job —
+          open a door, sign them into an account, check them into an event, or fill a form.
+        </p>
+        <div class="docs-callout">
+          <strong>In one line:</strong> Synk answers “who is this?” — your product decides “what now?”
+        </div>
+      </section>
+
+      <section class="card docs-section" id="for-members">
+        <p class="section-label">Members</p>
+        <h2>For members</h2>
+        <ol class="docs-steps">
+          <li>
+            <strong>Get Synk</strong> — request membership with your name, photo, and recovery details at
+            <a href="/join">Get Synk</a>.
+          </li>
+          <li>
+            <strong>Get approved</strong> — a Synk admin reviews your request. You’ll get a Synk code
+            like <code>SK-XXXX-XXXX</code>.
+          </li>
+          <li>
+            <strong>Log in</strong> — verify with your face (or code + recovery passphrase) at
+            <a href="/verify">Log in</a>.
+          </li>
+          <li>
+            <strong>Use the hub</strong> — open <a href="/hub">Member hub</a> for your Synk ID,
+            Community, and business tools.
+          </li>
+        </ol>
+        <p class="muted">
+          Tip: keep your recovery passphrase somewhere safe. You’ll need it if face check-in isn’t available.
+        </p>
+      </section>
+
+      <section class="card docs-section" id="for-business">
+        <p class="section-label">Businesses</p>
+        <h2>For businesses &amp; products</h2>
+        <p>
+          If you run a product, desk, or door that should trust Synk members, use
+          <a href="/business">Synk Business</a>. You’ll get an API key so your system can read a short-lived
+          <em>pass</em> after someone verifies.
+        </p>
+        <ul class="docs-list">
+          <li><strong>Account login</strong> — Synk confirms the person; your app signs them in.</li>
+          <li><strong>Visitor / front desk</strong> — verify who arrived, then your desk flow continues.</li>
+          <li><strong>Access control</strong> — verify, then unlock or admit based on your rules.</li>
+          <li><strong>Event check-in</strong> — confirm attendance with Synk, then mark them present.</li>
+          <li><strong>Custom</strong> — any product that needs a trusted “just verified” signal.</li>
+        </ul>
+      </section>
+
+      <section class="card docs-section" id="api-keys">
+        <p class="section-label">Setup</p>
+        <h2>How to set up your API key</h2>
+        <ol class="docs-steps">
+          <li>
+            Go to <a href="/business">Synk Business</a> and choose <strong>Request access</strong>.
+          </li>
+          <li>
+            Tell us your product name, what it does, and a work email. Create a portal password so you can
+            manage settings later.
+          </li>
+          <li>
+            Wait for approval. When you’re approved, Synk emails your API key
+            (<code>sk_live_…</code>). <strong>Copy it immediately</strong> — it’s only shown once.
+          </li>
+          <li>
+            Sign in to the Business portal to:
+            <ul>
+              <li>Rotate the key if it’s ever leaked</li>
+              <li>Choose your product type</li>
+              <li>Set what should happen after verify (identity only, autofill, auto-admit, and so on)</li>
+              <li>Pair desk / door devices when your product needs them</li>
+            </ul>
+          </li>
+          <li>
+            In your server, send the key on every pass request as header
+            <code>X-Synk-Key: sk_live_…</code>
+            (never put the key in a public website or mobile app binary).
+          </li>
+        </ol>
+
+        <div class="docs-callout docs-callout-warn">
+          <strong>Keep the key secret.</strong> Treat it like a password. If someone else gets it, they can
+          pretend to be your app. Rotate it in the Business portal as soon as you suspect exposure.
+        </div>
+
+        <h3>Where the key is used</h3>
+        <p>
+          Your backend calls Synk with the API key to <strong>consume a pass</strong> after a member verifies.
+          Members never see your key. Browsers and kiosks should only talk to <em>your</em> server, which holds the key.
+        </p>
+      </section>
+
+      <section class="card docs-section" id="verify-flow">
+        <p class="section-label">Flow</p>
+        <h2>Verify &amp; passes</h2>
+        <p>Typical integration:</p>
+        <ol class="docs-steps">
+          <li>Member opens Synk Log in (or your screen that launches Synk verify).</li>
+          <li>They verify with face (or Synk code + recovery passphrase).</li>
+          <li>
+            Synk issues a short-lived <strong>pass</strong> (about <strong>2 minutes</strong>).
+            Pass tokens look like <code>skp_…</code>.
+          </li>
+          <li>
+            Your server sends that pass to Synk with your API key. Synk returns the member’s public identity
+            details your app is allowed to see.
+          </li>
+          <li>Your product continues — unlock, check in, create a session, etc.</li>
+        </ol>
+        <p class="muted">
+          Passes expire quickly on purpose. Ask the member to verify again when you need a fresh confirmation.
+        </p>
+      </section>
+
+      <section class="card docs-section" id="api-reference">
+        <p class="section-label">Developers</p>
+        <h2>API basics</h2>
+        <p>
+          Call the API from your server. You can use either:
+        </p>
+        <ul class="docs-list">
+          <li><code>https://synkid.netlify.app/api/…</code> (recommended — same host as the member site)</li>
+          <li>or the Synk API host your Business portal is connected to</li>
+        </ul>
+
+        <h3>1. Member verifies</h3>
+        <p>
+          Members use the Synk Log in page, or you deep-link them there. After a successful verify, your
+          product receives a pass token (for example via redirect, QR handoff, or your own bridge).
+        </p>
+
+        <h3>2. Consume a pass (your server)</h3>
+        <pre class="docs-code" tabindex="0"><code>POST https://synkid.netlify.app/api/synk-pass
+Content-Type: application/json
+X-Synk-Key: sk_live_your_key_here
+
+{
+  "pass": "skp_..."
+}</code></pre>
+        <p>
+          A successful response looks like
+          <code>{ ok, app, profile, pass }</code>
+          — including the member’s name, Synk code, and related fields your app is allowed to see.
+        </p>
+
+        <h3>Optional headers</h3>
+        <ul class="docs-list">
+          <li><code>X-Synk-Key</code> — required API key</li>
+          <li><code>X-Synk-App</code> or body <code>appSlug</code> — pin the request to a specific app slug when you have more than one</li>
+        </ul>
+
+        <h3>Good practices</h3>
+        <ul class="docs-list">
+          <li>Call Synk only from a trusted server — never from public front-end code with the live key.</li>
+          <li>Treat passes as single-use unless you have a clear reason not to.</li>
+          <li>If a call fails with unauthorized, check for an expired pass or a rotated key.</li>
+          <li>Store only what you need after verify (often just your own account id linked to their Synk code).</li>
+        </ul>
+      </section>
+
+      <section class="card docs-section" id="glossary">
+        <p class="section-label">Reference</p>
+        <h2>Glossary</h2>
+        <dl class="docs-glossary">
+          <div>
+            <dt>Synk code</dt>
+            <dd>A member’s public ID, like <code>SK-XXXX-XXXX</code>. Safe to show; not a password.</dd>
+          </div>
+          <div>
+            <dt>Recovery passphrase</dt>
+            <dd>Backup secret for logging in without the camera.</dd>
+          </div>
+          <div>
+            <dt>Pass</dt>
+            <dd>Short-lived proof that someone just verified (<code>skp_…</code>, ~2 minutes).</dd>
+          </div>
+          <div>
+            <dt>API key</dt>
+            <dd>Secret for your business app (<code>sk_live_…</code>). Used only on your server.</dd>
+          </div>
+          <div>
+            <dt>Hub</dt>
+            <dd>Member home after login — Synk ID, Community, and shortcuts.</dd>
+          </div>
+          <div>
+            <dt>Community</dt>
+            <dd>Optional member space for posts and profiles, separate from Business APIs.</dd>
+          </div>
+          <div>
+            <dt>Verify action</dt>
+            <dd>
+              What your product prefers after Synk confirms identity (confirm only, autofill, auto-admit, wait for staff, etc.).
+            </dd>
+          </div>
+          <div>
+            <dt>Business portal</dt>
+            <dd>Where you manage API keys, product type, verify action, and devices.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="card docs-section docs-next">
+        <p class="section-label">Next steps</p>
+        <h2>Ready to build?</h2>
+        <div class="btn-row">
+          <a class="btn btn-primary" href="/business">Open Synk Business</a>
+          <a class="btn btn-secondary" href="/join">Get Synk</a>
+          <a class="btn btn-secondary" href="/hub">Member hub</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <a class="brand brand-footer" href="/">
+          <img src="/synk-logo.svg?v=circles2" alt="" width="22" height="22" />
+          <span>Synk</span>
+        </a>
+        <div class="footer-links">
+          <a href="/docs">Docs</a>
+          <a href="/join">Get Synk</a>
+          <a href="/verify">Log in</a>
+          <a href="/hub">Hub</a>
+          <a href="/business">Business</a>
+        </div>
+        <p class="footer-note muted">Faster check-ins, made simple.</p>
+      </div>
+    </footer>
+    <script src="/support-chat.js?v=support4" defer></script>
+  </body>
+</html>
