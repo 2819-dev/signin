@@ -222,12 +222,21 @@
     if (nameEl) nameEl.textContent = name;
     if (descEl) descEl.textContent = desc || "No description.";
     if (pinBtn) {
+      // Owner-only: never show Pin/Unpin to anyone else (also enforced in CSS).
       pinBtn.hidden = !canPin;
-      pinBtn.textContent = pinned ? "Unpin from name" : "Pin next to name";
-      pinBtn.classList.toggle("btn-primary", pinned);
-      pinBtn.classList.toggle("btn-secondary", !pinned);
-      pinBtn.setAttribute("data-pin-tag", tagId);
-      pinBtn.setAttribute("data-tag-pinned", pinned ? "1" : "0");
+      if (!canPin) {
+        pinBtn.removeAttribute("data-pin-tag");
+        pinBtn.removeAttribute("data-tag-pinned");
+        pinBtn.textContent = "Pin next to name";
+        pinBtn.classList.remove("btn-primary");
+        pinBtn.classList.add("btn-secondary");
+      } else {
+        pinBtn.textContent = pinned ? "Unpin from name" : "Pin next to name";
+        pinBtn.classList.toggle("btn-primary", pinned);
+        pinBtn.classList.toggle("btn-secondary", !pinned);
+        pinBtn.setAttribute("data-pin-tag", tagId);
+        pinBtn.setAttribute("data-tag-pinned", pinned ? "1" : "0");
+      }
     }
     document.querySelectorAll(".synk-tag-badge[aria-expanded='true']").forEach((el) => {
       if (el !== btn) el.setAttribute("aria-expanded", "false");
@@ -1870,6 +1879,7 @@
     if (pinFromPop) {
       e.preventDefault();
       e.stopPropagation();
+      if (pinFromPop.hidden || !pinFromPop.getAttribute("data-pin-tag")) return;
       pinTagById(pinFromPop.getAttribute("data-pin-tag"), {
         clear: pinFromPop.getAttribute("data-tag-pinned") === "1",
       }).catch(() => {});

@@ -3606,6 +3606,10 @@ textarea {
 .synk-tag-popover-pin {
   width: 100%;
 }
+/* .btn { display:inline-flex } overrides UA [hidden] — keep pin owner-only. */
+.synk-tag-popover-pin[hidden] {
+  display: none !important;
+}
 /* Hide old text chips if any leftover markup appears */
 .community-tag-chip {
   display: none !important;
