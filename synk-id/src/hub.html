@@ -14,7 +14,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=support4" />
+    <link rel="stylesheet" href="/join.css?v=hub-photo1" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body>
@@ -50,6 +50,11 @@
         <div class="btn-row" style="margin-top:14px;">
           <button class="btn btn-secondary" type="button" id="hub-copy-code">Copy code</button>
           <a class="btn btn-primary" href="/verify?autostart=1">Re-verify</a>
+        </div>
+        <div class="hub-photo-actions">
+          <input id="hub-photo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+          <button class="btn btn-secondary btn-compact" type="button" id="hub-photo-btn">Change login photo</button>
+          <p class="muted hub-photo-status" id="hub-photo-status" role="status"></p>
         </div>
       </section>
 
@@ -186,6 +191,63 @@
           avatar.style.backgroundImage = "";
           avatar.textContent = (profile.name || "S").slice(0, 1).toUpperCase();
         }
+      }
+
+
+      function writeSession(data) {
+        try {
+          const raw = JSON.stringify(data);
+          if (localStorage.getItem(STORAGE_KEY)) localStorage.setItem(STORAGE_KEY, raw);
+          else sessionStorage.setItem(STORAGE_KEY, raw);
+        } catch (_) {}
+      }
+
+      function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("Could not read image"));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const photoBtn = document.getElementById("hub-photo-btn");
+      const photoFile = document.getElementById("hub-photo-file");
+      const photoStatus = document.getElementById("hub-photo-status");
+      if (photoBtn && photoFile) {
+        photoBtn.addEventListener("click", () => photoFile.click());
+        photoFile.addEventListener("change", async () => {
+          const session = readSession();
+          const file = photoFile.files && photoFile.files[0];
+          if (!session || !file) return;
+          if (photoStatus) photoStatus.textContent = "Uploading…";
+          photoBtn.disabled = true;
+          try {
+            if (file.size > 3.5 * 1024 * 1024) throw new Error("Image too large (max ~3.5MB)");
+            const imageData = await readFileAsDataUrl(file);
+            const res = await fetch("/api/synk-community", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Synk-Hub-Session": session.hubSession.token,
+              },
+              body: JSON.stringify({ action: "set-synk-photo", imageData }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not update photo");
+            const nextUrl = data.photoUrl || "";
+            session.profile = session.profile || {};
+            session.profile.photoUrl = nextUrl;
+            writeSession(session);
+            if (photoStatus) photoStatus.textContent = "Login photo updated";
+            render();
+          } catch (err) {
+            if (photoStatus) photoStatus.textContent = err.message || "Could not update photo";
+          } finally {
+            photoBtn.disabled = false;
+            photoFile.value = "";
+          }
+        });
       }
 
       document.getElementById("hub-copy-code").addEventListener("click", async () => {

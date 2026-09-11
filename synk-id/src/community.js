@@ -1195,7 +1195,6 @@
         if (menuName) menuName.textContent = menuLabel;
         if (menuSub) menuSub.textContent = activePersona || publicUsername ? `u/${activePersona || publicUsername}` : "Account";
         paintAvatar(document.getElementById("user-menu-avatar"), faceUrl, menuLabel);
-        paintAvatar(document.getElementById("settings-synk-photo-preview"), photoUrl || (me && me.photoUrl) || "", (me && me.name) || "S");
         paintAvatar(document.getElementById("settings-avatar-preview"), faceUrl, menuLabel);
       }
     } else if (myProfileLink) {
@@ -1248,6 +1247,13 @@
     renderAlts();
     renderTagCatalog();
     syncPersonaUi();
+    if (!isStaff && route.type === "mod") {
+      route = { type: "home", slug: "", username: "" };
+      try {
+        history.replaceState(route, "", "/community");
+      } catch (_) {}
+      applyUsernameState();
+    }
   }
 
   function applyViewState(data) {
@@ -1676,24 +1682,6 @@
     } finally {
       if (fileInput) fileInput.value = "";
     }
-  }
-
-  const synkPhotoBtn = document.getElementById("settings-synk-photo-btn");
-  const synkPhotoFile = document.getElementById("settings-synk-photo-file");
-  if (synkPhotoBtn && synkPhotoFile) {
-    synkPhotoBtn.addEventListener("click", () => synkPhotoFile.click());
-    synkPhotoFile.addEventListener("change", () => {
-      uploadSettingsImage({
-        fileInput: synkPhotoFile,
-        statusEl: document.getElementById("settings-synk-photo-status"),
-        action: "set-synk-photo",
-        onSuccess: (data) => {
-          photoUrl = data.photoUrl || photoUrl;
-          if (me) me.photoUrl = photoUrl;
-          updateSessionPhotoUrl(photoUrl);
-        },
-      });
-    });
   }
 
   const avatarBtn = document.getElementById("settings-avatar-btn");

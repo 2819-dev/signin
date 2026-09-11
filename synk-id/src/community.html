@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community25" />
+    <link rel="stylesheet" href="/join.css?v=community26" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -55,7 +55,7 @@
             </a>
             <a class="reddit-user-item" href="/community/settings" id="settings-link" data-nav="settings" role="menuitem">
               <strong>Settings</strong>
-              <span>Profile, photos &amp; tags</span>
+              <span>Display name, avatar &amp; tags</span>
             </a>
             <a class="reddit-user-item" href="/community/mod" id="mod-menu-link" role="menuitem" hidden>
               <strong>Mod Tools</strong>
@@ -354,27 +354,12 @@
                 </div>
 
                 <div class="reddit-settings-section">
-                  <h2 class="reddit-settings-heading">Photos</h2>
+                  <h2 class="reddit-settings-heading">Profile picture</h2>
 
                   <div class="reddit-settings-row">
                     <div class="reddit-settings-copy">
-                      <strong>Synk login photo</strong>
-                      <p class="muted">Used when you sign in to Synk (Hub). This is separate from your Community avatar.</p>
-                    </div>
-                    <div class="reddit-settings-photo">
-                      <div class="settings-photo-preview" id="settings-synk-photo-preview" aria-hidden="true">S</div>
-                      <div class="reddit-settings-photo-actions">
-                        <input id="settings-synk-photo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
-                        <button class="btn btn-primary btn-compact" type="button" id="settings-synk-photo-btn">Change photo</button>
-                      </div>
-                    </div>
-                    <p id="settings-synk-photo-status" class="muted reddit-settings-status"></p>
-                  </div>
-
-                  <div class="reddit-settings-row">
-                    <div class="reddit-settings-copy">
-                      <strong>Community profile picture</strong>
-                      <p class="muted">Shown on posts and your Community profile. Private Synk login photo stays on Hub.</p>
+                      <strong>Community avatar</strong>
+                      <p class="muted">Shown on posts and your Community profile. Change your Synk login photo from Hub.</p>
                     </div>
                     <div class="reddit-settings-photo">
                       <div class="settings-photo-preview" id="settings-avatar-preview" aria-hidden="true">S</div>
@@ -569,6 +554,6 @@
       </a>
     </nav>
 
-    <script src="/community.js?v=reddit25"></script>
+    <script src="/community.js?v=reddit26"></script>
   </body>
 </html>

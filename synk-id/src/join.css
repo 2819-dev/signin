@@ -1045,6 +1045,19 @@ body.marketing {
   border: 2px solid var(--line);
 }
 
+.hub-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.hub-photo-status {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+}
+
 .hub-grid {
   display: grid;
   gap: 10px;
@@ -2189,6 +2202,11 @@ textarea {
   z-index: 120;
 }
 .reddit-user-dropdown[hidden] { display: none !important; }
+/* display:grid on nav/menu items overrides the UA [hidden] rule */
+.reddit-user-item[hidden],
+.reddit-nav-item[hidden] {
+  display: none !important;
+}
 .reddit-user-item {
   display: grid;
   gap: 2px;
@@ -2833,6 +2851,10 @@ textarea {
 .reddit-icon-btn:hover { background: var(--r-elev); }
 .reddit-user-dropdown { position: absolute; right: 0; top: calc(100% + 4px); width: min(260px, 92vw); padding: 8px; background: var(--r-card); border: 1px solid var(--r-line); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,.12); display: grid; gap: 2px; z-index: 120; }
 .reddit-user-dropdown[hidden] { display: none !important; }
+.reddit-user-item[hidden],
+.reddit-nav-item[hidden] {
+  display: none !important;
+}
 .reddit-backdrop:not([hidden]) { position: fixed; inset: 48px 0 0 0; background: rgba(0,0,0,.4); z-index: 90; display: block; }
 .reddit-leftnav { position: sticky; top: 60px; max-height: calc(100dvh - 72px); overflow: hidden; display: flex; flex-direction: column; background: var(--r-card); border: 1px solid var(--r-line); border-radius: 4px; }
 .reddit-leftnav-scroll { overflow: auto; padding: 12px 8px 16px; display: grid; gap: 16px; flex: 1 1 auto; min-height: 0; }
