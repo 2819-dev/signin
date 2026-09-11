@@ -91,6 +91,10 @@
             <strong>Connected places</strong>
             <span>See places that use Synk — tap for the full list.</span>
           </a>
+          <a class="hub-tile" href="/testing" id="hub-testing-tile" hidden>
+            <strong>Testing</strong>
+            <span>Beta updates, agenda checklist, and feedback for testers.</span>
+          </a>
         </div>
       </section>
 
@@ -272,7 +276,32 @@
         location.href = "/verify";
       });
 
+      async function loadFeatureFlags() {
+        const session = readSession();
+        const tile = document.getElementById("hub-testing-tile");
+        if (!tile) return;
+        if (!session) {
+          tile.hidden = true;
+          return;
+        }
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Synk-Hub-Session": session.hubSession.token,
+            },
+            body: JSON.stringify({ action: "hub-feature-flags" }),
+          });
+          const data = await res.json().catch(() => ({}));
+          tile.hidden = !(res.ok && data.betaTester);
+        } catch (_) {
+          tile.hidden = true;
+        }
+      }
+
       render();
+      loadFeatureFlags();
     </script>
       <script src="/support-chat.js?v=support4" defer></script>
   </body>

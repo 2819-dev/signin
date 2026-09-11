@@ -134,6 +134,26 @@
   status = 200
 
 [[redirects]]
+  from = "/testing"
+  to = "/testing.html"
+  status = 200
+
+[[redirects]]
+  from = "/testing/*"
+  to = "/testing.html"
+  status = 200
+
+[[redirects]]
+  from = "/info"
+  to = "/info.html"
+  status = 200
+
+[[redirects]]
+  from = "/info/*"
+  to = "/info.html"
+  status = 200
+
+[[redirects]]
   from = "/documentation"
   to = "/docs"
   status = 302

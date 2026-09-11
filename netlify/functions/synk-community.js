@@ -28,6 +28,13 @@ const {
   normalizeTagColor,
   listCommunityTags,
   findCommunityTag,
+  listInfoPages,
+  findInfoPage,
+  normalizePageSlug,
+  normalizePageTitle,
+  normalizePageBlocks,
+  mapInfoPage,
+  isBetaTesterTag,
   listProfileTags,
   listUsernameTags,
   getPinnedTagForProfile,
@@ -991,6 +998,10 @@ function serializeTagRow(row, { pinned = false } = {}) {
     description: row.description || "",
     color: row.color,
     iconUrl: row.icon_url || null,
+    learnMoreEnabled: row.learn_more_enabled === true,
+    learnMorePageId: row.learn_more_page_id || null,
+    learnMorePageSlug: row.learn_more_page_slug || row.info_page_slug || null,
+    learnMorePageTitle: row.learn_more_page_title || row.info_page_title || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     pinned: Boolean(pinned),
@@ -2346,6 +2357,15 @@ if (action === "create-alt") {
       const slug = normalizeTagSlug(body.slug || name);
       const description = normalizeTagDescription(body.description || body.about || "");
       const color = normalizeTagColor(body.color || "#6366f1") || "#6366f1";
+      const learnMoreEnabled = body.learnMoreEnabled === true || body.learn_more_enabled === true;
+      let learnMorePageId = body.learnMorePageId || body.learn_more_page_id || null;
+      if (learnMorePageId) {
+        const page = await findInfoPage(sql, { id: learnMorePageId });
+        if (!page) return json(400, { error: "Learn more page not found" });
+        learnMorePageId = page.id;
+      } else {
+        learnMorePageId = null;
+      }
       if (!name || name.length < 2) {
         return json(400, { error: "Tag name needs at least 2 characters" });
       }
@@ -2366,9 +2386,9 @@ if (action === "create-alt") {
       }
       try {
         const rows = await sql`
-          INSERT INTO synk_community_tags (name, slug, description, color, icon_url, created_by)
-          VALUES (${name}, ${slug}, ${description}, ${color}, ${iconUrl}, ${auth.profile.id})
-          RETURNING id, name, slug, description, color, icon_url, created_at, updated_at
+          INSERT INTO synk_community_tags (name, slug, description, color, icon_url, learn_more_enabled, learn_more_page_id, created_by)
+          VALUES (${name}, ${slug}, ${description}, ${color}, ${iconUrl}, ${learnMoreEnabled}, ${learnMorePageId}, ${auth.profile.id})
+          RETURNING id, name, slug, description, color, icon_url, learn_more_enabled, learn_more_page_id, created_at, updated_at
         `;
         await logSynkEvent(sql, {
           eventType: "community_tag_create",
@@ -2405,6 +2425,22 @@ if (action === "create-alt") {
       );
       const color =
         normalizeTagColor(body.color != null ? body.color : existing.color) || existing.color;
+      let learnMoreEnabled =
+        body.learnMoreEnabled != null || body.learn_more_enabled != null
+          ? body.learnMoreEnabled === true || body.learn_more_enabled === true
+          : existing.learnMoreEnabled === true;
+      let learnMorePageId =
+        body.learnMorePageId !== undefined || body.learn_more_page_id !== undefined
+          ? body.learnMorePageId || body.learn_more_page_id || null
+          : existing.learnMorePageId || null;
+      if (learnMorePageId) {
+        const page = await findInfoPage(sql, { id: learnMorePageId });
+        if (!page) return json(400, { error: "Learn more page not found" });
+        learnMorePageId = page.id;
+      } else {
+        learnMorePageId = null;
+      }
+      if (!learnMoreEnabled) learnMorePageId = learnMorePageId; // keep linked page even if button off
       if (!name || name.length < 2) {
         return json(400, { error: "Tag name needs at least 2 characters" });
       }
@@ -2439,9 +2475,11 @@ if (action === "create-alt") {
             description = ${description},
             color = ${color},
             icon_url = ${iconUrl},
+            learn_more_enabled = ${learnMoreEnabled},
+            learn_more_page_id = ${learnMorePageId},
             updated_at = NOW()
           WHERE id = ${existing.id}
-          RETURNING id, name, slug, description, color, icon_url, created_at, updated_at
+          RETURNING id, name, slug, description, color, icon_url, learn_more_enabled, learn_more_page_id, created_at, updated_at
         `;
         await logSynkEvent(sql, {
           eventType: "community_tag_update",
@@ -2645,6 +2683,283 @@ if (action === "create-alt") {
         me: mePayload(auth, role, alts, primaryTags, primaryPinned),
       });
     }
+
+    
+    if (action === "list-info-pages") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can manage info pages" });
+      }
+      return json(200, { ok: true, pages: await listInfoPages(sql) });
+    }
+
+    if (action === "get-info-page") {
+      const page = await findInfoPage(sql, {
+        id: body.pageId || body.id,
+        slug: body.slug || body.pageSlug,
+      });
+      if (!page) return json(404, { error: "Page not found" });
+      return json(200, { ok: true, page });
+    }
+
+    if (action === "create-info-page" || action === "update-info-page") {
+      if (role !== "owner") {
+        return json(403, { error: "Only the owner can edit info pages" });
+      }
+      const title = normalizePageTitle(body.title || body.name);
+      const slug = normalizePageSlug(body.slug || title);
+      const summary = String(body.summary || body.description || "").trim().slice(0, 400);
+      const heroImageUrl = String(body.heroImageUrl || body.hero_image_url || "").trim().slice(0, 800);
+      const blocks = normalizePageBlocks(body.blocks || body.content || []);
+      if (!title) return json(400, { error: "Page title is required" });
+      if (!slug) return json(400, { error: "Page slug is invalid" });
+      if (heroImageUrl && !(heroImageUrl.startsWith("/api/") || /^https?:\/\//i.test(heroImageUrl))) {
+        return json(400, { error: "Hero image URL is invalid" });
+      }
+      if (action === "create-info-page") {
+        try {
+          const rows = await sql`
+            INSERT INTO synk_info_pages (slug, title, summary, hero_image_url, blocks, created_by)
+            VALUES (${slug}, ${title}, ${summary}, ${heroImageUrl}, ${JSON.stringify(blocks)}::jsonb, ${auth.profile.id})
+            RETURNING id, slug, title, summary, hero_image_url, blocks, created_at, updated_at
+          `;
+          return json(201, { ok: true, page: mapInfoPage(rows[0]), pages: await listInfoPages(sql) });
+        } catch (err) {
+          if (String(err.message || "").includes("unique") || err.code === "23505") {
+            return json(409, { error: "A page with that slug already exists" });
+          }
+          throw err;
+        }
+      }
+      const existing = await findInfoPage(sql, { id: body.pageId || body.id, slug: body.currentSlug });
+      if (!existing) return json(404, { error: "Page not found" });
+      try {
+        const rows = await sql`
+          UPDATE synk_info_pages
+          SET
+            slug = ${slug},
+            title = ${title},
+            summary = ${summary},
+            hero_image_url = ${heroImageUrl},
+            blocks = ${JSON.stringify(blocks)}::jsonb,
+            updated_at = NOW()
+          WHERE id = ${existing.id}
+          RETURNING id, slug, title, summary, hero_image_url, blocks, created_at, updated_at
+        `;
+        return json(200, { ok: true, page: mapInfoPage(rows[0]), pages: await listInfoPages(sql) });
+      } catch (err) {
+        if (String(err.message || "").includes("unique") || err.code === "23505") {
+          return json(409, { error: "A page with that slug already exists" });
+        }
+        throw err;
+      }
+    }
+
+    if (action === "delete-info-page") {
+      if (role !== "owner") {
+        return json(403, { error: "Only the owner can delete info pages" });
+      }
+      const existing = await findInfoPage(sql, { id: body.pageId || body.id, slug: body.slug });
+      if (!existing) return json(404, { error: "Page not found" });
+      await sql`UPDATE synk_community_tags SET learn_more_page_id = NULL, updated_at = NOW() WHERE learn_more_page_id = ${existing.id}`;
+      await sql`DELETE FROM synk_info_pages WHERE id = ${existing.id}`;
+      return json(200, { ok: true, pages: await listInfoPages(sql) });
+    }
+
+    if (action === "beta-dashboard") {
+      const profileId = auth.profile.id;
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = false;
+      for (const row of usernames) {
+        const tags = await listUsernameTags(sql, row.public_username);
+        if (tags.some(isBetaTesterTag)) { beta = true; break; }
+      }
+      if (!beta && role !== "owner" && role !== "admin") {
+        return json(403, { error: "Beta testing is only for beta testers" });
+      }
+      const items = await sql`
+        SELECT id, title, detail, sort_order, active, created_at, updated_at
+        FROM synk_beta_agenda_items
+        WHERE active = TRUE
+        ORDER BY sort_order ASC, created_at ASC
+        LIMIT 100
+      `;
+      const checks = await sql`
+        SELECT agenda_item_id, completed_at
+        FROM synk_beta_agenda_checks
+        WHERE synk_profile_id = ${profileId}
+      `;
+      const checkMap = new Map(checks.map((c) => [c.agenda_item_id, c.completed_at]));
+      const feedback = await sql`
+        SELECT id, body, created_at
+        FROM synk_beta_feedback
+        WHERE synk_profile_id = ${profileId}
+        ORDER BY created_at DESC
+        LIMIT 50
+      `;
+      return json(200, {
+        ok: true,
+        isBetaTester: true,
+        agenda: items.map((item) => ({
+          id: item.id,
+          title: item.title,
+          detail: item.detail || "",
+          sortOrder: item.sort_order,
+          done: checkMap.has(item.id),
+          completedAt: checkMap.get(item.id) || null,
+        })),
+        feedback: feedback.map((f) => ({
+          id: f.id,
+          body: f.body,
+          createdAt: f.created_at,
+        })),
+      });
+    }
+
+    if (action === "beta-toggle-agenda") {
+      const profileId = auth.profile.id;
+      // access check reuse: any beta tag on profile usernames or staff
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = role === "owner" || role === "admin";
+      if (!beta) {
+        for (const row of usernames) {
+          const tags = await listUsernameTags(sql, row.public_username);
+          if (tags.some(isBetaTesterTag)) { beta = true; break; }
+        }
+      }
+      if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
+      const itemId = String(body.itemId || body.id || "").trim();
+      if (!itemId) return json(400, { error: "Agenda item required" });
+      const item = await sql`SELECT id FROM synk_beta_agenda_items WHERE id = ${itemId} AND active = TRUE LIMIT 1`;
+      if (!item[0]) return json(404, { error: "Agenda item not found" });
+      const done = body.done !== false && body.completed !== false;
+      if (done) {
+        await sql`
+          INSERT INTO synk_beta_agenda_checks (agenda_item_id, synk_profile_id)
+          VALUES (${itemId}, ${profileId})
+          ON CONFLICT (agenda_item_id, synk_profile_id) DO UPDATE SET completed_at = NOW()
+        `;
+      } else {
+        await sql`
+          DELETE FROM synk_beta_agenda_checks
+          WHERE agenda_item_id = ${itemId} AND synk_profile_id = ${profileId}
+        `;
+      }
+      return json(200, { ok: true, itemId, done });
+    }
+
+    if (action === "beta-send-feedback") {
+      const profileId = auth.profile.id;
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = role === "owner" || role === "admin";
+      if (!beta) {
+        for (const row of usernames) {
+          const tags = await listUsernameTags(sql, row.public_username);
+          if (tags.some(isBetaTesterTag)) { beta = true; break; }
+        }
+      }
+      if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
+      const bodyText = String(body.body || body.message || "").trim().replace(/\s+/g, " ").slice(0, 2000);
+      if (bodyText.length < 3) return json(400, { error: "Write a bit more feedback" });
+      const rows = await sql`
+        INSERT INTO synk_beta_feedback (synk_profile_id, body)
+        VALUES (${profileId}, ${bodyText})
+        RETURNING id, body, created_at
+      `;
+      return json(201, {
+        ok: true,
+        feedback: { id: rows[0].id, body: rows[0].body, createdAt: rows[0].created_at },
+      });
+    }
+
+    if (action === "beta-admin-agenda") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can manage the beta agenda" });
+      }
+      const items = await sql`
+        SELECT id, title, detail, sort_order, active, created_at, updated_at
+        FROM synk_beta_agenda_items
+        ORDER BY sort_order ASC, created_at ASC
+        LIMIT 200
+      `;
+      return json(200, {
+        ok: true,
+        agenda: items.map((item) => ({
+          id: item.id,
+          title: item.title,
+          detail: item.detail || "",
+          sortOrder: item.sort_order,
+          active: item.active !== false,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+        })),
+      });
+    }
+
+    if (action === "beta-save-agenda-item") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can manage the beta agenda" });
+      }
+      const title = String(body.title || "").trim().replace(/\s+/g, " ").slice(0, 160);
+      const detail = String(body.detail || "").trim().slice(0, 1000);
+      const sortOrder = Number.isFinite(Number(body.sortOrder)) ? Math.round(Number(body.sortOrder)) : 0;
+      const active = body.active !== false;
+      const id = String(body.itemId || body.id || "").trim();
+      if (!title) return json(400, { error: "Title is required" });
+      if (id) {
+        const rows = await sql`
+          UPDATE synk_beta_agenda_items
+          SET title = ${title}, detail = ${detail}, sort_order = ${sortOrder}, active = ${active}, updated_at = NOW()
+          WHERE id = ${id}
+          RETURNING id, title, detail, sort_order, active, created_at, updated_at
+        `;
+        if (!rows[0]) return json(404, { error: "Agenda item not found" });
+        return json(200, { ok: true, item: rows[0] });
+      }
+      const rows = await sql`
+        INSERT INTO synk_beta_agenda_items (title, detail, sort_order, active, created_by)
+        VALUES (${title}, ${detail}, ${sortOrder}, ${active}, ${auth.profile.id})
+        RETURNING id, title, detail, sort_order, active, created_at, updated_at
+      `;
+      return json(201, { ok: true, item: rows[0] });
+    }
+
+    if (action === "beta-delete-agenda-item") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can manage the beta agenda" });
+      }
+      const id = String(body.itemId || body.id || "").trim();
+      if (!id) return json(400, { error: "Agenda item required" });
+      await sql`DELETE FROM synk_beta_agenda_items WHERE id = ${id}`;
+      return json(200, { ok: true });
+    }
+
+    if (action === "hub-feature-flags") {
+      const profileId = auth.profile.id;
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = false;
+      for (const row of usernames) {
+        const tags = await listUsernameTags(sql, row.public_username);
+        if (tags.some(isBetaTesterTag)) { beta = true; break; }
+      }
+      return json(200, { ok: true, betaTester: beta });
+    }
+
 
     return json(400, { error: "Unknown action" });
   } catch (err) {

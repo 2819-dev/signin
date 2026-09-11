@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6f8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Synk beta testing — agenda and feedback." />
+    <title>Synk — Testing</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
+    <link rel="stylesheet" href="/join.css?v=community-polish2" />
+    <script src="/force-refresh.js" defer></script>
+  </head>
+  <body>
+    <header class="site-nav site-nav-light">
+      <a class="brand" href="/hub" aria-label="Synk hub">
+        <img src="/synk-logo.svg?v=circles2" alt="" width="28" height="28" />
+        <span>Synk</span>
+      </a>
+      <nav class="nav-actions" aria-label="Account">
+        <a class="nav-link" href="/hub">Hub</a>
+        <a class="nav-link" href="/community">Community</a>
+        <a class="btn btn-secondary btn-nav" href="/verify">Log in</a>
+      </nav>
+    </header>
+
+    <main class="shell shell-app shell-wide">
+      <header class="page-head">
+        <p class="eyebrow">Beta</p>
+        <h1>Testing</h1>
+        <p class="subtitle">Try new updates, check off the agenda, and send feedback.</p>
+      </header>
+
+      <section class="card" id="testing-locked" hidden>
+        <p class="section-label">Session</p>
+        <h2>Sign in to open Testing</h2>
+        <p class="muted">This area is for members with the Beta tester tag.</p>
+        <div class="btn-row" style="margin-top:14px;">
+          <a class="btn btn-primary" href="/verify?autostart=1">Log in</a>
+          <a class="btn btn-secondary" href="/hub">Back to hub</a>
+        </div>
+      </section>
+
+      <section class="card" id="testing-denied" hidden>
+        <p class="section-label">Access</p>
+        <h2>Beta testers only</h2>
+        <p class="muted">If you were invited to test, ask an owner to assign the Beta tester tag.</p>
+        <div class="btn-row" style="margin-top:14px;">
+          <a class="btn btn-secondary" href="/hub">Back to hub</a>
+        </div>
+      </section>
+
+      <section class="card" id="testing-panel" hidden>
+        <p class="section-label" id="testing-status">Loading…</p>
+        <div class="testing-layout">
+          <div>
+            <h2>Agenda</h2>
+            <p class="muted">Mark items as you try them.</p>
+            <div id="testing-agenda" class="testing-feedback-list" aria-live="polite"></div>
+          </div>
+          <div>
+            <h2>Messages</h2>
+            <p class="muted">Tell us what’s wrong, what’s good, or what feels off.</p>
+            <form id="testing-feedback-form" class="form">
+              <div class="field">
+                <label for="testing-feedback-body">Your note</label>
+                <textarea id="testing-feedback-body" rows="4" maxlength="2000" required placeholder="The new sidebar feels clearer, but the top bar still jumps on iPhone…"></textarea>
+              </div>
+              <p id="testing-feedback-status" class="muted" style="font-size:0.85rem;"></p>
+              <button class="btn btn-primary btn-compact" type="submit">Send feedback</button>
+            </form>
+            <div id="testing-feedback-list" class="testing-feedback-list" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "synk_member_session";
+      const locked = document.getElementById("testing-locked");
+      const denied = document.getElementById("testing-denied");
+      const panel = document.getElementById("testing-panel");
+      const statusEl = document.getElementById("testing-status");
+      const agendaEl = document.getElementById("testing-agenda");
+      const feedbackList = document.getElementById("testing-feedback-list");
+      const feedbackForm = document.getElementById("testing-feedback-form");
+      const feedbackStatus = document.getElementById("testing-feedback-status");
+
+      function escapeHtml(str) {
+        return String(str || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function readSession() {
+        try {
+          let raw = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          const data = JSON.parse(raw);
+          if (!data || !data.hubSession || !data.hubSession.token) return null;
+          const expiresAt = Number(data.expiresAt) || 0;
+          if (expiresAt && Date.now() > expiresAt) return null;
+          return data;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function hubHeaders() {
+        const session = readSession();
+        return {
+          "Content-Type": "application/json",
+          "X-Synk-Hub-Session": session.hubSession.token,
+        };
+      }
+
+      function renderAgenda(items) {
+        if (!items.length) {
+          agendaEl.innerHTML = '<p class="muted">No agenda items yet. Check back when an update ships.</p>';
+          return;
+        }
+        agendaEl.innerHTML = items
+          .map(
+            (item) => `
+          <label class="testing-agenda-item ${item.done ? "is-done" : ""}">
+            <input type="checkbox" data-agenda-id="${escapeHtml(item.id)}" ${item.done ? "checked" : ""} />
+            <span>
+              <strong>${escapeHtml(item.title)}</strong>
+              ${item.detail ? `<div class="muted">${escapeHtml(item.detail)}</div>` : ""}
+            </span>
+          </label>`
+          )
+          .join("");
+      }
+
+      function renderFeedback(items) {
+        if (!items.length) {
+          feedbackList.innerHTML = '<p class="muted">No messages yet. Be the first.</p>';
+          return;
+        }
+        feedbackList.innerHTML = items
+          .map((f) => {
+            const when = f.createdAt ? new Date(f.createdAt).toLocaleString() : "";
+            return `<div class="testing-feedback-item"><p>${escapeHtml(f.body)}</p><p class="muted">${escapeHtml(when)}</p></div>`;
+          })
+          .join("");
+      }
+
+      async function loadDashboard() {
+        const session = readSession();
+        locked.hidden = !!session;
+        denied.hidden = true;
+        panel.hidden = !session;
+        if (!session) return;
+
+        statusEl.textContent = "Loading…";
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: hubHeaders(),
+            body: JSON.stringify({ action: "beta-dashboard" }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.status === 403) {
+            panel.hidden = true;
+            denied.hidden = false;
+            return;
+          }
+          if (!res.ok) throw new Error(data.error || "Could not load testing");
+          statusEl.textContent = "Beta testing";
+          renderAgenda(data.agenda || []);
+          renderFeedback(data.feedback || []);
+        } catch (err) {
+          statusEl.textContent = err.message || "Could not load testing";
+        }
+      }
+
+      agendaEl.addEventListener("change", async (e) => {
+        const input = e.target.closest("[data-agenda-id]");
+        if (!input) return;
+        const itemId = input.getAttribute("data-agenda-id");
+        const done = !!input.checked;
+        input.disabled = true;
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: hubHeaders(),
+            body: JSON.stringify({ action: "beta-toggle-agenda", itemId, done }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not update");
+          const row = input.closest(".testing-agenda-item");
+          if (row) row.classList.toggle("is-done", done);
+        } catch (err) {
+          input.checked = !done;
+          statusEl.textContent = err.message || "Could not update agenda";
+        } finally {
+          input.disabled = false;
+        }
+      });
+
+      feedbackForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        feedbackStatus.textContent = "Sending…";
+        try {
+          const body = document.getElementById("testing-feedback-body").value;
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: hubHeaders(),
+            body: JSON.stringify({ action: "beta-send-feedback", body }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not send");
+          document.getElementById("testing-feedback-body").value = "";
+          feedbackStatus.textContent = "Sent — thank you";
+          await loadDashboard();
+        } catch (err) {
+          feedbackStatus.textContent = err.message || "Could not send";
+        }
+      });
+
+      loadDashboard();
+    </script>
+    <script src="/support-chat.js?v=support4" defer></script>
+  </body>
+</html>

@@ -88,6 +88,8 @@
   let alts = [];
   let ownerUsername = "vision";
   let tags = [];
+  let infoPagesCache = [];
+  window.__synkInfoPages = [];
   let pendingTagIconData = "";
   let myTags = [];
   let route = { type: "home", slug: "", username: "" };
@@ -296,7 +298,10 @@
     const inner = iconUrl
       ? `<img class="synk-tag-badge-img" src="${iconUrl}" alt="" loading="lazy" />`
       : `<span class="synk-tag-badge-icon" aria-hidden="true">${initial}</span>`;
-    return `<button type="button" class="${cls}" style="--tag-color:${color}" data-tag-badge="1" data-tag-id="${id}" data-tag-name="${name}" data-tag-desc="${desc}" data-tag-pinned="${pinned}" data-tag-icon="${iconUrl}" data-can-pin="${canPin ? "1" : "0"}" aria-label="${name}" aria-expanded="false" title="${name}">${inner}</button>`;
+    const learn = tag.learnMoreEnabled && (tag.learnMorePageSlug || tag.learnMorePageId) ? "1" : "0";
+    const learnSlug = escapeHtml(tag.learnMorePageSlug || "");
+    const learnId = escapeHtml(String(tag.learnMorePageId || ""));
+    return `<button type="button" class="${cls}" style="--tag-color:${color}" data-tag-badge="1" data-tag-id="${id}" data-tag-name="${name}" data-tag-desc="${desc}" data-tag-pinned="${pinned}" data-tag-icon="${iconUrl}" data-tag-learn="${learn}" data-tag-learn-slug="${learnSlug}" data-tag-learn-id="${learnId}" data-can-pin="${canPin ? "1" : "0"}" aria-label="${name}" aria-expanded="false" title="${name}">${inner}</button>`;
   }
   function ensureTagPopover() {
     let pop = document.getElementById("tag-badge-popover");
@@ -311,6 +316,7 @@
         <strong class="synk-tag-popover-name" id="tag-pop-name"></strong>
       </div>
       <p class="synk-tag-popover-desc" id="tag-pop-desc"></p>
+      <a class="synk-tag-popover-learn" id="tag-pop-learn" hidden href="#">Learn more</a>
       <button type="button" class="btn btn-secondary btn-compact synk-tag-popover-pin" id="tag-pop-pin" hidden>Pin next to name</button>
     `;
     document.body.appendChild(pop);
@@ -338,6 +344,19 @@
     const nameEl = pop.querySelector("#tag-pop-name");
     const descEl = pop.querySelector("#tag-pop-desc");
     const pinBtn = pop.querySelector("#tag-pop-pin");
+    const learnLink = pop.querySelector("#tag-pop-learn");
+    if (learnLink) {
+      const learnOn = btn.getAttribute("data-tag-learn") === "1";
+      const slug = btn.getAttribute("data-tag-learn-slug") || "";
+      const pageId = btn.getAttribute("data-tag-learn-id") || "";
+      if (learnOn && (slug || pageId)) {
+        learnLink.hidden = false;
+        learnLink.href = slug ? `/info/${encodeURIComponent(slug)}` : `/info/?id=${encodeURIComponent(pageId)}`;
+      } else {
+        learnLink.hidden = true;
+        learnLink.removeAttribute("href");
+      }
+    }
     if (icon) {
       const iconUrl = btn.getAttribute("data-tag-icon") || "";
       icon.style.setProperty("--tag-color", color);
@@ -415,6 +434,17 @@
                 <div class="synk-tag-mod-edit-panel" hidden>
                   <button class="btn btn-secondary btn-compact" type="button" data-upload-tag-icon="${id}">Icon</button>
                   ${tag.iconUrl ? `<button class="btn btn-secondary btn-compact" type="button" data-clear-tag-icon="${id}">Clear icon</button>` : ""}
+                  <div class="mod-learn-more-box">
+                    <label class="check-row">
+                      <input type="checkbox" data-tag-learn-enabled="${id}" ${tag.learnMoreEnabled ? "checked" : ""} />
+                      <span>Enable Learn more</span>
+                    </label>
+                    <select data-tag-learn-page="${id}">
+                      <option value="">Select page…</option>
+                      ${(window.__synkInfoPages || []).map((p) => `<option value="${escapeHtml(p.id)}" ${String(tag.learnMorePageId || "") === String(p.id) ? "selected" : ""}>${escapeHtml(p.title)}</option>`).join("")}
+                    </select>
+                    <button class="btn btn-secondary btn-compact" type="button" data-save-tag-learn="${id}">Save Learn more</button>
+                  </div>
                   <button class="btn btn-secondary btn-compact" type="button" data-delete-tag="${id}">Delete</button>
                   <button class="btn btn-secondary btn-compact" type="button" data-edit-tag-done="${id}">Done</button>
                 </div>
@@ -2212,12 +2242,20 @@
           description: document.getElementById("tag-description").value,
           color: document.getElementById("tag-color").value,
           iconData: pendingTagIconData || undefined,
+          learnMoreEnabled: !!(document.getElementById("tag-learn-more-enabled") && document.getElementById("tag-learn-more-enabled").checked),
+          learnMorePageId: (document.getElementById("tag-learn-more-page") && document.getElementById("tag-learn-more-page").value) || null,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not create tag");
       document.getElementById("tag-name").value = "";
       document.getElementById("tag-description").value = "";
+      const learnEn = document.getElementById("tag-learn-more-enabled");
+      const learnPage = document.getElementById("tag-learn-more-page");
+      const learnWrap = document.getElementById("tag-learn-more-page-wrap");
+      if (learnEn) learnEn.checked = false;
+      if (learnPage) learnPage.value = "";
+      if (learnWrap) learnWrap.hidden = true;
       const iconInput = document.getElementById("tag-icon");
       if (iconInput) iconInput.value = "";
       pendingTagIconData = "";
@@ -2364,6 +2402,37 @@
         if (edit) {
           edit.hidden = false;
           edit.setAttribute("aria-expanded", "false");
+        }
+        return;
+      }
+      const saveLearnBtn = e.target.closest("[data-save-tag-learn]");
+      if (saveLearnBtn) {
+        e.preventDefault();
+        const tagId = saveLearnBtn.getAttribute("data-save-tag-learn");
+        const row = saveLearnBtn.closest(".synk-tag-mod-item");
+        const enabledEl = row && row.querySelector(`[data-tag-learn-enabled="${tagId}"]`);
+        const pageEl = row && row.querySelector(`[data-tag-learn-page="${tagId}"]`);
+        const status = document.getElementById("tag-status");
+        if (status) status.textContent = "Saving Learn more…";
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: hubHeaders(),
+            body: JSON.stringify({
+              action: "update-tag",
+              tagId,
+              learnMoreEnabled: !!(enabledEl && enabledEl.checked),
+              learnMorePageId: (pageEl && pageEl.value) || null,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not update tag");
+          tags = data.tags || [];
+          renderTagCatalog();
+          if (status) status.textContent = "Learn more updated";
+          await loadCommunity();
+        } catch (err) {
+          if (status) status.textContent = err.message || "Could not update tag";
         }
         return;
       }
@@ -2874,6 +2943,13 @@
   function setNavOpen(open) {
     const next = !!open;
     document.body.classList.toggle("reddit-nav-open", next);
+    document.documentElement.classList.toggle("reddit-nav-lock", next);
+    // Lock page scroll so the top bar never rubber-bands with the drawer.
+    document.documentElement.style.overflow = next ? "hidden" : "";
+    document.body.style.overflow = next ? "hidden" : "";
+    document.body.style.touchAction = next ? "none" : "";
+    document.body.style.position = next ? "fixed" : "";
+    document.body.style.width = next ? "100%" : "";
     if (backdrop) backdrop.hidden = !next;
     if (leftNav) {
       leftNav.hidden = !next;
@@ -3070,6 +3146,14 @@
   if (navToggle) navToggle.addEventListener("click", () => setNavOpen(!document.body.classList.contains("reddit-nav-open")));
   if (backdrop) backdrop.addEventListener("click", () => setNavOpen(false));
   if (leftNav) {
+    leftNav.addEventListener(
+      "touchmove",
+      (e) => {
+        // Keep overscroll inside the drawer so the top bar does not drag.
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
     leftNav.addEventListener("click", (e) => {
       const link = e.target.closest("a[href]");
       if (link) setNavOpen(false);
@@ -3364,4 +3448,310 @@
       }, 1200);
     });
   }
+
+
+  // —— Learn more pages + beta agenda admin + nav touch lock ——
+  function fillLearnMorePageSelects() {
+    window.__synkInfoPages = infoPagesCache || [];
+    const options = ['<option value="">Select a page…</option>']
+      .concat((infoPagesCache || []).map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)}</option>`));
+    const createSelect = document.getElementById("tag-learn-more-page");
+    if (createSelect) {
+      const prev = createSelect.value;
+      createSelect.innerHTML = options.join("");
+      if (prev) createSelect.value = prev;
+    }
+  }
+
+  function renderInfoPagesAdmin() {
+    const list = document.getElementById("info-pages-list");
+    if (!list) return;
+    if (!infoPagesCache.length) {
+      list.innerHTML = '<p class="muted" style="margin:0;font-size:0.85rem;">No Learn more pages yet.</p>';
+      return;
+    }
+    list.innerHTML = infoPagesCache.map((p) => `
+      <div class="community-staff-row">
+        <div>
+          <strong>${escapeHtml(p.title)}</strong>
+          <div class="muted" style="font-size:0.78rem;">/info/${escapeHtml(p.slug)}</div>
+          <div class="muted" style="font-size:0.78rem;">${escapeHtml(p.summary || "")}</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-secondary btn-compact" type="button" data-edit-info-page="${escapeHtml(p.id)}">Edit</button>
+          <button class="btn btn-secondary btn-compact" type="button" data-delete-info-page="${escapeHtml(p.id)}">Delete</button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function resetInfoPageForm() {
+    const id = document.getElementById("info-page-id");
+    if (id) id.value = "";
+    ["info-page-title","info-page-slug","info-page-summary","info-page-hero","info-page-blocks"].forEach((fid) => {
+      const el = document.getElementById(fid);
+      if (el) el.value = "";
+    });
+    const status = document.getElementById("info-page-status");
+    if (status) status.textContent = "";
+    const btn = document.getElementById("info-page-save-btn");
+    if (btn) btn.textContent = "Save page";
+  }
+
+  async function loadInfoPagesForMods() {
+    if (!(me && me.isStaff)) return;
+    try {
+      const res = await fetch("/api/synk-community", {
+        method: "POST",
+        headers: hubHeaders(),
+        body: JSON.stringify({ action: "list-info-pages" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not load pages");
+      infoPagesCache = data.pages || [];
+      fillLearnMorePageSelects();
+      renderInfoPagesAdmin();
+      renderTagCatalog();
+    } catch (err) {
+      console.warn(err);
+    }
+  }
+
+  async function loadBetaAgendaAdmin() {
+    if (!(me && me.isStaff)) return;
+    const list = document.getElementById("beta-agenda-admin-list");
+    if (!list) return;
+    try {
+      const res = await fetch("/api/synk-community", {
+        method: "POST",
+        headers: hubHeaders(),
+        body: JSON.stringify({ action: "beta-admin-agenda" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not load agenda");
+      const items = data.agenda || [];
+      list._agendaItems = items;
+      if (!items.length) {
+        list.innerHTML = '<p class="muted" style="margin:0;font-size:0.85rem;">No agenda items yet.</p>';
+        return;
+      }
+      list.innerHTML = items.map((item) => `
+        <div class="community-staff-row">
+          <div>
+            <strong>${escapeHtml(item.title)}</strong>
+            <div class="muted" style="font-size:0.78rem;">${escapeHtml(item.detail || "")}</div>
+            <div class="muted" style="font-size:0.75rem;">sort ${escapeHtml(String(item.sortOrder ?? 0))} · ${item.active === false ? "inactive" : "active"}</div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-compact" type="button" data-edit-agenda="${escapeHtml(item.id)}">Edit</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-delete-agenda="${escapeHtml(item.id)}">Delete</button>
+          </div>
+        </div>
+      `).join("");
+    } catch (err) {
+      list.innerHTML = `<p class="muted">${escapeHtml(err.message || "Could not load agenda")}</p>`;
+    }
+  }
+
+  const learnEnable = document.getElementById("tag-learn-more-enabled");
+  const learnWrap = document.getElementById("tag-learn-more-page-wrap");
+  if (learnEnable && learnWrap) {
+    learnEnable.addEventListener("change", () => {
+      learnWrap.hidden = !learnEnable.checked;
+    });
+  }
+
+  const infoPageForm = document.getElementById("info-page-form");
+  if (infoPageForm) {
+    infoPageForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("info-page-status");
+      if (status) status.textContent = "Saving…";
+      let blocks = [];
+      try {
+        const raw = (document.getElementById("info-page-blocks").value || "").trim();
+        blocks = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(blocks)) throw new Error("Blocks must be a JSON array");
+      } catch (err) {
+        if (status) status.textContent = err.message || "Invalid blocks JSON";
+        return;
+      }
+      const pageId = document.getElementById("info-page-id").value;
+      try {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({
+            action: pageId ? "update-info-page" : "create-info-page",
+            pageId: pageId || undefined,
+            title: document.getElementById("info-page-title").value,
+            slug: document.getElementById("info-page-slug").value,
+            summary: document.getElementById("info-page-summary").value,
+            heroImageUrl: document.getElementById("info-page-hero").value,
+            blocks,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not save page");
+        infoPagesCache = data.pages || [];
+        fillLearnMorePageSelects();
+        renderInfoPagesAdmin();
+        resetInfoPageForm();
+        renderTagCatalog();
+        if (status) status.textContent = "Saved";
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not save page";
+      }
+    });
+  }
+  const infoReset = document.getElementById("info-page-reset-btn");
+  if (infoReset) infoReset.addEventListener("click", () => resetInfoPageForm());
+
+  const infoList = document.getElementById("info-pages-list");
+  if (infoList) {
+    infoList.addEventListener("click", async (e) => {
+      const edit = e.target.closest("[data-edit-info-page]");
+      const del = e.target.closest("[data-delete-info-page]");
+      if (edit) {
+        const id = edit.getAttribute("data-edit-info-page");
+        const page = (infoPagesCache || []).find((p) => String(p.id) === String(id));
+        if (!page) return;
+        document.getElementById("info-page-id").value = page.id;
+        document.getElementById("info-page-title").value = page.title || "";
+        document.getElementById("info-page-slug").value = page.slug || "";
+        document.getElementById("info-page-summary").value = page.summary || "";
+        document.getElementById("info-page-hero").value = page.heroImageUrl || "";
+        document.getElementById("info-page-blocks").value = JSON.stringify(page.blocks || [], null, 2);
+        const btn = document.getElementById("info-page-save-btn");
+        if (btn) btn.textContent = "Update page";
+        return;
+      }
+      if (del) {
+        const id = del.getAttribute("data-delete-info-page");
+        if (!confirm("Delete this Learn more page?")) return;
+        const status = document.getElementById("info-page-status");
+        if (status) status.textContent = "Deleting…";
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: hubHeaders(),
+            body: JSON.stringify({ action: "delete-info-page", pageId: id }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not delete page");
+          infoPagesCache = data.pages || [];
+          fillLearnMorePageSelects();
+          renderInfoPagesAdmin();
+          renderTagCatalog();
+          if (status) status.textContent = "Deleted";
+        } catch (err) {
+          if (status) status.textContent = err.message || "Could not delete page";
+        }
+      }
+    });
+  }
+
+  const agendaForm = document.getElementById("beta-agenda-form");
+  if (agendaForm) {
+    agendaForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("beta-agenda-status");
+      if (status) status.textContent = "Saving…";
+      try {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({
+            action: "beta-save-agenda-item",
+            itemId: document.getElementById("beta-agenda-id").value || undefined,
+            title: document.getElementById("beta-agenda-title").value,
+            detail: document.getElementById("beta-agenda-detail").value,
+            sortOrder: Number(document.getElementById("beta-agenda-sort").value || 0),
+            active: document.getElementById("beta-agenda-active").checked,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not save agenda item");
+        document.getElementById("beta-agenda-id").value = "";
+        document.getElementById("beta-agenda-title").value = "";
+        document.getElementById("beta-agenda-detail").value = "";
+        document.getElementById("beta-agenda-sort").value = "0";
+        document.getElementById("beta-agenda-active").checked = true;
+        if (status) status.textContent = "Saved";
+        await loadBetaAgendaAdmin();
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not save";
+      }
+    });
+  }
+  const agendaReset = document.getElementById("beta-agenda-reset-btn");
+  if (agendaReset) {
+    agendaReset.addEventListener("click", () => {
+      document.getElementById("beta-agenda-id").value = "";
+      document.getElementById("beta-agenda-title").value = "";
+      document.getElementById("beta-agenda-detail").value = "";
+      document.getElementById("beta-agenda-sort").value = "0";
+      document.getElementById("beta-agenda-active").checked = true;
+      const status = document.getElementById("beta-agenda-status");
+      if (status) status.textContent = "";
+    });
+  }
+  const agendaList = document.getElementById("beta-agenda-admin-list");
+  if (agendaList) {
+    agendaList.addEventListener("click", async (e) => {
+      const edit = e.target.closest("[data-edit-agenda]");
+      const del = e.target.closest("[data-delete-agenda]");
+      if (edit) {
+        const id = edit.getAttribute("data-edit-agenda");
+        const items = agendaList._agendaItems || [];
+        const item = items.find((x) => String(x.id) === String(id));
+        if (!item) return;
+        document.getElementById("beta-agenda-id").value = item.id;
+        document.getElementById("beta-agenda-title").value = item.title || "";
+        document.getElementById("beta-agenda-detail").value = item.detail || "";
+        document.getElementById("beta-agenda-sort").value = String(item.sortOrder ?? 0);
+        document.getElementById("beta-agenda-active").checked = item.active !== false;
+        return;
+      }
+      if (del) {
+        const id = del.getAttribute("data-delete-agenda");
+        if (!confirm("Delete this agenda item?")) return;
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: hubHeaders(),
+            body: JSON.stringify({ action: "beta-delete-agenda-item", itemId: id }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not delete");
+          await loadBetaAgendaAdmin();
+        } catch (err) {
+          alert(err.message || "Could not delete");
+        }
+      }
+    });
+  }
+
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!document.body.classList.contains("reddit-nav-open")) return;
+      const inDrawer = e.target.closest && e.target.closest("#left-nav");
+      if (!inDrawer) e.preventDefault();
+    },
+    { passive: false }
+  );
+
+  const _applyStaffState = typeof applyStaffState === "function" ? applyStaffState : null;
+  if (_applyStaffState) {
+    applyStaffState = function patchedApplyStaffState() {
+      _applyStaffState();
+      if (me && me.isStaff) {
+        loadInfoPagesForMods();
+        loadBetaAgendaAdmin();
+      }
+    };
+  }
+
+
 })();

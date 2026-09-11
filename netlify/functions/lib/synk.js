@@ -270,6 +270,59 @@ async function ensureSynkCommunityExtras(sql) {
     ON synk_community_tags (created_at DESC)
   `;
   await sql`ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS icon_url TEXT`;
+  await sql`ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS learn_more_enabled BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS learn_more_page_id UUID`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_info_pages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      slug TEXT NOT NULL,
+      title TEXT NOT NULL,
+      summary TEXT NOT NULL DEFAULT '',
+      hero_image_url TEXT NOT NULL DEFAULT '',
+      blocks JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS synk_info_pages_slug_idx ON synk_info_pages (slug)`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_info_pages_updated_idx ON synk_info_pages (updated_at DESC)`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_agenda_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      title TEXT NOT NULL,
+      detail TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_agenda_active_idx ON synk_beta_agenda_items (active, sort_order ASC, created_at ASC)`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_agenda_checks (
+      agenda_item_id UUID NOT NULL REFERENCES synk_beta_agenda_items(id) ON DELETE CASCADE,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (agenda_item_id, synk_profile_id)
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_feedback (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_created_idx ON synk_beta_feedback (created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_profile_idx ON synk_beta_feedback (synk_profile_id, created_at DESC)`;
+
 
   await sql`
     CREATE TABLE IF NOT EXISTS synk_community_profile_tags (
@@ -750,17 +803,128 @@ function mapCommunityTag(row, { pinned = false } = {}) {
     description: row.description || "",
     color: row.color || "#6366f1",
     iconUrl: row.icon_url || null,
+    learnMoreEnabled: row.learn_more_enabled === true,
+    learnMorePageId: row.learn_more_page_id || null,
+    learnMorePageSlug: row.learn_more_page_slug || row.info_page_slug || null,
+    learnMorePageTitle: row.learn_more_page_title || row.info_page_title || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     pinned: Boolean(pinned || row.pinned),
   };
 }
 
+function mapInfoPage(row, { includeBlocks = true } = {}) {
+  if (!row) return null;
+  let blocks = [];
+  try {
+    const raw = row.blocks;
+    blocks = Array.isArray(raw) ? raw : typeof raw === "string" ? JSON.parse(raw || "[]") : [];
+  } catch (_) {
+    blocks = [];
+  }
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    summary: row.summary || "",
+    heroImageUrl: row.hero_image_url || "",
+    blocks: includeBlocks ? blocks : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function normalizePageSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function normalizePageTitle(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 120);
+}
+
+function normalizePageBlocks(value) {
+  const list = Array.isArray(value) ? value : [];
+  const out = [];
+  for (const item of list.slice(0, 40)) {
+    if (!item || typeof item !== "object") continue;
+    const type = String(item.type || "").trim().toLowerCase();
+    if (type === "heading") {
+      const text = String(item.text || "").trim().slice(0, 160);
+      if (text) out.push({ type: "heading", text });
+    } else if (type === "paragraph" || type === "text") {
+      const text = String(item.text || "").trim().slice(0, 4000);
+      if (text) out.push({ type: "paragraph", text });
+    } else if (type === "image") {
+      const url = String(item.url || item.src || "").trim().slice(0, 800);
+      if (!url) continue;
+      if (!(url.startsWith("/api/") || /^https?:\/\//i.test(url))) continue;
+      out.push({ type: "image", url, alt: String(item.alt || "").trim().slice(0, 120) });
+    }
+  }
+  return out;
+}
+
+async function listInfoPages(sql) {
+  const rows = await sql`
+    SELECT id, slug, title, summary, hero_image_url, blocks, created_at, updated_at
+    FROM synk_info_pages
+    ORDER BY updated_at DESC
+    LIMIT 200
+  `;
+  return rows.map((row) => mapInfoPage(row));
+}
+
+async function findInfoPage(sql, { id, slug } = {}) {
+  const pageId = String(id || "").trim();
+  const pageSlug = normalizePageSlug(slug);
+  if (pageId) {
+    const rows = await sql`
+      SELECT id, slug, title, summary, hero_image_url, blocks, created_at, updated_at
+      FROM synk_info_pages WHERE id = ${pageId} LIMIT 1
+    `;
+    return mapInfoPage(rows[0]);
+  }
+  if (pageSlug) {
+    const rows = await sql`
+      SELECT id, slug, title, summary, hero_image_url, blocks, created_at, updated_at
+      FROM synk_info_pages WHERE slug = ${pageSlug} LIMIT 1
+    `;
+    return mapInfoPage(rows[0]);
+  }
+  return null;
+}
+
+function isBetaTesterTag(tag) {
+  if (!tag) return false;
+  const slug = String(tag.slug || "").toLowerCase();
+  const name = String(tag.name || "").toLowerCase();
+  return (
+    slug === "beta-tester" ||
+    slug === "beta_tester" ||
+    slug === "betatester" ||
+    slug.includes("beta-tester") ||
+    name.includes("beta tester")
+  );
+}
+
 async function listCommunityTags(sql) {
   const rows = await sql`
-    SELECT id, name, slug, description, color, icon_url, created_by, created_at, updated_at
-    FROM synk_community_tags
-    ORDER BY name ASC
+    SELECT
+      t.id, t.name, t.slug, t.description, t.color, t.icon_url,
+      t.learn_more_enabled, t.learn_more_page_id, t.created_by, t.created_at, t.updated_at,
+      p.slug AS learn_more_page_slug,
+      p.title AS learn_more_page_title
+    FROM synk_community_tags t
+    LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
+    ORDER BY t.name ASC
   `;
   return rows.map((row) => mapCommunityTag(row));
 }
@@ -770,18 +934,28 @@ async function findCommunityTag(sql, { id, slug } = {}) {
   const tagSlug = normalizeTagSlug(slug);
   if (tagId) {
     const rows = await sql`
-      SELECT id, name, slug, description, color, icon_url, created_by, created_at, updated_at
-      FROM synk_community_tags
-      WHERE id = ${tagId}
+      SELECT
+        t.id, t.name, t.slug, t.description, t.color, t.icon_url,
+        t.learn_more_enabled, t.learn_more_page_id, t.created_by, t.created_at, t.updated_at,
+        p.slug AS learn_more_page_slug,
+        p.title AS learn_more_page_title
+      FROM synk_community_tags t
+      LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
+      WHERE t.id = ${tagId}
       LIMIT 1
     `;
     return mapCommunityTag(rows[0]);
   }
   if (tagSlug) {
     const rows = await sql`
-      SELECT id, name, slug, description, color, icon_url, created_by, created_at, updated_at
-      FROM synk_community_tags
-      WHERE slug = ${tagSlug}
+      SELECT
+        t.id, t.name, t.slug, t.description, t.color, t.icon_url,
+        t.learn_more_enabled, t.learn_more_page_id, t.created_by, t.created_at, t.updated_at,
+        p.slug AS learn_more_page_slug,
+        p.title AS learn_more_page_title
+      FROM synk_community_tags t
+      LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
+      WHERE t.slug = ${tagSlug}
       LIMIT 1
     `;
     return mapCommunityTag(rows[0]);
@@ -836,14 +1010,19 @@ async function listUsernameTags(sql, username) {
       t.description,
       t.color,
       t.icon_url,
+      t.learn_more_enabled,
+      t.learn_more_page_id,
       t.created_at,
       t.updated_at,
+      p.slug AS learn_more_page_slug,
+      p.title AS learn_more_page_title,
       CASE
         WHEN COALESCE(c.pinned_tag_id, a.pinned_tag_id) = t.id THEN TRUE
         ELSE FALSE
       END AS pinned
     FROM synk_community_username_tags ut
     JOIN synk_community_tags t ON t.id = ut.tag_id
+    LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
     LEFT JOIN synk_community_profiles c ON c.public_username = ut.public_username
     LEFT JOIN synk_community_alt_accounts a ON a.public_username = ut.public_username
     WHERE ut.public_username = ${name}
@@ -2860,6 +3039,13 @@ module.exports = {
   normalizeTagDescription,
   normalizeTagColor,
   mapCommunityTag,
+  isBetaTesterTag,
+  findInfoPage,
+  listInfoPages,
+  normalizePageBlocks,
+  normalizePageTitle,
+  normalizePageSlug,
+  mapInfoPage,
   listCommunityTags,
   findCommunityTag,
   listProfileTags,

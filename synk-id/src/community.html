@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=menu-settings1" />
+    <link rel="stylesheet" href="/join.css?v=community-polish3" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -553,6 +553,20 @@
                         <p class="muted" style="margin:6px 0 0;font-size:0.8rem;">Optional. Square PNG/WebP looks best on badges.</p>
                         <div id="tag-icon-preview" class="synk-tag-icon-preview" hidden></div>
                       </div>
+
+                      <div class="mod-learn-more-box">
+                        <label class="check-row" for="tag-learn-more-enabled">
+                          <input id="tag-learn-more-enabled" type="checkbox" />
+                          <span>Enable Learn more button on this tag</span>
+                        </label>
+                        <div class="field" id="tag-learn-more-page-wrap" hidden>
+                          <label for="tag-learn-more-page">Learn more page</label>
+                          <select id="tag-learn-more-page">
+                            <option value="">Select a page…</option>
+                          </select>
+                          <p class="muted" style="margin:6px 0 0;font-size:0.8rem;">Only shown when someone opens the tag. Create pages below.</p>
+                        </div>
+                      </div>
                       <p id="tag-status" class="muted" style="font-size: 0.85rem"></p>
                       <button class="btn btn-secondary btn-compact" type="submit">Create tag</button>
                     </form>
@@ -569,6 +583,71 @@
                       </div>
                       <p id="assign-tag-status" class="muted" style="font-size: 0.85rem"></p>
                       <button class="btn btn-secondary btn-compact" type="submit">Assign tag</button>
+                    </form>
+                  </section>
+
+                  <section class="card" id="info-pages-card">
+                    <h3>Learn more pages</h3>
+                    <p class="muted">Custom pages linked from tag descriptions. Members only reach them via the Learn more button.</p>
+                    <div id="info-pages-list" class="community-staff-list"></div>
+                    <form id="info-page-form" class="form" style="margin-top:12px">
+                      <input type="hidden" id="info-page-id" value="" />
+                      <div class="field">
+                        <label for="info-page-title">Page title</label>
+                        <input id="info-page-title" type="text" maxlength="120" required placeholder="About Beta Tester" />
+                      </div>
+                      <div class="field">
+                        <label for="info-page-slug">URL slug <span class="muted">(optional)</span></label>
+                        <input id="info-page-slug" type="text" maxlength="80" placeholder="about-beta-tester" spellcheck="false" />
+                      </div>
+                      <div class="field">
+                        <label for="info-page-summary">Short summary</label>
+                        <input id="info-page-summary" type="text" maxlength="400" placeholder="What this tag means" />
+                      </div>
+                      <div class="field">
+                        <label for="info-page-hero">Hero image URL <span class="muted">(optional)</span></label>
+                        <input id="info-page-hero" type="url" maxlength="800" placeholder="https://…" />
+                      </div>
+                      <div class="field">
+                        <label for="info-page-blocks">Content blocks (JSON)</label>
+                        <textarea id="info-page-blocks" rows="6" placeholder='[{"type":"heading","text":"Welcome"},{"type":"paragraph","text":"Details…"},{"type":"image","url":"https://…","alt":""}]'></textarea>
+                        <p class="muted" style="margin:6px 0 0;font-size:0.8rem;">Use heading, paragraph, or image blocks.</p>
+                      </div>
+                      <p id="info-page-status" class="muted" style="font-size:0.85rem"></p>
+                      <div class="btn-row">
+                        <button class="btn btn-secondary btn-compact" type="submit" id="info-page-save-btn">Save page</button>
+                        <button class="btn btn-secondary btn-compact" type="button" id="info-page-reset-btn">Clear form</button>
+                      </div>
+                    </form>
+                  </section>
+
+                  <section class="card" id="beta-agenda-card">
+                    <h3>Beta testing agenda</h3>
+                    <p class="muted">Checklist shown to Beta tester members on the Testing hub tile.</p>
+                    <div id="beta-agenda-admin-list" class="community-staff-list"></div>
+                    <form id="beta-agenda-form" class="form" style="margin-top:12px">
+                      <input type="hidden" id="beta-agenda-id" value="" />
+                      <div class="field">
+                        <label for="beta-agenda-title">Agenda item</label>
+                        <input id="beta-agenda-title" type="text" maxlength="160" required placeholder="Try the new sidebar" />
+                      </div>
+                      <div class="field">
+                        <label for="beta-agenda-detail">Details <span class="muted">(optional)</span></label>
+                        <input id="beta-agenda-detail" type="text" maxlength="1000" placeholder="Open Community and scroll the menu" />
+                      </div>
+                      <div class="field">
+                        <label for="beta-agenda-sort">Sort order</label>
+                        <input id="beta-agenda-sort" type="number" value="0" />
+                      </div>
+                      <label class="check-row" for="beta-agenda-active">
+                        <input id="beta-agenda-active" type="checkbox" checked />
+                        <span>Active</span>
+                      </label>
+                      <p id="beta-agenda-status" class="muted" style="font-size:0.85rem"></p>
+                      <div class="btn-row">
+                        <button class="btn btn-secondary btn-compact" type="submit">Save agenda item</button>
+                        <button class="btn btn-secondary btn-compact" type="button" id="beta-agenda-reset-btn">Clear</button>
+                      </div>
                     </form>
                   </section>
                 </div>
@@ -628,6 +707,6 @@
     </nav>
 
     <div id="toast" class="community-toast" role="status" aria-live="polite"></div>
-    <script src="/community.js?v=menu-settings1"></script>
+    <script src="/community.js?v=community-polish3"></script>
   </body>
 </html>

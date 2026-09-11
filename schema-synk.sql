@@ -389,9 +389,57 @@ CREATE TABLE IF NOT EXISTS synk_community_tags (
 );
 
 ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS icon_url TEXT;
+ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS learn_more_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS learn_more_page_id UUID;
 
 CREATE UNIQUE INDEX IF NOT EXISTS synk_community_tags_slug_idx
   ON synk_community_tags (slug);
+
+CREATE TABLE IF NOT EXISTS synk_info_pages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug TEXT NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  hero_image_url TEXT NOT NULL DEFAULT '',
+  blocks JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS synk_info_pages_slug_idx ON synk_info_pages (slug);
+CREATE INDEX IF NOT EXISTS synk_info_pages_updated_idx ON synk_info_pages (updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS synk_beta_agenda_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS synk_beta_agenda_active_idx
+  ON synk_beta_agenda_items (active, sort_order ASC, created_at ASC);
+
+CREATE TABLE IF NOT EXISTS synk_beta_agenda_checks (
+  agenda_item_id UUID NOT NULL REFERENCES synk_beta_agenda_items(id) ON DELETE CASCADE,
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (agenda_item_id, synk_profile_id)
+);
+
+CREATE TABLE IF NOT EXISTS synk_beta_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS synk_beta_feedback_created_idx ON synk_beta_feedback (created_at DESC);
+CREATE INDEX IF NOT EXISTS synk_beta_feedback_profile_idx ON synk_beta_feedback (synk_profile_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS synk_community_tags_created_idx
   ON synk_community_tags (created_at DESC);
