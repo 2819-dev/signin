@@ -178,7 +178,7 @@
 
     async function loadSession() {
       if (!sessionId) return null;
-      const res = await fetch(`/api/chat-session?id=${encodeURIComponent(sessionId)}`);
+      const res = await fetch(`/api/synk-chat-session?id=${encodeURIComponent(sessionId)}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         sessionId = "";
@@ -198,10 +198,10 @@
     async function startSession(name) {
       const clean = String(name || "").trim().slice(0, 80);
       if (!clean) throw new Error("Name is required");
-      const res = await fetch("/api/chat-session", {
+      const res = await fetch("/api/synk-chat-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: `${clean} · Synk` }),
+        body: JSON.stringify({ name: clean }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not start chat");
@@ -258,7 +258,7 @@
       if (!body || !sessionId || closed) return;
       sendBtn.disabled = true;
       try {
-        const res = await fetch("/api/chat-message", {
+        const res = await fetch("/api/synk-chat-message", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId, sender: "visitor", body }),
