@@ -2942,6 +2942,7 @@ if (action === "create-alt") {
         ? body.ids.map((id) => String(id || "").trim()).filter((id) => isUuid(id))
         : [];
       if (ids.length) {
+        // Single/selected notifications: mark read (keep history).
         await sql`
           UPDATE synk_community_notifications
           SET read_at = NOW()
@@ -2950,11 +2951,10 @@ if (action === "create-alt") {
             AND read_at IS NULL
         `;
       } else {
+        // "Clear all" / mark-all: remove every notification for this member.
         await sql`
-          UPDATE synk_community_notifications
-          SET read_at = NOW()
+          DELETE FROM synk_community_notifications
           WHERE synk_profile_id = ${auth.profile.id}
-            AND read_at IS NULL
         `;
       }
       const notifications = await loadNotifications(sql, auth.profile.id, {

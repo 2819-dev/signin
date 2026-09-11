@@ -14,7 +14,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=act-as1" />
+    <link rel="stylesheet" href="/join.css?v=hub-notif1" />
     <script src="/force-refresh.js" defer></script>
   
     <style>
@@ -43,6 +43,43 @@
         cursor: pointer;
         font: inherit;
       }
+      .hub-notif-wrap {
+        display: inline-flex;
+        align-items: center;
+        position: relative;
+      }
+      .hub-notif-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 999px;
+        border: 1px solid var(--line, rgba(0,0,0,.12));
+        background: var(--surface, #fff);
+        color: inherit;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        position: relative;
+      }
+      .hub-notif-btn:hover {
+        background: var(--elev, rgba(0,0,0,.04));
+      }
+      .site-nav-light .hub-notif-btn {
+        border-color: rgba(0,0,0,.1);
+      }
+      .hub-notif-panel {
+        right: 0;
+        left: auto;
+        z-index: 120;
+      }
+      @media (max-width: 720px) {
+        .hub-notif-panel {
+          position: fixed;
+          top: 64px;
+          left: 8px;
+          right: 8px;
+          width: auto;
+        }
+      }
     </style>
 </head>
   <body>
@@ -54,6 +91,30 @@
         <span>Synk</span>
       </a>
       <nav class="nav-actions" aria-label="Account">
+        <div class="reddit-notif-wrap hub-notif-wrap" id="hub-notif-wrap" hidden>
+          <button
+            class="reddit-icon-btn reddit-notif-btn hub-notif-btn"
+            type="button"
+            id="hub-notif-btn"
+            aria-label="Notifications"
+            aria-haspopup="true"
+            aria-expanded="false"
+            title="Notifications"
+          >
+            <svg class="r-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 9a5.5 5.5 0 0 1 11 0c0 7 2.5 7 2.5 7H4s2.5 0 2.5-7"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+            <span class="reddit-notif-dot" id="hub-notif-dot" hidden aria-hidden="true"></span>
+          </button>
+          <div class="reddit-notif-panel hub-notif-panel" id="hub-notif-panel" hidden role="dialog" aria-label="Notifications">
+            <div class="reddit-notif-head">
+              <strong>Notifications</strong>
+              <button class="reddit-notif-mark" type="button" id="hub-notif-clear">Clear all</button>
+            </div>
+            <div class="reddit-notif-list" id="hub-notif-list">
+              <p class="muted reddit-notif-empty">You're all caught up</p>
+            </div>
+            <a class="reddit-notif-footer" href="/community/inbox">Open inbox</a>
+          </div>
+        </div>
         <a class="nav-link" href="/community">Community</a>
         <a class="nav-link" href="/docs">Docs</a>
         <a class="nav-link" href="/business">Business</a>
@@ -207,9 +268,12 @@
         featuresCard.hidden = !signedIn;
         locked.hidden = signedIn;
 
+        const notifWrap = document.getElementById("hub-notif-wrap");
+        if (notifWrap) notifWrap.hidden = !signedIn;
         if (!signedIn) {
           greeting.textContent = "Your Synk hub";
           subtitle.textContent = "Log in to see your ID, community, and tools.";
+          setHubNotifOpen(false);
           return;
         }
 
@@ -230,6 +294,7 @@
           avatar.style.backgroundImage = "";
           avatar.textContent = (profile.name || "S").slice(0, 1).toUpperCase();
         }
+        refreshHubNotifications().catch(() => {});
       }
 
 
@@ -305,6 +370,216 @@
         sessionStorage.removeItem(STORAGE_KEY);
         location.href = "/verify";
       });
+
+
+      let hubNotifCache = [];
+      let hubNotifLoaded = false;
+
+      function escapeHubHtml(str) {
+        return String(str || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function hubHeaders(session) {
+        return {
+          "Content-Type": "application/json",
+          "X-Synk-Hub-Session": session.hubSession.token,
+        };
+      }
+
+      function setHubNotifOpen(open) {
+        const panel = document.getElementById("hub-notif-panel");
+        const btn = document.getElementById("hub-notif-btn");
+        if (!panel || !btn) return;
+        panel.hidden = !open;
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+
+      function setHubNotifDot(count) {
+        const dot = document.getElementById("hub-notif-dot");
+        if (!dot) return;
+        const n = Number(count) || 0;
+        dot.hidden = n <= 0;
+      }
+
+      function describeHubNotification(note) {
+        const kind = String((note && note.kind) || "").trim().toLowerCase().replace(/-/g, "_");
+        const actor = String((note && (note.actorUsername || note.actor)) || "").trim() || "Someone";
+        let title = String((note && note.title) || "").trim();
+        let description = String((note && (note.description || note.body)) || "").trim();
+        if (kind === "friend_request") {
+          title = title || "Friend request";
+          description = description || `${actor} sent you a friend request.`;
+        } else if (kind === "friend_accept" || kind === "friend_accepted") {
+          title = title || "Friend request accepted";
+          description = description || `${actor} accepted your friend request.`;
+        } else if (kind === "comment") {
+          title = title || "New comment";
+          description = description || `${actor} commented on your post.`;
+        } else if (kind === "reply" || kind === "comment_reply_on_post") {
+          title = title || "New reply";
+          description = description || `${actor} replied to your comment.`;
+        } else if (kind === "dm" || kind === "message") {
+          title = title || "New message";
+          description = description || `${actor} sent you a message.`;
+        } else if (kind === "app_update" || kind === "app_updated" || kind === "update") {
+          title = title || "App updated";
+          description = description || "Synk was updated. Refresh to get the latest.";
+        } else {
+          title = title || "Notification";
+          description = description || `${actor} sent you a notification.`;
+        }
+        if (description && !/[.!?]$/.test(description)) description += ".";
+        const actions = [];
+        if (kind === "app_update" || kind === "app_updated" || kind === "update") {
+          actions.push({ type: "refresh", label: "Refresh", primary: true });
+        } else if (kind === "friend_request") {
+          actions.push({ type: "open", label: "Open inbox", href: "/community/inbox", primary: true });
+          if (actor && actor !== "Someone") {
+            actions.push({ type: "profile", label: "View profile", href: `/user/${encodeURIComponent(actor)}`, primary: false });
+          }
+        } else if (kind === "friend_accept" || kind === "friend_accepted") {
+          if (actor && actor !== "Someone") {
+            actions.push({ type: "profile", label: "View profile", href: `/user/${encodeURIComponent(actor)}`, primary: true });
+            actions.push({ type: "open", label: "Message", href: `/community/inbox?dm=${encodeURIComponent(actor)}`, primary: false });
+          }
+        } else if (kind === "dm" || kind === "message") {
+          if (actor && actor !== "Someone") {
+            actions.push({ type: "open", label: "Open chat", href: `/community/inbox?dm=${encodeURIComponent(actor)}`, primary: true });
+          }
+        } else if (note && note.postId) {
+          actions.push({ type: "open", label: "View post", href: `/community/post/${encodeURIComponent(note.postId)}`, primary: true });
+        }
+        return { kind, actor, title, description, actions };
+      }
+
+      function renderHubNotifActions(meta) {
+        return (meta.actions || [])
+          .map((action) => {
+            const cls = action.primary ? "btn btn-primary btn-compact" : "btn btn-secondary btn-compact";
+            if (action.type === "refresh") {
+              return `<button class="${cls}" type="button" data-hub-notif-refresh="1">${escapeHubHtml(action.label || "Refresh")}</button>`;
+            }
+            if (action.href) {
+              return `<a class="${cls}" href="${escapeHubHtml(action.href)}">${escapeHubHtml(action.label || "Open")}</a>`;
+            }
+            return "";
+          })
+          .filter(Boolean)
+          .join("");
+      }
+
+      function renderHubNotifications(notes) {
+        const list = document.getElementById("hub-notif-list");
+        if (!list) return;
+        hubNotifCache = Array.isArray(notes) ? notes.slice() : [];
+        if (!hubNotifCache.length) {
+          list.innerHTML = `<p class="muted reddit-notif-empty">You're all caught up</p>`;
+          return;
+        }
+        list.innerHTML = hubNotifCache
+          .map((note) => {
+            const meta = describeHubNotification(note);
+            const unread = !note.readAt;
+            const actions = renderHubNotifActions(meta);
+            return `<div class="reddit-notif-row ${unread ? "is-unread" : ""}">
+              <div class="reddit-notif-copy">
+                <strong class="reddit-notif-title">${escapeHubHtml(meta.title)}</strong>
+                <p class="reddit-notif-desc">${escapeHubHtml(meta.description)}</p>
+                ${actions ? `<div class="reddit-notif-actions">${actions}</div>` : ""}
+              </div>
+            </div>`;
+          })
+          .join("");
+      }
+
+      async function refreshHubNotifications() {
+        const session = readSession();
+        const wrap = document.getElementById("hub-notif-wrap");
+        if (!session || !session.hubSession || !session.hubSession.token) {
+          if (wrap) wrap.hidden = true;
+          return;
+        }
+        if (wrap) wrap.hidden = false;
+        try {
+          const res = await fetch("/api/synk-community?inbox=1", { headers: hubHeaders(session) });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Couldn't load notifications");
+          hubNotifLoaded = true;
+          renderHubNotifications(data.notifications || []);
+          setHubNotifDot(typeof data.unreadCount === "number" ? data.unreadCount : (data.notifications || []).filter((n) => !n.readAt).length);
+        } catch (_) {
+          const list = document.getElementById("hub-notif-list");
+          if (list && !hubNotifLoaded) {
+            list.innerHTML = `<p class="muted reddit-notif-empty">Couldn't load notifications</p>`;
+          }
+        }
+      }
+
+      const hubNotifBtn = document.getElementById("hub-notif-btn");
+      if (hubNotifBtn) {
+        hubNotifBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const panel = document.getElementById("hub-notif-panel");
+          const willOpen = !!(panel && panel.hidden);
+          if (!willOpen) {
+            setHubNotifOpen(false);
+            return;
+          }
+          if (hubNotifLoaded) renderHubNotifications(hubNotifCache);
+          else {
+            const list = document.getElementById("hub-notif-list");
+            if (list) list.innerHTML = `<p class="muted reddit-notif-empty">Loading…</p>`;
+          }
+          setHubNotifOpen(true);
+          refreshHubNotifications().catch(() => {});
+        });
+      }
+
+      const hubNotifClear = document.getElementById("hub-notif-clear");
+      if (hubNotifClear) {
+        hubNotifClear.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const session = readSession();
+          if (!session) return;
+          try {
+            const res = await fetch("/api/synk-community", {
+              method: "POST",
+              headers: hubHeaders(session),
+              body: JSON.stringify({ action: "mark-read" }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Couldn't clear notifications");
+            renderHubNotifications(data.notifications || []);
+            setHubNotifDot(typeof data.unreadCount === "number" ? data.unreadCount : 0);
+          } catch (err) {
+            const list = document.getElementById("hub-notif-list");
+            if (list) list.innerHTML = `<p class="muted reddit-notif-empty">${escapeHubHtml(err.message || "Couldn't clear")}</p>`;
+          }
+        });
+      }
+
+      document.addEventListener("click", (e) => {
+        const refreshBtn = e.target.closest("[data-hub-notif-refresh]");
+        if (refreshBtn) {
+          e.preventDefault();
+          try {
+            if (window.synkForceRefresh) window.synkForceRefresh();
+            else location.reload();
+          } catch (_) {
+            location.reload();
+          }
+          return;
+        }
+        const wrap = document.getElementById("hub-notif-wrap");
+        if (wrap && !wrap.contains(e.target)) setHubNotifOpen(false);
+      });
+
 
       async function loadFeatureFlags() {
         const session = readSession();

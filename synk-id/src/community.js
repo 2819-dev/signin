@@ -1548,17 +1548,25 @@
     // Ensure sentence punctuation for short system sentences.
     if (description && !/[.!?]$/.test(description)) description += ".";
     const actions = [];
-    if (kind === "friend_request") {
+    if (kind === "app_update" || kind === "app_updated" || kind === "update") {
+      actions.push({ type: "refresh", label: "Refresh", primary: true });
+    } else if (kind === "friend_request") {
       actions.push({ type: "friend-accept", label: "Accept", primary: true });
       actions.push({ type: "friend-decline", label: "Decline", primary: false });
-      actions.push({ type: "view-profile", label: "View profile", primary: false });
+      if (actor && actor !== "Someone") {
+        actions.push({ type: "view-profile", label: "View profile", primary: false });
+      }
     } else if (kind === "friend_accept" || kind === "friend_accepted") {
-      actions.push({ type: "view-profile", label: "View profile", primary: true });
-      actions.push({ type: "message", label: "Message", primary: false });
+      if (actor && actor !== "Someone") {
+        actions.push({ type: "view-profile", label: "View profile", primary: true });
+        actions.push({ type: "message", label: "Message", primary: false });
+      }
+    } else if (kind === "dm" || kind === "message") {
+      if (actor && actor !== "Someone") {
+        actions.push({ type: "message", label: "Open chat", primary: true });
+      }
     } else if (note && note.postId) {
       actions.push({ type: "view-post", label: "View post", primary: true });
-    } else if (actor && actor !== "Someone") {
-      actions.push({ type: "view-profile", label: "View profile", primary: false });
     }
     return { kind, actor, title, description, actions };
   }
@@ -1579,10 +1587,13 @@
           return `<a class="${cls}" href="/user/${encodeURIComponent(meta.actor)}">View profile</a>`;
         }
         if (action.type === "message") {
-          return `<button class="${cls}" type="button" data-notif-message="${actor}">Message</button>`;
+          return `<button class="${cls}" type="button" data-notif-message="${actor}">${escapeHtml(action.label || "Message")}</button>`;
         }
         if (action.type === "view-post" && postId) {
           return `<button class="${cls}" type="button" data-open-post="${postId}">View post</button>`;
+        }
+        if (action.type === "refresh") {
+          return `<button class="${cls}" type="button" data-notif-refresh="1">${escapeHtml(action.label || "Refresh")}</button>`;
         }
         return "";
       })
@@ -4170,6 +4181,18 @@ function applyViewState(data) {
     if (wrap && !wrap.contains(e.target)) setNotifOpen(false);
   });
   document.addEventListener("click", async (e) => {
+    const refreshBtn = e.target.closest("[data-notif-refresh]");
+    if (refreshBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        if (window.synkForceRefresh) window.synkForceRefresh();
+        else location.reload();
+      } catch (_) {
+        location.reload();
+      }
+      return;
+    }
     const msgBtn = e.target.closest("[data-notif-message]");
     if (msgBtn) {
       e.preventDefault();
