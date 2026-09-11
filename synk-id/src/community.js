@@ -3,6 +3,9 @@
   const PERSONA_KEY = "synk_community_persona";
   const RECENT_KEY = "synk_community_recent";
   const SORT_KEY = "synk_community_sort";
+  const VOTE_KEY = "synk_community_votes";
+  const SAVE_KEY = "synk_community_saved";
+  const JOIN_KEY = "synk_community_joined";
 
   const lockedCard = document.getElementById("locked-card");
   const communityApp = document.getElementById("community-app");
@@ -32,6 +35,7 @@
   const submitView = document.getElementById("submit-view");
   const settingsViewEl = document.getElementById("settings-view");
   const modView = document.getElementById("mod-view");
+  const postView = document.getElementById("post-view");
 
   let hubToken = "";
   let publicUsername = "";
@@ -46,6 +50,7 @@
   let route = { type: "home", slug: "", username: "" };
   let lastPosts = [];
   let currentSort = "new";
+  let activePostId = "";
 
   function readSession() {
     try {
@@ -251,11 +256,72 @@
     return activity / Math.pow(ageHours + 2, 1.2);
   }
 
+
+  function readMap(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      const data = raw ? JSON.parse(raw) : {};
+      return data && typeof data === "object" ? data : {};
+    } catch (_) {
+      return {};
+    }
+  }
+  function writeMap(key, data) {
+    try { localStorage.setItem(key, JSON.stringify(data || {})); } catch (_) {}
+  }
+  function getVote(id) {
+    const map = readMap(VOTE_KEY);
+    return map[String(id)] || 0;
+  }
+  function setVote(id, value) {
+    const map = readMap(VOTE_KEY);
+    if (!value) delete map[String(id)];
+    else map[String(id)] = value;
+    writeMap(VOTE_KEY, map);
+  }
+  function isSaved(id) {
+    return !!readMap(SAVE_KEY)[String(id)];
+  }
+  function toggleSaved(id) {
+    const map = readMap(SAVE_KEY);
+    const key = String(id);
+    if (map[key]) delete map[key];
+    else map[key] = true;
+    writeMap(SAVE_KEY, map);
+    return !!map[key];
+  }
+  function isJoined(slug) {
+    return !!readMap(JOIN_KEY)[String(slug || "")];
+  }
+  function toggleJoined(slug) {
+    const map = readMap(JOIN_KEY);
+    const key = String(slug || "");
+    if (!key) return false;
+    if (map[key]) delete map[key];
+    else map[key] = true;
+    writeMap(JOIN_KEY, map);
+    return !!map[key];
+  }
+  function splitPost(body) {
+    const text = String(body || "").trim();
+    const lines = text.split(/\n/);
+    const title = (lines[0] || "Post").slice(0, 180);
+    const rest = lines.slice(1).join("\n").trim();
+    const bodyText = rest || (text.length > 180 ? text.slice(180).trim() : "");
+    return { title, bodyText };
+  }
+  function displayScore(post) {
+    const base = Math.max(1, Math.round(postScore(post) * 10));
+    return base + Number(getVote(post.id) || 0);
+  }
   function sortedPosts(posts) {
     const list = Array.isArray(posts) ? posts.slice() : [];
     const sort = route.type === "popular" ? "hot" : currentSort || "new";
-    if (sort === "top" || sort === "hot") list.sort((a, b) => postScore(b) - postScore(a));
-    else list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    if (sort === "top" || sort === "hot" || sort === "best") {
+      list.sort((a, b) => displayScore(b) - displayScore(a) || postScore(b) - postScore(a));
+    } else {
+      list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    }
     return list;
   }
 
@@ -297,7 +363,11 @@
     const statPostsLabel = document.getElementById("stat-posts-label");
     const rightRail = document.getElementById("right-rail");
     const posts = (data && data.posts) || [];
-    if (rightRail) rightRail.hidden = route.type === "settings" || route.type === "submit" || route.type === "mod";
+    if (rightRail) rightRail.hidden = route.type === "settings" || route.type === "submit" || route.type === "mod" || route.type === "post";
+    const aboutCreated = document.getElementById("about-created");
+    const aboutMembers = document.getElementById("about-members");
+    if (aboutCreated) aboutCreated.textContent = "2024";
+    if (aboutMembers) aboutMembers.textContent = String(Math.max(groups.length * 12, posts.length || 0));
     const modsList = document.getElementById("mods-list");
     if (modsList) {
       const mods = (staff || []).filter((p) => p.role === "owner" || p.role === "admin");
@@ -341,7 +411,9 @@
     if (path === "/community/submit") return { type: "submit", slug: "", username: "" };
     if (path === "/community/mod" || path === "/community/mod-tools") return { type: "mod", slug: "", username: "" };
     if (path === "/community/popular") return { type: "popular", slug: "", username: "" };
-    let m = path.match(/^\/community\/g\/([a-z0-9-]+)$/i);
+    let m = path.match(/^\/community\/post\/([a-z0-9_-]+)$/i);
+    if (m) return { type: "post", slug: "", username: "", postId: m[1] };
+    m = path.match(/^\/community\/g\/([a-z0-9-]+)$/i);
     if (m) return { type: "group", slug: m[1].toLowerCase(), username: "" };
     m = path.match(/^\/(?:community\/)?u\/([a-z0-9_]+)$/i);
     if (m) return { type: "user", slug: "", username: m[1].toLowerCase() };
@@ -353,6 +425,7 @@
     if (next.type === "submit") return "/community/submit";
     if (next.type === "mod") return "/community/mod";
     if (next.type === "popular") return "/community/popular";
+    if (next.type === "post" && next.postId) return `/community/post/${encodeURIComponent(next.postId)}`;
     if (next.type === "group" && next.slug) return `/community/g/${encodeURIComponent(next.slug)}`;
     if (next.type === "user" && next.username) return `/u/${encodeURIComponent(next.username)}`;
     return "/community";
@@ -579,12 +652,17 @@
         const author = post.author || {};
         const username = author.username || "member";
         const showGroup = route.type !== "group" && group;
+        const parts = splitPost(post.body);
+        const vote = getVote(post.id);
+        const saved = isSaved(post.id);
+        const score = displayScore(post);
+        const pid = escapeHtml(String(post.id || ""));
         return `
-          <article class="reddit-post">
-            <div class="reddit-vote" aria-hidden="true">
-              <button class="reddit-vote-btn up" type="button" tabindex="-1" disabled>▲</button>
-              <span class="reddit-vote-count">${Math.max(1, Math.round(postScore(post) * 10))}</span>
-              <button class="reddit-vote-btn down" type="button" tabindex="-1" disabled>▼</button>
+          <article class="reddit-post" data-post-id="${pid}">
+            <div class="reddit-vote">
+              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-post-id="${pid}" aria-label="Upvote">▲</button>
+              <span class="reddit-vote-count">${score}</span>
+              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-post-id="${pid}" aria-label="Downvote">▼</button>
             </div>
             <div class="reddit-post-main">
               <div class="reddit-post-meta">
@@ -598,24 +676,62 @@
                 ${tagChip(author.pinnedTag, { compact: true })}
                 <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
               </div>
-              <h3 class="reddit-post-title">${escapeHtml((String(post.body || "").trim().split("\n")[0] || "Post").slice(0, 180))}</h3>
-              ${
-                String(post.body || "").trim().includes("\n")
-                  ? `<div class="reddit-post-body">${escapeHtml(String(post.body || "").trim().split("\n").slice(1).join("\n").trim())}</div>`
-                  : String(post.body || "").trim().length > 180
-                    ? `<div class="reddit-post-body">${escapeHtml(String(post.body || "").trim().slice(180))}</div>`
-                    : ""
-              }
+              <a class="reddit-post-title-link" href="/community/post/${pid}" data-open-post="${pid}">
+                <h3 class="reddit-post-title">${escapeHtml(parts.title)}</h3>
+              </a>
+              ${parts.bodyText ? `<div class="reddit-post-body">${escapeHtml(parts.bodyText)}</div>` : ""}
               <div class="reddit-post-actions">
-                <button class="reddit-action" type="button" disabled>Comments</button>
-                <button class="reddit-action" type="button" data-share="${escapeHtml(group && group.slug ? group.slug : "")}">Share</button>
-                <button class="reddit-action" type="button" disabled>Save</button>
+                <a class="reddit-action" href="/community/post/${pid}" data-open-post="${pid}">💬 Comments</a>
+                <button class="reddit-action" type="button" data-share-post="${pid}">↗ Share</button>
+                <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${saved ? "★ Saved" : "☆ Save"}</button>
+                <button class="reddit-action" type="button" data-hide-post="${pid}">Hide</button>
               </div>
             </div>
           </article>
         `;
       })
       .join("");
+  }
+
+  function renderPostDetail(post) {
+    const el = document.getElementById("post-detail");
+    if (!el) return;
+    if (!post) {
+      el.innerHTML = '<p class="muted">Post not found.</p>';
+      return;
+    }
+    const group = post.group || {};
+    const author = post.author || {};
+    const username = author.username || "member";
+    const parts = splitPost(post.body);
+    const vote = getVote(post.id);
+    const saved = isSaved(post.id);
+    const pid = escapeHtml(String(post.id || ""));
+    el.innerHTML = `
+      <article class="reddit-post reddit-post-detail-inner" data-post-id="${pid}">
+        <div class="reddit-vote">
+          <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-post-id="${pid}" aria-label="Upvote">▲</button>
+          <span class="reddit-vote-count">${displayScore(post)}</span>
+          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-post-id="${pid}" aria-label="Downvote">▼</button>
+        </div>
+        <div class="reddit-post-main">
+          <div class="reddit-post-meta">
+            ${group.slug ? `<a class="reddit-sub" href="/community/g/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>` : ""}
+            <span class="muted">Posted by</span>
+            <a class="community-user-link" href="/u/${escapeHtml(username)}">${escapeHtml(username)}</a>
+            ${tagChip(author.pinnedTag, { compact: true })}
+            <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
+          </div>
+          <h1 class="reddit-post-title reddit-post-title-lg">${escapeHtml(parts.title)}</h1>
+          ${parts.bodyText ? `<div class="reddit-post-body reddit-post-body-lg">${escapeHtml(parts.bodyText)}</div>` : ""}
+          <div class="reddit-post-actions">
+            <span class="reddit-action">💬 Comments</span>
+            <button class="reddit-action" type="button" data-share-post="${pid}">↗ Share</button>
+            <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${saved ? "★ Saved" : "☆ Save"}</button>
+          </div>
+        </div>
+      </article>
+    `;
   }
 
   function applyUsernameState() {
@@ -631,11 +747,13 @@
     const onSettings = route.type === "settings";
     const onSubmit = route.type === "submit";
     const onMod = route.type === "mod";
-    const onFeed = !onSettings && !onSubmit && !onMod;
+    const onPost = route.type === "post";
+    const onFeed = !onSettings && !onSubmit && !onMod && !onPost;
     if (feedView) feedView.hidden = needsUsername || !onFeed;
     if (settingsView) settingsView.hidden = needsUsername || !onSettings;
     if (submitView) submitView.hidden = needsUsername || !onSubmit;
     if (modView) modView.hidden = needsUsername || !onMod;
+    if (postView) postView.hidden = needsUsername || !onPost;
     if (composerCard) {
       composerCard.hidden = needsUsername || !onFeed || route.type === "user";
     }
@@ -685,6 +803,20 @@
     profileMeta.hidden = true;
     profileMeta.innerHTML = "";
     syncSortTabs();
+
+    const joinBtn = document.getElementById("join-community-btn");
+    const aboutJoin = document.getElementById("about-join-btn");
+    const showJoin = route.type === "group" && !!route.slug;
+    if (joinBtn) {
+      joinBtn.hidden = !showJoin;
+      if (showJoin) joinBtn.textContent = isJoined(route.slug) ? "Joined" : "Join";
+      joinBtn.classList.toggle("is-joined", showJoin && isJoined(route.slug));
+    }
+    if (aboutJoin) {
+      aboutJoin.hidden = !showJoin;
+      if (showJoin) aboutJoin.textContent = isJoined(route.slug) ? "Joined" : "Join";
+    }
+
     const createTop = document.getElementById("create-top-link");
     const bannerCreate = document.getElementById("banner-create-link");
     const submitHref =
@@ -695,6 +827,16 @@
     if (bannerCreate) bannerCreate.href = submitHref;
 
     if (route.type === "settings" || route.type === "submit" || route.type === "mod") {
+      updateAboutRail(data);
+      return;
+    }
+    if (route.type === "post") {
+      activePostId = route.postId || "";
+      const post = (lastPosts || []).find((p) => String(p.id) === String(activePostId))
+        || ((data && data.posts) || []).find((p) => String(p.id) === String(activePostId));
+      renderPostDetail(post || null);
+      const viewIcon = document.getElementById("view-icon");
+      if (viewIcon) viewIcon.textContent = "▣";
       updateAboutRail(data);
       return;
     }
@@ -813,6 +955,10 @@
     renderMyTags();
     applyViewState(data);
     renderFeed(data.posts || []);
+    if (route.type === "post") {
+      const post = (lastPosts || []).find((p) => String(p.id) === String(route.postId));
+      renderPostDetail(post || null);
+    }
   }
 
   personaBtn.addEventListener("click", (e) => {
@@ -957,7 +1103,12 @@
         body: JSON.stringify({
           action: "post",
           group: postGroup.value || route.slug || "general",
-          body: document.getElementById("post-body").value,
+          body: (() => {
+            const titleEl = document.getElementById("post-title");
+            const title = String((titleEl && titleEl.value) || "").trim();
+            const body = String(document.getElementById("post-body").value || "").trim();
+            return title ? `${title}\n\n${body}` : body;
+          })(),
           asUsername: activePersona || publicUsername,
         }),
       });
@@ -1331,13 +1482,117 @@
     location.href = "/verify";
   });
 
+
+  function refreshPostChrome(postId) {
+    const post = (lastPosts || []).find((p) => String(p.id) === String(postId));
+    if (!post) return;
+    if (route.type === "post" && String(route.postId) === String(postId)) renderPostDetail(post);
+    else renderFeed(lastPosts);
+  }
+
+  document.addEventListener("click", (e) => {
+    const voteBtn = e.target.closest("[data-vote]");
+    if (voteBtn) {
+      e.preventDefault();
+      const id = voteBtn.getAttribute("data-post-id");
+      const dir = voteBtn.getAttribute("data-vote") === "down" ? -1 : 1;
+      const cur = getVote(id);
+      setVote(id, cur === dir ? 0 : dir);
+      refreshPostChrome(id);
+      return;
+    }
+    const openPost = e.target.closest("[data-open-post]");
+    if (openPost) {
+      e.preventDefault();
+      const id = openPost.getAttribute("data-open-post");
+      navigate({ type: "post", slug: "", username: "", postId: id }).catch(() => {});
+      return;
+    }
+    const shareBtn = e.target.closest("[data-share-post]");
+    if (shareBtn) {
+      e.preventDefault();
+      const id = shareBtn.getAttribute("data-share-post");
+      const url = `${location.origin}/community/post/${id}`;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).catch(() => {});
+      }
+      shareBtn.textContent = "✓ Copied";
+      setTimeout(() => { shareBtn.textContent = "↗ Share"; }, 1200);
+      return;
+    }
+    const saveBtn = e.target.closest("[data-save-post]");
+    if (saveBtn) {
+      e.preventDefault();
+      const id = saveBtn.getAttribute("data-save-post");
+      toggleSaved(id);
+      refreshPostChrome(id);
+      return;
+    }
+    const hideBtn = e.target.closest("[data-hide-post]");
+    if (hideBtn) {
+      e.preventDefault();
+      const id = hideBtn.getAttribute("data-hide-post");
+      lastPosts = (lastPosts || []).filter((p) => String(p.id) !== String(id));
+      renderFeed(lastPosts);
+      return;
+    }
+  });
+
+  function syncJoinButtons() {
+    const joined = route.type === "group" && route.slug && isJoined(route.slug);
+    ["join-community-btn", "about-join-btn"].forEach((id) => {
+      const btn = document.getElementById(id);
+      if (!btn || btn.hidden) return;
+      btn.textContent = joined ? "Joined" : "Join";
+      btn.classList.toggle("is-joined", !!joined);
+    });
+  }
+  ["join-community-btn", "about-join-btn"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      if (route.type !== "group" || !route.slug) return;
+      toggleJoined(route.slug);
+      syncJoinButtons();
+    });
+  });
+
+  const postBackBtn = document.getElementById("post-back-btn");
+  if (postBackBtn) {
+    postBackBtn.addEventListener("click", () => {
+      if (history.length > 1) history.back();
+      else navigate({ type: "home", slug: "", username: "" }).catch(() => {});
+    });
+  }
+
+  document.querySelectorAll("[data-submit-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const name = tab.getAttribute("data-submit-tab") || "text";
+      document.querySelectorAll("[data-submit-tab]").forEach((t) => {
+        const on = t === tab;
+        t.classList.toggle("is-active", on);
+        t.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      const textFields = document.getElementById("submit-text-fields");
+      const soonFields = document.getElementById("submit-soon-fields");
+      const postBtn = document.getElementById("post-submit-btn");
+      const body = document.getElementById("post-body");
+      const isText = name === "text";
+      if (textFields) textFields.hidden = !isText;
+      if (soonFields) soonFields.hidden = isText;
+      if (body) body.required = isText;
+      if (postBtn) postBtn.disabled = !isText;
+    });
+  });
+
   try { currentSort = localStorage.getItem(SORT_KEY) || "new"; } catch (_) { currentSort = "new"; }
   renderRecent();
 
   const session = readSession();
   hubToken = (session && session.hubSession && session.hubSession.token) || "";
   route = parseRoute();
-  history.replaceState(route, "", routeUrl(route));
+  const bootUrl = routeUrl(route) + (route.type === "submit" && location.search ? location.search : "");
+  history.replaceState(route, "", bootUrl);
   if (!session || !hubToken) {
     lockedCard.hidden = false;
   } else {

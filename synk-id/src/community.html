@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-reddit6b" />
+    <link rel="stylesheet" href="/join.css?v=community-reddit7" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -31,9 +31,15 @@
       </form>
       <nav class="reddit-top-actions" aria-label="Quick actions">
         <a class="reddit-create-top" href="/community/submit" id="create-top-link" title="Create post">
-          <span aria-hidden="true">＋</span><span>Create</span>
+          <span class="reddit-ico" aria-hidden="true">＋</span><span class="reddit-create-label">Create</span>
         </a>
-        <a class="reddit-icon-btn" href="/hub" title="Hub">Hub</a>
+        <button class="reddit-icon-btn" type="button" disabled title="Coming soon">
+          <span class="reddit-ico" aria-hidden="true">💬</span><span class="sr-only">Chat</span>
+        </button>
+        <button class="reddit-icon-btn" type="button" disabled title="Coming soon">
+          <span class="reddit-ico" aria-hidden="true">🔔</span><span class="sr-only">Notifications</span>
+        </button>
+        <a class="reddit-icon-btn" href="/hub" title="Hub"><span class="reddit-ico" aria-hidden="true">⌂</span><span class="reddit-hub-label">Hub</span></a>
         <div class="reddit-user-menu" id="user-menu">
           <button class="reddit-user-chip" type="button" id="user-menu-btn" aria-haspopup="menu" aria-expanded="false">
             <span class="reddit-user-avatar" id="user-menu-avatar" aria-hidden="true">S</span>
@@ -111,8 +117,12 @@
                   <span>Home</span>
                 </a>
                 <a class="reddit-nav-item" href="/community/popular" id="popular-link">
-                  <span class="reddit-nav-ico" aria-hidden="true">▲</span>
+                  <span class="reddit-nav-ico" aria-hidden="true">◆</span>
                   <span>Popular</span>
+                </a>
+                <a class="reddit-nav-item" href="/community/popular" id="explore-link" title="Same as Popular for now">
+                  <span class="reddit-nav-ico" aria-hidden="true">◎</span>
+                  <span>Explore</span>
                 </a>
               </nav>
 
@@ -156,7 +166,10 @@
                     <h1 id="view-title">Home</h1>
                     <p class="muted" id="view-blurb">Posts from every group, newest first.</p>
                   </div>
-                  <a class="btn btn-primary btn-compact reddit-banner-cta" href="/community/submit" id="banner-create-link">Create Post</a>
+                  <div class="reddit-banner-actions">
+                    <button class="btn btn-secondary btn-compact" type="button" id="join-community-btn" hidden>Join</button>
+                    <a class="btn btn-primary btn-compact reddit-banner-cta" href="/community/submit" id="banner-create-link">Create Post</a>
+                  </div>
                 </div>
                 <div class="community-profile-meta" id="profile-meta" hidden></div>
               </section>
@@ -165,15 +178,21 @@
                 <div class="reddit-create-bar" id="composer-collapsed">
                   <div class="reddit-create-avatar" id="composer-avatar" aria-hidden="true">S</div>
                   <a class="reddit-create-fakeinput" href="/community/submit" id="composer-open-btn">Create Post</a>
+                  <div class="reddit-create-tools" aria-hidden="true">
+                    <span class="reddit-create-tool" title="Images & video">🖼</span>
+                    <span class="reddit-create-tool" title="Link">🔗</span>
+                    <span class="reddit-create-tool" title="Poll">📊</span>
+                  </div>
                 </div>
-                <!-- kept for JS compatibility; actual composer lives on Submit page -->
                 <div class="reddit-create-form" id="composer-expanded" hidden></div>
                 <p class="muted" id="composer-as" hidden>Posting as —</p>
               </section>
 
               <section class="reddit-sortbar" aria-label="Sort">
-                <button class="reddit-sort-tab is-active" type="button" data-sort="new" id="sort-new">New</button>
+                <span class="reddit-sort-label">Sort by</span>
+                <button class="reddit-sort-tab" type="button" data-sort="best" id="sort-best">Best</button>
                 <button class="reddit-sort-tab" type="button" data-sort="hot" id="sort-hot">Hot</button>
+                <button class="reddit-sort-tab is-active" type="button" data-sort="new" id="sort-new">New</button>
                 <button class="reddit-sort-tab" type="button" data-sort="top" id="sort-top">Top</button>
               </section>
 
@@ -185,6 +204,18 @@
               </section>
             </div>
 
+
+            <div id="post-view" hidden>
+              <section class="card reddit-post-detail-card">
+                <button class="reddit-back-btn" type="button" id="post-back-btn">← Back to feed</button>
+                <div id="post-detail" class="reddit-post-detail"></div>
+              </section>
+              <section class="card reddit-comments-card">
+                <h2 class="reddit-comments-title">Comments</h2>
+                <p class="muted" id="comments-empty">Comments are coming soon. Use the feed actions to share or save posts for now.</p>
+                <div id="comments-list" class="reddit-comments-list" hidden></div>
+              </section>
+            </div>
             <div id="submit-view" hidden>
               <section class="card reddit-submit-card">
                 <nav class="community-crumbs" aria-label="Breadcrumb">
@@ -192,22 +223,36 @@
                   <span>/</span>
                   <span>submit</span>
                 </nav>
-                <p class="section-label">Create a post</p>
-                <h2>Submit to Synk Community</h2>
-                <p class="muted" id="submit-as">Posting as —</p>
+                <div class="reddit-submit-head">
+                  <h2>Create a post</h2>
+                  <p class="muted" id="submit-as">Posting as —</p>
+                </div>
+                <div class="reddit-submit-tabs" role="tablist" aria-label="Post type">
+                  <button class="reddit-submit-tab is-active" type="button" data-submit-tab="text" role="tab" aria-selected="true">Text</button>
+                  <button class="reddit-submit-tab" type="button" data-submit-tab="image" role="tab" aria-selected="false">Images &amp; Video</button>
+                  <button class="reddit-submit-tab" type="button" data-submit-tab="link" role="tab" aria-selected="false">Link</button>
+                  <button class="reddit-submit-tab" type="button" data-submit-tab="poll" role="tab" aria-selected="false">Poll</button>
+                </div>
                 <form id="post-form" class="form reddit-submit-form">
                   <div class="field">
                     <label for="post-group">Choose a community</label>
                     <select id="post-group" required></select>
                   </div>
                   <div class="field">
-                    <label for="post-body">Body</label>
+                    <label for="post-title">Title</label>
+                    <input id="post-title" type="text" maxlength="180" placeholder="Title" />
+                  </div>
+                  <div class="field" id="submit-text-fields">
+                    <label for="post-body">Text</label>
                     <textarea id="post-body" rows="8" maxlength="1000" required placeholder="Share tips, questions, or notes about Synk security…"></textarea>
+                  </div>
+                  <div class="field" id="submit-soon-fields" hidden>
+                    <p class="muted" id="submit-soon-note">This post type is coming soon. Use Text for now.</p>
                   </div>
                   <p id="post-status" class="muted" style="font-size: 0.85rem"></p>
                   <div class="reddit-create-actions">
                     <a class="btn btn-secondary btn-compact" href="/community" id="composer-cancel-btn">Cancel</a>
-                    <button class="btn btn-primary btn-compact" type="submit">Post</button>
+                    <button class="btn btn-primary btn-compact" type="submit" id="post-submit-btn">Post</button>
                   </div>
                 </form>
               </section>
@@ -363,6 +408,11 @@
                 <div><dt id="stat-posts-label">Posts</dt><dd id="stat-posts">—</dd></div>
                 <div><dt>Communities</dt><dd id="stat-groups">—</dd></div>
               </dl>
+              <div class="reddit-about-meta">
+                <div><span class="reddit-about-kicker">Created</span><strong id="about-created">—</strong></div>
+                <div><span class="reddit-about-kicker">Members</span><strong id="about-members">—</strong></div>
+              </div>
+              <button class="btn btn-primary btn-compact reddit-about-join" type="button" id="about-join-btn" hidden>Join</button>
             </section>
             <section class="reddit-widget">
               <h2 class="reddit-widget-title">Community rules</h2>
@@ -378,13 +428,13 @@
             </section>
             <section class="reddit-widget reddit-widget-soft">
               <h2 class="reddit-widget-title">Tips</h2>
-              <p class="muted">Home and Popular live in the left sidebar. Create posts from Submit. Mod Tools are separate.</p>
+              <p class="muted">Browse Home or Popular, open a post for details, and create from Submit. Mod Tools stay off the feed.</p>
             </section>
           </aside>
         </div>
       </div>
     </main>
 
-    <script src="/community.js?v=reddit6"></script>
+    <script src="/community.js?v=reddit7"></script>
   </body>
 </html>
