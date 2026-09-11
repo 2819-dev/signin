@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-reddit7" />
+    <link rel="stylesheet" href="/join.css?v=community8" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -33,12 +33,11 @@
         <a class="reddit-create-top" href="/community/submit" id="create-top-link" title="Create post">
           <span class="reddit-ico" aria-hidden="true">＋</span><span class="reddit-create-label">Create</span>
         </a>
-        <button class="reddit-icon-btn" type="button" disabled title="Coming soon">
-          <span class="reddit-ico" aria-hidden="true">💬</span><span class="sr-only">Chat</span>
-        </button>
-        <button class="reddit-icon-btn" type="button" disabled title="Coming soon">
-          <span class="reddit-ico" aria-hidden="true">🔔</span><span class="sr-only">Notifications</span>
-        </button>
+        <a class="reddit-icon-btn" href="/community/inbox" id="inbox-btn" title="Inbox">
+          <span class="reddit-ico" aria-hidden="true">🔔</span>
+          <span class="sr-only">Notifications</span>
+          <span class="reddit-inbox-badge" id="inbox-badge" hidden>0</span>
+        </a>
         <a class="reddit-icon-btn" href="/hub" title="Hub"><span class="reddit-ico" aria-hidden="true">⌂</span><span class="reddit-hub-label">Hub</span></a>
         <div class="reddit-user-menu" id="user-menu">
           <button class="reddit-user-chip" type="button" id="user-menu-btn" aria-haspopup="menu" aria-expanded="false">
@@ -212,10 +211,40 @@
               </section>
               <section class="card reddit-comments-card">
                 <h2 class="reddit-comments-title">Comments</h2>
-                <p class="muted" id="comments-empty">Comments are coming soon. Use the feed actions to share or save posts for now.</p>
-                <div id="comments-list" class="reddit-comments-list" hidden></div>
+                <form id="comment-form" class="form reddit-comment-form">
+                  <div class="field">
+                    <label class="sr-only" for="comment-body">Add a comment</label>
+                    <textarea id="comment-body" rows="3" maxlength="1000" required placeholder="What are your thoughts?"></textarea>
+                  </div>
+                  <div class="reddit-create-actions">
+                    <button class="btn btn-primary btn-compact" type="submit" id="comment-submit-btn">Comment</button>
+                  </div>
+                  <p id="comment-status" class="muted" style="font-size: 0.85rem"></p>
+                </form>
+                <div id="comments-list" class="reddit-comments-list"></div>
+                <p class="muted" id="comments-empty" hidden>No comments yet. Be the first.</p>
               </section>
             </div>
+
+            <div id="inbox-view" hidden>
+              <section class="card reddit-inbox-card">
+                <div class="reddit-inbox-head">
+                  <div>
+                    <nav class="community-crumbs" aria-label="Breadcrumb">
+                      <a href="/community">community</a>
+                      <span>/</span>
+                      <span>inbox</span>
+                    </nav>
+                    <h2>Inbox</h2>
+                    <p class="muted">Notifications about comments and replies.</p>
+                  </div>
+                  <button class="btn btn-secondary btn-compact" type="button" id="inbox-mark-read">Mark all read</button>
+                </div>
+                <div id="inbox-list" class="reddit-inbox-list"></div>
+                <p class="muted" id="inbox-empty" hidden>You're all caught up.</p>
+              </section>
+            </div>
+
             <div id="submit-view" hidden>
               <section class="card reddit-submit-card">
                 <nav class="community-crumbs" aria-label="Breadcrumb">
@@ -246,8 +275,20 @@
                     <label for="post-body">Text</label>
                     <textarea id="post-body" rows="8" maxlength="1000" required placeholder="Share tips, questions, or notes about Synk security…"></textarea>
                   </div>
-                  <div class="field" id="submit-soon-fields" hidden>
-                    <p class="muted" id="submit-soon-note">This post type is coming soon. Use Text for now.</p>
+                  <div class="field" id="submit-link-fields" hidden>
+                    <label for="post-link-url">Link URL</label>
+                    <input id="post-link-url" type="url" maxlength="2000" placeholder="https://example.com" spellcheck="false" />
+                  </div>
+                  <div class="field" id="submit-image-fields" hidden>
+                    <label for="post-image-url">Image URL</label>
+                    <input id="post-image-url" type="url" maxlength="2000" placeholder="https://… or upload below" spellcheck="false" />
+                    <label for="post-image-file" style="margin-top: 10px">Or upload image</label>
+                    <input id="post-image-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" />
+                  </div>
+                  <div class="field" id="submit-poll-fields" hidden>
+                    <label for="post-poll-options">Poll options</label>
+                    <textarea id="post-poll-options" rows="5" maxlength="800" placeholder="Option one&#10;Option two&#10;Option three"></textarea>
+                    <p class="muted" style="font-size: 0.8rem; margin: 6px 0 0">One option per line (2–6 options).</p>
                   </div>
                   <p id="post-status" class="muted" style="font-size: 0.85rem"></p>
                   <div class="reddit-create-actions">
@@ -435,6 +476,6 @@
       </div>
     </main>
 
-    <script src="/community.js?v=reddit7"></script>
+    <script src="/community.js?v=reddit8"></script>
   </body>
 </html>

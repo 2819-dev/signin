@@ -3,9 +3,6 @@
   const PERSONA_KEY = "synk_community_persona";
   const RECENT_KEY = "synk_community_recent";
   const SORT_KEY = "synk_community_sort";
-  const VOTE_KEY = "synk_community_votes";
-  const SAVE_KEY = "synk_community_saved";
-  const JOIN_KEY = "synk_community_joined";
 
   const lockedCard = document.getElementById("locked-card");
   const communityApp = document.getElementById("community-app");
@@ -36,6 +33,7 @@
   const settingsViewEl = document.getElementById("settings-view");
   const modView = document.getElementById("mod-view");
   const postView = document.getElementById("post-view");
+  const inboxView = document.getElementById("inbox-view");
 
   let hubToken = "";
   let publicUsername = "";
@@ -49,8 +47,13 @@
   let myTags = [];
   let route = { type: "home", slug: "", username: "" };
   let lastPosts = [];
+  let lastComments = [];
+  let lastNotifications = [];
   let currentSort = "new";
   let activePostId = "";
+  let unreadCount = 0;
+  let activeSubmitType = "text";
+  let activeGroupJoined = false;
 
   function readSession() {
     try {
@@ -257,51 +260,6 @@
   }
 
 
-  function readMap(key) {
-    try {
-      const raw = localStorage.getItem(key);
-      const data = raw ? JSON.parse(raw) : {};
-      return data && typeof data === "object" ? data : {};
-    } catch (_) {
-      return {};
-    }
-  }
-  function writeMap(key, data) {
-    try { localStorage.setItem(key, JSON.stringify(data || {})); } catch (_) {}
-  }
-  function getVote(id) {
-    const map = readMap(VOTE_KEY);
-    return map[String(id)] || 0;
-  }
-  function setVote(id, value) {
-    const map = readMap(VOTE_KEY);
-    if (!value) delete map[String(id)];
-    else map[String(id)] = value;
-    writeMap(VOTE_KEY, map);
-  }
-  function isSaved(id) {
-    return !!readMap(SAVE_KEY)[String(id)];
-  }
-  function toggleSaved(id) {
-    const map = readMap(SAVE_KEY);
-    const key = String(id);
-    if (map[key]) delete map[key];
-    else map[key] = true;
-    writeMap(SAVE_KEY, map);
-    return !!map[key];
-  }
-  function isJoined(slug) {
-    return !!readMap(JOIN_KEY)[String(slug || "")];
-  }
-  function toggleJoined(slug) {
-    const map = readMap(JOIN_KEY);
-    const key = String(slug || "");
-    if (!key) return false;
-    if (map[key]) delete map[key];
-    else map[key] = true;
-    writeMap(JOIN_KEY, map);
-    return !!map[key];
-  }
   function splitPost(body) {
     const text = String(body || "").trim();
     const lines = text.split(/\n/);
@@ -310,10 +268,27 @@
     const bodyText = rest || (text.length > 180 ? text.slice(180).trim() : "");
     return { title, bodyText };
   }
-  function displayScore(post) {
-    const base = Math.max(1, Math.round(postScore(post) * 10));
-    return base + Number(getVote(post.id) || 0);
+
+  function postTitle(post) {
+    const titled = String((post && post.title) || "").trim();
+    if (titled) return titled;
+    return splitPost(post && post.body).title;
   }
+
+  function postBodyText(post) {
+    const titled = String((post && post.title) || "").trim();
+    const body = String((post && post.body) || "").trim();
+    if (titled) return body;
+    return splitPost(body).bodyText;
+  }
+
+  function displayScore(post) {
+    if (post && post.score != null && Number.isFinite(Number(post.score))) {
+      return Number(post.score);
+    }
+    return Math.max(1, Math.round(postScore(post) * 10));
+  }
+
   function sortedPosts(posts) {
     const list = Array.isArray(posts) ? posts.slice() : [];
     const sort = route.type === "popular" ? "hot" : currentSort || "new";
@@ -323,6 +298,89 @@
       list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     }
     return list;
+  }
+
+  function updateInboxBadge() {
+    const badge = document.getElementById("inbox-badge");
+    if (!badge) return;
+    const n = Number(unreadCount) || 0;
+    if (n > 0) {
+      badge.hidden = false;
+      badge.textContent = n > 99 ? "99+" : String(n);
+    } else {
+      badge.hidden = true;
+      badge.textContent = "0";
+    }
+  }
+
+  function apiSort() {
+    const sort = route.type === "popular" ? "hot" : currentSort || "new";
+    if (sort === "best") return "hot";
+    if (sort === "hot" || sort === "top" || sort === "new") return sort;
+    return "new";
+  }
+
+  async function communityAction(payload) {
+    const res = await fetch("/api/synk-community", {
+      method: "POST",
+      headers: hubHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Request failed");
+    return data;
+  }
+
+  function findPost(id) {
+    return (lastPosts || []).find((p) => String(p.id) === String(id)) || null;
+  }
+
+  function patchPost(id, patch) {
+    lastPosts = (lastPosts || []).map((p) =>
+      String(p.id) === String(id) ? { ...p, ...patch } : p
+    );
+    return findPost(id);
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Could not read image file"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderPostMedia(post, { large = false } = {}) {
+    const type = String((post && post.type) || "text").toLowerCase();
+    if (type === "link" && post.linkUrl) {
+      const href = escapeHtml(post.linkUrl);
+      return `<a class="reddit-post-link" href="${href}" target="_blank" rel="noopener noreferrer">${href}</a>`;
+    }
+    if (type === "image" && post.imageUrl) {
+      const src = escapeHtml(post.imageUrl);
+      return `<div class="reddit-post-image${large ? " is-lg" : ""}"><img src="${src}" alt="" loading="lazy" /></div>`;
+    }
+    if (type === "poll" && Array.isArray(post.pollOptions) && post.pollOptions.length) {
+      const counts = Array.isArray(post.pollCounts) ? post.pollCounts : post.pollOptions.map(() => 0);
+      const total = counts.reduce((sum, n) => sum + (Number(n) || 0), 0) || 0;
+      const pid = escapeHtml(String(post.id || ""));
+      const options = post.pollOptions
+        .map((label, index) => {
+          const count = Number(counts[index]) || 0;
+          const pct = total ? Math.round((count / total) * 100) : 0;
+          const selected = post.myPollVote === index ? "is-selected" : "";
+          return `
+            <button class="reddit-poll-option ${selected}" type="button" data-poll-vote="${pid}" data-option-index="${index}">
+              <span class="reddit-poll-label">${escapeHtml(label)}</span>
+              <span class="reddit-poll-meta">${count} · ${pct}%</span>
+            </button>
+          `;
+        })
+        .join("");
+      return `<div class="reddit-poll" data-post-id="${pid}">${options}</div>`;
+    }
+    return "";
   }
 
   function syncSortTabs() {
@@ -363,7 +421,14 @@
     const statPostsLabel = document.getElementById("stat-posts-label");
     const rightRail = document.getElementById("right-rail");
     const posts = (data && data.posts) || [];
-    if (rightRail) rightRail.hidden = route.type === "settings" || route.type === "submit" || route.type === "mod" || route.type === "post";
+    if (rightRail) {
+      rightRail.hidden =
+        route.type === "settings" ||
+        route.type === "submit" ||
+        route.type === "mod" ||
+        route.type === "post" ||
+        route.type === "inbox";
+    }
     const aboutCreated = document.getElementById("about-created");
     const aboutMembers = document.getElementById("about-members");
     if (aboutCreated) aboutCreated.textContent = "2024";
@@ -411,6 +476,7 @@
     if (path === "/community/submit") return { type: "submit", slug: "", username: "" };
     if (path === "/community/mod" || path === "/community/mod-tools") return { type: "mod", slug: "", username: "" };
     if (path === "/community/popular") return { type: "popular", slug: "", username: "" };
+    if (path === "/community/inbox") return { type: "inbox", slug: "", username: "" };
     let m = path.match(/^\/community\/post\/([a-z0-9_-]+)$/i);
     if (m) return { type: "post", slug: "", username: "", postId: m[1] };
     m = path.match(/^\/community\/g\/([a-z0-9-]+)$/i);
@@ -425,6 +491,7 @@
     if (next.type === "submit") return "/community/submit";
     if (next.type === "mod") return "/community/mod";
     if (next.type === "popular") return "/community/popular";
+    if (next.type === "inbox") return "/community/inbox";
     if (next.type === "post" && next.postId) return `/community/post/${encodeURIComponent(next.postId)}`;
     if (next.type === "group" && next.slug) return `/community/g/${encodeURIComponent(next.slug)}`;
     if (next.type === "user" && next.username) return `/u/${encodeURIComponent(next.username)}`;
@@ -553,6 +620,8 @@
       parts.push(`<span>/</span><span>mod</span>`);
     } else if (route.type === "popular") {
       parts.push(`<span>/</span><span>popular</span>`);
+    } else if (route.type === "inbox") {
+      parts.push(`<span>/</span><span>inbox</span>`);
     } else if (route.type === "group" && route.slug) {
       parts.push(`<span>/</span><span>${escapeHtml(route.slug)}</span>`);
     } else if (route.type === "user" && route.username) {
@@ -638,7 +707,7 @@
 
   function renderFeed(posts) {
     lastPosts = Array.isArray(posts) ? posts.slice() : [];
-    const ordered = sortedPosts(lastPosts);
+    const ordered = sortedPosts(lastPosts).filter((p) => !p.hidden);
     if (!ordered.length) {
       feedEl.innerHTML = "";
       feedEmpty.hidden = false;
@@ -652,17 +721,20 @@
         const author = post.author || {};
         const username = author.username || "member";
         const showGroup = route.type !== "group" && group;
-        const parts = splitPost(post.body);
-        const vote = getVote(post.id);
-        const saved = isSaved(post.id);
+        const title = postTitle(post);
+        const bodyText = postBodyText(post);
+        const vote = Number(post.myVote) || 0;
+        const saved = !!post.saved;
         const score = displayScore(post);
+        const comments = Number(post.commentCount) || 0;
         const pid = escapeHtml(String(post.id || ""));
+        const media = renderPostMedia(post);
         return `
           <article class="reddit-post" data-post-id="${pid}">
             <div class="reddit-vote">
-              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-post-id="${pid}" aria-label="Upvote">▲</button>
+              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">▲</button>
               <span class="reddit-vote-count">${score}</span>
-              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-post-id="${pid}" aria-label="Downvote">▼</button>
+              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">▼</button>
             </div>
             <div class="reddit-post-main">
               <div class="reddit-post-meta">
@@ -677,11 +749,12 @@
                 <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
               </div>
               <a class="reddit-post-title-link" href="/community/post/${pid}" data-open-post="${pid}">
-                <h3 class="reddit-post-title">${escapeHtml(parts.title)}</h3>
+                <h3 class="reddit-post-title">${escapeHtml(title)}</h3>
               </a>
-              ${parts.bodyText ? `<div class="reddit-post-body">${escapeHtml(parts.bodyText)}</div>` : ""}
+              ${bodyText ? `<div class="reddit-post-body">${escapeHtml(bodyText)}</div>` : ""}
+              ${media}
               <div class="reddit-post-actions">
-                <a class="reddit-action" href="/community/post/${pid}" data-open-post="${pid}">💬 Comments</a>
+                <a class="reddit-action" href="/community/post/${pid}" data-open-post="${pid}">💬 ${comments} Comments</a>
                 <button class="reddit-action" type="button" data-share-post="${pid}">↗ Share</button>
                 <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${saved ? "★ Saved" : "☆ Save"}</button>
                 <button class="reddit-action" type="button" data-hide-post="${pid}">Hide</button>
@@ -703,16 +776,19 @@
     const group = post.group || {};
     const author = post.author || {};
     const username = author.username || "member";
-    const parts = splitPost(post.body);
-    const vote = getVote(post.id);
-    const saved = isSaved(post.id);
+    const title = postTitle(post);
+    const bodyText = postBodyText(post);
+    const vote = Number(post.myVote) || 0;
+    const saved = !!post.saved;
+    const comments = Number(post.commentCount) || 0;
     const pid = escapeHtml(String(post.id || ""));
+    const media = renderPostMedia(post, { large: true });
     el.innerHTML = `
       <article class="reddit-post reddit-post-detail-inner" data-post-id="${pid}">
         <div class="reddit-vote">
-          <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-post-id="${pid}" aria-label="Upvote">▲</button>
+          <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">▲</button>
           <span class="reddit-vote-count">${displayScore(post)}</span>
-          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-post-id="${pid}" aria-label="Downvote">▼</button>
+          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">▼</button>
         </div>
         <div class="reddit-post-main">
           <div class="reddit-post-meta">
@@ -722,16 +798,84 @@
             ${tagChip(author.pinnedTag, { compact: true })}
             <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
           </div>
-          <h1 class="reddit-post-title reddit-post-title-lg">${escapeHtml(parts.title)}</h1>
-          ${parts.bodyText ? `<div class="reddit-post-body reddit-post-body-lg">${escapeHtml(parts.bodyText)}</div>` : ""}
+          <h1 class="reddit-post-title reddit-post-title-lg">${escapeHtml(title)}</h1>
+          ${bodyText ? `<div class="reddit-post-body reddit-post-body-lg">${escapeHtml(bodyText)}</div>` : ""}
+          ${media}
           <div class="reddit-post-actions">
-            <span class="reddit-action">💬 Comments</span>
+            <span class="reddit-action">💬 ${comments} Comments</span>
             <button class="reddit-action" type="button" data-share-post="${pid}">↗ Share</button>
             <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${saved ? "★ Saved" : "☆ Save"}</button>
           </div>
         </div>
       </article>
     `;
+  }
+
+  function renderComments(comments) {
+    const list = document.getElementById("comments-list");
+    const empty = document.getElementById("comments-empty");
+    if (!list) return;
+    lastComments = Array.isArray(comments) ? comments.slice() : [];
+    if (!lastComments.length) {
+      list.innerHTML = "";
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    list.innerHTML = lastComments
+      .map((comment) => {
+        const author = comment.author || {};
+        const username = author.username || "member";
+        const vote = Number(comment.myVote) || 0;
+        const cid = escapeHtml(String(comment.id || ""));
+        return `
+          <article class="reddit-comment" data-comment-id="${cid}">
+            <div class="reddit-vote reddit-vote-sm">
+              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="comment" data-comment-id="${cid}" aria-label="Upvote">▲</button>
+              <span class="reddit-vote-count">${Number(comment.score) || 0}</span>
+              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="comment" data-comment-id="${cid}" aria-label="Downvote">▼</button>
+            </div>
+            <div class="reddit-comment-main">
+              <div class="reddit-post-meta">
+                <a class="community-user-link" href="/u/${escapeHtml(username)}">${escapeHtml(username)}</a>
+                ${tagChip(author.pinnedTag, { compact: true })}
+                <span class="muted">• ${escapeHtml(formatRelative(comment.createdAt))}</span>
+              </div>
+              <div class="reddit-comment-body">${escapeHtml(comment.body || "")}</div>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  function renderInbox(notifications) {
+    const list = document.getElementById("inbox-list");
+    const empty = document.getElementById("inbox-empty");
+    if (!list) return;
+    lastNotifications = Array.isArray(notifications) ? notifications.slice() : [];
+    if (!lastNotifications.length) {
+      list.innerHTML = "";
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    list.innerHTML = lastNotifications
+      .map((note) => {
+        const nid = escapeHtml(String(note.id || ""));
+        const unread = !note.readAt;
+        const postId = note.postId ? escapeHtml(String(note.postId)) : "";
+        const body = escapeHtml(note.body || `${note.actorUsername || "Someone"} notified you`);
+        return `
+          <button class="reddit-inbox-row ${unread ? "is-unread" : ""}" type="button" data-inbox-id="${nid}" ${postId ? `data-open-post="${postId}"` : ""}>
+            <div class="reddit-inbox-row-copy">
+              <strong>${body}</strong>
+              <span class="muted">${escapeHtml(formatRelative(note.createdAt))}</span>
+            </div>
+          </button>
+        `;
+      })
+      .join("");
   }
 
   function applyUsernameState() {
@@ -748,12 +892,14 @@
     const onSubmit = route.type === "submit";
     const onMod = route.type === "mod";
     const onPost = route.type === "post";
-    const onFeed = !onSettings && !onSubmit && !onMod && !onPost;
+    const onInbox = route.type === "inbox";
+    const onFeed = !onSettings && !onSubmit && !onMod && !onPost && !onInbox;
     if (feedView) feedView.hidden = needsUsername || !onFeed;
     if (settingsView) settingsView.hidden = needsUsername || !onSettings;
     if (submitView) submitView.hidden = needsUsername || !onSubmit;
     if (modView) modView.hidden = needsUsername || !onMod;
     if (postView) postView.hidden = needsUsername || !onPost;
+    if (inboxView) inboxView.hidden = needsUsername || !onInbox;
     if (composerCard) {
       composerCard.hidden = needsUsername || !onFeed || route.type === "user";
     }
@@ -764,6 +910,8 @@
     const modNav = document.getElementById("mod-nav-link");
     if (modNav) modNav.classList.toggle("is-active", onMod);
     if (popularLink) popularLink.classList.toggle("is-active", route.type === "popular");
+    const inboxBtn = document.getElementById("inbox-btn");
+    if (inboxBtn) inboxBtn.classList.toggle("is-active", onInbox);
     if (publicUsername) {
       const gateInput = document.getElementById("public-username");
       if (gateInput) gateInput.value = publicUsername;
@@ -779,6 +927,14 @@
     const settingsLink = document.getElementById("settings-link");
     if (settingsLink) settingsLink.classList.toggle("is-active", onSettings);
     if (homeLink) homeLink.classList.toggle("is-active", route.type === "home");
+    const submitAs = document.getElementById("submit-as");
+    if (submitAs) {
+      submitAs.textContent = activePersona
+        ? `Posting as ${activePersona}`
+        : publicUsername
+          ? `Posting as ${publicUsername}`
+          : "Posting as —";
+    }
     syncPersonaUi();
   }
 
@@ -807,14 +963,20 @@
     const joinBtn = document.getElementById("join-community-btn");
     const aboutJoin = document.getElementById("about-join-btn");
     const showJoin = route.type === "group" && !!route.slug;
+    const groupJoined =
+      (data && data.group && typeof data.group.joined === "boolean"
+        ? data.group.joined
+        : activeGroupJoined) || false;
+    activeGroupJoined = !!groupJoined;
     if (joinBtn) {
       joinBtn.hidden = !showJoin;
-      if (showJoin) joinBtn.textContent = isJoined(route.slug) ? "Joined" : "Join";
-      joinBtn.classList.toggle("is-joined", showJoin && isJoined(route.slug));
+      if (showJoin) joinBtn.textContent = activeGroupJoined ? "Joined" : "Join";
+      joinBtn.classList.toggle("is-joined", showJoin && activeGroupJoined);
     }
     if (aboutJoin) {
       aboutJoin.hidden = !showJoin;
-      if (showJoin) aboutJoin.textContent = isJoined(route.slug) ? "Joined" : "Join";
+      if (showJoin) aboutJoin.textContent = activeGroupJoined ? "Joined" : "Join";
+      aboutJoin.classList.toggle("is-joined", showJoin && activeGroupJoined);
     }
 
     const createTop = document.getElementById("create-top-link");
@@ -826,15 +988,18 @@
     if (createTop) createTop.href = submitHref;
     if (bannerCreate) bannerCreate.href = submitHref;
 
-    if (route.type === "settings" || route.type === "submit" || route.type === "mod") {
+    if (route.type === "settings" || route.type === "submit" || route.type === "mod" || route.type === "inbox") {
       updateAboutRail(data);
       return;
     }
     if (route.type === "post") {
       activePostId = route.postId || "";
-      const post = (lastPosts || []).find((p) => String(p.id) === String(activePostId))
-        || ((data && data.posts) || []).find((p) => String(p.id) === String(activePostId));
+      const post =
+        (data && data.post) ||
+        (lastPosts || []).find((p) => String(p.id) === String(activePostId)) ||
+        ((data && data.posts) || []).find((p) => String(p.id) === String(activePostId));
       renderPostDetail(post || null);
+      renderComments((data && data.comments) || lastComments || []);
       const viewIcon = document.getElementById("view-icon");
       if (viewIcon) viewIcon.textContent = "▣";
       updateAboutRail(data);
@@ -933,11 +1098,23 @@
 
   async function loadCommunity() {
     let url = "/api/synk-community";
-    if (route.type === "group" && route.slug) {
-      url += `?group=${encodeURIComponent(route.slug)}`;
+    const sort = apiSort();
+    if (route.type === "post" && route.postId) {
+      url += `?post=${encodeURIComponent(route.postId)}`;
+    } else if (route.type === "inbox") {
+      url += "?inbox=1";
+    } else if (route.type === "popular") {
+      url += `?feed=popular&sort=${encodeURIComponent(sort)}`;
+    } else if (route.type === "home") {
+      url += `?feed=home&sort=${encodeURIComponent(sort)}`;
+    } else if (route.type === "group" && route.slug) {
+      url += `?group=${encodeURIComponent(route.slug)}&sort=${encodeURIComponent(sort)}`;
     } else if (route.type === "user" && route.username) {
-      url += `?user=${encodeURIComponent(route.username)}`;
+      url += `?user=${encodeURIComponent(route.username)}&sort=${encodeURIComponent(sort)}`;
+    } else if (sort && sort !== "new") {
+      url += `?sort=${encodeURIComponent(sort)}`;
     }
+
     const res = await fetch(url, { headers: hubHeaders() });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Could not load community");
@@ -946,19 +1123,60 @@
     alts = (me && me.alts) || [];
     myTags = (me && me.tags) || [];
     tags = data.tags || [];
-    groups = data.groups || [];
+    groups = data.groups || groups || [];
     staff = data.staff || [];
     ownerUsername = data.ownerUsername || "vision";
+    if (typeof data.unreadCount === "number") unreadCount = data.unreadCount;
+    if (data.group && typeof data.group.joined === "boolean") {
+      activeGroupJoined = !!data.group.joined;
+    }
+    updateInboxBadge();
     applyUsernameState();
     applyStaffState();
-    renderGroups();
+    if (route.type !== "inbox") renderGroups();
     renderMyTags();
-    applyViewState(data);
-    renderFeed(data.posts || []);
-    if (route.type === "post") {
-      const post = (lastPosts || []).find((p) => String(p.id) === String(route.postId));
-      renderPostDetail(post || null);
+
+    if (route.type === "inbox") {
+      if (!Array.isArray(data.groups) || !data.groups.length) {
+        try {
+          const baseRes = await fetch("/api/synk-community?feed=home", { headers: hubHeaders() });
+          const base = await baseRes.json().catch(() => ({}));
+          if (baseRes.ok) {
+            groups = base.groups || groups || [];
+            if (base.me) {
+              me = base.me;
+              publicUsername = (me && me.publicUsername) || publicUsername;
+              alts = (me && me.alts) || alts;
+              myTags = (me && me.tags) || myTags;
+            }
+            if (base.staff) staff = base.staff;
+            if (base.tags) tags = base.tags;
+            applyStaffState();
+          }
+        } catch (_) {}
+      }
+      applyUsernameState();
+      renderGroups();
+      applyViewState(data);
+      renderInbox(data.notifications || []);
+      return;
     }
+
+    if (route.type === "post") {
+      const post = data.post || (data.posts && data.posts[0]) || null;
+      lastPosts = post ? [post] : [];
+      lastComments = data.comments || [];
+      applyViewState(data);
+      renderPostDetail(post);
+      renderComments(lastComments);
+      return;
+    }
+
+    applyViewState(data);
+    if (route.type === "settings" || route.type === "submit" || route.type === "mod") {
+      return;
+    }
+    renderFeed(data.posts || []);
   }
 
   personaBtn.addEventListener("click", (e) => {
@@ -1097,26 +1315,66 @@
     const status = document.getElementById("post-status");
     status.textContent = "Posting…";
     try {
-      const res = await fetch("/api/synk-community", {
-        method: "POST",
-        headers: hubHeaders(),
-        body: JSON.stringify({
-          action: "post",
-          group: postGroup.value || route.slug || "general",
-          body: (() => {
-            const titleEl = document.getElementById("post-title");
-            const title = String((titleEl && titleEl.value) || "").trim();
-            const body = String(document.getElementById("post-body").value || "").trim();
-            return title ? `${title}\n\n${body}` : body;
-          })(),
-          asUsername: activePersona || publicUsername,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Could not post");
+      const title = String((document.getElementById("post-title") || {}).value || "").trim();
+      const body = String((document.getElementById("post-body") || {}).value || "").trim();
+      const type = activeSubmitType || "text";
+      if (!title || title.length < 2) throw new Error("Title needs at least 2 characters");
+
+      const payload = {
+        action: "post",
+        type,
+        title,
+        group: postGroup.value || route.slug || "general",
+        asUsername: activePersona || publicUsername,
+      };
+
+      if (type === "text") {
+        if (!body) throw new Error("Write some text for your post");
+        payload.body = body;
+      } else if (type === "link") {
+        const linkUrl = String((document.getElementById("post-link-url") || {}).value || "").trim();
+        if (!/^https?:\/\//i.test(linkUrl)) throw new Error("Enter a valid http(s) link");
+        payload.linkUrl = linkUrl;
+        payload.body = body;
+      } else if (type === "image") {
+        let imageUrl = String((document.getElementById("post-image-url") || {}).value || "").trim();
+        const fileInput = document.getElementById("post-image-file");
+        const file = fileInput && fileInput.files && fileInput.files[0];
+        if (file) imageUrl = await readFileAsDataUrl(file);
+        if (!imageUrl) throw new Error("Add an image URL or upload a file");
+        payload.imageUrl = imageUrl;
+        payload.body = body;
+      } else if (type === "poll") {
+        const raw = String((document.getElementById("post-poll-options") || {}).value || "");
+        const pollOptions = raw
+          .split(/\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        if (pollOptions.length < 2) throw new Error("Add at least 2 poll options");
+        if (pollOptions.length > 6) throw new Error("Polls support up to 6 options");
+        payload.pollOptions = pollOptions;
+        payload.body = body;
+      }
+
+      const data = await communityAction(payload);
       document.getElementById("post-body").value = "";
+      const titleEl = document.getElementById("post-title");
+      if (titleEl) titleEl.value = "";
+      const linkEl = document.getElementById("post-link-url");
+      if (linkEl) linkEl.value = "";
+      const imageEl = document.getElementById("post-image-url");
+      if (imageEl) imageEl.value = "";
+      const fileEl = document.getElementById("post-image-file");
+      if (fileEl) fileEl.value = "";
+      const pollEl = document.getElementById("post-poll-options");
+      if (pollEl) pollEl.value = "";
       status.textContent = "Posted";
-      if (data.post && data.post.group && data.post.group.slug) {
+      if (data.post && data.post.id) {
+        await navigate(
+          { type: "post", slug: "", username: "", postId: String(data.post.id) },
+          { replace: true }
+        );
+      } else if (data.post && data.post.group && data.post.group.slug) {
         await navigate({ type: "group", slug: data.post.group.slug, username: "" }, { replace: true });
       } else {
         await loadCommunity();
@@ -1125,6 +1383,52 @@
       status.textContent = err.message || "Could not post";
     }
   });
+
+  const commentForm = document.getElementById("comment-form");
+  if (commentForm) {
+    commentForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("comment-status");
+      const bodyEl = document.getElementById("comment-body");
+      const body = String((bodyEl && bodyEl.value) || "").trim();
+      if (!route.postId) return;
+      if (status) status.textContent = "Posting…";
+      try {
+        await communityAction({
+          action: "comment",
+          postId: route.postId,
+          body,
+          asUsername: activePersona || publicUsername,
+        });
+        if (bodyEl) bodyEl.value = "";
+        if (status) status.textContent = "Commented";
+        await loadCommunity();
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not comment";
+      }
+    });
+  }
+
+  const inboxMarkRead = document.getElementById("inbox-mark-read");
+  if (inboxMarkRead) {
+    inboxMarkRead.addEventListener("click", async () => {
+      try {
+        const data = await communityAction({ action: "mark-read" });
+        if (typeof data.unreadCount === "number") unreadCount = data.unreadCount;
+        else unreadCount = 0;
+        updateInboxBadge();
+        if (Array.isArray(data.notifications)) {
+          renderInbox(data.notifications);
+        } else {
+          lastNotifications = (lastNotifications || []).map((n) => ({
+            ...n,
+            readAt: n.readAt || new Date().toISOString(),
+          }));
+          renderInbox(lastNotifications);
+        }
+      } catch (_) {}
+    });
+  }
 
   document.getElementById("create-group-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1423,6 +1727,7 @@
   bindNav(document.getElementById("banner-create-link"), { type: "submit", slug: "", username: "" });
   bindNav(document.getElementById("mod-nav-link"), { type: "mod", slug: "", username: "" });
   bindNav(document.getElementById("mod-menu-link"), { type: "mod", slug: "", username: "" });
+  bindNav(document.getElementById("inbox-btn"), { type: "inbox", slug: "", username: "" });
 
   const userMenuBtn = document.getElementById("user-menu-btn");
   const userMenuDropdown = document.getElementById("user-menu-dropdown");
@@ -1449,6 +1754,10 @@
         return;
       }
       syncSortTabs();
+      if (route.type === "home" || route.type === "popular" || route.type === "group" || route.type === "user") {
+        loadCommunity().catch(() => {});
+        return;
+      }
       renderFeed(lastPosts);
     });
   });
@@ -1484,27 +1793,114 @@
 
 
   function refreshPostChrome(postId) {
-    const post = (lastPosts || []).find((p) => String(p.id) === String(postId));
+    const post = findPost(postId);
     if (!post) return;
     if (route.type === "post" && String(route.postId) === String(postId)) renderPostDetail(post);
     else renderFeed(lastPosts);
   }
 
-  document.addEventListener("click", (e) => {
+  document.addEventListener("click", async (e) => {
     const voteBtn = e.target.closest("[data-vote]");
     if (voteBtn) {
       e.preventDefault();
-      const id = voteBtn.getAttribute("data-post-id");
+      const targetType = voteBtn.getAttribute("data-target-type") || "post";
+      const postId = voteBtn.getAttribute("data-post-id");
+      const commentId = voteBtn.getAttribute("data-comment-id");
+      const targetId = targetType === "comment" ? commentId : postId;
+      if (!targetId) return;
       const dir = voteBtn.getAttribute("data-vote") === "down" ? -1 : 1;
-      const cur = getVote(id);
-      setVote(id, cur === dir ? 0 : dir);
-      refreshPostChrome(id);
+      let cur = 0;
+      if (targetType === "comment") {
+        const comment = (lastComments || []).find((c) => String(c.id) === String(targetId));
+        cur = Number(comment && comment.myVote) || 0;
+      } else {
+        const post = findPost(targetId);
+        cur = Number(post && post.myVote) || 0;
+      }
+      const next = cur === dir ? 0 : dir;
+      if (targetType === "post") {
+        const post = findPost(targetId);
+        if (post) {
+          const delta = next - cur;
+          patchPost(targetId, {
+            myVote: next,
+            score: (Number(post.score) || 0) + delta,
+          });
+          refreshPostChrome(targetId);
+        }
+      } else {
+        lastComments = (lastComments || []).map((c) => {
+          if (String(c.id) !== String(targetId)) return c;
+          const delta = next - cur;
+          return { ...c, myVote: next, score: (Number(c.score) || 0) + delta };
+        });
+        renderComments(lastComments);
+      }
+      try {
+        const data = await communityAction({
+          action: "vote",
+          targetType,
+          targetId,
+          value: next,
+        });
+        if (targetType === "post") {
+          patchPost(targetId, {
+            myVote: data.myVote,
+            score: data.score,
+          });
+          refreshPostChrome(targetId);
+        } else {
+          lastComments = (lastComments || []).map((c) =>
+            String(c.id) === String(targetId)
+              ? { ...c, myVote: data.myVote, score: data.score }
+              : c
+          );
+          renderComments(lastComments);
+        }
+      } catch (_) {
+        await loadCommunity().catch(() => {});
+      }
       return;
     }
+
+    const pollBtn = e.target.closest("[data-poll-vote]");
+    if (pollBtn) {
+      e.preventDefault();
+      const postId = pollBtn.getAttribute("data-poll-vote");
+      const optionIndex = Number(pollBtn.getAttribute("data-option-index"));
+      if (!postId || !Number.isInteger(optionIndex)) return;
+      try {
+        const data = await communityAction({
+          action: "poll-vote",
+          postId,
+          optionIndex,
+        });
+        if (data.post) {
+          patchPost(postId, data.post);
+          if (route.type === "post" && String(route.postId) === String(postId)) {
+            lastPosts = [data.post];
+            renderPostDetail(data.post);
+          } else {
+            refreshPostChrome(postId);
+          }
+        }
+      } catch (_) {}
+      return;
+    }
+
     const openPost = e.target.closest("[data-open-post]");
     if (openPost) {
       e.preventDefault();
       const id = openPost.getAttribute("data-open-post");
+      const inboxId = openPost.getAttribute("data-inbox-id");
+      if (inboxId) {
+        communityAction({ action: "mark-read", ids: [inboxId] })
+          .then((data) => {
+            if (typeof data.unreadCount === "number") unreadCount = data.unreadCount;
+            updateInboxBadge();
+          })
+          .catch(() => {});
+      }
       navigate({ type: "post", slug: "", username: "", postId: id }).catch(() => {});
       return;
     }
@@ -1524,22 +1920,39 @@
     if (saveBtn) {
       e.preventDefault();
       const id = saveBtn.getAttribute("data-save-post");
-      toggleSaved(id);
+      const post = findPost(id);
+      const saved = !(post && post.saved);
+      patchPost(id, { saved });
       refreshPostChrome(id);
+      try {
+        const data = await communityAction({ action: "save", postId: id, saved });
+        patchPost(id, { saved: !!data.saved });
+        refreshPostChrome(id);
+      } catch (_) {
+        patchPost(id, { saved: !saved });
+        refreshPostChrome(id);
+      }
       return;
     }
     const hideBtn = e.target.closest("[data-hide-post]");
     if (hideBtn) {
       e.preventDefault();
       const id = hideBtn.getAttribute("data-hide-post");
+      const prev = lastPosts.slice();
       lastPosts = (lastPosts || []).filter((p) => String(p.id) !== String(id));
       renderFeed(lastPosts);
+      try {
+        await communityAction({ action: "hide", postId: id, hidden: true });
+      } catch (_) {
+        lastPosts = prev;
+        renderFeed(lastPosts);
+      }
       return;
     }
   });
 
   function syncJoinButtons() {
-    const joined = route.type === "group" && route.slug && isJoined(route.slug);
+    const joined = route.type === "group" && route.slug && activeGroupJoined;
     ["join-community-btn", "about-join-btn"].forEach((id) => {
       const btn = document.getElementById(id);
       if (!btn || btn.hidden) return;
@@ -1550,10 +1963,28 @@
   ["join-community-btn", "about-join-btn"].forEach((id) => {
     const btn = document.getElementById(id);
     if (!btn) return;
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       if (route.type !== "group" || !route.slug) return;
-      toggleJoined(route.slug);
+      const next = !activeGroupJoined;
+      activeGroupJoined = next;
       syncJoinButtons();
+      try {
+        const data = await communityAction({
+          action: "join",
+          group: route.slug,
+          joined: next,
+        });
+        activeGroupJoined = !!(data.joined != null ? data.joined : next);
+        if (data.group) {
+          groups = (groups || []).map((g) =>
+            g.slug === route.slug ? { ...g, joined: activeGroupJoined } : g
+          );
+        }
+        syncJoinButtons();
+      } catch (_) {
+        activeGroupJoined = !next;
+        syncJoinButtons();
+      }
     });
   });
 
@@ -1565,25 +1996,39 @@
     });
   }
 
+  function setSubmitTab(name) {
+    activeSubmitType = name || "text";
+    document.querySelectorAll("[data-submit-tab]").forEach((t) => {
+      const on = (t.getAttribute("data-submit-tab") || "text") === activeSubmitType;
+      t.classList.toggle("is-active", on);
+      t.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    const textFields = document.getElementById("submit-text-fields");
+    const linkFields = document.getElementById("submit-link-fields");
+    const imageFields = document.getElementById("submit-image-fields");
+    const pollFields = document.getElementById("submit-poll-fields");
+    const body = document.getElementById("post-body");
+    const postBtn = document.getElementById("post-submit-btn");
+    if (textFields) textFields.hidden = false;
+    if (linkFields) linkFields.hidden = activeSubmitType !== "link";
+    if (imageFields) imageFields.hidden = activeSubmitType !== "image";
+    if (pollFields) pollFields.hidden = activeSubmitType !== "poll";
+    if (body) {
+      body.required = activeSubmitType === "text";
+      const label = textFields && textFields.querySelector("label");
+      if (label) {
+        label.textContent = activeSubmitType === "text" ? "Text" : "Text (optional)";
+      }
+    }
+    if (postBtn) postBtn.disabled = false;
+  }
+
   document.querySelectorAll("[data-submit-tab]").forEach((tab) => {
     tab.addEventListener("click", () => {
-      const name = tab.getAttribute("data-submit-tab") || "text";
-      document.querySelectorAll("[data-submit-tab]").forEach((t) => {
-        const on = t === tab;
-        t.classList.toggle("is-active", on);
-        t.setAttribute("aria-selected", on ? "true" : "false");
-      });
-      const textFields = document.getElementById("submit-text-fields");
-      const soonFields = document.getElementById("submit-soon-fields");
-      const postBtn = document.getElementById("post-submit-btn");
-      const body = document.getElementById("post-body");
-      const isText = name === "text";
-      if (textFields) textFields.hidden = !isText;
-      if (soonFields) soonFields.hidden = isText;
-      if (body) body.required = isText;
-      if (postBtn) postBtn.disabled = !isText;
+      setSubmitTab(tab.getAttribute("data-submit-tab") || "text");
     });
   });
+  setSubmitTab("text");
 
   try { currentSort = localStorage.getItem(SORT_KEY) || "new"; } catch (_) { currentSort = "new"; }
   renderRecent();

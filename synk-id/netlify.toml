@@ -63,6 +63,10 @@
   to = "/community.html"
   status = 200
 
+[[redirects]]
+  from = "/community/inbox"
+  to = "/community.html"
+  status = 200
 
 [[redirects]]
   from = "/community/post/*"
