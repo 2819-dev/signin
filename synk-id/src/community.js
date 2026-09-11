@@ -4,6 +4,40 @@
   const RECENT_KEY = "synk_community_recent";
   const SORT_KEY = "synk_community_sort";
 
+
+  const ICO_PATHS = {
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    bell: '<path d="M6.5 9a5.5 5.5 0 0 1 11 0c0 7 2.5 7 2.5 7H4s2.5 0 2.5-7"/><path d="M10 19a2 2 0 0 0 4 0"/>',
+    home: '<path d="m4 10 8-7 8 7"/><path d="M6 10v10h12V10"/>',
+    feed: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+    popular: '<path d="M3 17l6-6 4 4 7-8"/><path d="M14 7h6v6"/>',
+    create: '<path d="M12 5v14M5 12h14"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.2 6.2l1.4 1.4M18.4 16.4l1.4 1.4M3 12h2M19 12h2M4.2 17.8l1.4-1.4M18.4 7.6l1.4-1.4"/>',
+    shield: '<path d="M12 3l8 3v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z"/>',
+    exit: '<path d="M10 7V5a2 2 0 0 1 2-2h7v18h-7a2 2 0 0 1-2-2v-2"/><path d="M15 12H3m0 0 3-3m-3 3 3 3"/>',
+    chevron: '<path d="m6 9 6 6 6-6"/>',
+    up: '<path d="m6 14 6-6 6 6"/>',
+    down: '<path d="m6 10 6 6 6-6"/>',
+    comment: '<path d="M7 18.5 4 21V7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H7z"/>',
+    share: '<path d="M14 7h6v6"/><path d="M20 7 10.5 16.5"/><path d="M11 7H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-5"/>',
+    bookmark: '<path d="M7 4h10a1 1 0 0 1 1 1v16l-6-3.5L6 21V5a1 1 0 0 1 1-1z"/>',
+    back: '<path d="M15 18 9 12l6-6"/>',
+  };
+
+  function ico(name, size = 18) {
+    const body = ICO_PATHS[name] || "";
+    return `<svg class="r-ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+  }
+
+  function truncateText(text, max = 180) {
+    const value = String(text || "").replace(/\s+/g, " ").trim();
+    if (value.length <= max) return value;
+    return `${value.slice(0, max).trim()}…`;
+  }
+
+
   const lockedCard = document.getElementById("locked-card");
   const communityApp = document.getElementById("community-app");
   const communityMain = document.getElementById("community-main");
@@ -417,7 +451,7 @@
     if (post && post.score != null && Number.isFinite(Number(post.score))) {
       return Number(post.score);
     }
-    return Math.max(1, Math.round(postScore(post) * 10));
+    return 0;
   }
 
   function sortedPosts(posts) {
@@ -538,10 +572,7 @@
       return;
     }
     const collapsed = document.getElementById("composer-collapsed");
-    const expanded = document.getElementById("composer-expanded");
-    if (!collapsed || !expanded) return;
-    collapsed.hidden = false;
-    expanded.hidden = true;
+    if (collapsed) collapsed.hidden = false;
   }
 
   function updateAboutRail(data) {
@@ -560,10 +591,8 @@
         route.type === "post" ||
         route.type === "inbox";
     }
-    const aboutCreated = document.getElementById("about-created");
-    const aboutMembers = document.getElementById("about-members");
-    if (aboutCreated) aboutCreated.textContent = "2024";
-    if (aboutMembers) aboutMembers.textContent = String(Math.max(groups.length * 12, posts.length || 0));
+    const aboutMeta = document.getElementById("about-meta");
+    if (aboutMeta) aboutMeta.hidden = true;
     const modsList = document.getElementById("mods-list");
     if (modsList) {
       const mods = (staff || []).filter((p) => p.role === "owner" || p.role === "admin");
@@ -875,9 +904,9 @@
         return `
           <article class="reddit-post" data-post-id="${pid}">
             <div class="reddit-vote">
-              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">▲</button>
+              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
               <span class="reddit-vote-count">${score}</span>
-              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">▼</button>
+              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
             </div>
             <div class="reddit-post-main">
               <div class="reddit-post-meta">
@@ -894,13 +923,12 @@
               <a class="reddit-post-title-link" href="/community/post/${pid}" data-open-post="${pid}">
                 <h3 class="reddit-post-title">${escapeHtml(title)}</h3>
               </a>
-              ${bodyText ? `<div class="reddit-post-body">${escapeHtml(bodyText)}</div>` : ""}
+              ${bodyText ? `<div class="reddit-post-body">${escapeHtml(truncateText(bodyText, 160))}</div>` : ""}
               ${media}
               <div class="reddit-post-actions">
-                <a class="reddit-action" href="/community/post/${pid}" data-open-post="${pid}">💬 ${comments} Comments</a>
-                <button class="reddit-action" type="button" data-share-post="${pid}">↗ Share</button>
-                <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${saved ? "★ Saved" : "☆ Save"}</button>
-                <button class="reddit-action" type="button" data-hide-post="${pid}">Hide</button>
+                <a class="reddit-action" href="/community/post/${pid}" data-open-post="${pid}">${ico("comment", 16)} <span>${comments}</span></a>
+                <button class="reddit-action" type="button" data-share-post="${pid}">${ico("share", 16)} <span>Share</span></button>
+                <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${ico("bookmark", 16)} <span>${saved ? "Saved" : "Save"}</span></button>
               </div>
             </div>
           </article>
@@ -929,9 +957,9 @@
     el.innerHTML = `
       <article class="reddit-post reddit-post-detail-inner" data-post-id="${pid}">
         <div class="reddit-vote">
-          <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">▲</button>
+          <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
           <span class="reddit-vote-count">${displayScore(post)}</span>
-          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">▼</button>
+          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
         </div>
         <div class="reddit-post-main">
           <div class="reddit-post-meta">
@@ -945,9 +973,9 @@
           ${bodyText ? `<div class="reddit-post-body reddit-post-body-lg">${escapeHtml(bodyText)}</div>` : ""}
           ${media}
           <div class="reddit-post-actions">
-            <span class="reddit-action">💬 ${comments} Comments</span>
-            <button class="reddit-action" type="button" data-share-post="${pid}">↗ Share</button>
-            <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${saved ? "★ Saved" : "☆ Save"}</button>
+            <span class="reddit-action">${ico("comment", 16)} <span>${comments}</span></span>
+            <button class="reddit-action" type="button" data-share-post="${pid}">${ico("share", 16)} <span>Share</span></button>
+            <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${ico("bookmark", 16)} <span>${saved ? "Saved" : "Save"}</span></button>
           </div>
         </div>
       </article>
@@ -974,9 +1002,9 @@
         return `
           <article class="reddit-comment" data-comment-id="${cid}">
             <div class="reddit-vote reddit-vote-sm">
-              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="comment" data-comment-id="${cid}" aria-label="Upvote">▲</button>
+              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="comment" data-comment-id="${cid}" aria-label="Upvote">${ico("up", 16)}</button>
               <span class="reddit-vote-count">${Number(comment.score) || 0}</span>
-              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="comment" data-comment-id="${cid}" aria-label="Downvote">▼</button>
+              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="comment" data-comment-id="${cid}" aria-label="Downvote">${ico("down", 16)}</button>
             </div>
             <div class="reddit-comment-main">
               <div class="reddit-post-meta">
@@ -1103,6 +1131,8 @@
       profileMeta.hidden = true;
       profileMeta.innerHTML = "";
     }
+    const pageHead = document.getElementById("page-head");
+    if (pageHead) pageHead.hidden = true;
     syncSortTabs();
 
     const joinBtn = document.getElementById("join-community-btn");
@@ -1204,16 +1234,15 @@
       if (group) pushRecent(group);
       const slug = (group && group.slug) || route.slug || "";
       const name = (group && group.name) || slug;
-      const members =
-        group && group.memberCount != null
-          ? Number(group.memberCount)
-          : group && group.postCount != null
-            ? Math.max(Number(group.postCount) * 3, 1)
-            : Math.max(groups.length * 12, 1);
+      const postCount = group && group.postCount != null ? Number(group.postCount) : null;
+      const memberCount = group && group.memberCount != null ? Number(group.memberCount) : null;
       setBannerMode("group", true);
       if (viewIcon) viewIcon.textContent = (slug || "?").slice(0, 1).toUpperCase();
       setText("view-title", name);
-      setText("view-sub", `${slug} · ${members.toLocaleString()} member${members === 1 ? "" : "s"}`);
+      const subBits = [slug];
+      if (memberCount != null) subBits.push(`${memberCount.toLocaleString()} member${memberCount === 1 ? "" : "s"}`);
+      else if (postCount != null) subBits.push(`${postCount.toLocaleString()} post${postCount === 1 ? "" : "s"}`);
+      setText("view-sub", subBits.filter(Boolean).join(" · "));
       if (viewBlurb) {
         const desc = (group && group.description) || "";
         viewBlurb.textContent = desc;
@@ -1228,6 +1257,9 @@
         viewBlurb.hidden = true;
         viewBlurb.textContent = "";
       }
+      if (pageHead) pageHead.hidden = false;
+      setText("page-head-title", "Popular");
+      setText("page-head-sub", "Trending across communities");
       updateAboutRail(data);
       return;
     }
@@ -1237,6 +1269,9 @@
       viewBlurb.hidden = true;
       viewBlurb.textContent = "";
     }
+    if (pageHead) pageHead.hidden = false;
+    setText("page-head-title", "Feed");
+    setText("page-head-sub", "Latest from your communities");
     updateAboutRail(data);
   }
 
@@ -2253,7 +2288,7 @@
         navigator.clipboard.writeText(url).catch(() => {});
       }
       shareBtn.textContent = "✓ Copied";
-      setTimeout(() => { shareBtn.textContent = "↗ Share"; }, 1200);
+      setTimeout(() => { shareBtn.innerHTML = `${ico("share", 16)} <span>Share</span>`; }, 1200);
       return;
     }
     const saveBtn = e.target.closest("[data-save-post]");
@@ -2371,6 +2406,7 @@
   setSubmitTab("text");
 
   try { currentSort = localStorage.getItem(SORT_KEY) || "new"; } catch (_) { currentSort = "new"; }
+  if (currentSort === "best") currentSort = "hot";
   renderRecent();
 
   const session = readSession();
