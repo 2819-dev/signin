@@ -4171,6 +4171,79 @@ async function getAppUpdateReleaseNotes(sql, version) {
   };
 }
 
+function memberFacingReleaseNoteLines(text) {
+  return splitReleaseNoteBlocks(text)
+    .filter((block) => !isSensitiveReleaseNoteBlock(block))
+    .map((block) =>
+      String(block || "")
+        .replace(/^\s*([-*•+]|\d+[.)])\s+/, "")
+        .replace(/^#+\s*/, "")
+        .trim()
+    )
+    .filter(Boolean);
+}
+
+async function ensureBetaAgendaForAppUpdate(sql, { version, body, notes } = {}) {
+  const ver = String(version || "")
+    .trim()
+    .slice(0, 120);
+  if (!ver) return { created: 0, skipped: true };
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_agenda_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      title TEXT NOT NULL,
+      detail TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  const marker = `<!--synk-update:${ver}-->`;
+  const existing = await sql`
+    SELECT id
+    FROM synk_beta_agenda_items
+    WHERE detail LIKE ${"%" + marker + "%"}
+    LIMIT 1
+  `;
+  if (existing[0]) return { created: 0, already: true, version: ver };
+
+  const short = ver.length > 10 ? ver.slice(0, 7) : ver;
+  const publicLines = memberFacingReleaseNoteLines(notes || body || "").slice(0, 12);
+  const detailLines = publicLines.length
+    ? publicLines.map((line) => `• ${line}`)
+    : [
+        String(
+          body ||
+            "Synk was updated. Please try the latest build and report anything that feels broken."
+        ).trim(),
+      ];
+  const title = `Test app update (${short})`.slice(0, 160);
+  const detail = `${detailLines.join("\n")}\n\n${marker}`.trim().slice(0, 1000);
+
+  const sortRows = await sql`
+    SELECT COALESCE(MIN(sort_order), 0)::int AS min_sort
+    FROM synk_beta_agenda_items
+  `;
+  const sortOrder = (Number(sortRows[0] && sortRows[0].min_sort) || 0) - 1;
+
+  const rows = await sql`
+    INSERT INTO synk_beta_agenda_items (title, detail, sort_order, active, created_by)
+    VALUES (${title}, ${detail}, ${sortOrder}, TRUE, NULL)
+    RETURNING id
+  `;
+
+  return {
+    created: rows[0] ? 1 : 0,
+    already: false,
+    version: ver,
+    agendaItemId: rows[0] ? rows[0].id : null,
+  };
+}
+
 async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
   const ver = String(version || "")
     .trim()
@@ -4241,6 +4314,17 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
     ON CONFLICT (version) DO NOTHING
   `;
 
+  let agenda = { created: 0 };
+  try {
+    agenda = await ensureBetaAgendaForAppUpdate(sql, {
+      version: ver,
+      body: message,
+      notes: releaseNotes,
+    });
+  } catch (err) {
+    console.error("ensureBetaAgendaForAppUpdate failed:", err);
+  }
+
   return {
     ok: true,
     alreadyBroadcast: false,
@@ -4248,6 +4332,8 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
     notified,
     body: message,
     notes: releaseNotes,
+    agendaCreated: Number(agenda && agenda.created) || 0,
+    agendaItemId: (agenda && agenda.agendaItemId) || null,
   };
 }
 
@@ -4279,10 +4365,12 @@ module.exports = {
   requireHubSession,
   extractHubSessionToken,
   broadcastAppUpdate,
+  ensureBetaAgendaForAppUpdate,
   buildReleaseNotesPayload,
   getAppUpdateReleaseNotes,
   isSensitiveReleaseNoteBlock,
   splitReleaseNoteBlocks,
+  memberFacingReleaseNoteLines,
   normalizePublicUsername,
   normalizeDisplayName,
   normalizeBio,

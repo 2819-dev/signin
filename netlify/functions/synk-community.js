@@ -375,6 +375,11 @@ function mapNotification(row) {
 }
 
 function mePayload(auth, role, alts = [], tags = [], pinnedTag = null) {
+  const tagList = tags || [];
+  const altList = alts || [];
+  const betaTester =
+    tagList.some(isBetaTesterTag) ||
+    altList.some((alt) => (alt.tags || []).some(isBetaTesterTag));
   return {
     profileId: auth.profile.id,
     name: auth.profile.name,
@@ -389,8 +394,9 @@ function mePayload(auth, role, alts = [], tags = [], pinnedTag = null) {
     isStaff: isCommunityStaffRole(role),
     isOwner: role === "owner",
     isAdmin: role === "admin" || role === "owner",
-    alts: role === "owner" ? alts : [],
-    tags: tags || [],
+    betaTester,
+    alts: role === "owner" ? altList : [],
+    tags: tagList,
     pinnedTag: pinnedTag || null,
   };
 }

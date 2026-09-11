@@ -14,7 +14,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=hub-release-notes1" />
+    <link rel="stylesheet" href="/join.css?v=hub-testing-portal1" />
     <script src="/force-refresh.js" defer></script>
   
     <style>
@@ -374,6 +374,7 @@
 
       let hubNotifCache = [];
       let hubNotifLoaded = false;
+      let hubBetaTester = false;
 
       function escapeHubHtml(str) {
         return String(str || "")
@@ -437,6 +438,14 @@
         if (kind === "app_update" || kind === "app_updated" || kind === "update") {
           actions.push({ type: "refresh", label: "Refresh", primary: true });
           actions.push({ type: "release-notes", label: "Release notes", primary: false, version: note && note.version });
+          if (hubBetaTester) {
+            actions.push({
+              type: "open",
+              label: "Open testing portal",
+              href: "/testing",
+              primary: false,
+            });
+          }
         } else if (kind === "friend_request") {
           actions.push({ type: "open", label: "Open inbox", href: "/community/inbox", primary: true });
           if (actor && actor !== "Someone") {
@@ -659,6 +668,7 @@
         const tile = document.getElementById("hub-testing-tile");
         if (!tile) return;
         if (!session) {
+          hubBetaTester = false;
           tile.hidden = true;
           return;
         }
@@ -672,8 +682,11 @@
             body: JSON.stringify({ action: "hub-feature-flags" }),
           });
           const data = await res.json().catch(() => ({}));
-          tile.hidden = !(res.ok && data.betaTester);
+          hubBetaTester = !!(res.ok && data.betaTester);
+          tile.hidden = !hubBetaTester;
+          if (hubNotifLoaded) renderHubNotifications(hubNotifCache);
         } catch (_) {
+          hubBetaTester = false;
           tile.hidden = true;
         }
       }

@@ -94,6 +94,9 @@ async function main() {
     console.log(
       `Notified ${result.notified} users about app update ${result.version}.`
     );
+    if (result.agendaCreated) {
+      console.log(`Added ${result.agendaCreated} beta testing agenda item(s).`);
+    }
   }
 }
 

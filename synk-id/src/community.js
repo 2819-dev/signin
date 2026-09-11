@@ -213,6 +213,26 @@
     return (alt && alt.tags) || [];
   }
 
+  function isBetaTesterTagClient(tag) {
+    if (!tag) return false;
+    const slug = String(tag.slug || "").toLowerCase();
+    const name = String(tag.name || "").toLowerCase();
+    return (
+      slug === "beta-tester" ||
+      slug === "beta_tester" ||
+      slug === "betatester" ||
+      slug.includes("beta-tester") ||
+      name.includes("beta tester")
+    );
+  }
+
+  function isCurrentUserBetaTester() {
+    if (me && me.betaTester) return true;
+    if (tagsForActivePersona().some(isBetaTesterTagClient)) return true;
+    if (((me && me.tags) || []).some(isBetaTesterTagClient)) return true;
+    return (alts || []).some((alt) => (alt.tags || []).some(isBetaTesterTagClient));
+  }
+
 
 
   function activeDisplayLabel() {
@@ -1551,6 +1571,13 @@
     if (kind === "app_update" || kind === "app_updated" || kind === "update") {
       actions.push({ type: "refresh", label: "Refresh", primary: true });
       actions.push({ type: "release-notes", label: "Release notes", primary: false });
+      if (isCurrentUserBetaTester()) {
+        actions.push({
+          type: "testing-portal",
+          label: "Open testing portal",
+          primary: false,
+        });
+      }
     } else if (kind === "friend_request") {
       actions.push({ type: "friend-accept", label: "Accept", primary: true });
       actions.push({ type: "friend-decline", label: "Decline", primary: false });
@@ -1599,6 +1626,9 @@
         if (action.type === "release-notes") {
           const version = escapeHtml(String((note && note.version) || ""));
           return `<button class="${cls}" type="button" data-notif-release-notes="1" data-version="${version}">${escapeHtml(action.label || "Release notes")}</button>`;
+        }
+        if (action.type === "testing-portal") {
+          return `<a class="${cls}" href="/testing">${escapeHtml(action.label || "Open testing portal")}</a>`;
         }
         return "";
       })
