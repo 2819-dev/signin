@@ -6980,50 +6980,112 @@ body.reddit-body .reddit-create {
 }
 
 
-/* ===== COMMUNITY SHELL FIX v4 ===== */
+/* ===== COMMUNITY SHELL FIX v5 — avatar menu + undimmed drawer ===== */
+/*
+ * Earlier “v4” lost the z-index fight: backdrop was raised to 10040 while a more
+ * specific sidebar rule kept the drawer at 460, so the gray overlay covered the
+ * menu and ate every click. Match-or-beat that specificity here.
+ */
 html.reddit-nav-lock,
-html.reddit-nav-lock body {
+html.reddit-nav-lock body.community-body,
+html.reddit-nav-lock body.reddit-body {
   overflow: hidden !important;
   overscroll-behavior: none !important;
-  touch-action: none !important;
   height: 100% !important;
 }
-body.reddit-nav-open .reddit-topnav,
-body.community-body.reddit-nav-open .reddit-topnav {
+
+/* Profile picture only — no hamburger bars */
+body.community-body .reddit-menu-bars,
+body.community-body svg.reddit-menu-bars,
+#nav-toggle .reddit-menu-bars {
+  display: none !important;
+}
+body.community-body #nav-toggle.reddit-menu-btn,
+body.community-body #nav-toggle.reddit-menu-avatar-btn,
+button.reddit-menu-avatar-btn#nav-toggle {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--r-line, rgba(0,0,0,.12)) !important;
+  background: var(--r-elev, rgba(0,0,0,.04)) !important;
+  cursor: pointer !important;
+  flex: 0 0 auto !important;
+}
+body.community-body #nav-toggle .reddit-menu-avatar,
+body.community-body #user-menu-avatar.reddit-menu-avatar {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 999px !important;
+  display: grid !important;
+  place-items: center !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+body.community-body.reddit-nav-open .reddit-topnav,
+body.reddit-body.reddit-nav-open .reddit-topnav {
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
-  z-index: 10050 !important;
+  z-index: 12050 !important;
   transform: none !important;
   filter: none !important;
   opacity: 1 !important;
   pointer-events: auto !important;
 }
-#nav-backdrop:not([hidden]),
-.reddit-backdrop:not([hidden]) {
+
+/* Dim the page beside the drawer — never paint over the sidebar itself */
+body.community-body.reddit-nav-open #nav-backdrop:not([hidden]),
+body.reddit-body.reddit-nav-open #nav-backdrop:not([hidden]),
+body.community-body.reddit-nav-open .reddit-backdrop:not([hidden]),
+body.reddit-body.reddit-nav-open .reddit-backdrop:not([hidden]) {
   position: fixed !important;
+  inset: auto !important;
   top: 48px !important;
   left: 0 !important;
-  right: 0 !important;
+  /* Leave the drawer undimmed — gray only covers the page beside it */
+  right: min(320px, 92vw) !important;
   bottom: 0 !important;
-  z-index: 10040 !important;
+  z-index: 12040 !important;
   background: rgba(0, 0, 0, 0.45) !important;
   opacity: 1 !important;
   pointer-events: auto !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
-body.reddit-nav-open #left-nav,
-body.reddit-nav-open .reddit-leftnav,
-#left-nav:not([hidden]) {
+
+/* Sidebar always above the gray overlay, fully interactive */
+body.community-body.reddit-nav-open aside#left-nav.reddit-leftnav.reddit-sidemenu,
+body.reddit-body.reddit-nav-open aside#left-nav.reddit-leftnav.reddit-sidemenu,
+body.community-body.reddit-nav-open aside#left-nav.reddit-leftnav,
+body.reddit-body.reddit-nav-open aside#left-nav.reddit-leftnav,
+body.community-body.reddit-nav-open #left-nav.reddit-sidemenu,
+body.reddit-body.reddit-nav-open #left-nav.reddit-sidemenu,
+body.community-body.reddit-nav-open #left-nav.reddit-leftnav:not([hidden]),
+body.reddit-body.reddit-nav-open #left-nav.reddit-leftnav:not([hidden]),
+body.community-body.reddit-nav-open #left-nav.reddit-sidemenu:not([hidden]),
+body.reddit-body.reddit-nav-open #left-nav.reddit-sidemenu:not([hidden]) {
   position: fixed !important;
   top: 48px !important;
   right: 0 !important;
   left: auto !important;
   bottom: 0 !important;
-  z-index: 10060 !important;
+  width: min(320px, 92vw) !important;
+  max-width: 320px !important;
+  height: auto !important;
+  max-height: none !important;
+  z-index: 12060 !important;
+  display: flex !important;
+  flex-direction: column !important;
   background: var(--r-card, #ffffff) !important;
+  color: var(--r-ink, #111) !important;
   opacity: 1 !important;
   filter: none !important;
   -webkit-filter: none !important;
@@ -7031,12 +7093,36 @@ body.reddit-nav-open .reddit-leftnav,
   isolation: isolate !important;
   pointer-events: auto !important;
   transform: translateX(0) !important;
+  visibility: visible !important;
   box-shadow: -16px 0 40px rgba(0,0,0,.22) !important;
+  overflow: hidden !important;
+  overscroll-behavior: contain !important;
+  touch-action: pan-y !important;
 }
-body.reddit-nav-open .reddit-shell,
-body.reddit-nav-open .community-shell,
-body.reddit-nav-open main.reddit-shell,
-body.reddit-nav-open main {
+
+body.community-body.reddit-nav-open aside#left-nav.reddit-leftnav.reddit-sidemenu a,
+body.community-body.reddit-nav-open aside#left-nav.reddit-leftnav.reddit-sidemenu button,
+body.reddit-body.reddit-nav-open aside#left-nav.reddit-leftnav.reddit-sidemenu a,
+body.reddit-body.reddit-nav-open aside#left-nav.reddit-leftnav.reddit-sidemenu button,
+body.community-body.reddit-nav-open #left-nav a,
+body.community-body.reddit-nav-open #left-nav button {
+  pointer-events: auto !important;
+  position: relative !important;
+  z-index: 1 !important;
+  opacity: 1 !important;
+  filter: none !important;
+  cursor: pointer !important;
+  color: inherit !important;
+}
+
+body.community-body.reddit-nav-open .reddit-shell,
+body.reddit-body.reddit-nav-open .reddit-shell,
+body.community-body.reddit-nav-open .community-shell,
+body.reddit-body.reddit-nav-open .community-shell,
+body.community-body.reddit-nav-open main.reddit-shell,
+body.reddit-body.reddit-nav-open main.reddit-shell,
+body.community-body.reddit-nav-open main.shell,
+body.reddit-body.reddit-nav-open main.shell {
   filter: none !important;
   opacity: 1 !important;
   pointer-events: none !important;

@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=act-as1" />
+    <link rel="stylesheet" href="/join.css?v=sidebar-fix3" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -33,16 +33,15 @@
         </a>
         <div class="reddit-notif-wrap" id="notif-wrap">
           <button
-          class="reddit-menu-btn"
+          class="reddit-menu-btn reddit-menu-avatar-btn"
           type="button"
           id="nav-toggle"
           aria-label="Open menu"
           aria-controls="left-nav"
           aria-expanded="false"
-          title="Menu"
+          title="Your profile menu"
         >
           <span class="reddit-menu-avatar" id="user-menu-avatar" aria-hidden="true">S</span>
-          <svg class="r-ico reddit-menu-bars" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
         <!-- Hidden legacy account widgets kept for existing JS hooks -->
         <div class="reddit-user-menu" id="user-menu" hidden>
@@ -707,6 +706,6 @@
     </nav>
 
     <div id="toast" class="community-toast" role="status" aria-live="polite"></div>
-    <script src="/community.js?v=act-as1"></script>
+    <script src="/community.js?v=sidebar-fix2"></script>
   </body>
 </html>

@@ -2974,14 +2974,19 @@
 
   function setNavOpen(open) {
     const next = !!open;
+    if (next) {
+      document.body.dataset.navScrollY = String(window.scrollY || 0);
+    }
     document.body.classList.toggle("reddit-nav-open", next);
     document.documentElement.classList.toggle("reddit-nav-lock", next);
-    // Lock page scroll so the top bar never rubber-bands with the drawer.
+    // Lock page scroll without position:fixed on body — that broke drawer stacking
+    // so the gray backdrop sat above the sidebar and ate all clicks.
     document.documentElement.style.overflow = next ? "hidden" : "";
     document.body.style.overflow = next ? "hidden" : "";
-    document.body.style.touchAction = next ? "none" : "";
-    document.body.style.position = next ? "fixed" : "";
-    document.body.style.width = next ? "100%" : "";
+    document.body.style.touchAction = "";
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.width = "";
     if (backdrop) backdrop.hidden = !next;
     if (leftNav) {
       leftNav.hidden = !next;
@@ -2990,6 +2995,11 @@
     if (navToggle) {
       navToggle.setAttribute("aria-expanded", next ? "true" : "false");
       navToggle.setAttribute("aria-label", next ? "Close menu" : "Open menu");
+    }
+    if (!next) {
+      const y = Number(document.body.dataset.navScrollY || 0);
+      delete document.body.dataset.navScrollY;
+      if (y) window.scrollTo(0, y);
     }
   }
 
@@ -3151,7 +3161,7 @@
   }, 1200);
 
 
-  // Start closed — sidebar only via hamburger.
+  // Start closed — sidebar opens from the profile avatar.
   setNavOpen(false);
 
   try {
