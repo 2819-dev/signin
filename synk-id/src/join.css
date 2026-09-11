@@ -5517,3 +5517,136 @@ html[data-theme="dark"] .synk-support-panel,
   .community-dm-thread-list { max-height: 180px; }
   .community-dm-chat { min-height: 360px; }
 }
+
+
+/* ===== Community shell fix: drawer nav + clean profiles ===== */
+body.community-body {
+  overflow-x: hidden;
+}
+
+/* Main layout never reserves a permanent left column — nav is a drawer */
+.reddit-layout,
+.community-layout.reddit-layout {
+  grid-template-columns: minmax(0, 1fr) 312px !important;
+}
+@media (max-width: 1100px) {
+  .reddit-layout,
+  .community-layout.reddit-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .reddit-right { display: none !important; }
+}
+
+/* Hamburger always available */
+.reddit-nav-toggle,
+#nav-toggle.reddit-nav-toggle {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Left nav = off-canvas drawer at every breakpoint */
+.reddit-leftnav,
+#left-nav.reddit-leftnav {
+  position: fixed !important;
+  top: 48px !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  width: min(300px, 88vw) !important;
+  max-height: none !important;
+  height: auto !important;
+  z-index: 120 !important;
+  transform: translateX(-105%) !important;
+  transition: transform 0.18s ease !important;
+  border-radius: 0 !important;
+  border-left: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background: var(--r-card, #fff) !important;
+  box-shadow: 8px 0 24px rgba(0,0,0,.12);
+}
+body.reddit-nav-open .reddit-leftnav,
+body.reddit-nav-open #left-nav.reddit-leftnav {
+  transform: translateX(0) !important;
+}
+.reddit-backdrop:not([hidden]) {
+  position: fixed !important;
+  inset: 48px 0 0 0 !important;
+  background: rgba(0,0,0,.4) !important;
+  z-index: 110 !important;
+  display: block !important;
+}
+
+/* One scroll region — foot stays pinned in the drawer, no double-sticky overlap */
+.reddit-leftnav-scroll {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  position: relative !important;
+  top: auto !important;
+}
+.reddit-leftnav-foot {
+  flex: 0 0 auto !important;
+  position: relative !important;
+  top: auto !important;
+  bottom: auto !important;
+}
+
+@media (max-width: 860px) {
+  .reddit-leftnav,
+  #left-nav.reddit-leftnav {
+    top: 52px !important;
+  }
+  .reddit-backdrop:not([hidden]) {
+    inset: 52px 0 0 0 !important;
+  }
+}
+
+/* Profiles: kill the big blue banner + Join forever */
+#view-banner[data-mode="user"] .reddit-community-banner,
+#view-banner[data-mode="user"] #view-banner-strip {
+  display: none !important;
+  height: 0 !important;
+}
+#view-banner[data-mode="user"] {
+  background: var(--r-card, #fff);
+  border: 1px solid var(--r-line, #ddd);
+  border-radius: 12px;
+  overflow: visible;
+  padding-bottom: 8px;
+}
+#view-banner[data-mode="user"] .reddit-community-head {
+  margin-top: 0 !important;
+  padding: 16px 16px 8px !important;
+  align-items: center;
+}
+#view-banner[data-mode="user"] .reddit-community-icon {
+  width: 72px !important;
+  height: 72px !important;
+  margin-top: 0 !important;
+  border: 2px solid var(--r-line, #ddd) !important;
+}
+#view-banner[data-mode="user"] #join-community-btn,
+#view-banner[data-mode="user"] .reddit-join-btn {
+  display: none !important;
+}
+#view-banner[data-mode="user"] .reddit-community-actions {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+  padding-bottom: 0 !important;
+}
+#view-banner[data-mode="user"] .reddit-community-desc {
+  padding: 0 16px 8px !important;
+}
+#view-banner[data-mode="user"] .community-profile-meta,
+#view-banner[data-mode="user"] #profile-meta {
+  border-top: 0 !important;
+  padding: 0 16px 12px !important;
+}

@@ -770,6 +770,7 @@
   }
 
   async function navigate(next, { replace = false } = {}) {
+    try { setNavOpen(false); } catch (_) {}
     route = next;
     const url = routeUrl(next);
     if (replace) history.replaceState(next, "", url);
@@ -903,6 +904,14 @@
     }
     crumbsEl.innerHTML = parts.join(" ");
     crumbsEl.hidden = true;
+  }
+
+
+  function restoreJoinButton() {
+    const actionsHost = document.querySelector("#view-banner .reddit-community-actions");
+    if (!actionsHost) return;
+    if (actionsHost.querySelector("#join-community-btn")) return;
+    actionsHost.innerHTML = `<button class="btn btn-primary btn-compact reddit-join-btn" type="button" id="join-community-btn" hidden>Join</button>`;
   }
 
   function setBannerMode(mode, visible) {
@@ -1299,6 +1308,7 @@
     if (pageHead) pageHead.hidden = true;
     syncSortTabs();
 
+    if (route.type !== "user") restoreJoinButton();
     const joinBtn = document.getElementById("join-community-btn");
     const aboutJoin = document.getElementById("about-join-btn");
     const showJoin = route.type === "group" && !!route.slug;
@@ -1358,58 +1368,65 @@
       paintAvatar(viewIcon, profile.avatarUrl || "", dname);
       setText("view-title", dname);
       const bits = [];
-      if (uname && uname !== dname) bits.push(uname);
-      bits.push(`${Number(profile.postCount || 0)} posts`);
+      bits.push(`${Number(profile.postCount || 0)} post${Number(profile.postCount || 0) === 1 ? "" : "s"}`);
       if (profile.joinedAt) bits.push(`Joined ${formatWhen(profile.joinedAt)}`);
       setText("view-sub", bits.join(" · "));
       if (viewBlurb) {
-        viewBlurb.hidden = true;
-        viewBlurb.textContent = "";
-      }
-      if (joinBtn) joinBtn.hidden = true;
-      const aboutJoinBtn = document.getElementById("about-join-btn");
-      if (aboutJoinBtn) aboutJoinBtn.hidden = true;
-      if (profileMeta) {
-        let actions = "";
-        if (!isSelf && publicUsername) {
-          if (friendship === "friends") {
-            actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="unfriend" data-username="${escapeHtml(uname)}">Friends</button>`;
-          } else if (friendship === "pending_out") {
-            actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="cancel-friend" data-username="${escapeHtml(uname)}">Requested</button>`;
-          } else if (friendship === "pending_in") {
-            actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="accept-friend" data-username="${escapeHtml(uname)}">Accept</button>`;
-            actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="decline-friend" data-username="${escapeHtml(uname)}">Decline</button>`;
-          } else {
-            actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="add-friend" data-username="${escapeHtml(uname)}">Add friend</button>`;
-          }
-          if (canMessage || friendship === "friends") {
-            actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" ${canMessage ? "" : "disabled"}>Message</button>`;
-          }
-        } else if (isSelf) {
-          actions += `<a class="btn btn-secondary btn-compact" href="/community/settings">Edit profile</a>`;
+        viewBlurb.hidden = !profileBio;
+        viewBlurb.textContent = profileBio || "";
+        if (!profileBio && isSelf) {
+          viewBlurb.hidden = false;
+          viewBlurb.textContent = "Add a bio in Settings.";
         }
-        profileMeta.hidden = false;
-        profileMeta.innerHTML = `
-        <div class="community-profile-card community-profile-card-clean">
-          <div class="community-profile-main">
-            ${profileBio ? `<p class="community-profile-bio">${escapeHtml(profileBio)}</p>` : isSelf ? `<p class="muted community-profile-bio-empty">Add a bio in Settings.</p>` : ""}
-            <div class="community-tag-list synk-tag-badge-row">
-              ${
-                (profile.tags || []).length
-                  ? (profile.tags || [])
-                      .map((tag) =>
-                        tagChip(tag, {
-                          canPin: canPinTagsFor(profile.username),
-                        })
-                      )
-                      .join("")
-                  : ""
-              }
-            </div>
-            <div class="community-profile-actions">${actions}</div>
-          </div>
-        </div>
-      `;
+      }
+      // Never show community Join on profiles — Friend / Message / Edit only.
+      if (joinBtn) {
+        joinBtn.hidden = true;
+        joinBtn.setAttribute("hidden", "");
+      }
+      const aboutJoinBtn = document.getElementById("about-join-btn");
+      if (aboutJoinBtn) {
+        aboutJoinBtn.hidden = true;
+        aboutJoinBtn.setAttribute("hidden", "");
+      }
+      const actionsHost = document.querySelector("#view-banner .reddit-community-actions");
+      let actions = "";
+      if (!isSelf && publicUsername) {
+        if (friendship === "friends") {
+          actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="unfriend" data-username="${escapeHtml(uname)}">Friends</button>`;
+        } else if (friendship === "pending_out") {
+          actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="cancel-friend" data-username="${escapeHtml(uname)}">Requested</button>`;
+        } else if (friendship === "pending_in") {
+          actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="accept-friend" data-username="${escapeHtml(uname)}">Accept</button>`;
+          actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="decline-friend" data-username="${escapeHtml(uname)}">Decline</button>`;
+        } else {
+          actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="add-friend" data-username="${escapeHtml(uname)}">Add friend</button>`;
+        }
+        if (canMessage || friendship === "friends") {
+          actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" ${canMessage ? "" : "disabled"}>Message</button>`;
+        } else {
+          actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" disabled title="Messaging not available">Message</button>`;
+        }
+      } else if (isSelf) {
+        actions += `<a class="btn btn-secondary btn-compact" href="/community/settings">Edit profile</a>`;
+      }
+      if (actionsHost) {
+        actionsHost.innerHTML = actions;
+      }
+      if (profileMeta) {
+        const tagsHtml = (profile.tags || []).length
+          ? (profile.tags || [])
+              .map((tag) =>
+                tagChip(tag, {
+                  canPin: canPinTagsFor(profile.username),
+                })
+              )
+              .join("")
+          : "";
+        profileMeta.hidden = !tagsHtml;
+        profileMeta.innerHTML = tagsHtml
+          ? `<div class="community-profile-card community-profile-card-clean"><div class="community-tag-list synk-tag-badge-row">${tagsHtml}</div></div>`
+          : "";
       }
       composerCard.hidden = true;
       updateAboutRail(data);
@@ -2741,6 +2758,13 @@
   }
   if (navToggle) navToggle.addEventListener("click", () => setNavOpen(!document.body.classList.contains("reddit-nav-open")));
   if (backdrop) backdrop.addEventListener("click", () => setNavOpen(false));
+  const leftNav = document.getElementById("left-nav");
+  if (leftNav) {
+    leftNav.addEventListener("click", (e) => {
+      const link = e.target.closest("a[href]");
+      if (link) setNavOpen(false);
+    });
+  }
 
   document.getElementById("signout-btn").addEventListener("click", () => {
     localStorage.removeItem(STORAGE_KEY);
