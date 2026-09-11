@@ -819,6 +819,30 @@
     const url = routeUrl(next);
     if (replace) history.replaceState(next, "", url);
     else history.pushState(next, "", url);
+
+    // Swap chrome instantly for settings / create / mod / groups when we already
+    // have a session — don't block the UI on a full community reload.
+    const light =
+      next.type === "settings" ||
+      next.type === "submit" ||
+      next.type === "mod" ||
+      next.type === "groups" ||
+      next.type === "inbox";
+    if (light && me && publicUsername) {
+      try {
+        applyUsernameState();
+        applyViewState({
+          me,
+          groups,
+          tags,
+          staff,
+          ownerUsername,
+        });
+      } catch (_) {}
+      loadCommunity({ soft: true }).catch(() => {});
+      return;
+    }
+
     await loadCommunity();
   }
 
@@ -1574,13 +1598,22 @@
     updateAboutRail(data);
   }
 
-  async function loadCommunity() {
+  async function loadCommunity({ soft = false } = {}) {
     let url = "/api/synk-community";
     const sort = apiSort();
     if (route.type === "post" && route.postId) {
       url += `?post=${encodeURIComponent(route.postId)}`;
     } else if (route.type === "inbox") {
       url += "?inbox=1";
+    } else if (
+      route.type === "settings" ||
+      route.type === "submit" ||
+      route.type === "mod" ||
+      route.type === "groups" ||
+      soft
+    ) {
+      // Lightweight shell payload — no feed posts.
+      url += "?shell=1";
     } else if (route.type === "popular") {
       url += `?feed=popular&sort=${encodeURIComponent(sort)}`;
     } else if (route.type === "home") {

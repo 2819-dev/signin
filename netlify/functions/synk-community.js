@@ -1065,6 +1065,22 @@ exports.handler = async (event) => {
         });
       }
 
+      if (qs.shell === "1" || qs.me === "1") {
+        const payload = {
+          ok: true,
+          me: mePayload(auth, role, alts, myTags, myPinnedTag),
+          groups,
+          posts: [],
+          tags: tagCatalog,
+          ownerUsername: COMMUNITY_OWNER_USERNAME,
+          unreadCount,
+        };
+        if (isCommunityStaffRole(role)) {
+          payload.staff = await listCommunityStaff(sql);
+        }
+        return json(200, payload);
+      }
+
       if (qs.dms === "1" || qs.messages === "1") {
         if (!primaryUsername) {
           return json(400, { error: "Set a username first" });

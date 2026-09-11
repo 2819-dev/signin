@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=sidebar-fix3" />
+    <link rel="stylesheet" href="/join.css?v=community-fast1" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -263,8 +263,10 @@
                       </div>
                       <div id="dm-message-list" class="community-dm-message-list"></div>
                       <form id="dm-compose-form" class="community-dm-compose" hidden autocomplete="off">
-                        <input id="dm-compose-input" type="text" maxlength="1000" required placeholder="Write a message…" enterkeyhint="send" />
-                        <button class="btn btn-primary btn-compact" type="submit" id="dm-compose-send">Send</button>
+                        <input id="dm-compose-input" type="text" maxlength="1000" required placeholder="Message…" enterkeyhint="send" aria-label="Message" />
+                        <button class="community-dm-send" type="submit" id="dm-compose-send" aria-label="Send">
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg>
+                        </button>
                       </form>
                       <p class="muted" id="dm-chat-hint">Pick someone from the left, or message them from their profile.</p>
                     </div>
@@ -706,6 +708,6 @@
     </nav>
 
     <div id="toast" class="community-toast" role="status" aria-live="polite"></div>
-    <script src="/community.js?v=sidebar-fix2"></script>
+    <script src="/community.js?v=community-fast1"></script>
   </body>
 </html>
