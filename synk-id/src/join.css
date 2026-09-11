@@ -7965,3 +7965,114 @@ body.community-body.is-discord-group .reddit-sortbar {
   }
   #mod-view .mod-panel-hint { display: none; }
 }
+
+/* Structured notifications (title + description + actions) */
+.reddit-notif-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+.reddit-notif-btn:hover { background: var(--r-elev, #f3f4f6); }
+.reddit-notif-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #e11d48;
+  box-shadow: 0 0 0 2px var(--r-card, #fff);
+}
+.reddit-notif-title {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  margin: 0 0 2px;
+}
+.reddit-notif-desc,
+.reddit-inbox-desc {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--r-ink, #111);
+}
+.reddit-inbox-row {
+  cursor: default !important;
+}
+.reddit-inbox-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.reddit-inbox-title {
+  font-size: 0.95rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+.reddit-inbox-time {
+  flex: 0 0 auto;
+  font-size: 0.75rem !important;
+}
+.reddit-inbox-actions,
+.reddit-notif-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.reddit-inbox-actions .btn,
+.reddit-notif-actions .btn {
+  text-decoration: none;
+}
+body.community-body .reddit-inbox-row-copy {
+  display: grid !important;
+  gap: 2px !important;
+}
+body.community-body .reddit-inbox-row.is-unread .reddit-inbox-title {
+  color: var(--r-brand, #041A55) !important;
+}
+
+body.community-body .reddit-inbox-row-head {
+  display: flex !important;
+  align-items: baseline !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  margin-bottom: 4px !important;
+}
+body.community-body .reddit-inbox-title {
+  font-size: 0.95rem !important;
+  font-weight: 750 !important;
+}
+body.community-body .reddit-inbox-desc {
+  margin: 0 !important;
+  font-size: 0.88rem !important;
+  line-height: 1.4 !important;
+  font-weight: 450 !important;
+}
+body.community-body .reddit-inbox-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin-top: 10px !important;
+}
+body.community-body .reddit-notif-title {
+  display: block;
+  margin: 0 0 2px;
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+body.community-body .reddit-notif-desc {
+  margin: 0 0 4px;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}

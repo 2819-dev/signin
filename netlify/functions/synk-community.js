@@ -278,14 +278,65 @@ function mapComment(row) {
   };
 }
 
+function notificationCopy({ kind, actorUsername, body }) {
+  const actor = String(actorUsername || "").trim() || "Someone";
+  const k = String(kind || "").trim().toLowerCase().replace(/-/g, "_");
+  if (k === "friend_request") {
+    return {
+      title: "Friend request",
+      description: `${actor} sent you a friend request.`,
+    };
+  }
+  if (k === "friend_accept" || k === "friend_accepted") {
+    return {
+      title: "Friend request accepted",
+      description: `${actor} accepted your friend request.`,
+    };
+  }
+  if (k === "comment") {
+    return {
+      title: "New comment",
+      description: body && String(body).trim() ? String(body).trim() : `${actor} commented on your post.`,
+    };
+  }
+  if (k === "comment_reply_on_post" || k === "comment_reply_on_post") {
+    return {
+      title: "Reply on your post",
+      description: body && String(body).trim() ? String(body).trim() : `${actor} replied to a comment on your post.`,
+    };
+  }
+  if (k === "reply") {
+    return {
+      title: "New reply",
+      description: body && String(body).trim() ? String(body).trim() : `${actor} replied to your comment.`,
+    };
+  }
+  if (k === "dm" || k === "message") {
+    return {
+      title: "New message",
+      description: body && String(body).trim() ? String(body).trim() : `${actor} sent you a message.`,
+    };
+  }
+  return {
+    title: "Notification",
+    description: body && String(body).trim() ? String(body).trim() : `${actor} sent you a notification.`,
+  };
+}
+
 function mapNotification(row) {
+  const kind = row.kind;
+  const actorUsername = row.actor_username || null;
+  const body = row.body || "";
+  const copy = notificationCopy({ kind, actorUsername, body });
   return {
     id: row.id,
-    kind: row.kind,
-    actorUsername: row.actor_username || null,
+    kind,
+    actorUsername,
     postId: row.post_id || null,
     commentId: row.comment_id || null,
-    body: row.body || "",
+    body: copy.description,
+    title: copy.title,
+    description: copy.description,
     readAt: row.read_at || null,
     createdAt: row.created_at,
   };
@@ -380,13 +431,20 @@ async function loadNotifications(sql, profileId, { limit = 50, username = "" } =
       for (const row of pending) {
         const actor = String(row.requester_username || "").toLowerCase();
         if (!actor || seen.has(actor)) continue;
+        const actorName = row.requester_username;
+        const copy = notificationCopy({
+          kind: "friend_request",
+          actorUsername: actorName,
+        });
         notes.unshift({
           id: `friend-req-${row.id}`,
           kind: "friend_request",
-          actorUsername: row.requester_username,
+          actorUsername: actorName,
           postId: null,
           commentId: null,
-          body: `${row.requester_username} sent you a friend request`,
+          body: copy.description,
+          title: copy.title,
+          description: copy.description,
           readAt: null,
           createdAt: row.created_at,
         });
@@ -1492,7 +1550,7 @@ exports.handler = async (event) => {
             profileId: targetProfileId,
             kind: "friend_request",
             actorUsername: primaryUsername,
-            body: `${primaryUsername} sent you a friend request`,
+            body: `${primaryUsername} sent you a friend request.`,
           });
         }
       } catch (_) {}
@@ -1523,7 +1581,7 @@ exports.handler = async (event) => {
             profileId: targetProfileId,
             kind: "friend_accept",
             actorUsername: primaryUsername,
-            body: `${primaryUsername} accepted your friend request`,
+            body: `${primaryUsername} accepted your friend request.`,
           });
         }
       } catch (_) {}
@@ -2251,8 +2309,8 @@ if (action === "create-alt") {
           postId,
           commentId: rows[0].id,
           body: parent
-            ? `${persona.username} replied on your post`
-            : `${persona.username} commented on your post`,
+            ? `${persona.username} replied on your post.`
+            : `${persona.username} commented on your post.`,
         });
       }
       if (parent && parent.synk_profile_id && parent.synk_profile_id !== auth.profile.id) {
@@ -2262,7 +2320,7 @@ if (action === "create-alt") {
           actorUsername: persona.username,
           postId,
           commentId: rows[0].id,
-          body: `${persona.username} replied to your comment`,
+          body: `${persona.username} replied to your comment.`,
         });
       }
 

@@ -608,6 +608,8 @@
     });
     const avatarDot = document.getElementById("avatar-notif-dot");
     if (avatarDot) avatarDot.hidden = n <= 0;
+    const notifDot = document.getElementById("notif-dot");
+    if (notifDot) notifDot.hidden = n <= 0;
     const notifWrap = document.getElementById("notif-wrap");
     if (notifWrap) notifWrap.classList.toggle("has-unread", n > 0);
   }
@@ -1285,6 +1287,87 @@
       .join("");
   }
 
+  function normalizeNotifKind(kind) {
+    return String(kind || "")
+      .trim()
+      .toLowerCase()
+      .replace(/-/g, "_");
+  }
+
+  function describeNotification(note) {
+    const kind = normalizeNotifKind(note && note.kind);
+    const actor = String((note && (note.actorUsername || note.actor)) || "").trim() || "Someone";
+    const serverTitle = String((note && note.title) || "").trim();
+    const serverDesc = String((note && (note.description || note.body)) || "").trim();
+    let title = serverTitle;
+    let description = serverDesc;
+    if (kind === "friend_request") {
+      title = title || "Friend request";
+      description = description || `${actor} sent you a friend request.`;
+    } else if (kind === "friend_accept" || kind === "friend_accepted") {
+      title = title || "Friend request accepted";
+      description = description || `${actor} accepted your friend request.`;
+    } else if (kind === "comment") {
+      title = title || "New comment";
+      description = description || `${actor} commented on your post.`;
+    } else if (kind === "comment_reply_on_post" || kind === "comment_reply_on_post") {
+      title = title || "Reply on your post";
+      description = description || `${actor} replied to a comment on your post.`;
+    } else if (kind === "reply") {
+      title = title || "New reply";
+      description = description || `${actor} replied to your comment.`;
+    } else if (kind === "dm" || kind === "message") {
+      title = title || "New message";
+      description = description || `${actor} sent you a message.`;
+    } else {
+      title = title || "Notification";
+      description = description || `${actor} sent you a notification.`;
+    }
+    // Ensure sentence punctuation for short system sentences.
+    if (description && !/[.!?]$/.test(description)) description += ".";
+    const actions = [];
+    if (kind === "friend_request") {
+      actions.push({ type: "friend-accept", label: "Accept", primary: true });
+      actions.push({ type: "friend-decline", label: "Decline", primary: false });
+      actions.push({ type: "view-profile", label: "View profile", primary: false });
+    } else if (kind === "friend_accept" || kind === "friend_accepted") {
+      actions.push({ type: "view-profile", label: "View profile", primary: true });
+      actions.push({ type: "message", label: "Message", primary: false });
+    } else if (note && note.postId) {
+      actions.push({ type: "view-post", label: "View post", primary: true });
+    } else if (actor && actor !== "Someone") {
+      actions.push({ type: "view-profile", label: "View profile", primary: false });
+    }
+    return { kind, actor, title, description, actions };
+  }
+
+  function renderNotifActions(note, meta) {
+    const actor = escapeHtml(meta.actor);
+    const postId = note.postId ? escapeHtml(String(note.postId)) : "";
+    return (meta.actions || [])
+      .map((action) => {
+        const cls = action.primary ? "btn btn-primary btn-compact" : "btn btn-secondary btn-compact";
+        if (action.type === "friend-accept") {
+          return `<button class="${cls}" type="button" data-notif-friend="accept" data-username="${actor}">Accept</button>`;
+        }
+        if (action.type === "friend-decline") {
+          return `<button class="${cls}" type="button" data-notif-friend="decline" data-username="${actor}">Decline</button>`;
+        }
+        if (action.type === "view-profile") {
+          return `<a class="${cls}" href="/user/${encodeURIComponent(meta.actor)}">View profile</a>`;
+        }
+        if (action.type === "message") {
+          return `<button class="${cls}" type="button" data-notif-message="${actor}">Message</button>`;
+        }
+        if (action.type === "view-post" && postId) {
+          return `<button class="${cls}" type="button" data-open-post="${postId}">View post</button>`;
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join("");
+  }
+
   function renderInbox(notifications) {
     const list = document.getElementById("inbox-list");
     const empty = document.getElementById("inbox-empty");
@@ -1298,17 +1381,26 @@
     if (empty) empty.hidden = true;
     list.innerHTML = lastNotifications
       .map((note) => {
+        const meta = describeNotification(note);
         const nid = escapeHtml(String(note.id || ""));
         const unread = !note.readAt;
         const postId = note.postId ? escapeHtml(String(note.postId)) : "";
-        const body = escapeHtml(note.body || `${note.actorUsername || "Someone"} notified you`);
+        const actions = renderNotifActions(note, meta);
+        const openAttr =
+          postId && meta.kind !== "friend_request"
+            ? `data-open-post="${postId}" data-inbox-id="${nid}"`
+            : "";
         return `
-          <button class="reddit-inbox-row ${unread ? "is-unread" : ""}" type="button" data-inbox-id="${nid}" ${postId ? `data-open-post="${postId}"` : ""}>
+          <article class="reddit-inbox-row ${unread ? "is-unread" : ""}" data-inbox-id="${nid}" ${openAttr}>
             <div class="reddit-inbox-row-copy">
-              <strong>${body}</strong>
-              <span class="muted">${escapeHtml(formatRelative(note.createdAt))}</span>
+              <div class="reddit-inbox-row-head">
+                <strong class="reddit-inbox-title">${escapeHtml(meta.title)}</strong>
+                <span class="muted reddit-inbox-time">${escapeHtml(formatRelative(note.createdAt))}</span>
+              </div>
+              <p class="reddit-inbox-desc">${escapeHtml(meta.description)}</p>
+              ${actions ? `<div class="reddit-inbox-actions reddit-notif-actions">${actions}</div>` : ""}
             </div>
-          </button>
+          </article>
         `;
       })
       .join("");
@@ -3455,19 +3547,8 @@ function applyViewState(data) {
   let notifCache = [];
   let notifLoaded = false;
 
-  function friendlyNotifText(note) {
-    const actor = note.actorUsername || "Someone";
-    const kind = String(note.kind || "");
-    if (kind === "friend_request") return `${actor} sent you a friend request`;
-    if (kind === "friend_accept") return `${actor} accepted your friend request`;
-    if (kind === "comment" || kind === "comment_reply_on_post") return note.body || `${actor} commented on your post`;
-    if (kind === "reply") return note.body || `${actor} replied to you`;
-    return note.body || `${actor} sent a notification`;
-  }
-
   function renderNotifPanel(notes) {
     const list = document.getElementById("notif-list");
-    const empty = document.getElementById("notif-empty");
     if (!list) return;
     notifCache = Array.isArray(notes) ? notes.slice() : [];
     if (!notifCache.length) {
@@ -3476,25 +3557,22 @@ function applyViewState(data) {
     }
     list.innerHTML = notifCache
       .map((note) => {
+        const meta = describeNotification(note);
         const nid = escapeHtml(String(note.id || ""));
         const unread = !note.readAt;
-        const actor = escapeHtml(note.actorUsername || "Someone");
-        const text = escapeHtml(friendlyNotifText(note));
         const when = escapeHtml(formatRelative(note.createdAt));
-        const isFriendReq = String(note.kind || "") === "friend_request";
         const postId = note.postId ? escapeHtml(String(note.postId)) : "";
-        const actions = isFriendReq
-          ? `<div class="reddit-notif-actions">
-              <button class="btn btn-primary btn-compact" type="button" data-notif-friend="accept" data-username="${actor}">Accept</button>
-              <button class="btn btn-secondary btn-compact" type="button" data-notif-friend="decline" data-username="${actor}">Decline</button>
-            </div>`
-          : "";
-        const openAttr = postId && !isFriendReq ? `data-open-post="${postId}"` : "";
+        const actions = renderNotifActions(note, meta);
+        const openAttr =
+          postId && meta.kind !== "friend_request"
+            ? `data-open-post="${postId}"`
+            : "";
         return `<div class="reddit-notif-row ${unread ? "is-unread" : ""}" data-notif-id="${nid}" ${openAttr}>
           <div class="reddit-notif-copy">
-            <p>${text}</p>
+            <strong class="reddit-notif-title">${escapeHtml(meta.title)}</strong>
+            <p class="reddit-notif-desc">${escapeHtml(meta.description)}</p>
             <span class="muted">${when}</span>
-            ${actions}
+            ${actions ? `<div class="reddit-notif-actions">${actions}</div>` : ""}
           </div>
         </div>`;
       })
@@ -3580,6 +3658,14 @@ function applyViewState(data) {
     if (wrap && !wrap.contains(e.target)) setNotifOpen(false);
   });
   document.addEventListener("click", async (e) => {
+    const msgBtn = e.target.closest("[data-notif-message]");
+    if (msgBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const username = msgBtn.getAttribute("data-notif-message") || "";
+      if (username) openDmWith(username).catch(() => {});
+      return;
+    }
     const friendBtn = e.target.closest("[data-notif-friend]");
     if (!friendBtn) return;
     e.preventDefault();
@@ -3587,20 +3673,44 @@ function applyViewState(data) {
     const username = friendBtn.getAttribute("data-username") || "";
     const act = friendBtn.getAttribute("data-notif-friend");
     if (!username || !act) return;
+    const row = friendBtn.closest("[data-notif-id], [data-inbox-id]");
+    const noteId = row
+      ? row.getAttribute("data-notif-id") || row.getAttribute("data-inbox-id") || ""
+      : "";
     friendBtn.disabled = true;
+    const sibling = row ? row.querySelectorAll("[data-notif-friend]") : [];
+    sibling.forEach((btn) => { btn.disabled = true; });
     try {
       if (act === "accept") {
         await communityAction({ action: "friend-accept", username });
-        showToast("You're friends now");
+        showToast("Friend request accepted");
       } else {
         await communityAction({ action: "friend-decline", username });
-        showToast("Request declined");
+        showToast("Friend request declined");
+      }
+      if (noteId && !String(noteId).startsWith("friend-req-")) {
+        try {
+          await communityAction({ action: "mark-read", ids: [noteId] });
+        } catch (_) {}
       }
       await refreshNotifications();
+      if (route.type === "inbox") {
+        try {
+          const res = await fetch("/api/synk-community?inbox=1", { headers: hubHeaders() });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            renderInbox(data.notifications || []);
+            if (typeof data.unreadCount === "number") {
+              unreadCount = data.unreadCount;
+              updateInboxBadge();
+            }
+          }
+        } catch (_) {}
+      }
       if (route.type === "user") await loadCommunity();
     } catch (err) {
       showToast(err.message || "Something went wrong. Try again.");
-      friendBtn.disabled = false;
+      sibling.forEach((btn) => { btn.disabled = false; });
     }
   });
   // Prefetch notifications after first paint so the bell feels instant.

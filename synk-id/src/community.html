@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-mod-panels1" />
+    <link rel="stylesheet" href="/join.css?v=community-notifs2" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -33,6 +33,29 @@
         </a>
         <div class="reddit-notif-wrap" id="notif-wrap">
           <button
+            class="reddit-icon-btn reddit-notif-btn"
+            type="button"
+            id="notif-btn"
+            aria-label="Notifications"
+            aria-haspopup="true"
+            aria-expanded="false"
+            title="Notifications"
+          >
+            <svg class="r-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 9a5.5 5.5 0 0 1 11 0c0 7 2.5 7 2.5 7H4s2.5 0 2.5-7"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+            <span class="reddit-notif-dot" id="notif-dot" hidden aria-hidden="true"></span>
+          </button>
+          <div class="reddit-notif-panel" id="notif-panel" hidden role="dialog" aria-label="Notifications">
+            <div class="reddit-notif-head">
+              <strong>Notifications</strong>
+              <button class="reddit-notif-mark" type="button" id="notif-mark-read">Mark all read</button>
+            </div>
+            <div class="reddit-notif-list" id="notif-list">
+              <p class="muted reddit-notif-empty" id="notif-empty">You're all caught up</p>
+            </div>
+            <a class="reddit-notif-footer" href="/community/inbox" id="notif-see-all">Open inbox</a>
+          </div>
+        </div>
+        <button
           class="reddit-menu-btn reddit-menu-avatar-btn"
           type="button"
           id="nav-toggle"
@@ -788,6 +811,6 @@
     </nav>
 
     <div id="toast" class="community-toast" role="status" aria-live="polite"></div>
-    <script src="/community.js?v=community-mod-panels1"></script>
+    <script src="/community.js?v=community-notifs2"></script>
   </body>
 </html>
