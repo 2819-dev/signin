@@ -151,16 +151,95 @@ function normalizeCommunityRole(value) {
 
 function mapCommunityGroup(row) {
   if (!row) return null;
+  const theme = String(row.theme || "standard").toLowerCase() === "discord" ? "discord" : "standard";
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
     description: row.description || "",
+    theme,
+    isOfficial: row.is_official === true,
     createdBy: row.created_by || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     postCount: row.post_count != null ? Number(row.post_count) : undefined,
+    memberCount: row.member_count != null ? Number(row.member_count) : undefined,
+    categories: Array.isArray(row.categories) ? row.categories : undefined,
+    channels: Array.isArray(row.channels) ? row.channels : undefined,
+    roles: Array.isArray(row.roles) ? row.roles : undefined,
   };
+}
+
+function formatChannelLabel(emoji, name) {
+  const e = String(emoji || "").trim();
+  const n = String(name || "").trim();
+  if (e && n) return `${e} | ${n}`;
+  return n || e || "channel";
+}
+
+function mapCommunityChannel(row) {
+  if (!row) return null;
+  const emoji = String(row.emoji || "").trim();
+  const name = String(row.name || "").trim();
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    categoryId: row.category_id || null,
+    emoji,
+    name,
+    slug: row.slug,
+    description: row.description || "",
+    sortOrder: Number(row.sort_order) || 0,
+    label: formatChannelLabel(emoji, name),
+  };
+}
+
+function mapCommunityCategory(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    name: String(row.name || "").trim(),
+    sortOrder: Number(row.sort_order) || 0,
+  };
+}
+
+function mapCommunityGroupRole(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    name: String(row.name || "").trim(),
+    color: String(row.color || "#94a3b8").trim() || "#94a3b8",
+    sortOrder: Number(row.sort_order) || 0,
+    memberCount: row.member_count != null ? Number(row.member_count) : undefined,
+  };
+}
+
+function normalizeRoleName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 32);
+}
+
+function normalizeRoleColor(value) {
+  const raw = String(value || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+    const r = raw.slice(1);
+    return `#${r[0]}${r[0]}${r[1]}${r[1]}${r[2]}${r[2]}`.toLowerCase();
+  }
+  return "#94a3b8";
+}
+
+function normalizeChannelSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
 }
 
 async function ensureSynkCommunityExtras(sql) {
@@ -605,9 +684,88 @@ async function ensureSynkCommunityExtras(sql) {
   await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS deleted_for_recipient BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS edit_history JSONB NOT NULL DEFAULT '[]'::jsonb`;
 
+  await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'standard'`;
+  await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS is_official BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_group_categories (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_group_categories_group_idx
+    ON synk_community_group_categories (group_id, sort_order ASC)
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_group_channels (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+      category_id UUID REFERENCES synk_community_group_categories(id) ON DELETE SET NULL,
+      emoji TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_community_group_channels_group_slug_idx
+    ON synk_community_group_channels (group_id, slug)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_group_channels_group_idx
+    ON synk_community_group_channels (group_id, sort_order ASC)
+  `;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS channel_id UUID`;
+  try {
+    await sql`
+      ALTER TABLE synk_community_posts
+      ADD CONSTRAINT synk_community_posts_channel_id_fkey
+      FOREIGN KEY (channel_id) REFERENCES synk_community_group_channels(id) ON DELETE SET NULL
+    `;
+  } catch (_) {}
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_posts_channel_created_idx
+    ON synk_community_posts (channel_id, created_at DESC)
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_group_roles (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT '#94a3b8',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_community_group_roles_group_name_idx
+    ON synk_community_group_roles (group_id, lower(name))
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_group_roles_group_idx
+    ON synk_community_group_roles (group_id, sort_order ASC)
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_group_role_members (
+      role_id UUID NOT NULL REFERENCES synk_community_group_roles(id) ON DELETE CASCADE,
+      username TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (role_id, username)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_group_role_members_username_idx
+    ON synk_community_group_role_members (username)
+  `;
+
   await ensureCommunityOwner(sql);
-  // Do not auto-create a default "General" group — Community starts empty
-  // until someone creates groups intentionally.
+  await ensureOfficialSynkGroup(sql);
 }
 
 async function isCommunityUsernameTaken(sql, username, { exceptProfileId = null, exceptAltId = null } = {}) {
@@ -1228,45 +1386,294 @@ async function ensureCommunityOwner(sql) {
   return visionId;
 }
 
-async function ensureDefaultCommunityGroup(sql) {
-  const existing = await sql`
-    SELECT id, slug FROM synk_community_groups WHERE slug = 'general' LIMIT 1
+async function ensureOfficialSynkGroup(sql) {
+  const owner = await sql`
+    SELECT synk_profile_id FROM synk_community_staff WHERE role = 'owner' LIMIT 1
   `;
-  let groupId = existing[0] && existing[0].id;
-  if (!groupId) {
-    const owner = await sql`
-      SELECT synk_profile_id FROM synk_community_staff WHERE role = 'owner' LIMIT 1
+  const createdBy = owner[0] ? owner[0].synk_profile_id : null;
+
+  let group = null;
+  const existing = await sql`
+    SELECT id, slug, name, description, theme, is_official, created_by, created_at, updated_at
+    FROM synk_community_groups
+    WHERE slug = 'synk' OR is_official = TRUE
+    ORDER BY CASE WHEN slug = 'synk' THEN 0 ELSE 1 END
+    LIMIT 1
+  `;
+  if (existing[0]) {
+    group = existing[0];
+    await sql`
+      UPDATE synk_community_groups
+      SET
+        slug = 'synk',
+        name = 'Synk',
+        description = COALESCE(NULLIF(btrim(description), ''), 'The official Synk community — announcements, help, and conversation.'),
+        theme = 'discord',
+        is_official = TRUE,
+        updated_at = NOW()
+      WHERE id = ${group.id}
     `;
-    const createdBy = owner[0] ? owner[0].synk_profile_id : null;
+  } else {
     try {
       const created = await sql`
-        INSERT INTO synk_community_groups (slug, name, description, created_by)
+        INSERT INTO synk_community_groups (slug, name, description, theme, is_official, created_by)
         VALUES (
-          'general',
-          'General',
-          'The main Synk Community group. Admins can create more groups.',
+          'synk',
+          'Synk',
+          'The official Synk community — announcements, help, and conversation.',
+          'discord',
+          TRUE,
           ${createdBy}
         )
-        RETURNING id
+        RETURNING id, slug, name, description, theme, is_official, created_by, created_at, updated_at
       `;
-      groupId = created[0].id;
+      group = created[0];
     } catch (err) {
       if (!(String(err.message || "").includes("unique") || err.code === "23505")) throw err;
       const again = await sql`
-        SELECT id FROM synk_community_groups WHERE slug = 'general' LIMIT 1
+        SELECT id, slug, name, description, theme, is_official, created_by, created_at, updated_at
+        FROM synk_community_groups
+        WHERE slug = 'synk'
+        LIMIT 1
       `;
-      groupId = again[0] && again[0].id;
+      group = again[0] || null;
+      if (group) {
+        await sql`
+          UPDATE synk_community_groups
+          SET theme = 'discord', is_official = TRUE, updated_at = NOW()
+          WHERE id = ${group.id}
+        `;
+      }
+    }
+  }
+  if (!group) return null;
+
+  // Seed Discord-style categories + channels once.
+  const catCount = await sql`
+    SELECT COUNT(*)::int AS count FROM synk_community_group_categories WHERE group_id = ${group.id}
+  `;
+  if (!(Number(catCount[0] && catCount[0].count) > 0)) {
+    const blueprint = [
+      {
+        name: "INFORMATION",
+        channels: [
+          { emoji: "📢", name: "announcements", slug: "announcements", description: "Official Synk updates" },
+          { emoji: "📜", name: "rules", slug: "rules", description: "Community guidelines" },
+          { emoji: "🆕", name: "updates", slug: "updates", description: "Product and platform notes" },
+        ],
+      },
+      {
+        name: "COMMUNITY",
+        channels: [
+          { emoji: "💬", name: "general", slug: "general", description: "Everyday conversation" },
+          { emoji: "👋", name: "introductions", slug: "introductions", description: "Say hello" },
+          { emoji: "💡", name: "ideas", slug: "ideas", description: "Share ideas and requests" },
+        ],
+      },
+      {
+        name: "SUPPORT",
+        channels: [
+          { emoji: "🆘", name: "help", slug: "help", description: "Get help from the community" },
+          { emoji: "🐛", name: "bugs", slug: "bugs", description: "Report bugs" },
+          { emoji: "📣", name: "feedback", slug: "feedback", description: "Tell us what to improve" },
+        ],
+      },
+    ];
+    let catOrder = 0;
+    for (const cat of blueprint) {
+      const createdCat = await sql`
+        INSERT INTO synk_community_group_categories (group_id, name, sort_order)
+        VALUES (${group.id}, ${cat.name}, ${catOrder})
+        RETURNING id
+      `;
+      const categoryId = createdCat[0].id;
+      let chOrder = 0;
+      for (const ch of cat.channels) {
+        await sql`
+          INSERT INTO synk_community_group_channels (
+            group_id, category_id, emoji, name, slug, description, sort_order
+          )
+          VALUES (
+            ${group.id}, ${categoryId}, ${ch.emoji}, ${ch.name}, ${ch.slug}, ${ch.description}, ${chOrder}
+          )
+          ON CONFLICT (group_id, slug) DO NOTHING
+        `;
+        chOrder += 1;
+      }
+      catOrder += 1;
     }
   }
 
-  if (groupId) {
-    await sql`
-      UPDATE synk_community_posts
-      SET group_id = ${groupId}
-      WHERE group_id IS NULL
-    `;
+  // Default roles (no icons — badges stay separate).
+  const roleCount = await sql`
+    SELECT COUNT(*)::int AS count FROM synk_community_group_roles WHERE group_id = ${group.id}
+  `;
+  if (!(Number(roleCount[0] && roleCount[0].count) > 0)) {
+    const defaults = [
+      { name: "Member", color: "#94a3b8", sort: 0 },
+      { name: "Moderator", color: "#22c55e", sort: 1 },
+      { name: "Admin", color: "#f59e0b", sort: 2 },
+    ];
+    for (const role of defaults) {
+      try {
+        await sql`
+          INSERT INTO synk_community_group_roles (group_id, name, color, sort_order)
+          VALUES (${group.id}, ${role.name}, ${role.color}, ${role.sort})
+        `;
+      } catch (err) {
+        if (!(String(err.message || "").includes("unique") || err.code === "23505")) throw err;
+      }
+    }
   }
-  return groupId;
+
+  await sql`
+    UPDATE synk_community_posts
+    SET group_id = ${group.id}
+    WHERE group_id IS NULL
+  `;
+  return group.id;
+}
+
+async function listGroupCategories(sql, groupId) {
+  if (!groupId) return [];
+  const rows = await sql`
+    SELECT id, group_id, name, sort_order
+    FROM synk_community_group_categories
+    WHERE group_id = ${groupId}
+    ORDER BY sort_order ASC, name ASC
+  `;
+  return rows.map(mapCommunityCategory);
+}
+
+async function listGroupChannels(sql, groupId) {
+  if (!groupId) return [];
+  const rows = await sql`
+    SELECT id, group_id, category_id, emoji, name, slug, description, sort_order
+    FROM synk_community_group_channels
+    WHERE group_id = ${groupId}
+    ORDER BY sort_order ASC, name ASC
+  `;
+  return rows.map(mapCommunityChannel);
+}
+
+async function findGroupChannel(sql, { id, groupId, slug } = {}) {
+  const channelId = String(id || "").trim();
+  const gId = String(groupId || "").trim();
+  const channelSlug = normalizeChannelSlug(slug);
+  if (channelId) {
+    const rows = await sql`
+      SELECT id, group_id, category_id, emoji, name, slug, description, sort_order
+      FROM synk_community_group_channels
+      WHERE id = ${channelId}
+      LIMIT 1
+    `;
+    return mapCommunityChannel(rows[0]);
+  }
+  if (gId && channelSlug) {
+    const rows = await sql`
+      SELECT id, group_id, category_id, emoji, name, slug, description, sort_order
+      FROM synk_community_group_channels
+      WHERE group_id = ${gId} AND slug = ${channelSlug}
+      LIMIT 1
+    `;
+    return mapCommunityChannel(rows[0]);
+  }
+  return null;
+}
+
+async function listGroupRoles(sql, groupId) {
+  if (!groupId) return [];
+  const rows = await sql`
+    SELECT
+      r.id,
+      r.group_id,
+      r.name,
+      r.color,
+      r.sort_order,
+      COUNT(m.username)::int AS member_count
+    FROM synk_community_group_roles r
+    LEFT JOIN synk_community_group_role_members m ON m.role_id = r.id
+    WHERE r.group_id = ${groupId}
+    GROUP BY r.id
+    ORDER BY r.sort_order ASC, r.name ASC
+  `;
+  return rows.map(mapCommunityGroupRole);
+}
+
+async function hydrateCommunityGroup(sql, group) {
+  if (!group) return null;
+  const [categories, channels, roles, members] = await Promise.all([
+    listGroupCategories(sql, group.id),
+    listGroupChannels(sql, group.id),
+    listGroupRoles(sql, group.id),
+    sql`SELECT COUNT(*)::int AS count FROM synk_community_memberships WHERE group_id = ${group.id}`,
+  ]);
+  return {
+    ...group,
+    categories,
+    channels,
+    roles,
+    memberCount: Number(members[0] && members[0].count) || 0,
+  };
+}
+
+async function createGroupRole(sql, groupId, { name, color, sortOrder = 0 } = {}) {
+  const roleName = normalizeRoleName(name);
+  if (!roleName) return { ok: false, error: "Role name required" };
+  try {
+    const rows = await sql`
+      INSERT INTO synk_community_group_roles (group_id, name, color, sort_order)
+      VALUES (${groupId}, ${roleName}, ${normalizeRoleColor(color)}, ${Number(sortOrder) || 0})
+      RETURNING id, group_id, name, color, sort_order
+    `;
+    return { ok: true, role: mapCommunityGroupRole(rows[0]) };
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      return { ok: false, error: "A role with that name already exists" };
+    }
+    throw err;
+  }
+}
+
+async function updateGroupRole(sql, roleId, groupId, { name, color, sortOrder } = {}) {
+  const id = String(roleId || "").trim();
+  if (!id) return { ok: false, error: "Role required" };
+  const existing = await sql`
+    SELECT id, group_id, name, color, sort_order
+    FROM synk_community_group_roles
+    WHERE id = ${id} AND group_id = ${groupId}
+    LIMIT 1
+  `;
+  if (!existing[0]) return { ok: false, error: "Role not found" };
+  const nextName = name != null ? normalizeRoleName(name) : existing[0].name;
+  if (!nextName) return { ok: false, error: "Role name required" };
+  const nextColor = color != null ? normalizeRoleColor(color) : existing[0].color;
+  const nextSort = sortOrder != null ? Number(sortOrder) || 0 : existing[0].sort_order;
+  try {
+    const rows = await sql`
+      UPDATE synk_community_group_roles
+      SET name = ${nextName}, color = ${nextColor}, sort_order = ${nextSort}, updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING id, group_id, name, color, sort_order
+    `;
+    return { ok: true, role: mapCommunityGroupRole(rows[0]) };
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      return { ok: false, error: "A role with that name already exists" };
+    }
+    throw err;
+  }
+}
+
+async function deleteGroupRole(sql, roleId, groupId) {
+  const id = String(roleId || "").trim();
+  if (!id) return { ok: false, error: "Role required" };
+  const deleted = await sql`
+    DELETE FROM synk_community_group_roles
+    WHERE id = ${id} AND group_id = ${groupId}
+    RETURNING id
+  `;
+  return { ok: true, deleted: deleted.length > 0 };
 }
 
 async function getCommunityStaffRole(sql, profileId) {
@@ -1314,21 +1721,26 @@ async function listCommunityStaff(sql) {
 }
 
 async function listCommunityGroups(sql) {
+  await ensureOfficialSynkGroup(sql);
   const rows = await sql`
     SELECT
       g.id,
       g.slug,
       g.name,
       g.description,
+      g.theme,
+      g.is_official,
       g.created_by,
       g.created_at,
       g.updated_at,
-      COUNT(p.id)::int AS post_count
+      COUNT(DISTINCT p.id)::int AS post_count,
+      COUNT(DISTINCT mem.synk_profile_id)::int AS member_count
     FROM synk_community_groups g
     LEFT JOIN synk_community_posts p ON p.group_id = g.id
+    LEFT JOIN synk_community_memberships mem ON mem.group_id = g.id
     GROUP BY g.id
     ORDER BY
-      CASE g.slug WHEN 'general' THEN 0 ELSE 1 END,
+      CASE WHEN g.is_official THEN 0 WHEN g.slug = 'synk' THEN 0 ELSE 1 END,
       g.name ASC
   `;
   return rows.map(mapCommunityGroup);
@@ -1339,7 +1751,7 @@ async function findCommunityGroup(sql, { id, slug } = {}) {
   const groupSlug = normalizeGroupSlug(slug);
   if (groupId) {
     const rows = await sql`
-      SELECT id, slug, name, description, created_by, created_at, updated_at
+      SELECT id, slug, name, description, theme, is_official, created_by, created_at, updated_at
       FROM synk_community_groups
       WHERE id = ${groupId}
       LIMIT 1
@@ -1348,7 +1760,7 @@ async function findCommunityGroup(sql, { id, slug } = {}) {
   }
   if (groupSlug) {
     const rows = await sql`
-      SELECT id, slug, name, description, created_by, created_at, updated_at
+      SELECT id, slug, name, description, theme, is_official, created_by, created_at, updated_at
       FROM synk_community_groups
       WHERE slug = ${groupSlug}
       LIMIT 1
@@ -3451,6 +3863,18 @@ module.exports = {
   listCommunityGroups,
   findCommunityGroup,
   mapCommunityGroup,
+  ensureOfficialSynkGroup,
+  hydrateCommunityGroup,
+  listGroupCategories,
+  listGroupChannels,
+  findGroupChannel,
+  listGroupRoles,
+  createGroupRole,
+  updateGroupRole,
+  deleteGroupRole,
+  formatChannelLabel,
+  normalizeRoleName,
+  normalizeRoleColor,
   isCommunityUsernameTaken,
   listOwnerAltAccounts,
   findCommunityAltAccount,

@@ -205,6 +205,56 @@ CREATE UNIQUE INDEX IF NOT EXISTS synk_community_groups_slug_idx
 CREATE INDEX IF NOT EXISTS synk_community_groups_created_idx
   ON synk_community_groups (created_at DESC);
 
+ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'standard';
+ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS is_official BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS synk_community_group_categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS synk_community_group_channels (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+  category_id UUID REFERENCES synk_community_group_categories(id) ON DELETE SET NULL,
+  emoji TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS synk_community_group_channels_group_slug_idx
+  ON synk_community_group_channels (group_id, slug);
+
+ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS channel_id UUID;
+
+CREATE TABLE IF NOT EXISTS synk_community_group_roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#94a3b8',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS synk_community_group_roles_group_name_idx
+  ON synk_community_group_roles (group_id, lower(name));
+
+CREATE TABLE IF NOT EXISTS synk_community_group_role_members (
+  role_id UUID NOT NULL REFERENCES synk_community_group_roles(id) ON DELETE CASCADE,
+  username TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (role_id, username)
+);
+
+
+
 CREATE TABLE IF NOT EXISTS synk_community_posts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,

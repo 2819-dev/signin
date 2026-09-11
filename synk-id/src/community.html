@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-dm-tools1" />
+    <link rel="stylesheet" href="/join.css?v=community-synk-discord3" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -190,26 +190,39 @@
                 <div class="community-profile-meta" id="profile-meta" hidden></div>
               </section>
 
+              <div id="discord-shell" class="discord-shell" hidden>
+                <aside class="discord-channels" id="discord-channels" aria-label="Channels"></aside>
+                <div class="discord-main">
+                  <header class="discord-channel-head" id="discord-channel-head">
+                    <strong id="discord-channel-title"># general</strong>
+                    <p class="muted" id="discord-channel-desc"></p>
+                  </header>
+                  <div id="discord-feed-slot"></div>
+                </div>
+              </div>
+
               <nav class="community-crumbs" id="crumbs" hidden aria-label="Breadcrumb"></nav>
 
-              <section class="card community-composer reddit-create" id="composer-card" hidden>
-                <div class="reddit-create-bar" id="composer-collapsed">
-                  <div class="reddit-create-avatar" id="composer-avatar" aria-hidden="true">S</div>
-                  <a class="reddit-create-fakeinput" href="/community/submit" id="composer-open-btn">Create a post</a>
-                </div>
-                <p class="muted" id="composer-as" hidden>Posting as —</p>
-              </section>
+              <div id="feed-stack" class="feed-stack">
+                <section class="card community-composer reddit-create" id="composer-card" hidden>
+                  <div class="reddit-create-bar" id="composer-collapsed">
+                    <div class="reddit-create-avatar" id="composer-avatar" aria-hidden="true">S</div>
+                    <a class="reddit-create-fakeinput" href="/community/submit" id="composer-open-btn">Create a post</a>
+                  </div>
+                  <p class="muted" id="composer-as" hidden>Posting as —</p>
+                </section>
 
-              <section class="reddit-sortbar" aria-label="Sort">
-                <button class="reddit-sort-tab" type="button" data-sort="hot" id="sort-hot">Hot</button>
-                <button class="reddit-sort-tab is-active" type="button" data-sort="new" id="sort-new">New</button>
-                <button class="reddit-sort-tab" type="button" data-sort="top" id="sort-top">Top</button>
-              </section>
+                <section class="reddit-sortbar" aria-label="Sort">
+                  <button class="reddit-sort-tab" type="button" data-sort="hot" id="sort-hot">Hot</button>
+                  <button class="reddit-sort-tab is-active" type="button" data-sort="new" id="sort-new">New</button>
+                  <button class="reddit-sort-tab" type="button" data-sort="top" id="sort-top">Top</button>
+                </section>
 
-              <section class="card reddit-feed-wrap" id="feed-card">
-                <div id="feed" class="community-feed"></div>
-                <p id="feed-empty" class="muted reddit-feed-empty">No posts yet. Start the conversation.</p>
-              </section>
+                <section class="card reddit-feed-wrap" id="feed-card">
+                  <div id="feed" class="community-feed"></div>
+                  <p id="feed-empty" class="muted reddit-feed-empty">No posts yet. Start the conversation.</p>
+                </section>
+              </div>
             </div>
 
 
@@ -223,7 +236,7 @@
                 <form id="comment-form" class="form reddit-comment-form">
                   <div class="field">
                     <label class="sr-only" for="comment-body">Add a comment</label>
-                    <textarea id="comment-body" rows="3" maxlength="1000" required placeholder="What are your thoughts?"></textarea>
+                    <textarea id="comment-body" rows="3" maxlength="1000" required placeholder="Add a comment…"></textarea>
                   </div>
                   <div class="reddit-create-actions">
                     <button class="btn btn-primary btn-compact" type="submit" id="comment-submit-btn">Comment</button>
@@ -231,7 +244,7 @@
                   <p id="comment-status" class="muted" style="font-size: 0.85rem"></p>
                 </form>
                 <div id="comments-list" class="reddit-comments-list"></div>
-                <p class="muted" id="comments-empty" hidden>No comments yet. Be the first.</p>
+                <p class="muted reddit-comments-empty" id="comments-empty" hidden>No comments yet — share the first thought.</p>
               </section>
             </div>
 
@@ -674,6 +687,23 @@
               <div class="reddit-about-meta" id="about-meta" hidden></div>
               <button class="btn btn-primary btn-compact reddit-about-join" type="button" id="about-join-btn" hidden>Join</button>
             </section>
+            <section class="reddit-widget" id="group-roles-widget" hidden>
+              <h2 class="reddit-widget-title">Roles</h2>
+              <p class="muted" style="margin:0 0 10px;font-size:0.82rem;">Name + color only — no icons (those are for tags).</p>
+              <div id="group-roles-list" class="group-roles-list"></div>
+              <form id="group-role-form" class="form group-role-form" hidden>
+                <div class="field">
+                  <label for="group-role-name">Role name</label>
+                  <input id="group-role-name" type="text" maxlength="32" required placeholder="Moderator" />
+                </div>
+                <div class="field">
+                  <label for="group-role-color">Color</label>
+                  <input id="group-role-color" type="color" value="#94a3b8" />
+                </div>
+                <p id="group-role-status" class="muted" style="font-size:0.82rem"></p>
+                <button class="btn btn-secondary btn-compact" type="submit">Add role</button>
+              </form>
+            </section>
             <section class="reddit-widget">
               <h2 class="reddit-widget-title">Community rules</h2>
               <ol class="reddit-rules">
@@ -715,6 +745,6 @@
     </nav>
 
     <div id="toast" class="community-toast" role="status" aria-live="polite"></div>
-    <script src="/community.js?v=community-dm-tools1"></script>
+    <script src="/community.js?v=community-synk-discord3"></script>
   </body>
 </html>

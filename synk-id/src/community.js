@@ -103,6 +103,8 @@
   let unreadCount = 0;
   let activeSubmitType = "text";
   let activeGroupJoined = false;
+  let activeChannelSlug = "";
+  let activeGroupDetail = null;
 
   function readSession() {
     try {
@@ -712,9 +714,12 @@
 
   function setComposerOpen(open) {
     if (open) {
+      const groupSlug = route.type === "group" ? route.slug : "";
+      const channelSlug = route.type === "group" ? (route.channel || activeChannelSlug || "") : "";
       navigate({ type: "submit", slug: "", username: "" }).then(() => {
-        if (route.type === "group" && route.slug) {
-          history.replaceState(route, "", `/community/submit?group=${encodeURIComponent(route.slug)}`);
+        if (groupSlug) {
+          history.replaceState(route, "", submitUrlForGroup(groupSlug, channelSlug));
+          if (postGroup && groupSlug) postGroup.value = groupSlug;
         }
       }).catch(() => {});
       return;
@@ -804,7 +809,15 @@
     let m = path.match(/^\/community\/post\/([a-z0-9_-]+)$/i);
     if (m) return { type: "post", slug: "", username: "", postId: m[1] };
     m = path.match(/^\/community\/(?:group|g)\/([a-z0-9-]+)$/i);
-    if (m) return { type: "group", slug: m[1].toLowerCase(), username: "" };
+    if (m) {
+      const params = new URLSearchParams(location.search || "");
+      return {
+        type: "group",
+        slug: m[1].toLowerCase(),
+        username: "",
+        channel: String(params.get("channel") || "").trim().toLowerCase(),
+      };
+    }
     m = path.match(/^\/user\/([a-z0-9_]+)$/i);
     if (m) return { type: "user", slug: "", username: m[1].toLowerCase() };
     m = path.match(/^\/(?:community\/)?u\/([a-z0-9_]+)$/i);
@@ -820,7 +833,10 @@
     if (next.type === "inbox") return "/community/inbox";
     if (next.type === "groups") return "/community/groups";
     if (next.type === "post" && next.postId) return `/community/post/${encodeURIComponent(next.postId)}`;
-    if (next.type === "group" && next.slug) return `/community/group/${encodeURIComponent(next.slug)}`;
+    if (next.type === "group" && next.slug) {
+      const base = `/community/group/${encodeURIComponent(next.slug)}`;
+      return next.channel ? `${base}?channel=${encodeURIComponent(next.channel)}` : base;
+    }
     if (next.type === "user" && next.username) return `/user/${encodeURIComponent(next.username)}`;
     return "/community";
   }
@@ -1046,7 +1062,7 @@
           <a class="reddit-nav-item community-group-link ${active}" href="/community/group/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
             <span class="reddit-nav-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
             <span class="reddit-nav-copy">
-              <strong>${escapeHtml(group.slug)}</strong>
+              <strong>${escapeHtml(group.slug)}${group.isOfficial || group.slug === "synk" ? " ★" : ""}</strong>
               <span>${escapeHtml(group.name)}${count ? ` · ${escapeHtml(count)}` : ""}</span>
             </span>
           </a>
@@ -1117,6 +1133,14 @@
     if (!ordered.length) {
       feedEl.innerHTML = "";
       feedEmpty.hidden = false;
+      if (feedEmpty) {
+        feedEmpty.textContent =
+          route.type === "group" && activeChannelSlug
+            ? "No posts in this channel yet. Start the conversation."
+            : route.type === "group"
+              ? "No posts in this community yet. Be the first to post."
+              : "No posts yet. Start the conversation.";
+      }
       return;
     }
     feedEmpty.hidden = true;
@@ -1148,6 +1172,11 @@
                 ${
                   showGroup
                     ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="reddit-meta-dot">•</span>`
+                    : ""
+                }
+                ${
+                  post.channel && post.channel.label
+                    ? `<span class="reddit-channel-pill">${escapeHtml(post.channel.label)}</span><span class="reddit-meta-dot">•</span>`
                     : ""
                 }
                 <span class="reddit-meta-by">Posted by</span>
@@ -1223,7 +1252,10 @@
     lastComments = Array.isArray(comments) ? comments.slice() : [];
     if (!lastComments.length) {
       list.innerHTML = "";
-      if (empty) empty.hidden = false;
+      if (empty) {
+        empty.hidden = false;
+        empty.textContent = "No comments yet — share the first thought.";
+      }
       return;
     }
     if (empty) empty.hidden = true;
@@ -1432,7 +1464,170 @@
     }
   }
 
-  function applyViewState(data) {
+  
+  function isDiscordTheme(group) {
+    return !!(group && (group.theme === "discord" || group.isOfficial || group.slug === "synk"));
+  }
+
+  function formatChannelLabel(ch) {
+    if (!ch) return "";
+    if (ch.label) return ch.label;
+    if (ch.emoji && ch.name) return `${ch.emoji} | ${ch.name}`;
+    return ch.name || ch.slug || "";
+  }
+
+  function channelButtonHtml(ch) {
+    const on = ch.slug === activeChannelSlug ? "is-active" : "";
+    const label = formatChannelLabel(ch);
+    return `<button type="button" class="discord-channel-btn ${on}" data-discord-channel="${escapeHtml(
+      ch.slug
+    )}" title="${escapeHtml(label)}"><span class="discord-channel-label">${escapeHtml(
+      label
+    )}</span></button>`;
+  }
+
+  function mountFeedStack(intoDiscord) {
+    const stack = document.getElementById("feed-stack");
+    const slot = document.getElementById("discord-feed-slot");
+    const home = document.getElementById("feed-view");
+    if (!stack || !slot || !home) return;
+    if (intoDiscord) {
+      if (stack.parentElement !== slot) slot.appendChild(stack);
+    } else if (stack.parentElement === slot) {
+      const crumbs = document.getElementById("crumbs");
+      if (crumbs && crumbs.parentElement === home) {
+        crumbs.insertAdjacentElement("afterend", stack);
+      } else {
+        home.appendChild(stack);
+      }
+    }
+  }
+
+  function submitUrlForGroup(groupSlug, channelSlug) {
+    let href = "/community/submit";
+    const params = new URLSearchParams();
+    if (groupSlug) params.set("group", groupSlug);
+    if (channelSlug) params.set("channel", channelSlug);
+    const q = params.toString();
+    return q ? `${href}?${q}` : href;
+  }
+
+  function renderDiscordChannels(group) {
+    const shell = document.getElementById("discord-shell");
+    const host = document.getElementById("discord-channels");
+    if (!shell || !host) return;
+    if (!isDiscordTheme(group)) {
+      shell.hidden = true;
+      document.body.classList.remove("is-discord-group");
+      mountFeedStack(false);
+      return;
+    }
+    document.body.classList.add("is-discord-group");
+    shell.hidden = false;
+    mountFeedStack(true);
+    const categories = Array.isArray(group.categories) ? group.categories.slice() : [];
+    const channels = Array.isArray(group.channels) ? group.channels.slice() : [];
+    if (!activeChannelSlug) {
+      const general = channels.find((c) => c.slug === "general");
+      activeChannelSlug = (general && general.slug) || (channels[0] && channels[0].slug) || "";
+      if (activeChannelSlug && route.type === "group") {
+        route = { ...route, channel: activeChannelSlug };
+        try {
+          history.replaceState(route, "", routeUrl(route));
+        } catch (_) {}
+      }
+    }
+    const byCat = new Map();
+    categories.forEach((cat) => byCat.set(String(cat.id), { cat, list: [] }));
+    const loose = [];
+    channels.forEach((ch) => {
+      const key = ch.categoryId != null ? String(ch.categoryId) : "";
+      if (key && byCat.has(key)) byCat.get(key).list.push(ch);
+      else loose.push(ch);
+    });
+    const html = [];
+    for (const { cat, list } of byCat.values()) {
+      html.push(`<div class="discord-cat">${escapeHtml(cat.name)}</div>`);
+      list
+        .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))
+        .forEach((ch) => html.push(channelButtonHtml(ch)));
+    }
+    if (loose.length) {
+      html.push(`<div class="discord-cat">CHANNELS</div>`);
+      loose.forEach((ch) => html.push(channelButtonHtml(ch)));
+    }
+    host.innerHTML = html.join("") || `<p class="muted" style="padding:8px;">No channels yet.</p>`;
+    const active = channels.find((c) => c.slug === activeChannelSlug) || channels[0] || null;
+    const title = document.getElementById("discord-channel-title");
+    const desc = document.getElementById("discord-channel-desc");
+    if (title) title.textContent = active ? formatChannelLabel(active) : "Synk";
+    if (desc) {
+      desc.textContent = (active && (active.description || "")) || "";
+      desc.hidden = !desc.textContent;
+    }
+    const composerOpen = document.getElementById("composer-open-btn");
+    if (composerOpen && route.slug) {
+      composerOpen.href = submitUrlForGroup(route.slug, activeChannelSlug);
+      const chName = active ? formatChannelLabel(active) : "this channel";
+      composerOpen.textContent = `Post in ${chName}`;
+    }
+  }
+
+  function renderGroupRoles(group) {
+    const widget = document.getElementById("group-roles-widget");
+    const list = document.getElementById("group-roles-list");
+    const form = document.getElementById("group-role-form");
+    if (!widget || !list) return;
+    if (!(route.type === "group" && group)) {
+      widget.hidden = true;
+      return;
+    }
+    widget.hidden = false;
+    const roles = Array.isArray(group.roles) ? group.roles : [];
+    list.innerHTML = roles.length
+      ? roles
+          .map(
+            (r) =>
+              `<div class="group-role-chip"><span class="group-role-dot" style="background:${escapeHtml(
+                r.color || "#94a3b8"
+              )}"></span><span>${escapeHtml(r.name)}</span></div>`
+          )
+          .join("")
+      : `<p class="muted" style="margin:0;font-size:0.85rem;">No roles yet.</p>`;
+    const myId = me && (me.profileId || me.id || "");
+    const canManage =
+      !!(me && (me.role === "owner" || me.role === "admin" || me.isStaff)) ||
+      !!(group.createdBy && myId && String(group.createdBy) === String(myId));
+    if (form) form.hidden = !canManage;
+  }
+
+  function syncJoinCopy(joined, group) {
+    const joinLabel = group && (group.isOfficial || group.slug === "synk") ? "Join Synk" : "Join";
+    ["join-community-btn", "about-join-btn"].forEach((id) => {
+      const btn = document.getElementById(id);
+      if (!btn || btn.hidden) return;
+      btn.textContent = joined ? "Joined" : joinLabel;
+      btn.classList.toggle("is-joined", !!joined);
+      btn.setAttribute("aria-pressed", joined ? "true" : "false");
+    });
+  }
+
+function applyViewState(data) {
+    if (route.type !== "group") {
+      const shell = document.getElementById("discord-shell");
+      if (shell) shell.hidden = true;
+      document.body.classList.remove("is-discord-group");
+      mountFeedStack(false);
+      const rolesWidget = document.getElementById("group-roles-widget");
+      if (rolesWidget) rolesWidget.hidden = true;
+      activeChannelSlug = "";
+      activeGroupDetail = null;
+      const composerOpen = document.getElementById("composer-open-btn");
+      if (composerOpen) {
+        composerOpen.href = "/community/submit";
+        composerOpen.textContent = "Create a post";
+      }
+    }
     renderCrumbs();
     if (profileMeta) {
       profileMeta.hidden = true;
@@ -1465,9 +1660,13 @@
     const createTop = document.getElementById("create-top-link");
     const submitHref =
       route.type === "group" && route.slug
-        ? `/community/submit?group=${encodeURIComponent(route.slug)}`
+        ? submitUrlForGroup(route.slug, route.channel || activeChannelSlug || "")
         : "/community/submit";
     if (createTop) createTop.href = submitHref;
+    const composerOpenBtn = document.getElementById("composer-open-btn");
+    if (composerOpenBtn && route.type === "group" && route.slug) {
+      composerOpenBtn.href = submitHref;
+    }
 
     const viewBlurb = document.getElementById("view-blurb");
     const viewIcon = document.getElementById("view-icon");
@@ -1569,14 +1768,23 @@
     }
     if (route.type === "group") {
       const group = data.group || groups.find((g) => g.slug === route.slug) || null;
+      activeGroupDetail = group;
       if (group) pushRecent(group);
+      if (data.channel && data.channel.slug) activeChannelSlug = data.channel.slug;
+      else if (route.channel) activeChannelSlug = route.channel;
       const slug = (group && group.slug) || route.slug || "";
       const name = (group && group.name) || slug;
       const postCount = group && group.postCount != null ? Number(group.postCount) : null;
       const memberCount = group && group.memberCount != null ? Number(group.memberCount) : null;
       setBannerMode("group", true);
       if (viewIcon) viewIcon.textContent = (slug || "?").slice(0, 1).toUpperCase();
-      setText("view-title", name);
+      const official =
+        group && (group.isOfficial || group.slug === "synk")
+          ? ' <span class="official-pill">Official</span>'
+          : "";
+      const titleEl = document.getElementById("view-title");
+      if (titleEl) titleEl.innerHTML = `${escapeHtml(name)}${official}`;
+      else setText("view-title", name);
       const subBits = [slug];
       if (memberCount != null) subBits.push(`${memberCount.toLocaleString()} member${memberCount === 1 ? "" : "s"}`);
       else if (postCount != null) subBits.push(`${postCount.toLocaleString()} post${postCount === 1 ? "" : "s"}`);
@@ -1586,6 +1794,9 @@
         viewBlurb.textContent = desc;
         viewBlurb.hidden = !desc;
       }
+      renderDiscordChannels(group);
+      renderGroupRoles(group);
+      syncJoinCopy(activeGroupJoined, group);
       updateAboutRail(data);
       return;
     }
@@ -1635,6 +1846,8 @@
       url += `?feed=home&sort=${encodeURIComponent(sort)}`;
     } else if (route.type === "group" && route.slug) {
       url += `?group=${encodeURIComponent(route.slug)}&sort=${encodeURIComponent(sort)}`;
+      const ch = route.channel || activeChannelSlug || "";
+      if (ch) url += `&channel=${encodeURIComponent(ch)}`;
     } else if (route.type === "user" && route.username) {
       url += `?user=${encodeURIComponent(route.username)}&sort=${encodeURIComponent(sort)}`;
     } else if (sort && sort !== "new") {
@@ -1661,6 +1874,8 @@
     if (data.group && typeof data.group.joined === "boolean") {
       activeGroupJoined = !!data.group.joined;
     }
+    if (data.group) activeGroupDetail = data.group;
+    if (data.channel && data.channel.slug) activeChannelSlug = data.channel.slug;
     updateInboxBadge();
     applyUsernameState();
     applyStaffState();
@@ -2042,9 +2257,14 @@
         action: "post",
         type,
         title,
-        group: postGroup.value || route.slug || "general",
+        group: postGroup.value || route.slug || "synk",
         asUsername: activePersona || publicUsername,
       };
+      const channelPref =
+        (new URLSearchParams(location.search).get("channel") || "").trim().toLowerCase() ||
+        activeChannelSlug ||
+        "";
+      if (channelPref) payload.channel = channelPref;
 
       if (type === "text") {
         if (!body) throw new Error("Write some text for your post");
@@ -3601,21 +3821,65 @@
     }
   });
 
+
+  document.addEventListener("click", (e) => {
+    const chBtn = e.target.closest("[data-discord-channel]");
+    if (!chBtn) return;
+    e.preventDefault();
+    const slug = chBtn.getAttribute("data-discord-channel");
+    if (!slug || !route.slug) return;
+    activeChannelSlug = slug;
+    navigate({ type: "group", slug: route.slug, username: "", channel: slug }).catch(() => {});
+  });
+
+  const groupRoleForm = document.getElementById("group-role-form");
+  if (groupRoleForm) {
+    groupRoleForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("group-role-status");
+      const nameEl = document.getElementById("group-role-name");
+      const colorEl = document.getElementById("group-role-color");
+      if (!route.slug) return;
+      if (status) status.textContent = "Saving…";
+      try {
+        const data = await communityAction({
+          action: "create-group-role",
+          group: route.slug,
+          name: nameEl ? nameEl.value : "",
+          color: colorEl ? colorEl.value : "#94a3b8",
+        });
+        if (activeGroupDetail) activeGroupDetail.roles = data.roles || activeGroupDetail.roles || [];
+        renderGroupRoles(activeGroupDetail);
+        if (nameEl) nameEl.value = "";
+        if (status) status.textContent = "Role added";
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not add role";
+      }
+    });
+  }
+
   function syncJoinButtons() {
     const joined = route.type === "group" && route.slug && activeGroupJoined;
-    ["join-community-btn", "about-join-btn"].forEach((id) => {
-      const btn = document.getElementById(id);
-      if (!btn || btn.hidden) return;
-      btn.textContent = joined ? "Joined" : "Join";
-      btn.classList.toggle("is-joined", !!joined);
-    });
+    const group =
+      activeGroupDetail ||
+      (groups || []).find((g) => g.slug === route.slug) ||
+      null;
+    syncJoinCopy(joined, group);
   }
   ["join-community-btn", "about-join-btn"].forEach((id) => {
     const btn = document.getElementById(id);
     if (!btn) return;
     btn.addEventListener("click", async () => {
       if (route.type !== "group" || !route.slug) return;
+      const group =
+        activeGroupDetail ||
+        (groups || []).find((g) => g.slug === route.slug) ||
+        null;
       const next = !activeGroupJoined;
+      if (!next) {
+        const label = group && (group.isOfficial || group.slug === "synk") ? "Synk" : (group && group.name) || route.slug;
+        if (!window.confirm(`Leave ${label}? You can rejoin anytime.`)) return;
+      }
       activeGroupJoined = next;
       syncJoinButtons();
       try {
@@ -3625,15 +3889,31 @@
           joined: next,
         });
         activeGroupJoined = !!(data.joined != null ? data.joined : next);
-        if (data.group) {
-          groups = (groups || []).map((g) =>
-            g.slug === route.slug ? { ...g, joined: activeGroupJoined } : g
-          );
+        if (activeGroupDetail) activeGroupDetail.joined = activeGroupJoined;
+        if (typeof data.memberCount === "number" && activeGroupDetail) {
+          activeGroupDetail.memberCount = data.memberCount;
         }
+        groups = (groups || []).map((g) =>
+          g.slug === route.slug ? { ...g, joined: activeGroupJoined } : g
+        );
         syncJoinButtons();
-      } catch (_) {
+        showToast(activeGroupJoined ? "Joined" : "Left community");
+        if (route.type === "group") {
+          const memberCount = activeGroupDetail && activeGroupDetail.memberCount;
+          if (memberCount != null) {
+            const slug = route.slug || "";
+            setText(
+              "view-sub",
+              [slug, `${Number(memberCount).toLocaleString()} member${Number(memberCount) === 1 ? "" : "s"}`]
+                .filter(Boolean)
+                .join(" · ")
+            );
+          }
+        }
+      } catch (err) {
         activeGroupJoined = !next;
         syncJoinButtons();
+        showToast((err && err.message) || "Could not update membership");
       }
     });
   });

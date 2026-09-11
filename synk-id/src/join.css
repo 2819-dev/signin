@@ -7657,3 +7657,210 @@ body.community-body #dm-compose-send.btn {
     border-radius: 0 !important;
   }
 }
+
+
+/* ===== Official Synk Discord-style group ===== */
+.discord-shell {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  gap: 0;
+  min-height: 520px;
+  margin: 0 0 14px;
+  border: 1px solid var(--r-line, #d0d5dd);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1e1f22;
+  color: #f2f3f5;
+}
+.feed-stack { display: grid; gap: 10px; }
+.discord-shell .feed-stack {
+  gap: 0;
+  padding: 0 0 12px;
+}
+.discord-shell .reddit-sortbar {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: #313338;
+}
+.discord-shell .reddit-sort-tab { color: #b5bac1; }
+.discord-shell .reddit-sort-tab.is-active {
+  color: #fff;
+  background: rgba(88, 101, 242, 0.25);
+}
+.discord-shell .reddit-create {
+  margin: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #313338 !important;
+  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+}
+.discord-shell .reddit-create-fakeinput {
+  background: #1e1f22 !important;
+  color: #dbdee1 !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+.discord-channels {
+  background: #2b2d31;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  padding: 12px 8px 16px;
+  overflow: auto;
+  max-height: min(70vh, 720px);
+}
+.discord-cat {
+  margin: 14px 8px 6px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #949ba4;
+}
+.discord-channel-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #dbdee1;
+  text-align: left;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.discord-channel-btn:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.discord-channel-btn.is-active {
+  background: rgba(88, 101, 242, 0.28);
+  color: #fff;
+}
+.discord-channel-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.discord-channel-emoji { width: 1.4em; text-align: center; flex: 0 0 auto; }
+.reddit-channel-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--r-brand, #041A55) 12%, #fff);
+  color: var(--r-brand, #041A55);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.discord-shell .reddit-channel-pill {
+  background: rgba(88, 101, 242, 0.22);
+  color: #e3e5e8;
+}
+.discord-main {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 0;
+  background: #313338;
+}
+.discord-channel-head {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: #313338;
+}
+.discord-channel-head strong {
+  display: block;
+  font-size: 1rem;
+}
+.discord-channel-head .muted {
+  margin: 2px 0 0;
+  color: #b5bac1 !important;
+  font-size: 0.82rem;
+}
+.discord-shell .reddit-feed-wrap,
+.discord-shell #feed-card {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.discord-shell .reddit-post {
+  background: #2b2d31 !important;
+  border-color: rgba(255,255,255,0.06) !important;
+  color: #f2f3f5;
+}
+.discord-shell .reddit-post-title,
+.discord-shell .reddit-post-body { color: #f2f3f5; }
+.discord-shell .muted { color: #b5bac1; }
+body.community-body.is-discord-group .reddit-sortbar {
+  margin-left: 0;
+}
+.group-roles-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.group-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--r-line, #ddd);
+  background: var(--r-elev, #f6f7f8);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.group-role-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+.group-role-form .field { margin-bottom: 8px; }
+.reddit-join-btn.is-joined,
+.reddit-about-join.is-joined {
+  background: transparent !important;
+  color: var(--r-brand, #041A55) !important;
+  border: 1px solid var(--r-brand, #041A55) !important;
+}
+.reddit-comment {
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--r-elev, #f6f7f8) 80%, #fff);
+  border: 1px solid var(--r-line, #eceff3);
+}
+.reddit-comments-list {
+  display: grid;
+  gap: 8px;
+}
+.reddit-comment-body {
+  margin-top: 4px;
+  line-height: 1.45;
+}
+.reddit-feed-empty,
+#feed-empty {
+  padding: 28px 18px !important;
+  text-align: center;
+}
+.official-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--r-brand, #041A55) 12%, #fff);
+  color: var(--r-brand, #041A55);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+@media (max-width: 860px) {
+  .discord-shell { grid-template-columns: 1fr; }
+  .discord-channels {
+    max-height: 180px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+}

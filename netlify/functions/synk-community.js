@@ -18,6 +18,13 @@ const {
   listCommunityStaff,
   listCommunityGroups,
   findCommunityGroup,
+  hydrateCommunityGroup,
+  findGroupChannel,
+  listGroupRoles,
+  createGroupRole,
+  updateGroupRole,
+  deleteGroupRole,
+  ensureOfficialSynkGroup,
   isCommunityUsernameTaken,
   listOwnerAltAccounts,
   findCommunityAltAccount,
@@ -221,6 +228,20 @@ function mapPost(row) {
           id: row.group_id,
           slug: row.group_slug,
           name: row.group_name || row.group_slug,
+          theme: row.group_theme || "standard",
+          isOfficial: row.group_is_official === true,
+        }
+      : null,
+    channel: row.channel_id
+      ? {
+          id: row.channel_id,
+          slug: row.channel_slug || "",
+          name: row.channel_name || "",
+          emoji: row.channel_emoji || "",
+          label:
+            row.channel_emoji && row.channel_name
+              ? `${row.channel_emoji} | ${row.channel_name}`
+              : row.channel_name || row.channel_slug || "",
         }
       : null,
     author: {
@@ -511,6 +532,7 @@ async function loadPosts(
   sql,
   {
     groupId = null,
+    channelId = null,
     authorUsername = null,
     profileId = null,
     joinedOnly = false,
@@ -545,6 +567,12 @@ async function loadPosts(
           c.public_username,
           g.slug AS group_slug,
           g.name AS group_name,
+          g.theme AS group_theme,
+          g.is_official AS group_is_official,
+          p.channel_id,
+          ch.slug AS channel_slug,
+          ch.name AS channel_name,
+          ch.emoji AS channel_emoji,
           (
             SELECT COUNT(*)::int
             FROM synk_community_comments cc
@@ -560,10 +588,12 @@ async function loadPosts(
         JOIN synk_profiles m ON m.id = p.synk_profile_id
         LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
         LEFT JOIN synk_community_groups g ON g.id = p.group_id
+        LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
         LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
         LEFT JOIN synk_community_alt_accounts a
           ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
         WHERE (${groupId}::uuid IS NULL OR p.group_id = ${groupId})
+          AND (${channelId}::uuid IS NULL OR p.channel_id = ${channelId})
           AND (
             ${author || null}::text IS NULL
             OR COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = ${author || null}
@@ -615,6 +645,12 @@ async function loadPosts(
           c.public_username,
           g.slug AS group_slug,
           g.name AS group_name,
+          g.theme AS group_theme,
+          g.is_official AS group_is_official,
+          p.channel_id,
+          ch.slug AS channel_slug,
+          ch.name AS channel_name,
+          ch.emoji AS channel_emoji,
           (
             SELECT COUNT(*)::int
             FROM synk_community_comments cc
@@ -630,10 +666,12 @@ async function loadPosts(
         JOIN synk_profiles m ON m.id = p.synk_profile_id
         LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
         LEFT JOIN synk_community_groups g ON g.id = p.group_id
+        LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
         LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
         LEFT JOIN synk_community_alt_accounts a
           ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
         WHERE (${groupId}::uuid IS NULL OR p.group_id = ${groupId})
+          AND (${channelId}::uuid IS NULL OR p.channel_id = ${channelId})
           AND (
             ${author || null}::text IS NULL
             OR COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = ${author || null}
@@ -1164,6 +1202,7 @@ exports.handler = async (event) => {
       const sort = String(qs.sort || "").trim().toLowerCase() || "new";
 
       let activeGroup = null;
+      let activeChannel = null;
       let profile = null;
       let posts = [];
 
@@ -1209,6 +1248,7 @@ exports.handler = async (event) => {
         if (groupSlug) {
           activeGroup = await findCommunityGroup(sql, { slug: groupSlug });
           if (!activeGroup) return json(404, { error: "Group not found" });
+          activeGroup = await hydrateCommunityGroup(sql, activeGroup);
           activeGroup = {
             ...activeGroup,
             joined: (await listJoinedGroupIdSet(sql, auth.profile.id)).has(
@@ -1216,8 +1256,36 @@ exports.handler = async (event) => {
             ),
           };
         }
+        const channelSlug = String(qs.channel || qs.channelSlug || "")
+          .trim()
+          .toLowerCase();
+        if (activeGroup && (channelSlug || qs.channelId)) {
+          activeChannel = await findGroupChannel(sql, {
+            id: qs.channelId,
+            groupId: activeGroup.id,
+            slug: channelSlug,
+          });
+        }
+        // Discord/official groups always scope the feed to a channel (default: general).
+        if (
+          activeGroup &&
+          !activeChannel &&
+          (activeGroup.theme === "discord" || activeGroup.isOfficial)
+        ) {
+          activeChannel =
+            (activeGroup.channels || []).find((c) => c.slug === "general") ||
+            (activeGroup.channels || [])[0] ||
+            null;
+          if (!activeChannel) {
+            activeChannel = await findGroupChannel(sql, {
+              groupId: activeGroup.id,
+              slug: "general",
+            });
+          }
+        }
         posts = await loadPosts(sql, {
           groupId: activeGroup ? activeGroup.id : null,
+          channelId: activeChannel ? activeChannel.id : null,
           profileId: auth.profile.id,
           sort,
         });
@@ -1230,6 +1298,7 @@ exports.handler = async (event) => {
         me: mePayload(auth, role, alts, myTags, myPinnedTag),
         groups,
         group: activeGroup,
+        channel: activeChannel,
         profile,
         posts,
         tags: tagCatalog,
@@ -1738,9 +1807,9 @@ if (action === "create-alt") {
       }
       try {
         const rows = await sql`
-          INSERT INTO synk_community_groups (slug, name, description, created_by)
-          VALUES (${slug}, ${name}, ${description}, ${auth.profile.id})
-          RETURNING id, slug, name, description, created_by, created_at, updated_at
+          INSERT INTO synk_community_groups (slug, name, description, theme, is_official, created_by)
+          VALUES (${slug}, ${name}, ${description}, 'standard', FALSE, ${auth.profile.id})
+          RETURNING id, slug, name, description, theme, is_official, created_by, created_at, updated_at
         `;
         await logSynkEvent(sql, {
           eventType: "community_group_create",
@@ -1748,6 +1817,13 @@ if (action === "create-alt") {
           ip,
           detail: slug,
         });
+        await sql`
+          INSERT INTO synk_community_memberships (synk_profile_id, group_id)
+          VALUES (${auth.profile.id}, ${rows[0].id})
+          ON CONFLICT DO NOTHING
+        `;
+        await createGroupRole(sql, rows[0].id, { name: "Member", color: "#94a3b8", sortOrder: 0 });
+        await createGroupRole(sql, rows[0].id, { name: "Moderator", color: "#22c55e", sortOrder: 1 });
         return json(201, {
           ok: true,
           group: {
@@ -1755,11 +1831,14 @@ if (action === "create-alt") {
             slug: rows[0].slug,
             name: rows[0].name,
             description: rows[0].description || "",
+            theme: rows[0].theme || "standard",
+            isOfficial: rows[0].is_official === true,
             createdBy: rows[0].created_by,
             createdAt: rows[0].created_at,
             updatedAt: rows[0].updated_at,
             postCount: 0,
-            joined: false,
+            joined: true,
+            roles: await listGroupRoles(sql, rows[0].id),
           },
         });
       } catch (err) {
@@ -1926,17 +2005,30 @@ if (action === "create-alt") {
         slug: body.group || body.groupSlug || body.slug,
       });
       if (!group) {
-        group = await findCommunityGroup(sql, { slug: "general" });
+        group = await findCommunityGroup(sql, { slug: "synk" });
       }
       if (!group) {
         return json(400, { error: "Pick a group to post in" });
       }
 
       const pollJson = pollOptions ? JSON.stringify(pollOptions) : null;
+      let channel = null;
+      if (body.channelId || body.channel || body.channelSlug) {
+        channel = await findGroupChannel(sql, {
+          id: body.channelId,
+          groupId: group.id,
+          slug: body.channel || body.channelSlug,
+        });
+        if (!channel) return json(400, { error: "Channel not found in this group" });
+      } else if (group.theme === "discord" || group.isOfficial) {
+        const hydrated = await hydrateCommunityGroup(sql, group);
+        channel = (hydrated.channels || []).find((c) => c.slug === "general") || (hydrated.channels || [])[0] || null;
+      }
       const rows = await sql`
         INSERT INTO synk_community_posts (
           synk_profile_id,
           group_id,
+          channel_id,
           title,
           post_type,
           body,
@@ -1949,6 +2041,7 @@ if (action === "create-alt") {
         VALUES (
           ${auth.profile.id},
           ${group.id},
+          ${channel ? channel.id : null},
           ${title},
           ${postType},
           ${text || ""},
@@ -2277,6 +2370,72 @@ if (action === "create-alt") {
       return json(200, { ok: true, postId, hidden });
     }
 
+
+    if (action === "create-group-role") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug,
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only group owners or community staff can manage roles" });
+      // Explicitly ignore any icon/image fields — roles must not use icons (badge conflict).
+      const result = await createGroupRole(sql, group.id, {
+        name: body.name || body.title,
+        color: body.color,
+        sortOrder: body.sortOrder != null ? body.sortOrder : body.sort_order,
+      });
+      if (!result.ok) return json(400, { error: result.error || "Could not create role" });
+      return json(200, {
+        ok: true,
+        role: result.role,
+        roles: await listGroupRoles(sql, group.id),
+      });
+    }
+
+    if (action === "update-group-role") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug,
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only group owners or community staff can manage roles" });
+      const result = await updateGroupRole(sql, body.roleId || body.id, group.id, {
+        name: body.name,
+        color: body.color,
+        sortOrder: body.sortOrder != null ? body.sortOrder : body.sort_order,
+      });
+      if (!result.ok) return json(400, { error: result.error || "Could not update role" });
+      return json(200, {
+        ok: true,
+        role: result.role,
+        roles: await listGroupRoles(sql, group.id),
+      });
+    }
+
+    if (action === "delete-group-role") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug,
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only group owners or community staff can manage roles" });
+      const result = await deleteGroupRole(sql, body.roleId || body.id, group.id);
+      if (!result.ok) return json(400, { error: result.error || "Could not delete role" });
+      return json(200, {
+        ok: true,
+        roles: await listGroupRoles(sql, group.id),
+      });
+    }
+
     if (action === "join") {
       const joined =
         body.joined === false || body.join === false || body.value === false
@@ -2313,10 +2472,18 @@ if (action === "create-alt") {
         detail: group.slug,
       });
 
+      const memberRows = await sql`
+        SELECT COUNT(*)::int AS count
+        FROM synk_community_memberships
+        WHERE group_id = ${group.id}
+      `;
+      const memberCount = Number(memberRows[0] && memberRows[0].count) || 0;
+
       return json(200, {
         ok: true,
-        group: { ...group, joined },
+        group: { ...group, joined, memberCount },
         joined,
+        memberCount,
       });
     }
 
