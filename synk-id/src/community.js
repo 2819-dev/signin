@@ -321,22 +321,32 @@
     activePersona = options[0].username;
   }
 
+  function closePersonaMenu() {
+    if (!personaMenu || !personaBtn) return;
+    personaMenu.hidden = true;
+    personaBtn.setAttribute("aria-expanded", "false");
+  }
+
   function syncPersonaUi() {
     const isOwner = !!(me && me.isOwner);
     personaSwitch.hidden = !(isOwner && publicUsername);
-    if (!isOwner) {
-      personaMenu.hidden = true;
-      personaBtn.setAttribute("aria-expanded", "false");
-      return;
-    }
+    // Always keep the account menu closed unless the user opens it.
+    // (display:grid on .persona-menu would otherwise fight the hidden attribute.)
+    closePersonaMenu();
+    if (!isOwner) return;
     resolveActivePersona();
-    personaLabel.textContent = activePersona ? `@${activePersona}` : "@—";
+    const name = activePersona || "—";
+    personaLabel.textContent = name;
+    const personaAvatar = document.getElementById("persona-avatar");
+    if (personaAvatar) {
+      personaAvatar.textContent = String(activePersona || publicUsername || "S").slice(0, 1).toUpperCase();
+    }
     const composerAvatar = document.getElementById("composer-avatar");
     if (composerAvatar) {
       composerAvatar.textContent = String(activePersona || publicUsername || "S").slice(0, 1).toUpperCase();
     }
     document.getElementById("composer-as").textContent = activePersona
-      ? `Posting as @${activePersona}`
+      ? `Posting as ${activePersona}`
       : "Posting as —";
     // Keep tags/pins in sync with the active account (primary or alt).
     if (activePersona && me) {
@@ -351,10 +361,14 @@
     personaMenu.innerHTML = personaOptions()
       .map((opt) => {
         const selected = opt.username === activePersona ? "is-selected" : "";
+        const initial = String(opt.username || "?").slice(0, 1).toUpperCase();
         return `
           <button class="persona-menu-item ${selected}" type="button" role="option" data-persona="${escapeHtml(opt.username)}">
-            <strong>@${escapeHtml(opt.username)}</strong>
-            <span>${escapeHtml(opt.label || (opt.isAlt ? "Account" : "Primary"))}</span>
+            <span class="persona-menu-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
+            <span class="persona-menu-copy">
+              <strong>${escapeHtml(opt.username)}</strong>
+              <span>${escapeHtml(opt.label || (opt.isAlt ? "Account" : "Primary"))}</span>
+            </span>
           </button>
         `;
       })
@@ -376,12 +390,16 @@
   function renderGroups() {
     groupList.innerHTML = groups
       .map((group) => {
-        const count = group.postCount != null ? `${group.postCount} posts` : "";
+        const count = group.postCount != null ? `${group.postCount}` : "";
         const active = route.type === "group" && route.slug === group.slug ? "is-active" : "";
+        const initial = String(group.slug || "?").slice(0, 1).toUpperCase();
         return `
-          <a class="community-group-link ${active}" href="/community/g/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
-            <strong>${escapeHtml(group.slug)}</strong>
-            <span>${escapeHtml(group.name)}${count ? ` · ${escapeHtml(count)}` : ""}</span>
+          <a class="reddit-nav-item community-group-link ${active}" href="/community/g/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
+            <span class="reddit-nav-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
+            <span class="reddit-nav-copy">
+              <strong>${escapeHtml(group.slug)}</strong>
+              <span>${escapeHtml(group.name)}${count ? ` · ${escapeHtml(count)}` : ""}</span>
+            </span>
           </a>
         `;
       })
@@ -523,7 +541,7 @@
     const isOwner = !!(me && me.isOwner);
     staffTools.hidden = !isStaff;
     ownerTools.hidden = !isOwner;
-    document.getElementById("owner-label").textContent = `@${ownerUsername}`;
+    document.getElementById("owner-label").textContent = ownerUsername;
     renderStaff();
     renderAlts();
     renderTagCatalog();
@@ -641,11 +659,6 @@
     renderMyTags();
     applyViewState(data);
     renderFeed(data.posts || []);
-  }
-
-  function closePersonaMenu() {
-    personaMenu.hidden = true;
-    personaBtn.setAttribute("aria-expanded", "false");
   }
 
   personaBtn.addEventListener("click", (e) => {

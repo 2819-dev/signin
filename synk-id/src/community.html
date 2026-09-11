@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#dae0e6" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#080e16" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#030303" />
     <meta name="color-scheme" content="light dark" />
     <meta name="description" content="Synk Community — groups and profiles for Synk members." />
     <title>Synk Community</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-reddit3" />
+    <link rel="stylesheet" href="/join.css?v=community-reddit4" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -28,10 +28,16 @@
         </svg>
         <input id="jump-input" type="search" placeholder="Search Synk Community" spellcheck="false" autocapitalize="none" />
       </form>
-      <nav class="reddit-top-actions" aria-label="Account">
-        <a class="reddit-chip-link" href="/hub">Hub</a>
-        <a class="reddit-chip-link is-current" href="/community">Community</a>
-        <button class="reddit-user-chip" type="button" id="signout-btn">Sign out</button>
+      <nav class="reddit-top-actions" aria-label="Quick actions">
+        <a class="reddit-icon-btn" href="/hub" title="Hub">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+          <span class="reddit-icon-label">Hub</span>
+        </a>
+        <a class="reddit-icon-btn is-current" href="/community" title="Community">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          <span class="reddit-icon-label">Community</span>
+        </a>
+        <button class="reddit-user-chip" type="button" id="signout-btn" title="Sign out of Synk">Sign out</button>
       </nav>
     </header>
 
@@ -74,185 +80,201 @@
         </section>
 
         <div class="community-layout reddit-layout" id="community-main" hidden>
-          <aside class="community-sidebar card reddit-leftnav">
-            <div class="community-side-section">
-              <p class="section-label">You</p>
+          <aside class="reddit-leftnav" aria-label="Community navigation">
+            <div class="reddit-leftnav-scroll">
+              <nav class="reddit-nav-block" aria-label="Feeds">
+                <a class="reddit-nav-item is-active" href="/community" id="home-link">
+                  <span class="reddit-nav-ico" aria-hidden="true">⌂</span>
+                  <span>Home</span>
+                </a>
+              </nav>
+
+              <div class="reddit-nav-block">
+                <p class="reddit-nav-heading">Communities</p>
+                <div id="group-list" class="community-group-list reddit-group-list"></div>
+              </div>
+
+              <div class="reddit-nav-block">
+                <p class="reddit-nav-heading">Resources</p>
+                <a class="reddit-nav-item" href="/community/settings" id="settings-link" data-nav="settings">
+                  <span class="reddit-nav-ico" aria-hidden="true">⚙</span>
+                  <span>Profile settings</span>
+                </a>
+                <a class="reddit-nav-item" href="/community" id="my-profile-link" hidden>
+                  <span class="reddit-nav-ico" aria-hidden="true">◉</span>
+                  <span id="my-profile-label">you</span>
+                </a>
+              </div>
+
+              <div id="staff-tools" class="reddit-nav-block" hidden>
+                <details class="reddit-mod-details">
+                  <summary>
+                    <span class="reddit-nav-ico" aria-hidden="true">🛠</span>
+                    <span>Mod tools</span>
+                  </summary>
+                  <form id="create-group-form" class="form reddit-mod-form">
+                    <div class="field">
+                      <label for="group-name">New group name</label>
+                      <input id="group-name" type="text" maxlength="80" required placeholder="Security tips" />
+                    </div>
+                    <div class="field">
+                      <label for="group-slug">Group url</label>
+                      <div class="community-prefixed-input is-plain">
+                        <input
+                          id="group-slug"
+                          type="text"
+                          maxlength="40"
+                          placeholder="security-tips"
+                          spellcheck="false"
+                          autocapitalize="none"
+                        />
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label for="group-description">Description <span class="muted">(optional)</span></label>
+                      <input id="group-description" type="text" maxlength="280" placeholder="What this group is for" />
+                    </div>
+                    <p id="group-status" class="muted" style="font-size: 0.85rem"></p>
+                    <button class="btn btn-primary btn-compact" type="submit">Create group</button>
+                  </form>
+                </details>
+
+                <div id="owner-tools" hidden>
+                  <details class="reddit-mod-details">
+                    <summary>
+                      <span class="reddit-nav-ico" aria-hidden="true">★</span>
+                      <span>Admins</span>
+                    </summary>
+                    <p class="muted reddit-mod-note">
+                      Owner: <strong id="owner-label">vision</strong>
+                    </p>
+                    <div id="staff-list" class="community-staff-list"></div>
+                    <form id="add-admin-form" class="form reddit-mod-form">
+                      <div class="field">
+                        <label for="admin-username">Add admin</label>
+                        <div class="community-prefixed-input is-plain">
+                          <input
+                            id="admin-username"
+                            type="text"
+                            maxlength="24"
+                            required
+                            placeholder="username"
+                            spellcheck="false"
+                          />
+                        </div>
+                      </div>
+                      <p id="admin-status" class="muted" style="font-size: 0.85rem"></p>
+                      <button class="btn btn-secondary btn-compact" type="submit">Add admin</button>
+                    </form>
+                  </details>
+
+                  <details class="reddit-mod-details">
+                    <summary>
+                      <span class="reddit-nav-ico" aria-hidden="true">⇄</span>
+                      <span>Alt accounts</span>
+                    </summary>
+                    <p class="muted reddit-mod-note">
+                      Switch accounts from the account menu at the bottom of this sidebar.
+                    </p>
+                    <div id="alt-list" class="community-staff-list"></div>
+                    <form id="create-alt-form" class="form reddit-mod-form">
+                      <div class="field">
+                        <label for="alt-username">New alt</label>
+                        <div class="community-prefixed-input is-plain">
+                          <input
+                            id="alt-username"
+                            type="text"
+                            maxlength="24"
+                            required
+                            placeholder="another_name"
+                            spellcheck="false"
+                          />
+                        </div>
+                      </div>
+                      <div class="field">
+                        <label for="alt-label">Label <span class="muted">(optional)</span></label>
+                        <input id="alt-label" type="text" maxlength="40" placeholder="Support voice" />
+                      </div>
+                      <p id="alt-status" class="muted" style="font-size: 0.85rem"></p>
+                      <button class="btn btn-secondary btn-compact" type="submit">Create alt</button>
+                    </form>
+                  </details>
+
+                  <details class="reddit-mod-details">
+                    <summary>
+                      <span class="reddit-nav-ico" aria-hidden="true">🏷</span>
+                      <span>Tags</span>
+                    </summary>
+                    <p class="muted reddit-mod-note">
+                      Create tags and assign them. Members pin one beside their name — including an Owner tag for yourself.
+                    </p>
+                    <div id="tag-catalog" class="community-staff-list"></div>
+                    <form id="create-tag-form" class="form reddit-mod-form">
+                      <div class="field">
+                        <label for="tag-name">Tag name</label>
+                        <input id="tag-name" type="text" maxlength="32" required placeholder="Owner" />
+                      </div>
+                      <div class="field">
+                        <label for="tag-description">Description</label>
+                        <input
+                          id="tag-description"
+                          type="text"
+                          maxlength="200"
+                          placeholder="Helps keep Community healthy"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="tag-color">Color</label>
+                        <input id="tag-color" type="color" value="#2f80ed" />
+                      </div>
+                      <p id="tag-status" class="muted" style="font-size: 0.85rem"></p>
+                      <button class="btn btn-secondary btn-compact" type="submit">Create tag</button>
+                    </form>
+                    <form id="assign-tag-form" class="form reddit-mod-form">
+                      <div class="field">
+                        <label for="assign-tag-username">Assign to</label>
+                        <div class="community-prefixed-input is-plain">
+                          <input
+                            id="assign-tag-username"
+                            type="text"
+                            maxlength="24"
+                            required
+                            placeholder="username"
+                            spellcheck="false"
+                          />
+                        </div>
+                      </div>
+                      <div class="field">
+                        <label for="assign-tag-id">Tag</label>
+                        <select id="assign-tag-id" required></select>
+                      </div>
+                      <p id="assign-tag-status" class="muted" style="font-size: 0.85rem"></p>
+                      <button class="btn btn-secondary btn-compact" type="submit">Assign tag</button>
+                    </form>
+                  </details>
+                </div>
+              </div>
+            </div>
+
+            <div class="reddit-account-dock">
               <div class="persona-switch community-persona-panel" id="persona-switch" hidden>
                 <button
-                  class="persona-switch-btn"
+                  class="persona-switch-btn reddit-account-btn"
                   type="button"
                   id="persona-btn"
                   aria-haspopup="listbox"
                   aria-expanded="false"
+                  aria-controls="persona-menu"
                   title="Switch account"
                 >
-                  <svg class="persona-switch-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                    <path
-                      fill="currentColor"
-                      d="M16 3.5a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0ZM20.5 8a2.5 2.5 0 1 1-5 0a2.5 2.5 0 0 1 5 0ZM2 18.25C2 15.9 4.9 14 8.5 14s6.5 1.9 6.5 4.25V20H2v-1.75Zm12.75.25c.55-.95 2-1.6 3.75-1.6c2.07 0 4 1.12 4 2.85V20h-7.75v-1.5Z"
-                    />
-                  </svg>
-                  <span id="persona-label">@vision</span>
-                  <span aria-hidden="true">▾</span>
+                  <span class="reddit-account-avatar" id="persona-avatar" aria-hidden="true">S</span>
+                  <span class="reddit-account-meta">
+                    <span class="reddit-account-kicker">Posting as</span>
+                    <span class="reddit-account-name" id="persona-label">vision</span>
+                  </span>
+                  <span class="reddit-account-caret" aria-hidden="true">▾</span>
                 </button>
-                <div class="persona-menu" id="persona-menu" hidden role="listbox"></div>
-              </div>
-              <a class="community-side-link" href="/community/settings" id="settings-link" data-nav="settings">
-                <strong>Profile settings</strong>
-                <span>Username & pinned tag</span>
-              </a>
-              <a class="community-side-link" href="/community" id="my-profile-link" hidden>
-                <strong id="my-profile-label">you</strong>
-                <span>Your profile</span>
-              </a>
-            </div>
-
-            <hr class="community-divider" />
-
-            <div class="community-side-section">
-              <p class="section-label">Communities</p>
-              <a class="community-group-link is-active" href="/community" id="home-link">
-                <strong>Home</strong>
-                <span>All groups</span>
-              </a>
-              <div id="group-list" class="community-group-list"></div>
-            </div>
-
-            <div id="staff-tools" hidden>
-              <hr class="community-divider" />
-              <details class="community-side-details" open>
-                <summary class="section-label">Mod tools</summary>
-                <form id="create-group-form" class="form" style="margin-top: 10px">
-                  <div class="field">
-                    <label for="group-name">New group name</label>
-                    <input id="group-name" type="text" maxlength="80" required placeholder="Security tips" />
-                  </div>
-                  <div class="field">
-                    <label for="group-slug">Group url</label>
-                    <div class="community-prefixed-input is-plain">
-                <input
-                        id="group-slug"
-                        type="text"
-                        maxlength="40"
-                        placeholder="security-tips"
-                        spellcheck="false"
-                        autocapitalize="none"
-                      />
-                    </div>
-                  </div>
-                  <div class="field">
-                    <label for="group-description">Description <span class="muted">(optional)</span></label>
-                    <input id="group-description" type="text" maxlength="280" placeholder="What this group is for" />
-                  </div>
-                  <p id="group-status" class="muted" style="font-size: 0.85rem"></p>
-                  <button class="btn btn-primary btn-compact" type="submit">Create group</button>
-                </form>
-              </details>
-
-              <div id="owner-tools" hidden>
-                <details class="community-side-details">
-                  <summary class="section-label">Admins</summary>
-                  <p class="muted" style="font-size: 0.82rem; margin: 8px 0">
-                    Owner: <strong id="owner-label">@vision</strong>
-                  </p>
-                  <div id="staff-list" class="community-staff-list"></div>
-                  <form id="add-admin-form" class="form" style="margin-top: 10px">
-                    <div class="field">
-                      <label for="admin-username">Add admin</label>
-                      <div class="community-prefixed-input is-plain">
-                <input
-                          id="admin-username"
-                          type="text"
-                          maxlength="24"
-                          required
-                          placeholder="username"
-                          spellcheck="false"
-                        />
-                      </div>
-                    </div>
-                    <p id="admin-status" class="muted" style="font-size: 0.85rem"></p>
-                    <button class="btn btn-secondary btn-compact" type="submit">Add admin</button>
-                  </form>
-                </details>
-
-                <details class="community-side-details">
-                  <summary class="section-label">Alt accounts</summary>
-                  <p class="muted" style="font-size: 0.82rem; margin: 8px 0">
-                    Switch alts from the account menu above. No separate logins.
-                  </p>
-                  <div id="alt-list" class="community-staff-list"></div>
-                  <form id="create-alt-form" class="form" style="margin-top: 10px">
-                    <div class="field">
-                      <label for="alt-username">New alt</label>
-                      <div class="community-prefixed-input is-plain">
-                <input
-                          id="alt-username"
-                          type="text"
-                          maxlength="24"
-                          required
-                          placeholder="another_name"
-                          spellcheck="false"
-                        />
-                      </div>
-                    </div>
-                    <div class="field">
-                      <label for="alt-label">Label <span class="muted">(optional)</span></label>
-                      <input id="alt-label" type="text" maxlength="40" placeholder="Support voice" />
-                    </div>
-                    <p id="alt-status" class="muted" style="font-size: 0.85rem"></p>
-                    <button class="btn btn-secondary btn-compact" type="submit">Create alt</button>
-                  </form>
-                </details>
-
-                <details class="community-side-details">
-                  <summary class="section-label">Tags</summary>
-                  <p class="muted" style="font-size: 0.82rem; margin: 8px 0">
-                    Create tags and assign them. Members pin one beside their name — including an Owner tag for yourself.
-                  </p>
-                  <div id="tag-catalog" class="community-staff-list"></div>
-                  <form id="create-tag-form" class="form" style="margin-top: 10px">
-                    <div class="field">
-                      <label for="tag-name">Tag name</label>
-                      <input id="tag-name" type="text" maxlength="32" required placeholder="Owner" />
-                    </div>
-                    <div class="field">
-                      <label for="tag-description">Description</label>
-                      <input
-                        id="tag-description"
-                        type="text"
-                        maxlength="200"
-                        placeholder="Helps keep Community healthy"
-                      />
-                    </div>
-                    <div class="field">
-                      <label for="tag-color">Color</label>
-                      <input id="tag-color" type="color" value="#2f80ed" />
-                    </div>
-                    <p id="tag-status" class="muted" style="font-size: 0.85rem"></p>
-                    <button class="btn btn-secondary btn-compact" type="submit">Create tag</button>
-                  </form>
-                  <form id="assign-tag-form" class="form" style="margin-top: 12px">
-                    <div class="field">
-                      <label for="assign-tag-username">Assign to</label>
-                      <div class="community-prefixed-input is-plain">
-                <input
-                          id="assign-tag-username"
-                          type="text"
-                          maxlength="24"
-                          required
-                          placeholder="username"
-                          spellcheck="false"
-                        />
-                      </div>
-                    </div>
-                    <div class="field">
-                      <label for="assign-tag-id">Tag</label>
-                      <select id="assign-tag-id" required></select>
-                    </div>
-                    <p id="assign-tag-status" class="muted" style="font-size: 0.85rem"></p>
-                    <button class="btn btn-secondary btn-compact" type="submit">Assign tag</button>
-                  </form>
-                </details>
+                <div class="persona-menu" id="persona-menu" hidden role="listbox" aria-label="Switch account"></div>
               </div>
             </div>
           </aside>
@@ -279,31 +301,31 @@
                   <button class="reddit-create-fakeinput" type="button" id="composer-open-btn">Create Post</button>
                 </div>
                 <div class="reddit-create-form" id="composer-expanded" hidden>
-                <div class="community-composer-head">
-                  <p class="section-label">Create post</p>
-                  <p class="muted" id="composer-as">Posting as —</p>
-                </div>
-                <form id="post-form" class="form">
-                  <div class="field">
-                    <label for="post-group">Post to</label>
-                    <select id="post-group"></select>
+                  <div class="community-composer-head">
+                    <p class="section-label">Create post</p>
+                    <p class="muted" id="composer-as">Posting as —</p>
                   </div>
-                  <div class="field">
-                    <label for="post-body">Text</label>
-                    <textarea
-                      id="post-body"
-                      rows="4"
-                      maxlength="1000"
-                      required
-                      placeholder="Tips, questions, or notes about Synk security…"
-                    ></textarea>
-                  </div>
-                  <p id="post-status" class="muted" style="font-size: 0.85rem"></p>
-                  <div class="reddit-create-actions">
-                    <button class="btn btn-secondary btn-compact" type="button" id="composer-cancel-btn">Cancel</button>
-                    <button class="btn btn-primary btn-compact" type="submit">Post</button>
-                  </div>
-                </form>
+                  <form id="post-form" class="form">
+                    <div class="field">
+                      <label for="post-group">Post to</label>
+                      <select id="post-group"></select>
+                    </div>
+                    <div class="field">
+                      <label for="post-body">Text</label>
+                      <textarea
+                        id="post-body"
+                        rows="4"
+                        maxlength="1000"
+                        required
+                        placeholder="Tips, questions, or notes about Synk security…"
+                      ></textarea>
+                    </div>
+                    <p id="post-status" class="muted" style="font-size: 0.85rem"></p>
+                    <div class="reddit-create-actions">
+                      <button class="btn btn-secondary btn-compact" type="button" id="composer-cancel-btn">Cancel</button>
+                      <button class="btn btn-primary btn-compact" type="submit">Post</button>
+                    </div>
+                  </form>
                 </div>
               </section>
 
@@ -317,7 +339,7 @@
                 <p class="section-label" id="feed-label">Feed</p>
                 <h2 id="feed-title">Recent posts</h2>
                 <div id="feed" class="community-feed"></div>
-                <p id="feed-empty" class="muted">No posts yet. Start the conversation.</p>
+                <p id="feed-empty" class="muted reddit-feed-empty">No posts yet. Start the conversation.</p>
               </section>
             </div>
 
@@ -336,7 +358,7 @@
                   <div class="field">
                     <label for="settings-username">Public username</label>
                     <div class="community-prefixed-input is-plain">
-                <input
+                      <input
                         id="settings-username"
                         type="text"
                         maxlength="24"
@@ -380,11 +402,15 @@
                 <li>Keep posts relevant to security and Synk.</li>
               </ol>
             </section>
+            <section class="reddit-widget reddit-widget-soft">
+              <h2 class="reddit-widget-title">Tips</h2>
+              <p class="muted">Use the left sidebar to jump communities, open settings, and switch accounts.</p>
+            </section>
           </aside>
         </div>
       </div>
     </main>
 
-    <script src="/community.js?v=reddit3"></script>
+    <script src="/community.js?v=reddit4"></script>
   </body>
 </html>
