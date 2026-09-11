@@ -74,6 +74,13 @@
   let displayName = "";
   let photoUrl = "";
   let avatarUrl = "";
+  let bio = "";
+  let dmPolicy = "friends";
+  let activeProfile = null;
+  let inboxTab = "notifications";
+  let dmThreads = [];
+  let activeDmUser = "";
+  let activeDmThreadId = "";
   let activePersona = "";
   let me = null;
   let groups = [];
@@ -567,6 +574,22 @@
     return "new";
   }
 
+  function showToast(message) {
+    let el = document.getElementById("toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "toast";
+      el.className = "community-toast";
+      el.setAttribute("role", "status");
+      el.setAttribute("aria-live", "polite");
+      document.body.appendChild(el);
+    }
+    el.textContent = String(message || "");
+    el.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => el.classList.remove("show"), 2400);
+  }
+
   async function communityAction(payload) {
     const res = await fetch("/api/synk-community", {
       method: "POST",
@@ -685,10 +708,14 @@
     if (statGroups) statGroups.textContent = String(groups.length);
     if (route.type === "user") {
       const profile = (data && data.profile) || {};
-      if (aboutTitle) aboutTitle.textContent = `${profile.username || route.username || ""}`;
-      if (aboutBlurb) aboutBlurb.textContent = "Member profile";
+      const uname = profile.username || route.username || "";
+      const dname = String(profile.displayName || "").trim() || uname;
+      if (aboutTitle) aboutTitle.textContent = dname || "Profile";
+      if (aboutBlurb) aboutBlurb.textContent = String(profile.bio || "").trim() || "Member profile";
       if (statPostsLabel) statPostsLabel.textContent = "Posts";
       if (statPosts) statPosts.textContent = String(profile.postCount != null ? profile.postCount : posts.length);
+      const aboutJoin = document.getElementById("about-join-btn");
+      if (aboutJoin) aboutJoin.hidden = true;
       return;
     }
     if (route.type === "group") {
@@ -848,7 +875,7 @@
             ${avatarMarkup(optAvatar, optLabel, "persona-menu-avatar community-face")}
             <span class="persona-menu-copy">
               <strong>${escapeHtml(optLabel)}</strong>
-              <span>${escapeHtml(opt.label || (opt.isAlt ? "u/" + opt.username : "Primary"))}</span>
+              <span>${escapeHtml(opt.label || (opt.isAlt ? opt.username : "Primary"))}</span>
             </span>
           </button>
         `;
@@ -1182,6 +1209,12 @@
         }
         settingsDisplay.value = shown;
       }
+      const settingsBio = document.getElementById("settings-bio");
+      if (settingsBio && document.activeElement !== settingsBio) {
+        settingsBio.value = bio || "";
+      }
+      const settingsDm = document.getElementById("settings-dm-policy");
+      if (settingsDm) settingsDm.value = dmPolicy || "friends";
       if (myProfileLink) {
         myProfileLink.hidden = false;
         myProfileLink.href = `/user/${encodeURIComponent(publicUsername)}`;
@@ -1193,7 +1226,7 @@
         const menuName = document.getElementById("user-menu-name");
         const menuSub = document.getElementById("user-menu-sub");
         if (menuName) menuName.textContent = menuLabel;
-        if (menuSub) menuSub.textContent = activePersona || publicUsername ? `u/${activePersona || publicUsername}` : "Account";
+        if (menuSub) menuSub.textContent = activePersona || publicUsername || "Account";
         paintAvatar(document.getElementById("user-menu-avatar"), faceUrl, menuLabel);
         paintAvatar(document.getElementById("settings-avatar-preview"), faceUrl, menuLabel);
       }
@@ -1314,36 +1347,53 @@
     }
     if (route.type === "user") {
       const profile = data.profile || { username: route.username };
+      activeProfile = profile;
       const uname = profile.username || route.username || "";
       const dname = String(profile.displayName || "").trim() || uname;
+      const isSelf = !!(profile.isSelf || (publicUsername && publicUsername === uname));
+      const friendship = (profile.friendship && profile.friendship.status) || "none";
+      const canMessage = !!profile.canMessage;
+      const profileBio = String(profile.bio || "").trim();
       setBannerMode("user", true);
       paintAvatar(viewIcon, profile.avatarUrl || "", dname);
       setText("view-title", dname);
-      setText(
-        "view-sub",
-        `u/${uname}${profile.joinedAt ? ` · Joined ${formatWhen(profile.joinedAt)}` : ""}`
-      );
+      const bits = [];
+      if (uname && uname !== dname) bits.push(uname);
+      bits.push(`${Number(profile.postCount || 0)} posts`);
+      if (profile.joinedAt) bits.push(`Joined ${formatWhen(profile.joinedAt)}`);
+      setText("view-sub", bits.join(" · "));
       if (viewBlurb) {
         viewBlurb.hidden = true;
         viewBlurb.textContent = "";
       }
       if (joinBtn) joinBtn.hidden = true;
+      const aboutJoinBtn = document.getElementById("about-join-btn");
+      if (aboutJoinBtn) aboutJoinBtn.hidden = true;
       if (profileMeta) {
+        let actions = "";
+        if (!isSelf && publicUsername) {
+          if (friendship === "friends") {
+            actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="unfriend" data-username="${escapeHtml(uname)}">Friends</button>`;
+          } else if (friendship === "pending_out") {
+            actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="cancel-friend" data-username="${escapeHtml(uname)}">Requested</button>`;
+          } else if (friendship === "pending_in") {
+            actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="accept-friend" data-username="${escapeHtml(uname)}">Accept</button>`;
+            actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="decline-friend" data-username="${escapeHtml(uname)}">Decline</button>`;
+          } else {
+            actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="add-friend" data-username="${escapeHtml(uname)}">Add friend</button>`;
+          }
+          if (canMessage || friendship === "friends") {
+            actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" ${canMessage ? "" : "disabled"}>Message</button>`;
+          }
+        } else if (isSelf) {
+          actions += `<a class="btn btn-secondary btn-compact" href="/community/settings">Edit profile</a>`;
+        }
         profileMeta.hidden = false;
         profileMeta.innerHTML = `
-        <div class="community-profile-card">
-          ${avatarMarkup(profile.avatarUrl || "", dname, "community-avatar community-face is-lg")}
-          <div>
-            <div class="community-profile-name-row author-with-tag">
-              <strong>${escapeHtml(dname)}</strong>
-              ${tagChip(profile.pinnedTag, { compact: true })}
-            </div>
-            <p class="muted" style="margin:2px 0 0;font-size:0.85rem;">u/${escapeHtml(uname)}</p>
-            <p class="muted" style="margin:4px 0 0;font-size:0.85rem;">
-              ${Number(profile.postCount || 0)} posts
-              ${profile.joinedAt ? ` · joined ${escapeHtml(formatWhen(profile.joinedAt))}` : ""}
-            </p>
-            <div class="community-tag-list synk-tag-badge-row" style="margin-top:10px;">
+        <div class="community-profile-card community-profile-card-clean">
+          <div class="community-profile-main">
+            ${profileBio ? `<p class="community-profile-bio">${escapeHtml(profileBio)}</p>` : isSelf ? `<p class="muted community-profile-bio-empty">Add a bio in Settings.</p>` : ""}
+            <div class="community-tag-list synk-tag-badge-row">
               ${
                 (profile.tags || []).length
                   ? (profile.tags || [])
@@ -1353,9 +1403,10 @@
                         })
                       )
                       .join("")
-                  : '<p class="muted" style="margin:0;font-size:0.85rem;">No tags yet.</p>'
+                  : ""
               }
             </div>
+            <div class="community-profile-actions">${actions}</div>
           </div>
         </div>
       `;
@@ -1437,6 +1488,8 @@
     displayName = (me && me.displayName) || "";
     photoUrl = (me && me.photoUrl) || "";
     avatarUrl = (me && me.avatarUrl) || "";
+    bio = (me && me.bio) || "";
+    dmPolicy = (me && me.dmPolicy) || "friends";
     alts = (me && me.alts) || [];
     myTags = (me && me.tags) || [];
     tags = data.tags || [];
@@ -1454,6 +1507,10 @@
     renderMyTags();
 
     if (route.type === "inbox") {
+      setInboxTab(inboxTab);
+      if (inboxTab === "messages") {
+        loadDmThreads().catch(() => {});
+      }
       if (!Array.isArray(data.groups) || !data.groups.length) {
         try {
           const baseRes = await fetch("/api/synk-community?feed=home", { headers: hubHeaders() });
@@ -2412,6 +2469,225 @@
   bindNav(document.getElementById("create-top-link"), { type: "submit", slug: "", username: "" });
   bindNav(document.getElementById("mod-nav-link"), { type: "mod", slug: "", username: "" });
   bindNav(document.getElementById("mod-menu-link"), { type: "mod", slug: "", username: "" });
+
+  // —— Bio & DM privacy settings ——
+  const bioForm = document.getElementById("settings-bio-form");
+  if (bioForm) {
+    bioForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("settings-bio-status");
+      const input = document.getElementById("settings-bio");
+      if (status) status.textContent = "Saving…";
+      try {
+        const data = await communityAction({
+          action: "set-bio",
+          bio: input ? input.value : "",
+          username: activePersona || publicUsername,
+        });
+        bio = data.bio || "";
+        if (me) me.bio = bio;
+        if (status) status.textContent = "Saved";
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not save bio";
+      }
+    });
+  }
+
+  const dmForm = document.getElementById("settings-dm-form");
+  if (dmForm) {
+    dmForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("settings-dm-status");
+      const select = document.getElementById("settings-dm-policy");
+      if (status) status.textContent = "Saving…";
+      try {
+        const data = await communityAction({
+          action: "set-dm-policy",
+          dmPolicy: select ? select.value : "friends",
+          username: activePersona || publicUsername,
+        });
+        dmPolicy = data.dmPolicy || "friends";
+        if (me) me.dmPolicy = dmPolicy;
+        if (status) status.textContent = "Saved";
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not save";
+      }
+    });
+  }
+
+  async function openDmWith(username) {
+    const target = String(username || "").trim().toLowerCase();
+    if (!target) return;
+    inboxTab = "messages";
+    activeDmUser = target;
+    await navigate({ type: "inbox", slug: "", username: "" });
+    await loadDmThreads();
+    await openDmThread(target);
+  }
+
+  function setInboxTab(tab) {
+    inboxTab = tab === "messages" ? "messages" : "notifications";
+    const notifPane = document.getElementById("inbox-notifications-pane");
+    const msgPane = document.getElementById("inbox-messages-pane");
+    const notifTab = document.getElementById("inbox-tab-notifications");
+    const msgTab = document.getElementById("inbox-tab-messages");
+    if (notifPane) notifPane.hidden = inboxTab !== "notifications";
+    if (msgPane) msgPane.hidden = inboxTab !== "messages";
+    if (notifTab) notifTab.classList.toggle("is-active", inboxTab === "notifications");
+    if (msgTab) msgTab.classList.toggle("is-active", inboxTab === "messages");
+    const markRead = document.getElementById("inbox-mark-read");
+    if (markRead) markRead.hidden = inboxTab !== "notifications";
+  }
+
+  function renderDmThreads(threads) {
+    dmThreads = Array.isArray(threads) ? threads : [];
+    const list = document.getElementById("dm-thread-list");
+    const empty = document.getElementById("dm-thread-empty");
+    if (!list) return;
+    if (!dmThreads.length) {
+      list.innerHTML = "";
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    list.innerHTML = dmThreads
+      .map((t) => {
+        const other = t.otherUser || t.otherUsername || "";
+        const active = other === activeDmUser ? "is-active" : "";
+        const preview = escapeHtml(t.lastBody || t.preview || "No messages yet");
+        const when = escapeHtml(formatWhen(t.lastMessageAt || t.updatedAt || t.createdAt));
+        const label = escapeHtml(t.otherDisplayName || other);
+        return `<button type="button" class="community-dm-thread ${active}" data-dm-user="${escapeHtml(other)}">
+          <div class="community-dm-thread-top"><strong>${label}</strong><span>${when}</span></div>
+          <p>${preview}</p>
+        </button>`;
+      })
+      .join("");
+  }
+
+  function renderDmMessages(messages, { otherUser = "" } = {}) {
+    const list = document.getElementById("dm-message-list");
+    const title = document.getElementById("dm-chat-title");
+    const form = document.getElementById("dm-compose-form");
+    const hint = document.getElementById("dm-chat-hint");
+    if (title) title.textContent = otherUser || "Select a conversation";
+    if (form) form.hidden = !otherUser;
+    if (hint) hint.hidden = !!otherUser;
+    if (!list) return;
+    const rows = Array.isArray(messages) ? messages : [];
+    list.innerHTML = rows
+      .map((m) => {
+        const mine = String(m.senderUsername || m.sender || "") === publicUsername;
+        return `<div class="community-dm-bubble ${mine ? "is-mine" : "is-theirs"}">${escapeHtml(m.body || "")}</div>`;
+      })
+      .join("");
+    list.scrollTop = list.scrollHeight;
+  }
+
+  async function loadDmThreads() {
+    const data = await communityAction({ action: "dm-list" });
+    renderDmThreads(data.threads || []);
+    return data;
+  }
+
+  async function openDmThread(username) {
+    const target = String(username || "").trim().toLowerCase();
+    if (!target) return;
+    activeDmUser = target;
+    const data = await communityAction({ action: "dm-open", username: target });
+    activeDmThreadId = (data.thread && data.thread.id) || "";
+    renderDmThreads(dmThreads);
+    renderDmMessages(data.messages || [], { otherUser: target });
+    const form = document.getElementById("dm-compose-form");
+    if (form) form.hidden = false;
+  }
+
+  document.querySelectorAll("[data-inbox-tab]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      setInboxTab(btn.getAttribute("data-inbox-tab"));
+      if (inboxTab === "messages") {
+        try {
+          await loadDmThreads();
+          if (activeDmUser) await openDmThread(activeDmUser);
+        } catch (err) {
+          showToast(err.message || "Could not load messages");
+        }
+      }
+    });
+  });
+
+  const dmThreadList = document.getElementById("dm-thread-list");
+  if (dmThreadList) {
+    dmThreadList.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-dm-user]");
+      if (!btn) return;
+      openDmThread(btn.getAttribute("data-dm-user")).catch((err) => {
+        showToast(err.message || "Could not open chat");
+      });
+    });
+  }
+
+  const dmCompose = document.getElementById("dm-compose-form");
+  if (dmCompose) {
+    dmCompose.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("dm-compose-input");
+      const body = String((input && input.value) || "").trim();
+      if (!body || !activeDmUser) return;
+      const sendBtn = document.getElementById("dm-compose-send");
+      if (sendBtn) sendBtn.disabled = true;
+      try {
+        await communityAction({
+          action: "dm-send",
+          username: activeDmUser,
+          threadId: activeDmThreadId || undefined,
+          body,
+        });
+        if (input) input.value = "";
+        await openDmThread(activeDmUser);
+        await loadDmThreads();
+      } catch (err) {
+        showToast(err.message || "Could not send");
+      } finally {
+        if (sendBtn) sendBtn.disabled = false;
+        if (input) input.focus();
+      }
+    });
+  }
+
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-profile-action]");
+    if (!btn) return;
+    e.preventDefault();
+    const action = btn.getAttribute("data-profile-action");
+    const username = btn.getAttribute("data-username") || "";
+    if (!action || !username) return;
+    try {
+      if (action === "message") {
+        await openDmWith(username);
+        return;
+      }
+      if (action === "add-friend") {
+        await communityAction({ action: "friend-request", username });
+        showToast("Friend request sent");
+      } else if (action === "accept-friend") {
+        await communityAction({ action: "friend-accept", username });
+        showToast("Friend added");
+      } else if (action === "decline-friend" || action === "cancel-friend" || action === "unfriend") {
+        if (action === "decline-friend") {
+          await communityAction({ action: "friend-decline", username });
+        } else {
+          await communityAction({ action: "friend-remove", username });
+        }
+        showToast(action === "unfriend" ? "Friend removed" : "Request cleared");
+      }
+      await loadCommunity();
+    } catch (err) {
+      showToast(err.message || "Could not update");
+    }
+  });
+
+
   bindNav(document.getElementById("inbox-btn"), { type: "inbox", slug: "", username: "" });
 
   const userMenuBtn = document.getElementById("user-menu-btn");
