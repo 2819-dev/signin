@@ -30,6 +30,180 @@ const {
   extractBusinessToken,
   verifyBusinessToken,
 } = require("./lib/synk-business-auth");
+const { sendEmail, normalizeEmail: normalizeEmailAddress } = require("./lib/email");
+
+const BUSINESS_PORTAL_URL = String(
+  process.env.SYNK_BUSINESS_PORTAL_URL ||
+    process.env.SYNK_ID_ORIGIN ||
+    "https://synkid.netlify.app"
+)
+  .trim()
+  .replace(/\/$/, "");
+
+function portalBusinessUrl() {
+  return `${BUSINESS_PORTAL_URL}/business`;
+}
+
+function escapeHtmlEmail(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function notifyBusinessDecision({
+  email,
+  name,
+  contactName,
+  approved,
+  apiKey = null,
+  appSlug = null,
+}) {
+  const to = normalizeEmailAddress(email);
+  if (!to) return { ok: false, skipped: true, error: "Missing recipient" };
+  const who = contactName || name || "there";
+  const portal = portalBusinessUrl();
+
+  if (approved) {
+    const keyBlock = apiKey
+      ? `\nYour API key (shown once — store it securely):\n${apiKey}\n`
+      : "\nYour API app is already set up. Sign in to the portal to rotate the key if needed.\n";
+    const keyHtml = apiKey
+      ? `<p><strong>Your API key</strong> (copy and store it now — it won’t be shown again):</p><pre style="background:#f4f6f8;padding:12px;border-radius:8px;white-space:pre-wrap;word-break:break-all;">${escapeHtmlEmail(apiKey)}</pre>`
+      : `<p>Your API app is already set up. Sign in to the portal if you need to rotate the key.</p>`;
+    return sendEmail({
+      to,
+      subject: "Synk Business API access approved",
+      text:
+        `Hi ${who},\n\n` +
+        `Your Synk Business request for “${name || "your product"}” was approved.` +
+        (appSlug ? ` App slug: ${appSlug}.` : "") +
+        keyBlock +
+        `\nPortal: ${portal}\n\n— Synk\n`,
+      html:
+        `<p>Hi ${escapeHtmlEmail(who)},</p>` +
+        `<p>Your Synk Business request for <strong>${escapeHtmlEmail(name || "your product")}</strong> was <strong>approved</strong>.` +
+        (appSlug ? ` App slug: <code>${escapeHtmlEmail(appSlug)}</code>.` : "") +
+        `</p>${keyHtml}` +
+        `<p><a href="${escapeHtmlEmail(portal)}">Open Synk Business portal</a></p>` +
+        `<p>— Synk</p>`,
+    });
+  }
+
+  return sendEmail({
+    to,
+    subject: "Synk Business API access denied",
+    text:
+      `Hi ${who},\n\n` +
+      `Your Synk Business request for “${name || "your product"}” was denied.\n\n— Synk\n`,
+    html:
+      `<p>Hi ${escapeHtmlEmail(who)},</p>` +
+      `<p>Your Synk Business request for <strong>${escapeHtmlEmail(name || "your product")}</strong> was <strong>denied</strong>.</p>` +
+      `<p>— Synk</p>`,
+  });
+}
+
+async function notifyBusinessApiKeyRotated({ email, name, contactName, apiKey, appSlug }) {
+  const to = normalizeEmailAddress(email);
+  if (!to || !apiKey) return { ok: false, skipped: true, error: "Missing recipient or key" };
+  const who = contactName || name || "there";
+  const portal = portalBusinessUrl();
+  return sendEmail({
+    to,
+    subject: "Your Synk API key was rotated",
+    text:
+      `Hi ${who},\n\n` +
+      `A Synk admin rotated the API key for “${name || "your product"}”` +
+      (appSlug ? ` (${appSlug})` : "") +
+      `.\n\nNew API key (shown once):\n${apiKey}\n\nPortal: ${portal}\n\n— Synk\n`,
+    html:
+      `<p>Hi ${escapeHtmlEmail(who)},</p>` +
+      `<p>A Synk admin rotated the API key for <strong>${escapeHtmlEmail(name || "your product")}</strong>` +
+      (appSlug ? ` (<code>${escapeHtmlEmail(appSlug)}</code>)` : "") +
+      `.</p>` +
+      `<p><strong>New API key</strong> (copy and store it now):</p>` +
+      `<pre style="background:#f4f6f8;padding:12px;border-radius:8px;white-space:pre-wrap;word-break:break-all;">${escapeHtmlEmail(apiKey)}</pre>` +
+      `<p><a href="${escapeHtmlEmail(portal)}">Open Synk Business portal</a></p>` +
+      `<p>— Synk</p>`,
+  });
+}
+
+async function loadBusinessDetail(sql, businessId) {
+  const bizRows = await sql`
+    SELECT id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary, created_at, updated_at, reviewed_at
+    FROM synk_business_accounts
+    WHERE id = ${businessId}
+    LIMIT 1
+  `;
+  if (!bizRows[0]) return null;
+  const business = mapBusiness(bizRows[0]);
+  const apps = await sql`
+    SELECT id, slug, name, enabled, verify_action, product_type, business_id, created_at, updated_at
+    FROM synk_apps
+    WHERE business_id = ${businessId}
+    ORDER BY created_at ASC
+  `;
+  const devices = await listBusinessDevices(sql, businessId);
+  const sessions = await sql`
+    SELECT id, ip, user_agent, created_at, last_seen_at, expires_at, revoked_at
+    FROM synk_business_sessions
+    WHERE business_id = ${businessId}
+    ORDER BY created_at DESC
+    LIMIT 30
+  `;
+  const appSlugs = apps.map((row) => row.slug).filter(Boolean);
+  let events = [];
+  if (appSlugs.length) {
+    events = await sql`
+      SELECT id, event_type, app_slug, ip, detail, created_at
+      FROM synk_events
+      WHERE app_slug = ANY(${appSlugs})
+         OR (
+           event_type LIKE 'business_%'
+           AND detail ILIKE ${"%" + (business.name || "") + "%"}
+         )
+      ORDER BY created_at DESC
+      LIMIT 80
+    `;
+  } else {
+    events = await sql`
+      SELECT id, event_type, app_slug, ip, detail, created_at
+      FROM synk_events
+      WHERE event_type LIKE 'business_%'
+        AND detail ILIKE ${"%" + (business.name || "") + "%"}
+      ORDER BY created_at DESC
+      LIMIT 80
+    `;
+  }
+  const activeSessions = sessions.filter(
+    (row) => !row.revoked_at && new Date(row.expires_at).getTime() > Date.now()
+  );
+  return {
+    business,
+    apps: apps.map(mapApp),
+    devices,
+    sessions: sessions.map((row) => ({
+      id: row.id,
+      ip: row.ip || "",
+      userAgent: row.user_agent || "",
+      createdAt: row.created_at,
+      lastSeenAt: row.last_seen_at,
+      expiresAt: row.expires_at,
+      revokedAt: row.revoked_at,
+      active: !row.revoked_at && new Date(row.expires_at).getTime() > Date.now(),
+    })),
+    activeSessionCount: activeSessions.length,
+    events: events.map((row) => ({
+      id: row.id,
+      eventType: row.event_type,
+      appSlug: row.app_slug || "",
+      ip: row.ip || "",
+      detail: row.detail || "",
+      createdAt: row.created_at,
+    })),
+  };
+}
 
 function normalizeName(value) {
   return String(value || "")
@@ -650,15 +824,31 @@ exports.handler = async (event) => {
 
     if (event.httpMethod === "GET") {
       await seedVisitorSignInBusiness(sql);
+      const detailId = String(
+        (event.queryStringParameters &&
+          (event.queryStringParameters.id || event.queryStringParameters.businessId)) ||
+          ""
+      ).trim();
+      if (detailId) {
+        const detail = await loadBusinessDetail(sql, detailId);
+        if (!detail) return json(404, { error: "Business not found" });
+        return json(200, { ok: true, ...detail, productTypes: PRODUCT_TYPES });
+      }
       const rows = await sql`
         SELECT id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary, created_at, updated_at, reviewed_at
         FROM synk_business_accounts
         ORDER BY
-          CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,
+          CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 WHEN 'suspended' THEN 2 ELSE 3 END,
           created_at DESC
         LIMIT 200
       `;
-      return json(200, { businesses: rows.map(mapBusiness), productTypes: PRODUCT_TYPES });
+      const businesses = rows.map(mapBusiness);
+      return json(200, {
+        businesses,
+        requests: businesses.filter((b) => b.status === "pending"),
+        accounts: businesses.filter((b) => b.status !== "pending"),
+        productTypes: PRODUCT_TYPES,
+      });
     }
 
     if (event.httpMethod === "POST" && action === "approve") {
@@ -728,6 +918,12 @@ exports.handler = async (event) => {
         app = mapApp(created[0]);
       } else {
         app = mapApp(apps[0]);
+        // Re-enable apps if approving a previously suspended account.
+        await sql`
+          UPDATE synk_apps
+          SET enabled = TRUE, updated_at = NOW()
+          WHERE business_id = ${id} AND enabled = FALSE
+        `;
       }
 
       await logSynkEvent(sql, {
@@ -735,11 +931,23 @@ exports.handler = async (event) => {
         appSlug: app && app.slug,
         detail: biz.name,
       });
+
+      const email = await notifyBusinessDecision({
+        email: biz.email,
+        name: biz.name,
+        contactName: biz.contact_name,
+        approved: true,
+        apiKey,
+        appSlug: app && app.slug,
+      });
+
       return json(200, {
         ok: true,
         business: mapBusiness(updated[0]),
         app,
-        apiKey,
+        // API key is emailed to the business — never returned to Synk Admin.
+        apiKeyEmailed: Boolean(apiKey),
+        email,
       });
     }
 
@@ -750,11 +958,17 @@ exports.handler = async (event) => {
         UPDATE synk_business_accounts
         SET status = 'denied', reviewed_at = NOW(), updated_at = NOW()
         WHERE id = ${id}
-        RETURNING id, name, contact_name, email, password_hash, status, note, created_at, updated_at, reviewed_at
+        RETURNING id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary, created_at, updated_at, reviewed_at
       `;
       if (!rows[0]) return json(404, { error: "Business request not found" });
       await logSynkEvent(sql, { eventType: "business_deny", detail: rows[0].name });
-      return json(200, { ok: true, business: mapBusiness(rows[0]) });
+      const email = await notifyBusinessDecision({
+        email: rows[0].email,
+        name: rows[0].name,
+        contactName: rows[0].contact_name,
+        approved: false,
+      });
+      return json(200, { ok: true, business: mapBusiness(rows[0]), email });
     }
 
     if (event.httpMethod === "POST" && action === "set-password") {
@@ -766,10 +980,144 @@ exports.handler = async (event) => {
         UPDATE synk_business_accounts
         SET password_hash = ${hashSecret(password)}, updated_at = NOW()
         WHERE id = ${id}
-        RETURNING id, name, contact_name, email, password_hash, status, note, created_at, updated_at, reviewed_at
+        RETURNING id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary, created_at, updated_at, reviewed_at
       `;
       if (!rows[0]) return json(404, { error: "Business account not found" });
+      await logSynkEvent(sql, { eventType: "business_set_password", detail: rows[0].name });
       return json(200, { ok: true, business: mapBusiness(rows[0]) });
+    }
+
+    if (event.httpMethod === "POST" && (action === "suspend" || action === "disable")) {
+      const id = String(body.id || "").trim();
+      if (!id) return json(400, { error: "id is required" });
+      const rows = await sql`
+        UPDATE synk_business_accounts
+        SET status = 'suspended', updated_at = NOW()
+        WHERE id = ${id}
+        RETURNING id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary, created_at, updated_at, reviewed_at
+      `;
+      if (!rows[0]) return json(404, { error: "Business account not found" });
+      await sql`
+        UPDATE synk_apps
+        SET enabled = FALSE, updated_at = NOW()
+        WHERE business_id = ${id}
+      `;
+      await sql`
+        UPDATE synk_business_sessions
+        SET revoked_at = NOW()
+        WHERE business_id = ${id} AND revoked_at IS NULL
+      `;
+      await logSynkEvent(sql, { eventType: "business_suspend", detail: rows[0].name });
+      return json(200, { ok: true, business: mapBusiness(rows[0]) });
+    }
+
+    if (event.httpMethod === "POST" && (action === "unsuspend" || action === "enable" || action === "reactivate")) {
+      const id = String(body.id || "").trim();
+      if (!id) return json(400, { error: "id is required" });
+      const existing = await sql`SELECT * FROM synk_business_accounts WHERE id = ${id} LIMIT 1`;
+      if (!existing[0]) return json(404, { error: "Business account not found" });
+      if (existing[0].status === "pending") {
+        return json(400, { error: "Approve the request instead of unsuspending" });
+      }
+      const rows = await sql`
+        UPDATE synk_business_accounts
+        SET status = 'approved', updated_at = NOW(), reviewed_at = COALESCE(reviewed_at, NOW())
+        WHERE id = ${id}
+        RETURNING id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary, created_at, updated_at, reviewed_at
+      `;
+      await sql`
+        UPDATE synk_apps
+        SET enabled = TRUE, updated_at = NOW()
+        WHERE business_id = ${id}
+      `;
+      await logSynkEvent(sql, { eventType: "business_unsuspend", detail: rows[0].name });
+      return json(200, { ok: true, business: mapBusiness(rows[0]) });
+    }
+
+    if (event.httpMethod === "POST" && (action === "revoke-sessions" || action === "sign-out-all")) {
+      const id = String(body.id || "").trim();
+      if (!id) return json(400, { error: "id is required" });
+      const existing = await sql`SELECT id, name FROM synk_business_accounts WHERE id = ${id} LIMIT 1`;
+      if (!existing[0]) return json(404, { error: "Business account not found" });
+      const revoked = await sql`
+        UPDATE synk_business_sessions
+        SET revoked_at = NOW()
+        WHERE business_id = ${id} AND revoked_at IS NULL
+        RETURNING id
+      `;
+      await logSynkEvent(sql, {
+        eventType: "business_revoke_sessions",
+        detail: `${existing[0].name}:${revoked.length}`,
+      });
+      return json(200, { ok: true, revoked: revoked.length });
+    }
+
+    if (event.httpMethod === "POST" && (action === "rotate-key" || action === "rotate-api-key")) {
+      const id = String(body.id || "").trim();
+      if (!id) return json(400, { error: "id is required" });
+      const bizRows = await sql`SELECT * FROM synk_business_accounts WHERE id = ${id} LIMIT 1`;
+      if (!bizRows[0]) return json(404, { error: "Business account not found" });
+      const appId = String(body.appId || body.app_id || "").trim();
+      const apps = appId
+        ? await sql`
+            SELECT id, slug, name, enabled, verify_action, product_type, business_id, created_at, updated_at
+            FROM synk_apps
+            WHERE id = ${appId} AND business_id = ${id}
+            LIMIT 1
+          `
+        : await sql`
+            SELECT id, slug, name, enabled, verify_action, product_type, business_id, created_at, updated_at
+            FROM synk_apps
+            WHERE business_id = ${id}
+            ORDER BY created_at ASC
+            LIMIT 1
+          `;
+      if (!apps[0]) return json(404, { error: "No API app found for this business" });
+      const apiKey = generateApiKey();
+      const updatedApps = await sql`
+        UPDATE synk_apps
+        SET api_key_hash = ${hashSecret(apiKey)}, updated_at = NOW()
+        WHERE id = ${apps[0].id}
+        RETURNING id, slug, name, enabled, verify_action, product_type, business_id, created_at, updated_at
+      `;
+      await logSynkEvent(sql, {
+        eventType: "business_key_rotate_admin",
+        appSlug: updatedApps[0].slug,
+        detail: bizRows[0].name,
+      });
+      const email = await notifyBusinessApiKeyRotated({
+        email: bizRows[0].email,
+        name: bizRows[0].name,
+        contactName: bizRows[0].contact_name,
+        apiKey,
+        appSlug: updatedApps[0].slug,
+      });
+      return json(200, {
+        ok: true,
+        app: mapApp(updatedApps[0]),
+        apiKeyEmailed: true,
+        email,
+      });
+    }
+
+    if (event.httpMethod === "POST" && (action === "set-app-enabled" || action === "toggle-app")) {
+      const id = String(body.id || body.businessId || "").trim();
+      const appId = String(body.appId || "").trim();
+      const enabled = body.enabled !== false && body.enabled !== "false" && body.enabled !== 0;
+      if (!id || !appId) return json(400, { error: "id and appId are required" });
+      const rows = await sql`
+        UPDATE synk_apps
+        SET enabled = ${enabled}, updated_at = NOW()
+        WHERE id = ${appId} AND business_id = ${id}
+        RETURNING id, slug, name, enabled, verify_action, product_type, business_id, created_at, updated_at
+      `;
+      if (!rows[0]) return json(404, { error: "App not found for this business" });
+      await logSynkEvent(sql, {
+        eventType: enabled ? "business_app_enable" : "business_app_disable",
+        appSlug: rows[0].slug,
+        detail: id,
+      });
+      return json(200, { ok: true, app: mapApp(rows[0]) });
     }
 
     return json(405, { error: "Method not allowed" });

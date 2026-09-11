@@ -275,19 +275,40 @@
         <header class="admin-header">
           <div>
             <h1>Business</h1>
-            <p class="muted">Approve accounts and manage Synk Business portal access.</p>
+            <p class="muted">Review API access requests and oversee existing Synk Business accounts.</p>
           </div>
           <div class="admin-header-actions">
             <button class="btn btn-secondary btn-compact" type="button" id="refresh-business-btn">Refresh</button>
           </div>
         </header>
+
         <section class="panel">
-          <h2>Accounts</h2>
+          <h2>API access requests</h2>
           <p class="muted" style="margin:0 0 12px;font-size:0.85rem;">
-            Approving a business issues API access and lets them use the Synk Business portal.
+            Approving emails the business their API key automatically — it is not shown here.
           </p>
-          <div id="synk-businesses" class="synk-sessions"></div>
-          <p id="synk-businesses-empty" class="chat-empty-note">No business accounts yet.</p>
+          <div id="synk-business-requests" class="synk-sessions"></div>
+          <p id="synk-business-requests-empty" class="chat-empty-note">No pending business requests.</p>
+        </section>
+
+        <section class="panel" style="margin-top:16px;">
+          <h2>Existing API businesses</h2>
+          <p class="muted" style="margin:0 0 12px;font-size:0.85rem;">
+            Open an account to inspect apps, devices, sessions, and recent activity — and suspend or rotate keys if something looks wrong.
+          </p>
+          <div id="synk-business-accounts" class="synk-sessions"></div>
+          <p id="synk-business-accounts-empty" class="chat-empty-note">No approved or suspended businesses yet.</p>
+        </section>
+
+        <section class="panel hidden" id="synk-business-detail-panel" style="margin-top:16px;">
+          <div class="admin-header" style="padding:0;margin:0 0 12px;">
+            <div>
+              <h2 style="margin:0;" id="biz-detail-title">Business detail</h2>
+              <p class="muted" id="biz-detail-subtitle" style="margin:4px 0 0;"></p>
+            </div>
+            <button class="btn btn-secondary btn-compact" type="button" id="biz-detail-close">Close</button>
+          </div>
+          <div id="synk-business-detail"></div>
         </section>
       </div>
 
@@ -507,9 +528,14 @@
       const synkAppStatus = document.getElementById("synk-app-status");
       const synkAppsEl = document.getElementById("synk-apps");
       const synkAppsEmpty = document.getElementById("synk-apps-empty");
-      const synkBusinessesEl = document.getElementById("synk-businesses");
-      const synkBusinessesEmpty = document.getElementById("synk-businesses-empty");
+      const synkBusinessRequestsEl = document.getElementById("synk-business-requests");
+      const synkBusinessRequestsEmpty = document.getElementById("synk-business-requests-empty");
+      const synkBusinessAccountsEl = document.getElementById("synk-business-accounts");
+      const synkBusinessAccountsEmpty = document.getElementById("synk-business-accounts-empty");
+      const synkBusinessDetailPanel = document.getElementById("synk-business-detail-panel");
+      const synkBusinessDetailEl = document.getElementById("synk-business-detail");
       let synkBusinessesCache = [];
+      let synkBusinessDetailId = "";
       const synkAdminsEl = document.getElementById("synk-admins");
       const synkAdminsEmpty = document.getElementById("synk-admins-empty");
       let synkAdminsCache = [];
@@ -1207,48 +1233,89 @@
         return data;
       }
 
-      function renderSynkBusinesses(businesses) {
-        synkBusinessesCache = businesses || [];
-        if (!synkBusinessesEl) return;
-        if (!synkBusinessesCache.length) {
-          synkBusinessesEl.innerHTML = "";
-          if (synkBusinessesEmpty) synkBusinessesEmpty.classList.remove("hidden");
+      function businessMetaLine(biz) {
+        return `
+          ${escapeHtml(biz.contactName || "")}
+          · ${escapeHtml(biz.email || "")}
+          ${biz.productLabel || biz.productType ? ` · ${escapeHtml(biz.productLabel || synkProductTypeLabel(biz.productType))}` : ""}
+          ${biz.preferredVerifyAction ? ` · ${escapeHtml(synkVerifyActionLabel(biz.preferredVerifyAction))}` : ""}
+          ${biz.website ? ` · ${escapeHtml(biz.website)}` : ""}
+          ${/visitor sign-?in/i.test(biz.name || "") ? " · system" : ""}
+          ${biz.hasPassword || /visitor sign-?in/i.test(biz.name || "") ? "" : " · needs portal password"}
+        `;
+      }
+
+      function renderSynkBusinessRequests(requests) {
+        if (!synkBusinessRequestsEl) return;
+        if (!requests.length) {
+          synkBusinessRequestsEl.innerHTML = "";
+          if (synkBusinessRequestsEmpty) synkBusinessRequestsEmpty.classList.remove("hidden");
           return;
         }
-        if (synkBusinessesEmpty) synkBusinessesEmpty.classList.add("hidden");
-        synkBusinessesEl.innerHTML = synkBusinessesCache
-          .map((biz) => {
-            const pending = (biz.status || "") === "pending";
-            return `
+        if (synkBusinessRequestsEmpty) synkBusinessRequestsEmpty.classList.add("hidden");
+        synkBusinessRequestsEl.innerHTML = requests
+          .map(
+            (biz) => `
               <article class="synk-session-row" data-business-id="${escapeHtml(biz.id)}">
                 <div class="synk-session-top">
                   <strong>${escapeHtml(biz.name || "Business")}</strong>
                   <span class="synk-badge">${escapeHtml(biz.status || "pending")}</span>
                 </div>
-                <div class="synk-session-meta">
-                  ${escapeHtml(biz.contactName || "")}
-                  · ${escapeHtml(biz.email || "")}
-                  ${biz.productLabel || biz.productType ? ` · ${escapeHtml(biz.productLabel || synkProductTypeLabel(biz.productType))}` : ""}
-                  ${biz.preferredVerifyAction ? ` · ${escapeHtml(synkVerifyActionLabel(biz.preferredVerifyAction))}` : ""}
-                  ${biz.website ? ` · ${escapeHtml(biz.website)}` : ""}
-                  ${/visitor sign-?in/i.test(biz.name || "") ? " · system" : ""}
-                  ${biz.hasPassword || /visitor sign-?in/i.test(biz.name || "") ? "" : " · needs portal password"}
-                </div>
+                <div class="synk-session-meta">${businessMetaLine(biz)}</div>
                 ${biz.productSummary ? `<p class="muted" style="margin:6px 0 0;font-size:0.85rem;"><strong>Product:</strong> ${escapeHtml(biz.productSummary)}</p>` : ""}
                 ${biz.note ? `<p class="muted" style="margin:6px 0 0;font-size:0.82rem;">${escapeHtml(biz.note)}</p>` : ""}
                 <div class="btn-row" style="margin-top:8px;">
+                  <button class="btn btn-compact" type="button" data-business-action="approve">Approve &amp; email API key</button>
+                  <button class="btn btn-danger btn-compact" type="button" data-business-action="deny">Deny &amp; email</button>
+                </div>
+              </article>
+            `
+          )
+          .join("");
+      }
+
+      function renderSynkBusinessAccounts(accounts) {
+        if (!synkBusinessAccountsEl) return;
+        if (!accounts.length) {
+          synkBusinessAccountsEl.innerHTML = "";
+          if (synkBusinessAccountsEmpty) synkBusinessAccountsEmpty.classList.remove("hidden");
+          return;
+        }
+        if (synkBusinessAccountsEmpty) synkBusinessAccountsEmpty.classList.add("hidden");
+        synkBusinessAccountsEl.innerHTML = accounts
+          .map(
+            (biz) => `
+              <article class="synk-session-row" data-business-id="${escapeHtml(biz.id)}">
+                <div class="synk-session-top">
+                  <strong>${escapeHtml(biz.name || "Business")}</strong>
+                  <span class="synk-badge">${escapeHtml(biz.status || "approved")}</span>
+                </div>
+                <div class="synk-session-meta">${businessMetaLine(biz)}</div>
+                ${biz.productSummary ? `<p class="muted" style="margin:6px 0 0;font-size:0.85rem;"><strong>Product:</strong> ${escapeHtml(biz.productSummary)}</p>` : ""}
+                ${biz.note ? `<p class="muted" style="margin:6px 0 0;font-size:0.82rem;">${escapeHtml(biz.note)}</p>` : ""}
+                <div class="btn-row" style="margin-top:8px;">
+                  <button class="btn btn-compact" type="button" data-business-action="inspect">Inspect activity</button>
                   ${
-                    pending
-                      ? `<button class="btn btn-compact" type="button" data-business-action="approve">Approve API access</button>
-                         <button class="btn btn-danger btn-compact" type="button" data-business-action="deny">Deny</button>`
-                      : ""
+                    biz.status === "suspended"
+                      ? `<button class="btn btn-secondary btn-compact" type="button" data-business-action="unsuspend">Reactivate</button>`
+                      : biz.status === "approved"
+                        ? `<button class="btn btn-danger btn-compact" type="button" data-business-action="suspend">Suspend</button>`
+                        : ""
                   }
                   <button class="btn btn-secondary btn-compact" type="button" data-business-action="set-password">Set portal password</button>
                 </div>
               </article>
-            `;
-          })
+            `
+          )
           .join("");
+      }
+
+      function renderSynkBusinesses(businesses) {
+        synkBusinessesCache = businesses || [];
+        const requests = synkBusinessesCache.filter((b) => (b.status || "") === "pending");
+        const accounts = synkBusinessesCache.filter((b) => (b.status || "") !== "pending");
+        renderSynkBusinessRequests(requests);
+        renderSynkBusinessAccounts(accounts);
       }
 
       async function refreshSynkBusinesses() {
@@ -1256,7 +1323,302 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Could not load business accounts");
         renderSynkBusinesses(data.businesses || []);
+        if (synkBusinessDetailId) {
+          try {
+            await openBusinessDetail(synkBusinessDetailId);
+          } catch (_) {}
+        }
         return data;
+      }
+
+      function formatBizWhen(iso) {
+        try {
+          return new Date(iso).toLocaleString([], {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+        } catch {
+          return "";
+        }
+      }
+
+      function renderBusinessDetail(detail) {
+        if (!synkBusinessDetailEl || !synkBusinessDetailPanel) return;
+        const biz = detail.business || {};
+        const apps = detail.apps || [];
+        const devices = detail.devices || [];
+        const sessions = detail.sessions || [];
+        const events = detail.events || [];
+        document.getElementById("biz-detail-title").textContent = biz.name || "Business detail";
+        document.getElementById("biz-detail-subtitle").textContent =
+          `${biz.status || "unknown"} · ${biz.email || ""} · ${detail.activeSessionCount || 0} active session(s)`;
+        synkBusinessDetailPanel.classList.remove("hidden");
+        synkBusinessDetailEl.innerHTML = `
+          <div class="synk-session-meta" style="margin-bottom:12px;">
+            ${escapeHtml(biz.contactName || "")}
+            ${biz.website ? ` · <a href="${escapeHtml(biz.website)}" target="_blank" rel="noopener">${escapeHtml(biz.website)}</a>` : ""}
+            ${biz.productLabel ? ` · ${escapeHtml(biz.productLabel)}` : ""}
+            ${biz.preferredVerifyAction ? ` · ${escapeHtml(synkVerifyActionLabel(biz.preferredVerifyAction))}` : ""}
+          </div>
+          ${biz.productSummary ? `<p class="muted" style="margin:0 0 10px;"><strong>Product:</strong> ${escapeHtml(biz.productSummary)}</p>` : ""}
+          ${biz.note ? `<p class="muted" style="margin:0 0 12px;">${escapeHtml(biz.note)}</p>` : ""}
+
+          <div class="btn-row" style="margin-bottom:14px;">
+            ${
+              biz.status === "suspended"
+                ? `<button class="btn btn-compact" type="button" data-business-action="unsuspend" data-business-id="${escapeHtml(biz.id)}">Reactivate account</button>`
+                : biz.status === "approved"
+                  ? `<button class="btn btn-danger btn-compact" type="button" data-business-action="suspend" data-business-id="${escapeHtml(biz.id)}">Suspend account</button>`
+                  : ""
+            }
+            <button class="btn btn-secondary btn-compact" type="button" data-business-action="revoke-sessions" data-business-id="${escapeHtml(biz.id)}">Revoke portal sessions</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-business-action="rotate-key" data-business-id="${escapeHtml(biz.id)}">Rotate API key (email them)</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-business-action="set-password" data-business-id="${escapeHtml(biz.id)}">Set portal password</button>
+          </div>
+
+          <h3 style="margin:0 0 8px;font-size:1rem;">Apps</h3>
+          <div class="synk-sessions" style="margin-bottom:14px;">
+            ${
+              apps.length
+                ? apps
+                    .map(
+                      (app) => `
+                        <article class="synk-session-row">
+                          <div class="synk-session-top">
+                            <strong>${escapeHtml(app.name || app.slug)}</strong>
+                            <span class="synk-badge">${app.enabled ? "enabled" : "disabled"}</span>
+                          </div>
+                          <div class="synk-session-meta">
+                            ${escapeHtml(app.slug)}
+                            · ${escapeHtml(synkVerifyActionLabel(app.verifyAction))}
+                            ${app.productLabel ? ` · ${escapeHtml(app.productLabel)}` : ""}
+                          </div>
+                          <div class="btn-row" style="margin-top:8px;">
+                            <button class="btn btn-secondary btn-compact" type="button" data-business-action="${app.enabled ? "disable-app" : "enable-app"}" data-business-id="${escapeHtml(biz.id)}" data-app-id="${escapeHtml(app.id)}">
+                              ${app.enabled ? "Disable app" : "Enable app"}
+                            </button>
+                          </div>
+                        </article>
+                      `
+                    )
+                    .join("")
+                : `<p class="muted" style="margin:0;">No API apps linked.</p>`
+            }
+          </div>
+
+          <h3 style="margin:0 0 8px;font-size:1rem;">Devices</h3>
+          <div class="synk-sessions" style="margin-bottom:14px;">
+            ${
+              devices.length
+                ? devices
+                    .map(
+                      (device) => `
+                        <article class="synk-session-row">
+                          <div class="synk-session-top">
+                            <strong>${escapeHtml(device.name || "Device")}</strong>
+                          </div>
+                          <div class="synk-session-meta">
+                            camera ${escapeHtml(device.cameraSide || "—")}
+                            · pair ${escapeHtml(device.pairingCode || "—")}
+                            ${device.lastSeenAt ? ` · seen ${escapeHtml(formatBizWhen(device.lastSeenAt))}` : ""}
+                          </div>
+                        </article>
+                      `
+                    )
+                    .join("")
+                : `<p class="muted" style="margin:0;">No devices registered.</p>`
+            }
+          </div>
+
+          <h3 style="margin:0 0 8px;font-size:1rem;">Portal sessions</h3>
+          <div class="synk-sessions" style="margin-bottom:14px;">
+            ${
+              sessions.length
+                ? sessions
+                    .map(
+                      (session) => `
+                        <article class="synk-session-row">
+                          <div class="synk-session-top">
+                            <strong>${escapeHtml(session.ip || "unknown IP")}</strong>
+                            <span class="synk-badge">${session.active ? "active" : "ended"}</span>
+                          </div>
+                          <div class="synk-session-meta">
+                            ${escapeHtml(formatBizWhen(session.createdAt))}
+                            ${session.lastSeenAt ? ` · last seen ${escapeHtml(formatBizWhen(session.lastSeenAt))}` : ""}
+                            ${session.userAgent ? ` · ${escapeHtml(String(session.userAgent).slice(0, 80))}` : ""}
+                          </div>
+                        </article>
+                      `
+                    )
+                    .join("")
+                : `<p class="muted" style="margin:0;">No portal sessions yet.</p>`
+            }
+          </div>
+
+          <h3 style="margin:0 0 8px;font-size:1rem;">Recent activity</h3>
+          <div class="synk-sessions">
+            ${
+              events.length
+                ? events
+                    .map(
+                      (event) => `
+                        <article class="synk-session-row">
+                          <div class="synk-session-top">
+                            <strong>${escapeHtml(event.eventType || "event")}</strong>
+                            <span class="muted">${escapeHtml(formatBizWhen(event.createdAt))}</span>
+                          </div>
+                          <div class="synk-session-meta">
+                            ${event.appSlug ? `${escapeHtml(event.appSlug)} · ` : ""}
+                            ${event.ip ? `${escapeHtml(event.ip)} · ` : ""}
+                            ${escapeHtml(event.detail || "")}
+                          </div>
+                        </article>
+                      `
+                    )
+                    .join("")
+                : `<p class="muted" style="margin:0;">No related events found.</p>`
+            }
+          </div>
+        `;
+      }
+
+      async function openBusinessDetail(id) {
+        synkBusinessDetailId = id;
+        const res = await fetch(`/api/synk-business?id=${encodeURIComponent(id)}`, {
+          headers: adminHeaders(),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load business detail");
+        renderBusinessDetail(data);
+        return data;
+      }
+
+      function emailStatusNote(email) {
+        if (!email) return "";
+        if (email.ok) return " · email sent";
+        if (email.skipped) return " · email not configured";
+        if (email.error) return " · email failed";
+        return "";
+      }
+
+      async function postBusinessAction(payload) {
+        const res = await fetch("/api/synk-business", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not update business");
+        return data;
+      }
+
+      async function handleBusinessAction(action, id, appId) {
+        if (!id || !action) return;
+        if (action === "inspect" || action === "inspect") {
+          await openBusinessDetail(id);
+          showToast("Loaded business detail");
+          return;
+        }
+        if (action === "approve") {
+          if (!confirm("Approve this business? Their API key will be emailed to them (not shown here).")) return;
+          const data = await postBusinessAction({ action: "approve", id });
+          showToast(`Business approved${emailStatusNote(data.email)}`);
+          await Promise.all([refreshSynkBusinesses(), refreshSynkApps().catch(() => {})]);
+          return;
+        }
+        if (action === "deny") {
+          if (!confirm("Deny this business request? They will be emailed.")) return;
+          const data = await postBusinessAction({ action: "deny", id });
+          showToast(`Business denied${emailStatusNote(data.email)}`);
+          await refreshSynkBusinesses();
+          return;
+        }
+        if (action === "set-password") {
+          const password = window.prompt("New Synk Business portal password (min 8 characters):");
+          if (!password) return;
+          await postBusinessAction({ action: "set-password", id, password });
+          showToast("Portal password updated");
+          await refreshSynkBusinesses();
+          return;
+        }
+        if (action === "suspend") {
+          if (!confirm("Suspend this business? Their apps will be disabled and portal sessions revoked.")) return;
+          await postBusinessAction({ action: "suspend", id });
+          showToast("Business suspended");
+          await Promise.all([refreshSynkBusinesses(), refreshSynkApps().catch(() => {})]);
+          return;
+        }
+        if (action === "unsuspend") {
+          await postBusinessAction({ action: "unsuspend", id });
+          showToast("Business reactivated");
+          await Promise.all([refreshSynkBusinesses(), refreshSynkApps().catch(() => {})]);
+          return;
+        }
+        if (action === "revoke-sessions") {
+          if (!confirm("Revoke all portal sessions for this business?")) return;
+          const data = await postBusinessAction({ action: "revoke-sessions", id });
+          showToast(`Revoked ${data.revoked || 0} session(s)`);
+          if (synkBusinessDetailId === id) await openBusinessDetail(id);
+          return;
+        }
+        if (action === "rotate-key") {
+          if (!confirm("Rotate their API key? The new key will be emailed to them (not shown here).")) return;
+          const data = await postBusinessAction({ action: "rotate-key", id, appId });
+          showToast(`API key rotated${emailStatusNote(data.email)}`);
+          if (synkBusinessDetailId === id) await openBusinessDetail(id);
+          return;
+        }
+        if (action === "disable-app" || action === "enable-app") {
+          await postBusinessAction({
+            action: "set-app-enabled",
+            id,
+            appId,
+            enabled: action === "enable-app" || action === "enable-app",
+          });
+          showToast(action === "enable-app" ? "App enabled" : "App disabled");
+          await Promise.all([
+            refreshSynkApps().catch(() => {}),
+            synkBusinessDetailId === id ? openBusinessDetail(id) : Promise.resolve(),
+          ]);
+        }
+      }
+
+      function bindBusinessClicks(root) {
+        if (!root) return;
+        root.addEventListener("click", async (e) => {
+          const btn = e.target.closest("[data-business-action]");
+          if (!btn) return;
+          const action = btn.getAttribute("data-business-action");
+          const row = e.target.closest("[data-business-id]");
+          const id = btn.getAttribute("data-business-id") || (row && row.getAttribute("data-business-id"));
+          const appId = btn.getAttribute("data-app-id") || "";
+          try {
+            await handleBusinessAction(action, id, appId);
+          } catch (err) {
+            showToast(err.message || "Could not update business");
+          }
+        });
+      }
+
+      bindBusinessClicks(synkBusinessRequestsEl);
+      bindBusinessClicks(synkBusinessAccountsEl);
+      bindBusinessClicks(synkBusinessDetailEl);
+      if (document.getElementById("biz-detail-close")) {
+        document.getElementById("biz-detail-close").addEventListener("click", () => {
+          synkBusinessDetailId = "";
+          if (synkBusinessDetailPanel) synkBusinessDetailPanel.classList.add("hidden");
+          if (synkBusinessDetailEl) synkBusinessDetailEl.innerHTML = "";
+        });
+      }
+
+      function emailToastNote(email) {
+        if (!email) return "";
+        if (email.ok) return " · email sent";
+        if (email.skipped) return " · email not configured";
+        if (email.error) return " · email failed";
+        return "";
       }
 
       async function refreshSettings() {
@@ -1593,59 +1955,6 @@
         }
         if (!res.ok) throw new Error(data.error || "Could not update request");
         return data;
-      }
-
-      if (synkBusinessesEl) {
-        synkBusinessesEl.addEventListener("click", async (e) => {
-          const btn = e.target.closest("[data-business-action]");
-          const row = e.target.closest("[data-business-id]");
-          if (!btn || !row) return;
-          const action = btn.getAttribute("data-business-action");
-          const id = row.getAttribute("data-business-id");
-          if (!id) return;
-          try {
-            if (action === "approve") {
-              if (!confirm("Approve this Synk Business account and issue API access?")) return;
-              const res = await fetch("/api/synk-business", {
-                method: "POST",
-                headers: adminHeaders(),
-                body: JSON.stringify({ action: "approve", id }),
-              });
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok) throw new Error(data.error || "Could not approve");
-              if (data.apiKey) {
-                window.prompt("API key (copy now — shown once):", data.apiKey);
-              }
-              showToast("Business approved");
-              await Promise.all([refreshSynkBusinesses(), refreshSynkApps()]);
-            } else if (action === "deny") {
-              if (!confirm("Deny this Synk Business request?")) return;
-              const res = await fetch("/api/synk-business", {
-                method: "POST",
-                headers: adminHeaders(),
-                body: JSON.stringify({ action: "deny", id }),
-              });
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok) throw new Error(data.error || "Could not deny");
-              showToast("Business denied");
-              await refreshSynkBusinesses();
-            } else if (action === "set-password") {
-              const password = window.prompt("New Synk Business portal password (min 8 characters):");
-              if (!password) return;
-              const res = await fetch("/api/synk-business", {
-                method: "POST",
-                headers: adminHeaders(),
-                body: JSON.stringify({ action: "set-password", id, password }),
-              });
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok) throw new Error(data.error || "Could not set password");
-              showToast("Portal password updated");
-              await refreshSynkBusinesses();
-            }
-          } catch (err) {
-            showToast(err.message || "Could not update business");
-          }
-        });
       }
 
       function bindRequestListClicks(root) {

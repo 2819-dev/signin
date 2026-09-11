@@ -126,7 +126,14 @@ async function requireBusinessSession(sql, event) {
     return { ok: false, status: 401, error: "Session expired. Sign in again." };
   }
   if (row.status !== "approved") {
-    return { ok: false, status: 403, error: "Business account is not approved yet" };
+    return {
+      ok: false,
+      status: 403,
+      error:
+        row.status === "suspended"
+          ? "This business account is suspended"
+          : "Business account is not approved yet",
+    };
   }
   await sql`UPDATE synk_business_sessions SET last_seen_at = NOW() WHERE id = ${row.id}`;
   return {
