@@ -910,3 +910,63 @@ button.btn:disabled {
     min-height: 360px;
   }
 }
+
+
+/* Member badges in Synk Admin directory */
+.synk-member-badges {
+  display: grid;
+  gap: 8px;
+}
+.synk-member-badges-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.synk-member-badge-list {
+  display: grid;
+  gap: 8px;
+}
+.synk-member-badge {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--badge-color, #6366f1) 35%, var(--line, #d5dbe6));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--badge-color, #6366f1) 10%, var(--surface, #fff));
+}
+.synk-member-badge-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  background: #fff;
+  border: 1px solid var(--line, #d5dbe6);
+}
+.synk-member-badge-dot {
+  width: 14px;
+  height: 14px;
+  margin: 7px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.synk-member-badge-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.synk-member-badge-copy strong {
+  font-size: 0.9rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.synk-member-badge-copy .muted {
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -14,7 +14,7 @@
     <title>Synk Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synk-admin12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin12" />
-    <link rel="stylesheet" href="/admin.css?v=places1" />
+    <link rel="stylesheet" href="/admin.css?v=member-badges1" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js?v=facefix4" defer></script>
   </head>
@@ -932,9 +932,59 @@
         const q = memberSearch.value.trim().toLowerCase();
         if (!q) return synkProfilesCache;
         return synkProfilesCache.filter((p) => {
-          const hay = `${p.name || ""} ${p.synkCode || ""}`.toLowerCase();
+          const badgeText = (Array.isArray(p.badges) ? p.badges : [])
+            .map((b) => `${b.name || ""} ${b.slug || ""} ${b.username || ""}`)
+            .join(" ");
+          const hay = `${p.name || ""} ${p.synkCode || ""} ${badgeText}`.toLowerCase();
           return hay.includes(q);
         });
+      }
+
+      function renderMemberBadges(profile) {
+        const badges = Array.isArray(profile.badges) ? profile.badges : [];
+        if (!badges.length) {
+          return `<div class="synk-member-badges"><span class="muted" style="font-size:0.8rem;">No badges</span></div>`;
+        }
+        return `
+          <div class="synk-member-badges" aria-label="Member badges">
+            <div class="synk-member-badges-label muted">Badges</div>
+            <div class="synk-member-badge-list">
+              ${badges
+                .map((badge) => {
+                  const color = escapeHtml(badge.color || "#6366f1");
+                  const name = escapeHtml(badge.name || "Badge");
+                  const username = escapeHtml(badge.username || "");
+                  const pinned = badge.pinned ? " · pinned" : "";
+                  const account =
+                    badge.account === "alt" ? "alt" : badge.account === "primary" ? "primary" : "";
+                  const meta = [username ? `@${username}` : "", account, pinned.replace(/^ · /, "")]
+                    .filter(Boolean)
+                    .join(" · ");
+                  const icon = badge.iconUrl
+                    ? `<img class="synk-member-badge-icon" src="${escapeHtml(badge.iconUrl)}" alt="" />`
+                    : `<span class="synk-member-badge-dot" style="background:${color}" aria-hidden="true"></span>`;
+                  return `
+                    <div class="synk-member-badge" style="--badge-color:${color}">
+                      ${icon}
+                      <div class="synk-member-badge-copy">
+                        <strong>${name}</strong>
+                        ${meta ? `<span class="muted">${escapeHtml(meta)}</span>` : ""}
+                      </div>
+                      <button
+                        class="btn btn-danger btn-compact"
+                        type="button"
+                        data-synk-action="remove-badge"
+                        data-tag-id="${escapeHtml(badge.id || "")}"
+                        data-badge-username="${username}"
+                        title="Remove ${name}"
+                      >Remove</button>
+                    </div>
+                  `;
+                })
+                .join("")}
+            </div>
+          </div>
+        `;
       }
 
       function renderSynkProfiles() {
@@ -976,6 +1026,7 @@
                       ${profile.enabled ? "" : " · paused"}
                     </div>
                   </div>
+                  ${renderMemberBadges(profile)}
                   <label class="field" style="margin:0;">
                     <span class="muted" style="font-size:0.78rem;">Reset secret (optional)</span>
                     <input type="password" data-synk-action="secret" placeholder="New passphrase" maxlength="200" autocomplete="new-password" />
@@ -2586,6 +2637,46 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
         const id = card.getAttribute("data-synk-id");
         const profile = synkProfilesCache.find((p) => p.id === id);
         if (!profile) return;
+
+        if (action === "remove-badge") {
+          const tagId = btn.getAttribute("data-tag-id") || "";
+          const username = btn.getAttribute("data-badge-username") || "";
+          if (!tagId) return;
+          const badge = (profile.badges || []).find(
+            (b) => String(b.id) === String(tagId) && (!username || String(b.username || "") === username)
+          );
+          const label = (badge && badge.name) || "this badge";
+          const where = username ? ` from @${username}` : "";
+          if (!confirm(`Remove ${label}${where} from ${profile.name}?`)) return;
+          btn.disabled = true;
+          try {
+            const res = await fetch("/api/synk-profiles", {
+              method: "PATCH",
+              headers: adminHeaders(),
+              body: JSON.stringify({
+                id,
+                action: "remove-badge",
+                tagId,
+                username: username || undefined,
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not remove badge");
+            if (data.profile) {
+              synkProfilesCache = synkProfilesCache.map((p) =>
+                p.id === id ? { ...p, badges: data.profile.badges || [] } : p
+              );
+              renderSynkProfiles();
+            } else {
+              await refreshSynkProfiles();
+            }
+            showToast("Badge removed");
+          } catch (err) {
+            showToast(err.message || "Could not remove badge");
+            btn.disabled = false;
+          }
+          return;
+        }
 
         if (action === "save-secret") {
           const secretInput = card.querySelector('[data-synk-action="secret"]');
