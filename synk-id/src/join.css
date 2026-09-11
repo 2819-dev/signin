@@ -5059,6 +5059,17 @@ body.community-body {
   position: relative;
   z-index: 80;
 }
+/* display:flex/grid on panel/chat/gate beats UA [hidden] — force closed until opened */
+.synk-support-panel[hidden],
+.synk-support-backdrop[hidden],
+.synk-support-chat[hidden],
+.synk-support-gate[hidden],
+.synk-support-error[hidden],
+.synk-support-closed[hidden],
+.synk-support-root[hidden],
+.synk-support-composer[hidden] {
+  display: none !important;
+}
 .synk-support-fab {
   position: fixed;
   right: max(16px, env(safe-area-inset-right));

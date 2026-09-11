@@ -276,6 +276,8 @@
       }
     });
 
+    // Always start closed — only the FAB opens the panel.
+    setOpen(false);
     chatEnabled().then((enabled) => {
       root.hidden = !enabled;
       if (!enabled) setOpen(false);
