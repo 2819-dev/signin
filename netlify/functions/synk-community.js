@@ -35,10 +35,25 @@ const {
   getPinnedTagsByUsernames,
   getDisplayNamesByUsernames,
   setDisplayNameForUsername,
+  setBioForUsername,
+  setDmPolicyForUsername,
+  getFriendship,
+  requestFriendship,
+  respondFriendship,
+  removeFriendship,
+  canDm,
+  getOrCreateDmThread,
+  listDmThreads,
+  getDmThreadById,
+  listDmMessages,
+  sendDm,
+  friendshipViewerStatus,
   getAvatarsByUsernames,
   setAvatarForUsername,
   updateSynkProfilePhoto,
   normalizeDisplayName,
+  normalizeBio,
+  normalizeDmPolicy,
   assignUsernameTag,
   unassignUsernameTag,
   setPinnedTagForUsername,
@@ -255,6 +270,8 @@ function mePayload(auth, role, alts = [], tags = [], pinnedTag = null) {
     displayName: auth.profile.displayName || "",
     photoUrl: signedPhotoUrl(auth.profile.photoUrl || ""),
     avatarUrl: auth.profile.avatarUrl || "",
+    bio: auth.profile.bio || "",
+    dmPolicy: auth.profile.dmPolicy || "friends",
     role: role || null,
     isStaff: isCommunityStaffRole(role),
     isOwner: role === "owner",
@@ -997,6 +1014,55 @@ exports.handler = async (event) => {
         });
       }
 
+      if (qs.dms === "1" || qs.messages === "1") {
+        if (!primaryUsername) {
+          return json(400, { error: "Set a username first" });
+        }
+        const threads = await listDmThreads(sql, primaryUsername);
+        return json(200, {
+          ok: true,
+          me: mePayload(auth, role, alts, myTags, myPinnedTag),
+          threads,
+          unreadCount,
+          dmUnread: 0,
+          tags: tagCatalog,
+          ownerUsername: COMMUNITY_OWNER_USERNAME,
+        });
+      }
+
+      const dmThreadId = String(qs.dm || qs.threadId || "").trim();
+      const dmUser = normalizePublicUsername(qs.dmUser || qs.with || "");
+      if (dmThreadId || dmUser) {
+        if (!primaryUsername) {
+          return json(400, { error: "Set a username first" });
+        }
+        let thread = null;
+        let messages = [];
+        if (dmThreadId) {
+          if (!isUuid(dmThreadId)) return json(400, { error: "Invalid thread id" });
+          const result = await listDmMessages(sql, dmThreadId, primaryUsername);
+          if (!result.ok) return json(404, { error: result.error || "Thread not found" });
+          thread = result.thread;
+          messages = result.messages;
+        } else {
+          const opened = await getOrCreateDmThread(sql, primaryUsername, dmUser);
+          if (!opened.ok) return json(400, { error: opened.error || "Could not open thread" });
+          const result = await listDmMessages(sql, opened.thread.id, primaryUsername);
+          if (!result.ok) return json(404, { error: result.error || "Thread not found" });
+          thread = result.thread;
+          messages = result.messages;
+        }
+        return json(200, {
+          ok: true,
+          me: mePayload(auth, role, alts, myTags, myPinnedTag),
+          thread,
+          messages,
+          unreadCount,
+          tags: tagCatalog,
+          ownerUsername: COMMUNITY_OWNER_USERNAME,
+        });
+      }
+
       const postId = String(qs.post || qs.postId || "").trim();
       if (postId) {
         if (!isUuid(postId)) return json(400, { error: "Invalid post id" });
@@ -1035,6 +1101,18 @@ exports.handler = async (event) => {
       if (profileUsername) {
         profile = await findCommunityPublicProfile(sql, profileUsername);
         if (!profile) return json(404, { error: "Profile not found" });
+        const isSelf = Boolean(primaryUsername && primaryUsername === profileUsername);
+        profile.isSelf = isSelf;
+        if (primaryUsername && !isSelf) {
+          const friendship = await getFriendship(sql, primaryUsername, profileUsername);
+          profile.friendship = {
+            status: friendshipViewerStatus(friendship),
+          };
+          profile.canMessage = await canDm(sql, primaryUsername, profileUsername);
+        } else {
+          profile.friendship = { status: "none" };
+          profile.canMessage = false;
+        }
         posts = await loadPosts(sql, {
           authorUsername: profileUsername,
           profileId: auth.profile.id,
@@ -1179,6 +1257,195 @@ exports.handler = async (event) => {
         username: result.username,
         displayName: result.displayName,
         me: mePayload(auth, role, nextAlts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "set-bio") {
+      const primary = normalizePublicUsername(auth.profile.publicUsername);
+      if (!primary) return json(400, { error: "Set a username first" });
+      const requested = normalizePublicUsername(body.username || body.asUsername || primary) || primary;
+      const result = await setBioForUsername(
+        sql,
+        requested,
+        body.bio != null ? body.bio : body.text,
+        auth.profile.id
+      );
+      if (!result.ok) return json(400, { error: result.error || "Could not save bio" });
+      if (requested === primary) {
+        auth.profile.bio = result.bio;
+      }
+      const nextAlts =
+        role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
+      if (nextAlts.length) {
+        for (const alt of nextAlts) {
+          alt.tags = await listUsernameTags(sql, alt.username);
+          alt.pinnedTag = alt.tags.find((tag) => tag.pinned) || null;
+        }
+      }
+      return json(200, {
+        ok: true,
+        username: result.username,
+        bio: result.bio,
+        me: mePayload(auth, role, nextAlts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "set-dm-policy") {
+      const primary = normalizePublicUsername(auth.profile.publicUsername);
+      if (!primary) return json(400, { error: "Set a username first" });
+      const requested = normalizePublicUsername(body.username || body.asUsername || primary) || primary;
+      const rawPolicy =
+        body.dmPolicy != null
+          ? body.dmPolicy
+          : body.policy != null
+            ? body.policy
+            : body.dm_policy;
+      const normalized = normalizeDmPolicy(rawPolicy);
+      if (
+        rawPolicy != null &&
+        String(rawPolicy).trim() !== "" &&
+        !["friends", "nobody", "everyone"].includes(
+          String(rawPolicy).trim().toLowerCase()
+        )
+      ) {
+        return json(400, { error: "dmPolicy must be friends, nobody, or everyone" });
+      }
+      const result = await setDmPolicyForUsername(
+        sql,
+        requested,
+        normalized,
+        auth.profile.id
+      );
+      if (!result.ok) return json(400, { error: result.error || "Could not save DM policy" });
+      if (requested === primary) {
+        auth.profile.dmPolicy = result.dmPolicy;
+      }
+      const nextAlts =
+        role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
+      if (nextAlts.length) {
+        for (const alt of nextAlts) {
+          alt.tags = await listUsernameTags(sql, alt.username);
+          alt.pinnedTag = alt.tags.find((tag) => tag.pinned) || null;
+        }
+      }
+      return json(200, {
+        ok: true,
+        username: result.username,
+        dmPolicy: result.dmPolicy,
+        me: mePayload(auth, role, nextAlts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "friend-request") {
+      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const target = normalizePublicUsername(body.username || body.user || body.to);
+      if (!target) return json(400, { error: "Username required" });
+      const result = await requestFriendship(sql, primaryUsername, target);
+      if (!result.ok) return json(400, { error: result.error || "Could not send request" });
+      return json(200, {
+        ok: true,
+        username: target,
+        friendship: {
+          status: friendshipViewerStatus(result.friendship),
+        },
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "friend-accept") {
+      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const target = normalizePublicUsername(body.username || body.user || body.from);
+      if (!target) return json(400, { error: "Username required" });
+      const result = await respondFriendship(sql, primaryUsername, target, true);
+      if (!result.ok) return json(400, { error: result.error || "Could not accept request" });
+      return json(200, {
+        ok: true,
+        username: target,
+        friendship: {
+          status: friendshipViewerStatus(result.friendship),
+        },
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "friend-decline") {
+      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const target = normalizePublicUsername(body.username || body.user || body.from);
+      if (!target) return json(400, { error: "Username required" });
+      const result = await respondFriendship(sql, primaryUsername, target, false);
+      if (!result.ok) return json(400, { error: result.error || "Could not decline request" });
+      return json(200, {
+        ok: true,
+        username: target,
+        friendship: { status: "none" },
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "friend-remove") {
+      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const target = normalizePublicUsername(body.username || body.user);
+      if (!target) return json(400, { error: "Username required" });
+      const result = await removeFriendship(sql, primaryUsername, target);
+      if (!result.ok) return json(400, { error: result.error || "Could not remove friend" });
+      return json(200, {
+        ok: true,
+        username: target,
+        friendship: { status: "none" },
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-list") {
+      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const threads = await listDmThreads(sql, primaryUsername);
+      return json(200, {
+        ok: true,
+        threads,
+        dmUnread: 0,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-open") {
+      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const target = normalizePublicUsername(body.username || body.user || body.with);
+      if (!target) return json(400, { error: "Username required" });
+      const opened = await getOrCreateDmThread(sql, primaryUsername, target);
+      if (!opened.ok) return json(400, { error: opened.error || "Could not open thread" });
+      const result = await listDmMessages(sql, opened.thread.id, primaryUsername);
+      if (!result.ok) return json(404, { error: result.error || "Thread not found" });
+      return json(200, {
+        ok: true,
+        thread: result.thread,
+        messages: result.messages,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-send") {
+      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      let target = normalizePublicUsername(body.username || body.user || body.to);
+      const threadId = String(body.threadId || body.thread || "").trim();
+      if (!target && threadId) {
+        if (!isUuid(threadId)) return json(400, { error: "Invalid thread id" });
+        const existing = await getDmThreadById(sql, threadId, primaryUsername);
+        if (!existing) return json(404, { error: "Thread not found" });
+        target = existing.otherUser;
+      }
+      if (!target) return json(400, { error: "Username or threadId required" });
+      const result = await sendDm(
+        sql,
+        primaryUsername,
+        target,
+        body.body != null ? body.body : body.message
+      );
+      if (!result.ok) return json(400, { error: result.error || "Could not send message" });
+      return json(200, {
+        ok: true,
+        message: result.message,
+        thread: result.thread,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
       });
     }
 

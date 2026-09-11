@@ -414,9 +414,13 @@ CREATE INDEX IF NOT EXISTS synk_community_profile_tags_tag_idx
 ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS pinned_tag_id UUID;
 ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS display_name TEXT;
 ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS bio TEXT;
+ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS dm_policy TEXT NOT NULL DEFAULT 'friends';
 ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS pinned_tag_id UUID;
 ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS display_name TEXT;
 ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS bio TEXT;
+ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS dm_policy TEXT NOT NULL DEFAULT 'friends';
 
 CREATE TABLE IF NOT EXISTS synk_community_username_tags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -433,4 +437,50 @@ CREATE INDEX IF NOT EXISTS synk_community_username_tags_username_idx
 CREATE INDEX IF NOT EXISTS synk_community_username_tags_tag_idx
   ON synk_community_username_tags (tag_id);
 
+CREATE TABLE IF NOT EXISTS synk_community_friendships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  requester_username TEXT NOT NULL,
+  addressee_username TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT synk_community_friendships_status_chk
+    CHECK (status IN ('pending', 'accepted')),
+  UNIQUE (requester_username, addressee_username)
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_friendships_addressee_idx
+  ON synk_community_friendships (addressee_username);
+
+CREATE INDEX IF NOT EXISTS synk_community_friendships_requester_idx
+  ON synk_community_friendships (requester_username);
+
+CREATE TABLE IF NOT EXISTS synk_community_dm_threads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_a TEXT NOT NULL,
+  user_b TEXT NOT NULL,
+  last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_a, user_b)
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_dm_threads_user_a_idx
+  ON synk_community_dm_threads (user_a);
+
+CREATE INDEX IF NOT EXISTS synk_community_dm_threads_user_b_idx
+  ON synk_community_dm_threads (user_b);
+
+CREATE INDEX IF NOT EXISTS synk_community_dm_threads_last_message_idx
+  ON synk_community_dm_threads (last_message_at DESC);
+
+CREATE TABLE IF NOT EXISTS synk_community_dm_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id UUID NOT NULL REFERENCES synk_community_dm_threads(id) ON DELETE CASCADE,
+  sender_username TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_dm_messages_thread_created_idx
+  ON synk_community_dm_messages (thread_id, created_at ASC);
 

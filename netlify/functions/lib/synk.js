@@ -468,6 +468,84 @@ async function ensureSynkCommunityExtras(sql) {
     ON synk_community_notifications (synk_profile_id, created_at DESC)
   `;
 
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS bio TEXT`;
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS dm_policy TEXT NOT NULL DEFAULT 'friends'`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS bio TEXT`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS dm_policy TEXT NOT NULL DEFAULT 'friends'`;
+  await sql`
+    UPDATE synk_community_profiles
+    SET dm_policy = 'friends'
+    WHERE dm_policy IS NULL
+       OR btrim(dm_policy) = ''
+       OR lower(dm_policy) NOT IN ('friends', 'nobody', 'everyone')
+  `;
+  await sql`
+    UPDATE synk_community_alt_accounts
+    SET dm_policy = 'friends'
+    WHERE dm_policy IS NULL
+       OR btrim(dm_policy) = ''
+       OR lower(dm_policy) NOT IN ('friends', 'nobody', 'everyone')
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_friendships (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      requester_username TEXT NOT NULL,
+      addressee_username TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT synk_community_friendships_status_chk
+        CHECK (status IN ('pending', 'accepted')),
+      UNIQUE (requester_username, addressee_username)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_friendships_addressee_idx
+    ON synk_community_friendships (addressee_username)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_friendships_requester_idx
+    ON synk_community_friendships (requester_username)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_dm_threads (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_a TEXT NOT NULL,
+      user_b TEXT NOT NULL,
+      last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_a, user_b)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_dm_threads_user_a_idx
+    ON synk_community_dm_threads (user_a)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_dm_threads_user_b_idx
+    ON synk_community_dm_threads (user_b)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_dm_threads_last_message_idx
+    ON synk_community_dm_threads (last_message_at DESC)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_dm_messages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      thread_id UUID NOT NULL REFERENCES synk_community_dm_threads(id) ON DELETE CASCADE,
+      sender_username TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_dm_messages_thread_created_idx
+    ON synk_community_dm_messages (thread_id, created_at ASC)
+  `;
+
   await ensureCommunityOwner(sql);
   await ensureDefaultCommunityGroup(sql);
 }
@@ -495,7 +573,7 @@ async function isCommunityUsernameTaken(sql, username, { exceptProfileId = null,
 async function listOwnerAltAccounts(sql, ownerProfileId) {
   if (!ownerProfileId) return [];
   const rows = await sql`
-    SELECT id, owner_synk_profile_id, public_username, label, display_name, avatar_url, created_at, updated_at
+    SELECT id, owner_synk_profile_id, public_username, label, display_name, avatar_url, bio, dm_policy, created_at, updated_at
     FROM synk_community_alt_accounts
     WHERE owner_synk_profile_id = ${ownerProfileId}
     ORDER BY created_at ASC
@@ -506,6 +584,8 @@ async function listOwnerAltAccounts(sql, ownerProfileId) {
     label: row.label || "",
     displayName: String(row.display_name || "").trim(),
     avatarUrl: String(row.avatar_url || "").trim(),
+    bio: normalizeBio(row.bio),
+    dmPolicy: normalizeDmPolicy(row.dm_policy),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     isAlt: true,
@@ -566,6 +646,8 @@ async function findCommunityPublicProfile(sql, username) {
       c.public_username,
       c.display_name,
       c.avatar_url,
+      c.bio,
+      c.dm_policy,
       c.created_at,
       s.role
     FROM synk_community_profiles c
@@ -586,6 +668,8 @@ async function findCommunityPublicProfile(sql, username) {
       username: primary[0].public_username,
       displayName: String(primary[0].display_name || "").trim(),
       avatarUrl: String(primary[0].avatar_url || "").trim(),
+      bio: normalizeBio(primary[0].bio),
+      dmPolicy: normalizeDmPolicy(primary[0].dm_policy),
       role: normalizeCommunityRole(primary[0].role),
       isAlt: false,
       joinedAt: primary[0].created_at,
@@ -596,7 +680,7 @@ async function findCommunityPublicProfile(sql, username) {
   }
 
   const alt = await sql`
-    SELECT id, public_username, label, display_name, avatar_url, created_at
+    SELECT id, public_username, label, display_name, avatar_url, bio, dm_policy, created_at
     FROM synk_community_alt_accounts
     WHERE public_username = ${name}
     LIMIT 1
@@ -613,6 +697,8 @@ async function findCommunityPublicProfile(sql, username) {
     username: alt[0].public_username,
     displayName: String(alt[0].display_name || "").trim() || String(alt[0].label || "").trim(),
     avatarUrl: String(alt[0].avatar_url || "").trim(),
+    bio: normalizeBio(alt[0].bio),
+    dmPolicy: normalizeDmPolicy(alt[0].dm_policy),
     role: null,
     isAlt: true,
     joinedAt: alt[0].created_at,
@@ -2053,7 +2139,7 @@ async function requireHubSession(sql, event, body = {}) {
   const rows = await sql`
     SELECT s.id, s.synk_profile_id, s.expires_at, s.revoked_at,
            p.synk_code, p.name, p.photo_url, p.enabled,
-           c.public_username, c.display_name, c.avatar_url
+           c.public_username, c.display_name, c.avatar_url, c.bio, c.dm_policy
     FROM synk_hub_sessions s
     JOIN synk_profiles p ON p.id = s.synk_profile_id
     LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.id
@@ -2082,6 +2168,8 @@ async function requireHubSession(sql, event, body = {}) {
       publicUsername: row.public_username || "",
       displayName: String(row.display_name || "").trim(),
       avatarUrl: String(row.avatar_url || "").trim(),
+      bio: normalizeBio(row.bio),
+      dmPolicy: normalizeDmPolicy(row.dm_policy),
     },
   };
 }
@@ -2099,6 +2187,64 @@ function normalizeDisplayName(value) {
     throw err;
   }
   return cleaned;
+}
+
+function normalizeBio(value) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .trim()
+    .slice(0, 280);
+}
+
+function normalizeDmPolicy(value) {
+  const policy = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (policy === "nobody" || policy === "everyone" || policy === "friends") return policy;
+  return "friends";
+}
+
+function normalizeDmBody(value) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .trim()
+    .slice(0, 1000);
+}
+
+function orderedDmPair(a, b) {
+  const left = normalizePublicUsername(a);
+  const right = normalizePublicUsername(b);
+  if (!left || !right) return null;
+  return left < right ? [left, right] : [right, left];
+}
+
+async function communityUsernameExists(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return false;
+  const primary = await sql`
+    SELECT 1 FROM synk_community_profiles WHERE public_username = ${name} LIMIT 1
+  `;
+  if (primary[0]) return true;
+  const alt = await sql`
+    SELECT 1 FROM synk_community_alt_accounts WHERE public_username = ${name} LIMIT 1
+  `;
+  return Boolean(alt[0]);
+}
+
+async function getDmPolicyForUsername(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return "friends";
+  const primary = await sql`
+    SELECT dm_policy FROM synk_community_profiles WHERE public_username = ${name} LIMIT 1
+  `;
+  if (primary[0]) return normalizeDmPolicy(primary[0].dm_policy);
+  const alt = await sql`
+    SELECT dm_policy FROM synk_community_alt_accounts WHERE public_username = ${name} LIMIT 1
+  `;
+  if (alt[0]) return normalizeDmPolicy(alt[0].dm_policy);
+  return "friends";
 }
 
 async function getDisplayNamesByUsernames(sql, usernames) {
@@ -2156,6 +2302,369 @@ async function setDisplayNameForUsername(sql, username, displayName, ownerProfil
     return { ok: true, username: alt[0].public_username, displayName: String(alt[0].display_name || "").trim() };
   }
   return { ok: false, error: "Profile not found" };
+}
+
+async function setBioForUsername(sql, username, bio, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  const next = normalizeBio(bio);
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET bio = ${next || null}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, bio
+  `;
+  if (primary[0]) {
+    return { ok: true, username: primary[0].public_username, bio: normalizeBio(primary[0].bio) };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET bio = ${next || null}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, bio
+  `;
+  if (alt[0]) {
+    return { ok: true, username: alt[0].public_username, bio: normalizeBio(alt[0].bio) };
+  }
+  return { ok: false, error: "Profile not found" };
+}
+
+async function setDmPolicyForUsername(sql, username, policy, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  const next = normalizeDmPolicy(policy);
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET dm_policy = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, dm_policy
+  `;
+  if (primary[0]) {
+    return {
+      ok: true,
+      username: primary[0].public_username,
+      dmPolicy: normalizeDmPolicy(primary[0].dm_policy),
+    };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET dm_policy = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, dm_policy
+  `;
+  if (alt[0]) {
+    return {
+      ok: true,
+      username: alt[0].public_username,
+      dmPolicy: normalizeDmPolicy(alt[0].dm_policy),
+    };
+  }
+  return { ok: false, error: "Profile not found" };
+}
+
+async function getFriendship(sql, a, b) {
+  const left = normalizePublicUsername(a);
+  const right = normalizePublicUsername(b);
+  if (!left || !right || left === right) return null;
+  const rows = await sql`
+    SELECT requester_username, addressee_username, status
+    FROM synk_community_friendships
+    WHERE (requester_username = ${left} AND addressee_username = ${right})
+       OR (requester_username = ${right} AND addressee_username = ${left})
+    LIMIT 1
+  `;
+  if (!rows[0]) return null;
+  const row = rows[0];
+  if (row.status === "accepted") {
+    return { status: "accepted", direction: "accepted" };
+  }
+  if (row.requester_username === left) {
+    return { status: "pending", direction: "outgoing" };
+  }
+  return { status: "pending", direction: "incoming" };
+}
+
+async function listFriends(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return [];
+  const rows = await sql`
+    SELECT CASE
+             WHEN requester_username = ${name} THEN addressee_username
+             ELSE requester_username
+           END AS friend_username
+    FROM synk_community_friendships
+    WHERE status = 'accepted'
+      AND (requester_username = ${name} OR addressee_username = ${name})
+    ORDER BY friend_username ASC
+  `;
+  return rows.map((row) => row.friend_username);
+}
+
+async function requestFriendship(sql, fromUsername, toUsername) {
+  const from = normalizePublicUsername(fromUsername);
+  const to = normalizePublicUsername(toUsername);
+  if (!from || !to) return { ok: false, error: "Username required" };
+  if (from === to) return { ok: false, error: "You cannot friend yourself" };
+  if (!(await communityUsernameExists(sql, to))) {
+    return { ok: false, error: "User not found" };
+  }
+  const existing = await getFriendship(sql, from, to);
+  if (existing) {
+    if (existing.status === "accepted") {
+      return { ok: false, error: "Already friends", friendship: existing };
+    }
+    if (existing.direction === "outgoing") {
+      return { ok: false, error: "Friend request already sent", friendship: existing };
+    }
+    if (existing.direction === "incoming") {
+      return respondFriendship(sql, from, to, true);
+    }
+  }
+  try {
+    await sql`
+      INSERT INTO synk_community_friendships (requester_username, addressee_username, status)
+      VALUES (${from}, ${to}, 'pending')
+    `;
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      const again = await getFriendship(sql, from, to);
+      if (again) return { ok: true, friendship: again };
+    }
+    throw err;
+  }
+  return {
+    ok: true,
+    friendship: { status: "pending", direction: "outgoing" },
+  };
+}
+
+async function respondFriendship(sql, actorUsername, otherUsername, accept) {
+  const actor = normalizePublicUsername(actorUsername);
+  const other = normalizePublicUsername(otherUsername);
+  if (!actor || !other) return { ok: false, error: "Username required" };
+  if (actor === other) return { ok: false, error: "Invalid friendship" };
+  const rows = await sql`
+    SELECT id, requester_username, addressee_username, status
+    FROM synk_community_friendships
+    WHERE requester_username = ${other}
+      AND addressee_username = ${actor}
+      AND status = 'pending'
+    LIMIT 1
+  `;
+  if (!rows[0]) return { ok: false, error: "No pending friend request" };
+  if (!accept) {
+    await sql`DELETE FROM synk_community_friendships WHERE id = ${rows[0].id}`;
+    return { ok: true, friendship: null };
+  }
+  const updated = await sql`
+    UPDATE synk_community_friendships
+    SET status = 'accepted', updated_at = NOW()
+    WHERE id = ${rows[0].id}
+    RETURNING requester_username, addressee_username, status
+  `;
+  return {
+    ok: true,
+    friendship: { status: "accepted", direction: "accepted" },
+    row: updated[0] || null,
+  };
+}
+
+async function removeFriendship(sql, a, b) {
+  const left = normalizePublicUsername(a);
+  const right = normalizePublicUsername(b);
+  if (!left || !right || left === right) return { ok: false, error: "Username required" };
+  const deleted = await sql`
+    DELETE FROM synk_community_friendships
+    WHERE (requester_username = ${left} AND addressee_username = ${right})
+       OR (requester_username = ${right} AND addressee_username = ${left})
+    RETURNING id
+  `;
+  return { ok: true, removed: deleted.length > 0 };
+}
+
+async function canDm(sql, fromUsername, toUsername) {
+  const from = normalizePublicUsername(fromUsername);
+  const to = normalizePublicUsername(toUsername);
+  if (!from || !to || from === to) return false;
+  if (!(await communityUsernameExists(sql, to))) return false;
+  const policy = await getDmPolicyForUsername(sql, to);
+  if (policy === "nobody") return false;
+  if (policy === "everyone") return true;
+  const friendship = await getFriendship(sql, from, to);
+  return Boolean(friendship && friendship.status === "accepted");
+}
+
+function mapDmThread(row, viewerUsername) {
+  if (!row) return null;
+  const viewer = normalizePublicUsername(viewerUsername);
+  const otherUser = row.user_a === viewer ? row.user_b : row.user_a;
+  return {
+    id: row.id,
+    userA: row.user_a,
+    userB: row.user_b,
+    otherUser,
+    lastBody: row.last_body != null ? String(row.last_body) : "",
+    lastMessageAt: row.last_message_at,
+    createdAt: row.created_at,
+  };
+}
+
+function mapDmMessage(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    threadId: row.thread_id,
+    senderUsername: row.sender_username,
+    body: row.body,
+    createdAt: row.created_at,
+  };
+}
+
+async function getOrCreateDmThread(sql, a, b) {
+  const pair = orderedDmPair(a, b);
+  if (!pair) return { ok: false, error: "Username required" };
+  const [userA, userB] = pair;
+  if (userA === userB) return { ok: false, error: "Cannot message yourself" };
+  const existing = await sql`
+    SELECT id, user_a, user_b, last_message_at, created_at
+    FROM synk_community_dm_threads
+    WHERE user_a = ${userA} AND user_b = ${userB}
+    LIMIT 1
+  `;
+  if (existing[0]) {
+    return { ok: true, thread: mapDmThread({ ...existing[0], last_body: "" }, a) };
+  }
+  try {
+    const created = await sql`
+      INSERT INTO synk_community_dm_threads (user_a, user_b)
+      VALUES (${userA}, ${userB})
+      RETURNING id, user_a, user_b, last_message_at, created_at
+    `;
+    return { ok: true, thread: mapDmThread({ ...created[0], last_body: "" }, a) };
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      const again = await sql`
+        SELECT id, user_a, user_b, last_message_at, created_at
+        FROM synk_community_dm_threads
+        WHERE user_a = ${userA} AND user_b = ${userB}
+        LIMIT 1
+      `;
+      if (again[0]) return { ok: true, thread: mapDmThread({ ...again[0], last_body: "" }, a) };
+    }
+    throw err;
+  }
+}
+
+async function listDmThreads(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return [];
+  const rows = await sql`
+    SELECT
+      t.id,
+      t.user_a,
+      t.user_b,
+      t.last_message_at,
+      t.created_at,
+      (
+        SELECT m.body
+        FROM synk_community_dm_messages m
+        WHERE m.thread_id = t.id
+        ORDER BY m.created_at DESC
+        LIMIT 1
+      ) AS last_body
+    FROM synk_community_dm_threads t
+    WHERE t.user_a = ${name} OR t.user_b = ${name}
+    ORDER BY t.last_message_at DESC
+  `;
+  return rows.map((row) => mapDmThread(row, name));
+}
+
+async function getDmThreadById(sql, threadId, username) {
+  const id = String(threadId || "").trim();
+  const name = normalizePublicUsername(username);
+  if (!id || !name) return null;
+  const rows = await sql`
+    SELECT
+      t.id,
+      t.user_a,
+      t.user_b,
+      t.last_message_at,
+      t.created_at,
+      (
+        SELECT m.body
+        FROM synk_community_dm_messages m
+        WHERE m.thread_id = t.id
+        ORDER BY m.created_at DESC
+        LIMIT 1
+      ) AS last_body
+    FROM synk_community_dm_threads t
+    WHERE t.id = ${id}
+      AND (t.user_a = ${name} OR t.user_b = ${name})
+    LIMIT 1
+  `;
+  return rows[0] ? mapDmThread(rows[0], name) : null;
+}
+
+async function listDmMessages(sql, threadId, username) {
+  const id = String(threadId || "").trim();
+  const name = normalizePublicUsername(username);
+  if (!id || !name) return { ok: false, error: "Thread required", messages: [] };
+  const thread = await getDmThreadById(sql, id, name);
+  if (!thread) return { ok: false, error: "Thread not found", messages: [] };
+  const rows = await sql`
+    SELECT id, thread_id, sender_username, body, created_at
+    FROM synk_community_dm_messages
+    WHERE thread_id = ${id}
+    ORDER BY created_at ASC
+  `;
+  return {
+    ok: true,
+    thread,
+    messages: rows.map(mapDmMessage),
+  };
+}
+
+async function sendDm(sql, fromUsername, toUsername, body) {
+  const from = normalizePublicUsername(fromUsername);
+  const to = normalizePublicUsername(toUsername);
+  if (!from || !to) return { ok: false, error: "Username required" };
+  if (from === to) return { ok: false, error: "Cannot message yourself" };
+  const text = normalizeDmBody(body);
+  if (!text) return { ok: false, error: "Message required" };
+  if (!(await canDm(sql, from, to))) {
+    return { ok: false, error: "You cannot message this user" };
+  }
+  const threadResult = await getOrCreateDmThread(sql, from, to);
+  if (!threadResult.ok) return threadResult;
+  const threadId = threadResult.thread.id;
+  const inserted = await sql`
+    INSERT INTO synk_community_dm_messages (thread_id, sender_username, body)
+    VALUES (${threadId}, ${from}, ${text})
+    RETURNING id, thread_id, sender_username, body, created_at
+  `;
+  const updated = await sql`
+    UPDATE synk_community_dm_threads
+    SET last_message_at = ${inserted[0].created_at}
+    WHERE id = ${threadId}
+    RETURNING id, user_a, user_b, last_message_at, created_at
+  `;
+  return {
+    ok: true,
+    message: mapDmMessage(inserted[0]),
+    thread: mapDmThread({ ...updated[0], last_body: text }, from),
+  };
+}
+
+function friendshipViewerStatus(friendship) {
+  if (!friendship) return "none";
+  if (friendship.status === "accepted") return "friends";
+  if (friendship.direction === "outgoing") return "pending_out";
+  if (friendship.direction === "incoming") return "pending_in";
+  return "none";
 }
 
 function normalizePublicUsername(value) {
@@ -2287,8 +2796,24 @@ module.exports = {
   extractHubSessionToken,
   normalizePublicUsername,
   normalizeDisplayName,
+  normalizeBio,
+  normalizeDmPolicy,
   getDisplayNamesByUsernames,
   setDisplayNameForUsername,
+  setBioForUsername,
+  setDmPolicyForUsername,
+  getFriendship,
+  listFriends,
+  requestFriendship,
+  respondFriendship,
+  removeFriendship,
+  canDm,
+  getOrCreateDmThread,
+  listDmThreads,
+  getDmThreadById,
+  listDmMessages,
+  sendDm,
+  friendshipViewerStatus,
   getAvatarsByUsernames,
   setAvatarForUsername,
   updateSynkProfilePhoto,
