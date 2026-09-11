@@ -19,7 +19,7 @@
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
     <link rel="stylesheet" href="/join.css?v=layout4" />
     <script src="/force-refresh.js" defer></script>
-    <script src="/face.js?v=facefix2" defer></script>
+    <script src="/face.js?v=facefix4" defer></script>
   </head>
   <body>
     <header class="site-nav site-nav-light">
@@ -249,6 +249,19 @@
         return [a, b];
       }
 
+      function startScanHeartbeat() {
+        const steps = ["Scanning…", "Looking for your face…", "Almost there…"];
+        let i = 0;
+        statusEl.textContent = steps[0];
+        return setInterval(() => {
+          i = (i + 1) % steps.length;
+          // Don't overwrite later status messages mid-flow.
+          if (/Scanning|Looking for your face|Almost there/.test(statusEl.textContent || "")) {
+            statusEl.textContent = steps[i];
+          }
+        }, 2200);
+      }
+
       function showSuccess(data) {
         stopCamera();
         const profile = (data && data.profile) || {};
@@ -409,12 +422,14 @@
         busy = true;
         scanBtn.disabled = true;
         errorEl.classList.add("hidden");
-        statusEl.textContent = "Scanning…";
+        const heartbeat = startScanHeartbeat();
         try {
           const descriptors = await dualDescriptors();
+          clearInterval(heartbeat);
           statusEl.textContent = "Checking membership…";
           await verifyPayload({ descriptors });
         } catch (err) {
+          clearInterval(heartbeat);
           errorEl.textContent = err.message || "Verification failed";
           errorEl.classList.remove("hidden");
           statusEl.textContent = "Try again";

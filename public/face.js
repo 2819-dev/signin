@@ -44,6 +44,19 @@
     return false;
   }
 
+  function isIPhone() {
+    try {
+      return /iPhone|iPod/i.test(String(navigator.userAgent || ""));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function detectMaxSide() {
+    // iPhone Safari WebGL face inference is much heavier than iPad; keep tensors small.
+    return isIPhone() ? 320 : DETECT_MAX_SIDE;
+  }
+
   function loadScript(src) {
     return new Promise((resolve, reject) => {
       if (global.faceapi) {
@@ -87,26 +100,51 @@
     });
   }
 
+  async function setTfBackend(tf, backend) {
+    const ok = await withTimeout(
+      tf.setBackend(backend),
+      5000,
+      `Face backend ${backend} timed out`
+    );
+    if (ok === false) throw new Error(`Face backend ${backend} rejected`);
+    if (typeof tf.ready === "function") {
+      await withTimeout(tf.ready(), 5000, `Face backend ${backend} not ready`);
+    }
+  }
+
+  async function preferIPhoneCpuBackend() {
+    // Re-assert CPU before every detect. Some iPhone Safari sessions flip back to
+    // WebGL after model load, and WebGL detect can freeze the Scanning… UI forever.
+    if (!isIPhone() || !global.faceapi) return;
+    const tf = global.faceapi.tf || global.tf;
+    if (!tf || typeof tf.setBackend !== "function") return;
+    try {
+      if (typeof tf.getBackend === "function" && tf.getBackend() === "cpu") return;
+      await setTfBackend(tf, "cpu");
+    } catch (_) {
+      /* keep whatever backend we have */
+    }
+  }
+
   async function pickTfBackend(faceapi) {
     const tf = faceapi.tf || global.tf;
     if (!tf || typeof tf.setBackend !== "function") return;
 
     // Avoid wasm: on iOS Safari it often hangs or fails without explicit wasm paths,
     // and a hung setBackend blocks the UI while the camera preview still looks "fine".
-    const backends = isAppleTouchDevice() ? ["webgl", "cpu"] : ["webgl", "cpu"];
+    // iPhone: prefer CPU. WebGL setBackend can succeed then hang forever on detect,
+    // which freezes "Scanning…" because the main thread never yields to timeouts.
+    // iPad WebGL is usually fine and much faster, so keep it first there.
+    const backends = isIPhone()
+      ? ["cpu", "webgl"]
+      : isAppleTouchDevice()
+        ? ["webgl", "cpu"]
+        : ["webgl", "cpu"];
 
     for (const backend of backends) {
       try {
         await yieldToEventLoop();
-        const ok = await withTimeout(
-          tf.setBackend(backend),
-          5000,
-          `Face backend ${backend} timed out`
-        );
-        if (ok === false) continue;
-        if (typeof tf.ready === "function") {
-          await withTimeout(tf.ready(), 5000, `Face backend ${backend} not ready`);
-        }
+        await setTfBackend(tf, backend);
         await yieldToEventLoop();
         return backend;
       } catch (_) {
@@ -167,9 +205,10 @@
   }
 
   function detectorOptions() {
+    // Smaller input on iPhone keeps recognition from locking Safari's UI thread.
     return new global.faceapi.TinyFaceDetectorOptions({
-      inputSize: 320,
-      scoreThreshold: 0.4,
+      inputSize: isIPhone() ? 224 : 320,
+      scoreThreshold: isIPhone() ? 0.35 : 0.4,
     });
   }
 
@@ -179,13 +218,14 @@
     if (!width || !height) return input;
 
     const maxSide = Math.max(width, height);
-    if (maxSide <= DETECT_MAX_SIDE) return input;
+    const limit = detectMaxSide();
+    if (maxSide <= limit) return input;
 
-    const scale = DETECT_MAX_SIDE / maxSide;
+    const scale = limit / maxSide;
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(width * scale));
     canvas.height = Math.max(1, Math.round(height * scale));
-    const ctx = canvas.getContext("2d", { alpha: false });
+    const ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
     ctx.drawImage(input, 0, 0, canvas.width, canvas.height);
     return canvas;
   }
@@ -305,17 +345,31 @@
 
   async function descriptorFromImage(input) {
     const faceapi = await ensureFaceApi();
+    await preferIPhoneCpuBackend();
     await yieldToEventLoop();
     const sized = downscaleForDetection(input);
+    // iPhone CPU path is slower; allow more time so a real timeout can surface
+    // instead of leaving the UI stuck on Scanning… forever.
+    const timeoutMs = isIPhone() ? 16000 : DETECT_TIMEOUT_MS;
     const detection = await withTimeout(
       faceapi.detectSingleFace(sized, detectorOptions()).withFaceLandmarks(true).withFaceDescriptor(),
-      DETECT_TIMEOUT_MS,
+      timeoutMs,
       "Face check timed out. Move into better light and try again."
     );
     if (!detection || !detection.descriptor) {
       throw new Error("No clear face found. Keep looking at the screen and stay in the ring.");
     }
     return Array.from(detection.descriptor);
+  }
+
+  function waitForPaintedFrame() {
+    // iOS Safari can report videoWidth/readyState before a real frame is painted.
+    // Capturing too early yields a black frame or can stall inference.
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
   }
 
   function waitForVideoDimensions(videoEl, timeoutMs = 8000) {
@@ -445,6 +499,9 @@
 
   async function descriptorFromVideo(videoEl) {
     await waitForVideoDimensions(videoEl);
+    await waitForPaintedFrame();
+    await preferIPhoneCpuBackend();
+    await yieldToEventLoop();
     return descriptorFromImage(captureVideoFrame(videoEl));
   }
 
