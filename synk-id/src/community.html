@@ -12,11 +12,11 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-reddit1" />
+    <link rel="stylesheet" href="/join.css?v=community-reddit2" />
     <script src="/force-refresh.js" defer></script>
   </head>
-  <body class="community-body">
-    <header class="site-nav site-nav-light community-topnav">
+  <body class="community-body reddit-body">
+    <header class="site-nav site-nav-light community-topnav reddit-topnav">
       <a class="brand" href="/hub" aria-label="Synk hub">
         <img src="/synk-logo.svg?v=circles2" alt="" width="28" height="28" />
         <span>Synk</span>
@@ -39,7 +39,7 @@
       </nav>
     </header>
 
-    <main class="shell shell-app shell-wide community-shell">
+    <main class="shell shell-app shell-wide community-shell reddit-shell">
       <section class="card" id="locked-card" hidden>
         <h2>Log in to browse Community</h2>
         <p class="muted" id="locked-help">Verify with your face or Synk code, then come back here.</p>
@@ -78,8 +78,8 @@
           </form>
         </section>
 
-        <div class="community-layout" id="community-main" hidden>
-          <aside class="community-sidebar card">
+        <div class="community-layout reddit-layout" id="community-main" hidden>
+          <aside class="community-sidebar card reddit-leftnav">
             <div class="community-side-section">
               <p class="section-label">You</p>
               <div class="persona-switch community-persona-panel" id="persona-switch" hidden>
@@ -215,13 +215,13 @@
                 <details class="community-side-details">
                   <summary class="section-label">Tags</summary>
                   <p class="muted" style="font-size: 0.82rem; margin: 8px 0">
-                    Create colored tags and assign them. Members pin one next to their name.
+                    Create tags and assign them. Members pin one beside their name — including an Owner tag for yourself.
                   </p>
                   <div id="tag-catalog" class="community-staff-list"></div>
                   <form id="create-tag-form" class="form" style="margin-top: 10px">
                     <div class="field">
                       <label for="tag-name">Tag name</label>
-                      <input id="tag-name" type="text" maxlength="32" required placeholder="Moderator" />
+                      <input id="tag-name" type="text" maxlength="32" required placeholder="Owner" />
                     </div>
                     <div class="field">
                       <label for="tag-description">Description</label>
@@ -234,7 +234,7 @@
                     </div>
                     <div class="field">
                       <label for="tag-color">Color</label>
-                      <input id="tag-color" type="color" value="#6366f1" />
+                      <input id="tag-color" type="color" value="#2f80ed" />
                     </div>
                     <p id="tag-status" class="muted" style="font-size: 0.85rem"></p>
                     <button class="btn btn-secondary btn-compact" type="submit">Create tag</button>
@@ -266,7 +266,7 @@
             </div>
           </aside>
 
-          <div class="community-main-col">
+          <div class="community-main-col reddit-main">
             <div id="feed-view">
               <section class="card community-view-card">
                 <nav class="community-crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
@@ -276,7 +276,12 @@
                 <div class="community-profile-meta" id="profile-meta" hidden></div>
               </section>
 
-              <section class="card community-composer" id="composer-card" hidden>
+              <section class="card community-composer reddit-create" id="composer-card" hidden>
+                <div class="reddit-create-bar" id="composer-collapsed">
+                  <div class="reddit-create-avatar" id="composer-avatar" aria-hidden="true">S</div>
+                  <button class="reddit-create-fakeinput" type="button" id="composer-open-btn">Create Post</button>
+                </div>
+                <div class="reddit-create-form" id="composer-expanded" hidden>
                 <div class="community-composer-head">
                   <p class="section-label">Create post</p>
                   <p class="muted" id="composer-as">Posting as —</p>
@@ -297,11 +302,21 @@
                     ></textarea>
                   </div>
                   <p id="post-status" class="muted" style="font-size: 0.85rem"></p>
-                  <button class="btn btn-primary" type="submit">Post</button>
+                  <div class="reddit-create-actions">
+                    <button class="btn btn-secondary btn-compact" type="button" id="composer-cancel-btn">Cancel</button>
+                    <button class="btn btn-primary btn-compact" type="submit">Post</button>
+                  </div>
                 </form>
+                </div>
               </section>
 
-              <section class="card" id="feed-card">
+              <section class="reddit-sortbar" aria-label="Sort">
+                <button class="reddit-sort-tab is-active" type="button">New</button>
+                <button class="reddit-sort-tab" type="button" disabled title="Coming soon">Hot</button>
+                <button class="reddit-sort-tab" type="button" disabled title="Coming soon">Top</button>
+              </section>
+
+              <section class="card reddit-feed-wrap" id="feed-card">
                 <p class="section-label" id="feed-label">Feed</p>
                 <h2 id="feed-title">Recent posts</h2>
                 <div id="feed" class="community-feed"></div>
@@ -351,10 +366,29 @@
               </section>
             </div>
           </div>
+
+          <aside class="reddit-right" id="right-rail" aria-label="About">
+            <section class="reddit-widget">
+              <h2 class="reddit-widget-title" id="about-title">About Community</h2>
+              <p class="muted" id="about-blurb">Posts from every group, newest first.</p>
+              <dl class="reddit-stats">
+                <div><dt id="stat-posts-label">Posts</dt><dd id="stat-posts">—</dd></div>
+                <div><dt>Communities</dt><dd id="stat-groups">—</dd></div>
+              </dl>
+            </section>
+            <section class="reddit-widget">
+              <h2 class="reddit-widget-title">Community rules</h2>
+              <ol class="reddit-rules">
+                <li>Be respectful — this is a Synk member space.</li>
+                <li>No sharing legal names or private Synk data.</li>
+                <li>Keep posts relevant to security and Synk.</li>
+              </ol>
+            </section>
+          </aside>
         </div>
       </div>
     </main>
 
-    <script src="/community.js?v=reddit1"></script>
+    <script src="/community.js?v=reddit2"></script>
   </body>
 </html>

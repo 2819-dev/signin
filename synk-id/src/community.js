@@ -150,10 +150,73 @@
       .join("");
   }
 
-  function roleBadge(role) {
-    if (role === "owner") return '<span class="community-badge community-badge-owner">Owner</span>';
+  // Public flair is tags only — no automatic Owner badge on posts/profiles.
+  function roleBadge(role, { staffOnly = false } = {}) {
+    if (!staffOnly) return "";
     if (role === "admin") return '<span class="community-badge community-badge-admin">Admin</span>';
     return "";
+  }
+
+  function formatRelative(iso) {
+    try {
+      const then = new Date(iso).getTime();
+      if (!Number.isFinite(then)) return "";
+      const sec = Math.max(0, Math.floor((Date.now() - then) / 1000));
+      if (sec < 60) return `${sec || 1}s ago`;
+      const min = Math.floor(sec / 60);
+      if (min < 60) return `${min}m ago`;
+      const hr = Math.floor(min / 60);
+      if (hr < 24) return `${hr}h ago`;
+      const day = Math.floor(hr / 24);
+      if (day < 30) return `${day}d ago`;
+      return formatWhen(iso);
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function setComposerOpen(open) {
+    const collapsed = document.getElementById("composer-collapsed");
+    const expanded = document.getElementById("composer-expanded");
+    if (!collapsed || !expanded) return;
+    collapsed.hidden = !!open;
+    expanded.hidden = !open;
+    if (open) {
+      const ta = document.getElementById("post-body");
+      if (ta) ta.focus();
+    }
+  }
+
+  function updateAboutRail(data) {
+    const aboutTitle = document.getElementById("about-title");
+    const aboutBlurb = document.getElementById("about-blurb");
+    const statPosts = document.getElementById("stat-posts");
+    const statGroups = document.getElementById("stat-groups");
+    const statPostsLabel = document.getElementById("stat-posts-label");
+    const rightRail = document.getElementById("right-rail");
+    const posts = (data && data.posts) || [];
+    if (rightRail) rightRail.hidden = route.type === "settings";
+    if (statGroups) statGroups.textContent = String(groups.length);
+    if (route.type === "user") {
+      const profile = (data && data.profile) || {};
+      if (aboutTitle) aboutTitle.textContent = `u/${profile.username || route.username || ""}`;
+      if (aboutBlurb) aboutBlurb.textContent = "Member profile";
+      if (statPostsLabel) statPostsLabel.textContent = "Posts";
+      if (statPosts) statPosts.textContent = String(profile.postCount != null ? profile.postCount : posts.length);
+      return;
+    }
+    if (route.type === "group") {
+      const group = (data && data.group) || groups.find((g) => g.slug === route.slug) || null;
+      if (aboutTitle) aboutTitle.textContent = group ? `About g/${group.slug}` : "About community";
+      if (aboutBlurb) aboutBlurb.textContent = (group && group.description) || "A Synk Community group.";
+      if (statPostsLabel) statPostsLabel.textContent = "Posts";
+      if (statPosts) statPosts.textContent = String(group && group.postCount != null ? group.postCount : posts.length);
+      return;
+    }
+    if (aboutTitle) aboutTitle.textContent = "Home";
+    if (aboutBlurb) aboutBlurb.textContent = "Your Synk Community feed across all groups.";
+    if (statPostsLabel) statPostsLabel.textContent = "Visible posts";
+    if (statPosts) statPosts.textContent = String(posts.length);
   }
 
   function parseRoute() {
@@ -236,6 +299,10 @@
     }
     resolveActivePersona();
     personaLabel.textContent = activePersona ? `@${activePersona}` : "@—";
+    const composerAvatar = document.getElementById("composer-avatar");
+    if (composerAvatar) {
+      composerAvatar.textContent = String(activePersona || publicUsername || "S").slice(0, 1).toUpperCase();
+    }
     document.getElementById("composer-as").textContent = activePersona
       ? `Posting as @${activePersona}`
       : "Posting as —";
@@ -307,7 +374,7 @@
           <div class="community-staff-row">
             <div>
               <a class="community-user-link" href="/u/${escapeHtml(person.username || "")}">@${escapeHtml(person.username || "member")}</a>
-              ${roleBadge(person.role)}
+              ${roleBadge(person.role, { staffOnly: true })}
             </div>
             ${
               canRemove
@@ -352,24 +419,32 @@
         const group = post.group;
         const author = post.author || {};
         const username = author.username || "member";
+        const showGroup = route.type !== "group" && group;
         return `
-          <article class="community-post">
-            <div class="community-post-rail" aria-hidden="true"></div>
-            <div class="community-post-body">
-              <div class="community-post-meta">
+          <article class="reddit-post">
+            <div class="reddit-vote" aria-hidden="true">
+              <button class="reddit-vote-btn" type="button" tabindex="-1" disabled>▲</button>
+              <span class="reddit-vote-count">•</span>
+              <button class="reddit-vote-btn" type="button" tabindex="-1" disabled>▼</button>
+            </div>
+            <div class="reddit-post-main">
+              <div class="reddit-post-meta">
                 ${
-                  group
-                    ? `<a class="community-group-chip" href="/community/g/${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)}</a>`
+                  showGroup
+                    ? `<a class="reddit-sub" href="/community/g/${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)}</a><span class="muted">•</span>`
                     : ""
                 }
                 <span class="muted">Posted by</span>
                 <a class="community-user-link" href="/u/${escapeHtml(username)}">u/${escapeHtml(username)}</a>
                 ${tagChip(author.pinnedTag, { compact: true })}
-                ${roleBadge(author.role)}
-                
-                <span class="muted">· ${escapeHtml(formatWhen(post.createdAt))}</span>
+                <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
               </div>
-              <p>${escapeHtml(post.body || "")}</p>
+              <div class="reddit-post-title">${escapeHtml(post.body || "")}</div>
+              <div class="reddit-post-actions">
+                <span class="reddit-action muted">Comment</span>
+                <span class="reddit-action muted">Share</span>
+                <span class="reddit-action muted">Save</span>
+              </div>
             </div>
           </article>
         `;
@@ -444,7 +519,7 @@
           <div>
             <strong>u/${escapeHtml(profile.username || "")}</strong>
             ${tagChip(profile.pinnedTag, { compact: true })}
-            ${roleBadge(profile.role)}
+            
             
             <p class="muted" style="margin:4px 0 0;font-size:0.85rem;">
               ${Number(profile.postCount || 0)} posts
@@ -685,6 +760,7 @@
       if (!res.ok) throw new Error(data.error || "Could not post");
       document.getElementById("post-body").value = "";
       status.textContent = "Posted";
+      setComposerOpen(false);
       if (data.post && data.post.group && data.post.group.slug) {
         await navigate({ type: "group", slug: data.post.group.slug, username: "" }, { replace: true });
       } else {
@@ -956,6 +1032,18 @@
 
   if (myTagsList) myTagsList.addEventListener("click", handlePinClick);
   if (profileMeta) profileMeta.addEventListener("click", handlePinClick);
+
+  
+  const composerOpenBtn = document.getElementById("composer-open-btn");
+  const composerCancelBtn = document.getElementById("composer-cancel-btn");
+  if (composerOpenBtn) composerOpenBtn.addEventListener("click", () => setComposerOpen(true));
+  if (composerCancelBtn) {
+    composerCancelBtn.addEventListener("click", () => {
+      setComposerOpen(false);
+      const st = document.getElementById("post-status");
+      if (st) st.textContent = "";
+    });
+  }
 
   document.getElementById("signout-btn").addEventListener("click", () => {
     localStorage.removeItem(STORAGE_KEY);
