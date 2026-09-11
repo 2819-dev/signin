@@ -2027,7 +2027,20 @@ textarea {
   color: var(--r-ink);
   flex: 0 0 auto;
 }
-.reddit-brand img { border-radius: 999px; }
+.reddit-brand img,
+.reddit-brand-logo {
+  width: 28px;
+  height: 28px;
+  display: block;
+  border-radius: 0;
+  flex: 0 0 auto;
+}
+@media (prefers-color-scheme: dark) {
+  .reddit-brand-logo,
+  body.community-body .reddit-brand img {
+    filter: brightness(0) invert(1);
+  }
+}
 .reddit-brand-mark {
   width: 32px;
   height: 32px;
@@ -3000,7 +3013,7 @@ textarea {
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: #ff4500;
+  background: var(--r-brand, #041A55);
   color: #fff;
   font-size: 0.65rem;
   font-weight: 700;
@@ -6225,7 +6238,7 @@ body.reddit-nav-open #left-nav,
 .reddit-vote-btn:hover {
   background: color-mix(in srgb, var(--r-accent, #1a3a5c) 10%, transparent) !important;
 }
-.reddit-vote-btn.up.is-active { color: #ff4500 !important; }
+.reddit-vote-btn.up.is-active { color: var(--r-brand, #041A55) !important; }
 .reddit-vote-btn.down.is-active { color: #7193ff !important; }
 .reddit-post-main {
   padding: 10px 14px 8px !important;
@@ -6898,6 +6911,10 @@ body.reddit-body .reddit-create {
   color: var(--r-accent-ink, #1a3a5c);
   text-decoration: none;
 }
+/* .btn / display:inline-flex overrides UA [hidden] — hide Learn more when disabled */
+.synk-tag-popover-learn[hidden] {
+  display: none !important;
+}
 .synk-tag-popover-learn:hover { text-decoration: underline; }
 .info-page-shell { max-width: 760px; }
 .info-page-hero {
@@ -7026,6 +7043,51 @@ body.community-body #user-menu-avatar.reddit-menu-avatar {
   place-items: center !important;
   overflow: hidden !important;
   pointer-events: none !important;
+}
+
+/* Tiny red unread indicator on profile picture */
+body.community-body #nav-toggle.reddit-menu-avatar-btn,
+button.reddit-menu-avatar-btn#nav-toggle {
+  position: relative !important;
+}
+.avatar-notif-dot,
+#avatar-notif-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #e11d48;
+  border: 2px solid var(--r-card, #fff);
+  box-sizing: content-box;
+  pointer-events: none;
+  z-index: 2;
+}
+.avatar-notif-dot[hidden],
+#avatar-notif-dot[hidden] {
+  display: none !important;
+}
+
+/* Sidebar notifications unread count */
+.reddit-nav-flat .reddit-nav-item:has(.reddit-nav-count) {
+  grid-template-columns: 28px 1fr auto;
+}
+.reddit-nav-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e11d48;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  justify-self: end;
+}
+.reddit-nav-count[hidden] {
+  display: none !important;
 }
 
 body.community-body.reddit-nav-open .reddit-topnav,
@@ -7320,7 +7382,7 @@ body.community-body .reddit-inbox-tab {
 }
 body.community-body .reddit-inbox-tab.is-active {
   color: var(--r-ink, #111) !important;
-  border-bottom-color: #ff4500 !important;
+  border-bottom-color: var(--r-brand, #041A55) !important;
   background: transparent !important;
 }
 body.community-body .reddit-inbox-list {
@@ -7352,10 +7414,10 @@ body.community-body .reddit-inbox-row::before {
   background: transparent !important;
 }
 body.community-body .reddit-inbox-row.is-unread {
-  background: color-mix(in srgb, #ff4500 6%, var(--r-card, #fff)) !important;
+  background: color-mix(in srgb, var(--r-brand, #041A55) 6%, var(--r-card, #fff)) !important;
 }
 body.community-body .reddit-inbox-row.is-unread::before {
-  background: #ff4500 !important;
+  background: var(--r-brand, #041A55) !important;
 }
 body.community-body .reddit-inbox-row-copy {
   display: grid !important;
@@ -7403,8 +7465,8 @@ body.community-body .community-dm-thread {
   padding: 12px 14px !important;
 }
 body.community-body .community-dm-thread.is-active {
-  background: color-mix(in srgb, #ff4500 8%, #fff) !important;
-  box-shadow: inset 3px 0 0 #ff4500 !important;
+  background: color-mix(in srgb, var(--r-brand, #041A55) 8%, #fff) !important;
+  box-shadow: inset 3px 0 0 var(--r-brand, #041A55) !important;
 }
 body.community-body .community-dm-chat {
   min-height: 520px !important;
@@ -7459,7 +7521,7 @@ body.community-body .community-dm-send {
   border-radius: 999px !important;
   display: inline-grid !important;
   place-items: center !important;
-  background: #ff4500 !important;
+  background: var(--r-brand, #041A55) !important;
   color: #fff !important;
   cursor: pointer !important;
   box-shadow: none !important;

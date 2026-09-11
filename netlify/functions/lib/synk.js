@@ -600,7 +600,8 @@ async function ensureSynkCommunityExtras(sql) {
   `;
 
   await ensureCommunityOwner(sql);
-  await ensureDefaultCommunityGroup(sql);
+  // Do not auto-create a default "General" group — Community starts empty
+  // until someone creates groups intentionally.
 }
 
 async function isCommunityUsernameTaken(sql, username, { exceptProfileId = null, exceptAltId = null } = {}) {

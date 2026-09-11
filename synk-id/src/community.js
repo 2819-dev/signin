@@ -351,9 +351,13 @@
       const pageId = btn.getAttribute("data-tag-learn-id") || "";
       if (learnOn && (slug || pageId)) {
         learnLink.hidden = false;
+        learnLink.removeAttribute("aria-hidden");
+        learnLink.textContent = "Learn more";
         learnLink.href = slug ? `/info/${encodeURIComponent(slug)}` : `/info/?id=${encodeURIComponent(pageId)}`;
       } else {
         learnLink.hidden = true;
+        learnLink.setAttribute("aria-hidden", "true");
+        learnLink.textContent = "";
         learnLink.removeAttribute("href");
       }
     }
@@ -585,16 +589,23 @@
   }
 
   function updateInboxBadge() {
-    const badge = document.getElementById("inbox-badge");
-    if (!badge) return;
     const n = Number(unreadCount) || 0;
-    if (n > 0) {
-      badge.hidden = false;
-      badge.textContent = n > 99 ? "99+" : String(n);
-    } else {
-      badge.hidden = true;
-      badge.textContent = "0";
-    }
+    const label = n > 99 ? "99+" : String(n);
+    ["inbox-badge", "notifications-badge", "tab-inbox-badge"].forEach((id) => {
+      const badge = document.getElementById(id);
+      if (!badge) return;
+      if (n > 0) {
+        badge.hidden = false;
+        badge.textContent = label;
+      } else {
+        badge.hidden = true;
+        badge.textContent = "0";
+      }
+    });
+    const avatarDot = document.getElementById("avatar-notif-dot");
+    if (avatarDot) avatarDot.hidden = n <= 0;
+    const notifWrap = document.getElementById("notif-wrap");
+    if (notifWrap) notifWrap.classList.toggle("has-unread", n > 0);
   }
 
   function apiSort() {
@@ -1307,6 +1318,8 @@
 
     const messagesNavLink = document.getElementById("messages-nav-link");
     if (messagesNavLink) messagesNavLink.classList.toggle("is-active", onInbox && inboxTab === "messages");
+    const notificationsNavLink = document.getElementById("notifications-nav-link");
+    if (notificationsNavLink) notificationsNavLink.classList.toggle("is-active", onInbox && inboxTab === "notifications");
     const groupsNavLink = document.getElementById("groups-nav-link");
     if (groupsNavLink) groupsNavLink.classList.toggle("is-active", route.type === "groups");
 
@@ -2668,6 +2681,13 @@
   bindNav(document.getElementById("tab-inbox"), { type: "inbox", slug: "", username: "" });
 
   bindNav(document.getElementById("groups-nav-link"), { type: "groups", slug: "", username: "" });
+  const notificationsNav = document.getElementById("notifications-nav-link");
+  if (notificationsNav) {
+    notificationsNav.addEventListener("click", (e) => {
+      e.preventDefault();
+      openNotifications().catch(() => {});
+    });
+  }
   const messagesNav = document.getElementById("messages-nav-link");
   if (messagesNav) {
     messagesNav.addEventListener("click", (e) => {
@@ -2747,6 +2767,12 @@
     });
   }
 
+  async function openNotifications() {
+    inboxTab = "notifications";
+    await navigate({ type: "inbox", slug: "", username: "" });
+    setInboxTab("notifications");
+  }
+
   async function openMessages() {
     inboxTab = "messages";
     await navigate({ type: "inbox", slug: "", username: "" });
@@ -2776,6 +2802,10 @@
     if (msgTab) msgTab.classList.toggle("is-active", inboxTab === "messages");
     const markRead = document.getElementById("inbox-mark-read");
     if (markRead) markRead.hidden = inboxTab !== "notifications";
+    const messagesNavLink = document.getElementById("messages-nav-link");
+    if (messagesNavLink) messagesNavLink.classList.toggle("is-active", inboxTab === "messages");
+    const notificationsNavLink = document.getElementById("notifications-nav-link");
+    if (notificationsNavLink) notificationsNavLink.classList.toggle("is-active", inboxTab === "notifications");
   }
 
   function renderDmThreads(threads) {
