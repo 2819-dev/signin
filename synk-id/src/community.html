@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community16" />
+    <link rel="stylesheet" href="/join.css?v=community17" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -408,6 +408,7 @@
                     <h3>Tags</h3>
                     <p class="muted">Create tags and assign them. Members pin one beside their name.</p>
                     <div id="tag-catalog" class="community-staff-list"></div>
+                    <input id="tag-icon-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
                     <form id="create-tag-form" class="form" style="margin-top: 12px">
                       <div class="field">
                         <label for="tag-name">Tag name</label>
@@ -420,6 +421,12 @@
                       <div class="field">
                         <label for="tag-color">Color</label>
                         <input id="tag-color" type="color" value="#2f80ed" />
+                      </div>
+                      <div class="field">
+                        <label for="tag-icon">Icon</label>
+                        <input id="tag-icon" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                        <p class="muted" style="margin:6px 0 0;font-size:0.8rem;">Optional. Square PNG/WebP looks best on badges.</p>
+                        <div id="tag-icon-preview" class="synk-tag-icon-preview" hidden></div>
                       </div>
                       <p id="tag-status" class="muted" style="font-size: 0.85rem"></p>
                       <button class="btn btn-secondary btn-compact" type="submit">Create tag</button>
@@ -479,6 +486,6 @@
       </div>
     </main>
 
-    <script src="/community.js?v=reddit16"></script>
+    <script src="/community.js?v=reddit17"></script>
   </body>
 </html>

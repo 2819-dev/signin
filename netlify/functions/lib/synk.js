@@ -269,6 +269,7 @@ async function ensureSynkCommunityExtras(sql) {
     CREATE INDEX IF NOT EXISTS synk_community_tags_created_idx
     ON synk_community_tags (created_at DESC)
   `;
+  await sql`ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS icon_url TEXT`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS synk_community_profile_tags (
@@ -654,6 +655,7 @@ function mapCommunityTag(row, { pinned = false } = {}) {
     slug: row.slug,
     description: row.description || "",
     color: row.color || "#6366f1",
+    iconUrl: row.icon_url || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     pinned: Boolean(pinned || row.pinned),
@@ -662,7 +664,7 @@ function mapCommunityTag(row, { pinned = false } = {}) {
 
 async function listCommunityTags(sql) {
   const rows = await sql`
-    SELECT id, name, slug, description, color, created_by, created_at, updated_at
+    SELECT id, name, slug, description, color, icon_url, created_by, created_at, updated_at
     FROM synk_community_tags
     ORDER BY name ASC
   `;
@@ -674,7 +676,7 @@ async function findCommunityTag(sql, { id, slug } = {}) {
   const tagSlug = normalizeTagSlug(slug);
   if (tagId) {
     const rows = await sql`
-      SELECT id, name, slug, description, color, created_by, created_at, updated_at
+      SELECT id, name, slug, description, color, icon_url, created_by, created_at, updated_at
       FROM synk_community_tags
       WHERE id = ${tagId}
       LIMIT 1
@@ -683,7 +685,7 @@ async function findCommunityTag(sql, { id, slug } = {}) {
   }
   if (tagSlug) {
     const rows = await sql`
-      SELECT id, name, slug, description, color, created_by, created_at, updated_at
+      SELECT id, name, slug, description, color, icon_url, created_by, created_at, updated_at
       FROM synk_community_tags
       WHERE slug = ${tagSlug}
       LIMIT 1
@@ -702,6 +704,7 @@ async function listProfileTags(sql, profileId) {
       t.slug,
       t.description,
       t.color,
+      t.icon_url,
       t.created_at,
       t.updated_at,
       CASE WHEN c.pinned_tag_id = t.id THEN TRUE ELSE FALSE END AS pinned
@@ -719,7 +722,7 @@ async function listProfileTags(sql, profileId) {
 async function getPinnedTagForProfile(sql, profileId) {
   if (!profileId) return null;
   const rows = await sql`
-    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.icon_url, t.created_at, t.updated_at
     FROM synk_community_profiles c
     JOIN synk_community_tags t ON t.id = c.pinned_tag_id
     WHERE c.synk_profile_id = ${profileId}
@@ -738,6 +741,7 @@ async function listUsernameTags(sql, username) {
       t.slug,
       t.description,
       t.color,
+      t.icon_url,
       t.created_at,
       t.updated_at,
       CASE
@@ -760,7 +764,7 @@ async function getPinnedTagForUsername(sql, username) {
   const name = normalizePublicUsername(username);
   if (!name) return null;
   const primary = await sql`
-    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.icon_url, t.created_at, t.updated_at
     FROM synk_community_profiles c
     JOIN synk_community_tags t ON t.id = c.pinned_tag_id
     WHERE c.public_username = ${name}
@@ -768,7 +772,7 @@ async function getPinnedTagForUsername(sql, username) {
   `;
   if (primary[0]) return mapCommunityTag(primary[0], { pinned: true });
   const alt = await sql`
-    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.icon_url, t.created_at, t.updated_at
     FROM synk_community_alt_accounts a
     JOIN synk_community_tags t ON t.id = a.pinned_tag_id
     WHERE a.public_username = ${name}
@@ -790,6 +794,7 @@ async function getPinnedTagsByUsernames(sql, usernames) {
       t.slug,
       t.description,
       t.color,
+      t.icon_url,
       t.created_at,
       t.updated_at
     FROM (

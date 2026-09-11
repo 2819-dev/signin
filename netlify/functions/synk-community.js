@@ -1,5 +1,7 @@
 "use strict";
 
+const { randomUUID } = require("crypto");
+const { getStore, connectLambda } = require("@netlify/blobs");
 const { getSql, json } = require("./lib/db");
 const {
   ensureSynkCoreTables,
@@ -753,6 +755,86 @@ async function applyVote(sql, { profileId, targetType, targetId, value }) {
   }
 
   return { prev, next, delta };
+}
+
+
+const TAG_ICON_MAX_BYTES = 512 * 1024;
+const TAG_ICON_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"]);
+
+function allowedTagIconUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (raw.startsWith("/api/community-tag-icon?id=")) return raw.split("&")[0];
+  try {
+    const u = new URL(raw, "https://synkid.netlify.app");
+    if (u.pathname === "/api/community-tag-icon" && u.searchParams.get("id")) {
+      const id = u.searchParams.get("id");
+      if (/^[0-9a-f-]{36}$/i.test(id)) return `/api/community-tag-icon?id=${encodeURIComponent(id)}`;
+    }
+  } catch (_) {}
+  return undefined; // invalid
+}
+
+async function saveCommunityTagIcon(event, rawInput) {
+  const raw = String(rawInput || "").trim();
+  if (!raw) return null;
+  let contentType = "image/png";
+  let base64 = raw;
+  const dataMatch = /^data:(image\/(png|jpeg|jpg|webp|gif));base64,(.+)$/i.exec(raw);
+  if (dataMatch) {
+    contentType = dataMatch[1].toLowerCase().replace("image/jpg", "image/jpeg");
+    base64 = dataMatch[3];
+  } else if (raw.includes(",")) {
+    base64 = raw.split(",").pop();
+  }
+  if (!TAG_ICON_TYPES.has(contentType) && !TAG_ICON_TYPES.has(contentType.replace("image/jpg", "image/jpeg"))) {
+    const err = new Error("Use a PNG, JPG, WebP, or GIF icon");
+    err.statusCode = 400;
+    throw err;
+  }
+  let buffer;
+  try {
+    buffer = Buffer.from(base64, "base64");
+  } catch {
+    const err = new Error("Could not read icon data");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!buffer.length) {
+    const err = new Error("Could not read icon");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (buffer.length > TAG_ICON_MAX_BYTES) {
+    const err = new Error("Icon too large (max 512KB)");
+    err.statusCode = 400;
+    throw err;
+  }
+  connectLambda(event);
+  const store = getStore("kiosk-media");
+  const id = randomUUID();
+  await store.set(`community-tag-icon-${id}`, buffer, {
+    metadata: {
+      contentType: contentType === "image/jpg" ? "image/jpeg" : contentType,
+      updatedAt: new Date().toISOString(),
+      source: "community-tag-icon",
+    },
+  });
+  return `/api/community-tag-icon?id=${encodeURIComponent(id)}&v=${Date.now()}`;
+}
+
+function serializeTagRow(row, { pinned = false } = {}) {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description || "",
+    color: row.color,
+    iconUrl: row.icon_url || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    pinned: Boolean(pinned),
+  };
 }
 
 exports.handler = async (event) => {
@@ -1736,11 +1818,25 @@ exports.handler = async (event) => {
         return json(400, { error: "Tag name needs at least 2 characters" });
       }
       if (!slug) return json(400, { error: "Tag name is invalid" });
+      let iconUrl = null;
+      try {
+        if (body.iconData || body.icon || body.imageData) {
+          iconUrl = await saveCommunityTagIcon(event, body.iconData || body.icon || body.imageData);
+        } else if (body.iconUrl != null || body.icon_url != null) {
+          const normalized = allowedTagIconUrl(body.iconUrl != null ? body.iconUrl : body.icon_url);
+          if (normalized === undefined) {
+            return json(400, { error: "Icon URL is invalid" });
+          }
+          iconUrl = normalized;
+        }
+      } catch (err) {
+        return json(err.statusCode || 400, { error: err.message || "Could not save icon" });
+      }
       try {
         const rows = await sql`
-          INSERT INTO synk_community_tags (name, slug, description, color, created_by)
-          VALUES (${name}, ${slug}, ${description}, ${color}, ${auth.profile.id})
-          RETURNING id, name, slug, description, color, created_at, updated_at
+          INSERT INTO synk_community_tags (name, slug, description, color, icon_url, created_by)
+          VALUES (${name}, ${slug}, ${description}, ${color}, ${iconUrl}, ${auth.profile.id})
+          RETURNING id, name, slug, description, color, icon_url, created_at, updated_at
         `;
         await logSynkEvent(sql, {
           eventType: "community_tag_create",
@@ -1750,16 +1846,7 @@ exports.handler = async (event) => {
         });
         return json(201, {
           ok: true,
-          tag: {
-            id: rows[0].id,
-            name: rows[0].name,
-            slug: rows[0].slug,
-            description: rows[0].description || "",
-            color: rows[0].color,
-            createdAt: rows[0].created_at,
-            updatedAt: rows[0].updated_at,
-            pinned: false,
-          },
+          tag: serializeTagRow(rows[0], { pinned: false }),
           tags: await listCommunityTags(sql),
         });
       } catch (err) {
@@ -1790,6 +1877,27 @@ exports.handler = async (event) => {
         return json(400, { error: "Tag name needs at least 2 characters" });
       }
       if (!slug) return json(400, { error: "Tag name is invalid" });
+      let iconUrl = existing.iconUrl || null;
+      try {
+        if (body.clearIcon === true || body.removeIcon === true) {
+          iconUrl = null;
+        } else if (body.iconData || body.icon || body.imageData) {
+          iconUrl = await saveCommunityTagIcon(event, body.iconData || body.icon || body.imageData);
+        } else if (body.iconUrl !== undefined || body.icon_url !== undefined) {
+          const incoming = body.iconUrl !== undefined ? body.iconUrl : body.icon_url;
+          if (incoming == null || incoming === "") {
+            iconUrl = null;
+          } else {
+            const normalized = allowedTagIconUrl(incoming);
+            if (normalized === undefined) {
+              return json(400, { error: "Icon URL is invalid" });
+            }
+            iconUrl = normalized;
+          }
+        }
+      } catch (err) {
+        return json(err.statusCode || 400, { error: err.message || "Could not save icon" });
+      }
       try {
         const rows = await sql`
           UPDATE synk_community_tags
@@ -1798,9 +1906,10 @@ exports.handler = async (event) => {
             slug = ${slug},
             description = ${description},
             color = ${color},
+            icon_url = ${iconUrl},
             updated_at = NOW()
           WHERE id = ${existing.id}
-          RETURNING id, name, slug, description, color, created_at, updated_at
+          RETURNING id, name, slug, description, color, icon_url, created_at, updated_at
         `;
         await logSynkEvent(sql, {
           eventType: "community_tag_update",
@@ -1810,16 +1919,7 @@ exports.handler = async (event) => {
         });
         return json(200, {
           ok: true,
-          tag: {
-            id: rows[0].id,
-            name: rows[0].name,
-            slug: rows[0].slug,
-            description: rows[0].description || "",
-            color: rows[0].color,
-            createdAt: rows[0].created_at,
-            updatedAt: rows[0].updated_at,
-            pinned: false,
-          },
+          tag: serializeTagRow(rows[0], { pinned: false }),
           tags: await listCommunityTags(sql),
         });
       } catch (err) {

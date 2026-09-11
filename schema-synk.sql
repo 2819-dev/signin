@@ -378,10 +378,13 @@ CREATE TABLE IF NOT EXISTS synk_community_tags (
   slug TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   color TEXT NOT NULL DEFAULT '#6366f1',
+  icon_url TEXT,
   created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS icon_url TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS synk_community_tags_slug_idx
   ON synk_community_tags (slug);

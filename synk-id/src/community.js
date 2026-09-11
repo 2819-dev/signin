@@ -44,6 +44,7 @@
   let alts = [];
   let ownerUsername = "vision";
   let tags = [];
+  let pendingTagIconData = "";
   let myTags = [];
   let route = { type: "home", slug: "", username: "" };
   let lastPosts = [];
@@ -165,16 +166,20 @@
     const id = escapeHtml(String(tag.id || ""));
     const pinned = tag.pinned ? "1" : "0";
     const initial = escapeHtml(tagInitial(tag));
+    const iconUrl = escapeHtml(tag.iconUrl || "");
     const cls = [
       "synk-tag-badge",
       compact ? "is-compact" : "",
       tag.pinned ? "is-pinned" : "",
+      iconUrl ? "has-icon" : "",
     ]
       .filter(Boolean)
       .join(" ");
-    return `<button type="button" class="${cls}" style="--tag-color:${color}" data-tag-badge="1" data-tag-id="${id}" data-tag-name="${name}" data-tag-desc="${desc}" data-tag-pinned="${pinned}" data-can-pin="${canPin ? "1" : "0"}" aria-label="${name}" aria-expanded="false" title="${name}"><span class="synk-tag-badge-icon" aria-hidden="true">${initial}</span></button>`;
+    const inner = iconUrl
+      ? `<img class="synk-tag-badge-img" src="${iconUrl}" alt="" loading="lazy" />`
+      : `<span class="synk-tag-badge-icon" aria-hidden="true">${initial}</span>`;
+    return `<button type="button" class="${cls}" style="--tag-color:${color}" data-tag-badge="1" data-tag-id="${id}" data-tag-name="${name}" data-tag-desc="${desc}" data-tag-pinned="${pinned}" data-tag-icon="${iconUrl}" data-can-pin="${canPin ? "1" : "0"}" aria-label="${name}" aria-expanded="false" title="${name}">${inner}</button>`;
   }
-
   function ensureTagPopover() {
     let pop = document.getElementById("tag-badge-popover");
     if (pop) return pop;
@@ -216,8 +221,15 @@
     const descEl = pop.querySelector("#tag-pop-desc");
     const pinBtn = pop.querySelector("#tag-pop-pin");
     if (icon) {
-      icon.textContent = (name || "?").slice(0, 1).toUpperCase();
+      const iconUrl = btn.getAttribute("data-tag-icon") || "";
       icon.style.setProperty("--tag-color", color);
+      if (iconUrl) {
+        icon.classList.add("has-image");
+        icon.innerHTML = `<img src="${iconUrl.replace(/"/g, "&quot;")}" alt="" />`;
+      } else {
+        icon.classList.remove("has-image");
+        icon.textContent = (name || "?").slice(0, 1).toUpperCase();
+      }
     }
     if (nameEl) nameEl.textContent = name;
     if (descEl) descEl.textContent = desc || "No description.";
@@ -279,7 +291,11 @@
                   <div class="muted" style="font-size:0.78rem;margin-top:2px;">${escapeHtml(tag.description || "No description")}</div>
                 </div>
               </div>
-              <button class="btn btn-secondary btn-compact" type="button" data-delete-tag="${escapeHtml(tag.id)}">Delete</button>
+              <div class="synk-tag-mod-actions">
+                <button class="btn btn-secondary btn-compact" type="button" data-upload-tag-icon="${escapeHtml(tag.id)}">Icon</button>
+                ${tag.iconUrl ? `<button class="btn btn-secondary btn-compact" type="button" data-clear-tag-icon="${escapeHtml(tag.id)}">Clear icon</button>` : ""}
+                <button class="btn btn-secondary btn-compact" type="button" data-delete-tag="${escapeHtml(tag.id)}">Delete</button>
+              </div>
             </div>
           `;
         })
@@ -1742,12 +1758,21 @@
           name: document.getElementById("tag-name").value,
           description: document.getElementById("tag-description").value,
           color: document.getElementById("tag-color").value,
+          iconData: pendingTagIconData || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not create tag");
       document.getElementById("tag-name").value = "";
       document.getElementById("tag-description").value = "";
+      const iconInput = document.getElementById("tag-icon");
+      if (iconInput) iconInput.value = "";
+      pendingTagIconData = "";
+      const iconPreview = document.getElementById("tag-icon-preview");
+      if (iconPreview) {
+        iconPreview.hidden = true;
+        iconPreview.innerHTML = "";
+      }
       tags = data.tags || [];
       renderTagCatalog();
       status.textContent = `Created ${data.tag.name}`;
@@ -1780,8 +1805,108 @@
     }
   });
 
+  const tagIconInput = document.getElementById("tag-icon");
+  const tagIconPreview = document.getElementById("tag-icon-preview");
+  if (tagIconInput) {
+    tagIconInput.addEventListener("change", async () => {
+      const status = document.getElementById("tag-status");
+      try {
+        const file = tagIconInput.files && tagIconInput.files[0];
+        if (!file) {
+          pendingTagIconData = "";
+          if (tagIconPreview) {
+            tagIconPreview.hidden = true;
+            tagIconPreview.innerHTML = "";
+          }
+          return;
+        }
+        if (!String(file.type || "").startsWith("image/")) throw new Error("Choose an image file");
+        if (file.size > 512 * 1024) throw new Error("Icon too large (max 512KB)");
+        pendingTagIconData = await readFileAsDataUrl(file);
+        if (tagIconPreview) {
+          tagIconPreview.hidden = false;
+          tagIconPreview.innerHTML = `<img src="${pendingTagIconData}" alt="" />`;
+        }
+        if (status) status.textContent = "Icon ready";
+      } catch (err) {
+        pendingTagIconData = "";
+        tagIconInput.value = "";
+        if (tagIconPreview) {
+          tagIconPreview.hidden = true;
+          tagIconPreview.innerHTML = "";
+        }
+        if (status) status.textContent = err.message || "Could not read icon";
+      }
+    });
+  }
+
+  const tagIconFile = document.getElementById("tag-icon-file");
+  let tagIconUploadId = "";
+  if (tagIconFile) {
+    tagIconFile.addEventListener("change", async () => {
+      const status = document.getElementById("tag-status");
+      const tagId = tagIconUploadId;
+      tagIconUploadId = "";
+      if (!tagId) return;
+      if (status) status.textContent = "Uploading icon…";
+      try {
+        const file = tagIconFile.files && tagIconFile.files[0];
+        tagIconFile.value = "";
+        if (!file) throw new Error("Choose an image");
+        if (!String(file.type || "").startsWith("image/")) throw new Error("Choose an image file");
+        if (file.size > 512 * 1024) throw new Error("Icon too large (max 512KB)");
+        const iconData = await readFileAsDataUrl(file);
+        if (!iconData) throw new Error("Choose an image");
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({ action: "update-tag", tagId, iconData }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not upload icon");
+        tags = data.tags || [];
+        renderTagCatalog();
+        await loadCommunity();
+        if (status) status.textContent = "Icon updated";
+      } catch (err) {
+        tagIconFile.value = "";
+        if (status) status.textContent = err.message || "Could not upload icon";
+      }
+    });
+  }
+
   if (tagCatalog) {
     tagCatalog.addEventListener("click", async (e) => {
+      const uploadBtn = e.target.closest("[data-upload-tag-icon]");
+      if (uploadBtn) {
+        e.preventDefault();
+        tagIconUploadId = uploadBtn.getAttribute("data-upload-tag-icon") || "";
+        if (tagIconFile) tagIconFile.click();
+        return;
+      }
+      const clearBtn = e.target.closest("[data-clear-tag-icon]");
+      if (clearBtn) {
+        e.preventDefault();
+        const tagId = clearBtn.getAttribute("data-clear-tag-icon");
+        const status = document.getElementById("tag-status");
+        if (status) status.textContent = "Clearing icon…";
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: hubHeaders(),
+            body: JSON.stringify({ action: "update-tag", tagId, clearIcon: true }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not clear icon");
+          tags = data.tags || [];
+          renderTagCatalog();
+          await loadCommunity();
+          if (status) status.textContent = "Icon cleared";
+        } catch (err) {
+          if (status) status.textContent = err.message || "Could not clear icon";
+        }
+        return;
+      }
       const btn = e.target.closest("[data-delete-tag]");
       if (!btn) return;
       const tagId = btn.getAttribute("data-delete-tag");
@@ -1865,7 +1990,7 @@
 
   async function handlePinClick(e) {
     const btn = e.target.closest("[data-pin-tag]");
-    if (!btn) return;
+    if (!btn || btn.hidden) return;
     e.preventDefault();
     e.stopPropagation();
     const clearAttr = btn.getAttribute("data-tag-pinned");
