@@ -611,6 +611,13 @@
   }
 
   function renderCrumbs() {
+    if (!crumbsEl) return;
+    // Reddit home/popular have no breadcrumb chrome; keep optional crumbs hidden on feed.
+    if (route.type === "home" || route.type === "popular" || route.type === "group" || route.type === "user") {
+      crumbsEl.hidden = true;
+      crumbsEl.innerHTML = "";
+      return;
+    }
     const parts = ['<a href="/community">community</a>'];
     if (route.type === "settings") {
       parts.push(`<span>/</span><span>settings</span>`);
@@ -618,16 +625,24 @@
       parts.push(`<span>/</span><span>submit</span>`);
     } else if (route.type === "mod") {
       parts.push(`<span>/</span><span>mod</span>`);
-    } else if (route.type === "popular") {
-      parts.push(`<span>/</span><span>popular</span>`);
     } else if (route.type === "inbox") {
       parts.push(`<span>/</span><span>inbox</span>`);
-    } else if (route.type === "group" && route.slug) {
-      parts.push(`<span>/</span><span>${escapeHtml(route.slug)}</span>`);
-    } else if (route.type === "user" && route.username) {
-      parts.push(`<span>/</span><span>${escapeHtml(route.username)}</span>`);
     }
     crumbsEl.innerHTML = parts.join(" ");
+    crumbsEl.hidden = true;
+  }
+
+  function setBannerMode(mode, visible) {
+    const banner = document.getElementById("view-banner");
+    if (!banner) return null;
+    banner.dataset.mode = mode || "";
+    banner.hidden = !visible;
+    return banner;
+  }
+
+  function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
   }
 
   function renderGroups() {
@@ -956,8 +971,10 @@
 
   function applyViewState(data) {
     renderCrumbs();
-    profileMeta.hidden = true;
-    profileMeta.innerHTML = "";
+    if (profileMeta) {
+      profileMeta.hidden = true;
+      profileMeta.innerHTML = "";
+    }
     syncSortTabs();
 
     const joinBtn = document.getElementById("join-community-btn");
@@ -980,19 +997,22 @@
     }
 
     const createTop = document.getElementById("create-top-link");
-    const bannerCreate = document.getElementById("banner-create-link");
     const submitHref =
       route.type === "group" && route.slug
         ? `/community/submit?group=${encodeURIComponent(route.slug)}`
         : "/community/submit";
     if (createTop) createTop.href = submitHref;
-    if (bannerCreate) bannerCreate.href = submitHref;
+
+    const viewBlurb = document.getElementById("view-blurb");
+    const viewIcon = document.getElementById("view-icon");
 
     if (route.type === "settings" || route.type === "submit" || route.type === "mod" || route.type === "inbox") {
+      setBannerMode("", false);
       updateAboutRail(data);
       return;
     }
     if (route.type === "post") {
+      setBannerMode("", false);
       activePostId = route.postId || "";
       const post =
         (data && data.post) ||
@@ -1000,29 +1020,29 @@
         ((data && data.posts) || []).find((p) => String(p.id) === String(activePostId));
       renderPostDetail(post || null);
       renderComments((data && data.comments) || lastComments || []);
-      const viewIcon = document.getElementById("view-icon");
-      if (viewIcon) viewIcon.textContent = "▣";
       updateAboutRail(data);
       return;
     }
     if (route.type === "user") {
       const profile = data.profile || { username: route.username };
-      const viewIcon = document.getElementById("view-icon");
-      if (viewIcon) viewIcon.textContent = "u";
-      document.getElementById("view-eyebrow").textContent = "Profile";
-      document.getElementById("view-title").textContent = `${profile.username || route.username}`;
-      document.getElementById("view-blurb").textContent = "Member profile";
-      document.getElementById("feed-label").textContent = "Posts";
-      document.getElementById("feed-title").textContent = `Posts by ${profile.username || route.username}`;
-      profileMeta.hidden = false;
-      profileMeta.innerHTML = `
+      const uname = profile.username || route.username || "";
+      setBannerMode("user", true);
+      if (viewIcon) viewIcon.textContent = (uname || "u").slice(0, 1).toUpperCase();
+      setText("view-title", uname);
+      setText("view-sub", `u/${uname}`);
+      if (viewBlurb) {
+        viewBlurb.hidden = true;
+        viewBlurb.textContent = "";
+      }
+      if (joinBtn) joinBtn.hidden = true;
+      if (profileMeta) {
+        profileMeta.hidden = false;
+        profileMeta.innerHTML = `
         <div class="community-profile-card">
-          <div class="community-avatar" aria-hidden="true">${escapeHtml((profile.username || "?").slice(0, 1).toUpperCase())}</div>
+          <div class="community-avatar" aria-hidden="true">${escapeHtml((uname || "?").slice(0, 1).toUpperCase())}</div>
           <div>
-            <strong>${escapeHtml(profile.username || "")}</strong>
+            <strong>${escapeHtml(uname)}</strong>
             ${tagChip(profile.pinnedTag, { compact: true })}
-            
-            
             <p class="muted" style="margin:4px 0 0;font-size:0.85rem;">
               ${Number(profile.postCount || 0)} posts
               ${profile.joinedAt ? ` · joined ${escapeHtml(formatWhen(profile.joinedAt))}` : ""}
@@ -1059,41 +1079,50 @@
           </div>
         </div>
       `;
+      }
       composerCard.hidden = true;
+      updateAboutRail(data);
       return;
     }
     if (route.type === "group") {
       const group = data.group || groups.find((g) => g.slug === route.slug) || null;
       if (group) pushRecent(group);
-      const viewIcon = document.getElementById("view-icon");
-      if (viewIcon) viewIcon.textContent = (group && group.slug ? group.slug : "g").slice(0, 1).toUpperCase();
-      document.getElementById("view-eyebrow").textContent = group ? group.slug : "Group";
-      document.getElementById("view-title").textContent = group ? group.slug : route.slug;
-      document.getElementById("view-blurb").textContent =
-        (group && group.description) || "Posts in this community.";
-      document.getElementById("feed-label").textContent = "Feed";
-      document.getElementById("feed-title").textContent = group
-        ? `Posts in ${group.slug}`
-        : "Group posts";
+      const slug = (group && group.slug) || route.slug || "";
+      const name = (group && group.name) || slug;
+      const members =
+        group && group.memberCount != null
+          ? Number(group.memberCount)
+          : group && group.postCount != null
+            ? Math.max(Number(group.postCount) * 3, 1)
+            : Math.max(groups.length * 12, 1);
+      setBannerMode("group", true);
+      if (viewIcon) viewIcon.textContent = (slug || "g").slice(0, 1).toUpperCase();
+      setText("view-title", name);
+      setText("view-sub", `g/${slug} · ${members.toLocaleString()} member${members === 1 ? "" : "s"}`);
+      if (viewBlurb) {
+        const desc = (group && group.description) || "";
+        viewBlurb.textContent = desc;
+        viewBlurb.hidden = !desc;
+      }
+      updateAboutRail(data);
       return;
     }
     if (route.type === "popular") {
-      const viewIconPop = document.getElementById("view-icon");
-      if (viewIconPop) viewIconPop.textContent = "▲";
-      document.getElementById("view-eyebrow").textContent = "Popular";
-      document.getElementById("view-title").textContent = "Popular";
-      document.getElementById("view-blurb").textContent = "Trending posts from across Synk communities.";
-      document.getElementById("feed-label").textContent = "Popular";
-      document.getElementById("feed-title").textContent = "Trending posts";
+      setBannerMode("popular", false);
+      if (viewBlurb) {
+        viewBlurb.hidden = true;
+        viewBlurb.textContent = "";
+      }
+      updateAboutRail(data);
       return;
     }
-    const viewIcon = document.getElementById("view-icon");
-    if (viewIcon) viewIcon.textContent = "⌂";
-    document.getElementById("view-eyebrow").textContent = "Home feed";
-    document.getElementById("view-title").textContent = "Home";
-    document.getElementById("view-blurb").textContent = "Posts from every group, newest first.";
-    document.getElementById("feed-label").textContent = "Feed";
-    document.getElementById("feed-title").textContent = "Recent posts";
+    // home
+    setBannerMode("home", false);
+    if (viewBlurb) {
+      viewBlurb.hidden = true;
+      viewBlurb.textContent = "";
+    }
+    updateAboutRail(data);
   }
 
   async function loadCommunity() {
@@ -1233,12 +1262,14 @@
     }
   });
 
-  crumbsEl.addEventListener("click", (e) => {
-    const home = e.target.closest('a[href="/community"]');
-    if (!home) return;
-    e.preventDefault();
-    navigate({ type: "home", slug: "", username: "" }).catch(() => {});
-  });
+  if (crumbsEl) {
+    crumbsEl.addEventListener("click", (e) => {
+      const home = e.target.closest('a[href="/community"]');
+      if (!home) return;
+      e.preventDefault();
+      navigate({ type: "home", slug: "", username: "" }).catch(() => {});
+    });
+  }
 
   document.getElementById("jump-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1724,7 +1755,6 @@
   bindNav(document.getElementById("settings-nav-link"), { type: "settings", slug: "", username: "" });
   bindNav(document.getElementById("submit-nav-link"), { type: "submit", slug: "", username: "" });
   bindNav(document.getElementById("create-top-link"), { type: "submit", slug: "", username: "" });
-  bindNav(document.getElementById("banner-create-link"), { type: "submit", slug: "", username: "" });
   bindNav(document.getElementById("mod-nav-link"), { type: "mod", slug: "", username: "" });
   bindNav(document.getElementById("mod-menu-link"), { type: "mod", slug: "", username: "" });
   bindNav(document.getElementById("inbox-btn"), { type: "inbox", slug: "", username: "" });

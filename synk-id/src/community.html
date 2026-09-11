@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community8" />
+    <link rel="stylesheet" href="/join.css?v=community9" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -155,23 +155,23 @@
 
           <div class="community-main-col reddit-main">
             <div id="feed-view">
-              <section class="reddit-banner" id="view-banner">
-                <div class="reddit-banner-wash" aria-hidden="true"></div>
-                <div class="reddit-banner-inner">
-                  <div class="reddit-banner-icon" id="view-icon" aria-hidden="true">⌂</div>
-                  <div class="reddit-banner-copy">
-                    <nav class="community-crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
-                    <p class="section-label" id="view-eyebrow">Home feed</p>
+              <section class="reddit-community-header" id="view-banner" hidden>
+                <div class="reddit-community-banner" id="view-banner-strip" aria-hidden="true"></div>
+                <div class="reddit-community-head">
+                  <div class="reddit-community-icon" id="view-icon" aria-hidden="true">g</div>
+                  <div class="reddit-community-titles">
                     <h1 id="view-title">Home</h1>
-                    <p class="muted" id="view-blurb">Posts from every group, newest first.</p>
+                    <p class="reddit-community-sub" id="view-sub">g/general</p>
                   </div>
-                  <div class="reddit-banner-actions">
-                    <button class="btn btn-secondary btn-compact" type="button" id="join-community-btn" hidden>Join</button>
-                    <a class="btn btn-primary btn-compact reddit-banner-cta" href="/community/submit" id="banner-create-link">Create Post</a>
+                  <div class="reddit-community-actions">
+                    <button class="btn btn-primary btn-compact reddit-join-btn" type="button" id="join-community-btn" hidden>Join</button>
                   </div>
                 </div>
+                <p class="reddit-community-desc muted" id="view-blurb" hidden></p>
                 <div class="community-profile-meta" id="profile-meta" hidden></div>
               </section>
+
+              <nav class="community-crumbs" id="crumbs" hidden aria-label="Breadcrumb"></nav>
 
               <section class="card community-composer reddit-create" id="composer-card" hidden>
                 <div class="reddit-create-bar" id="composer-collapsed">
@@ -196,8 +196,6 @@
               </section>
 
               <section class="card reddit-feed-wrap" id="feed-card">
-                <p class="section-label" id="feed-label">Feed</p>
-                <h2 id="feed-title">Recent posts</h2>
                 <div id="feed" class="community-feed"></div>
                 <p id="feed-empty" class="muted reddit-feed-empty">No posts yet. Start the conversation.</p>
               </section>
@@ -476,6 +474,6 @@
       </div>
     </main>
 
-    <script src="/community.js?v=reddit8"></script>
+    <script src="/community.js?v=reddit9"></script>
   </body>
 </html>
