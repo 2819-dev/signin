@@ -6338,9 +6338,6 @@ body.reddit-nav-open #left-nav,
 .docs-shell {
   max-width: 820px;
 }
-.docs-section {
-  scroll-margin-top: 5.5rem;
-}
 .docs-toc-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -6361,6 +6358,7 @@ body.reddit-nav-open #left-nav,
 }
 .docs-section {
   margin-top: 16px;
+  scroll-margin-top: 5.5rem;
 }
 .docs-section h2 {
   margin: 4px 0 12px;
