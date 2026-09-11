@@ -2058,10 +2058,12 @@ async function ensureSynkCoreTables(sql) {
     CREATE TABLE IF NOT EXISTS synk_app_update_broadcasts (
       version TEXT PRIMARY KEY,
       body TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
       notified_count INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE synk_app_update_broadcasts ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS synk_community_profiles (
@@ -4055,7 +4057,121 @@ async function claimAdminActAsHandoff(sql, { token } = {}) {
 }
 
 
-async function broadcastAppUpdate(sql, { version, body } = {}) {
+function isSensitiveReleaseNoteBlock(text) {
+  return /\b(mod(?:erator)?\s*tools?|admin\s*panel|admin\s*dashboard|admin\s*console|staff(?:-|\s+)only|staff\s*tools?|act[\s-]?as\b|impersonat|synk[- ]?admin|owner\s*tools?|role\s*permissions?|permission\s*matrix|mod\s*queue|staff\s*panel)\b/i.test(
+    String(text || "")
+  );
+}
+
+function splitReleaseNoteBlocks(text) {
+  const lines = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n");
+  const blocks = [];
+  let para = [];
+  const flushPara = () => {
+    const value = para.join("\n").trim();
+    if (value) blocks.push(value);
+    para = [];
+  };
+  for (const line of lines) {
+    if (/^\s*([-*•+]|\d+[.)])\s+/.test(line)) {
+      flushPara();
+      blocks.push(String(line).trim());
+      continue;
+    }
+    if (!String(line).trim()) {
+      flushPara();
+      continue;
+    }
+    para.push(line);
+  }
+  flushPara();
+  return blocks;
+}
+
+function buildReleaseNotesPayload(
+  rawNotes,
+  { isStaff = false, version = "", body = "", createdAt = null } = {}
+) {
+  const notes = String(rawNotes || "").trim() || String(body || "").trim();
+  const blocks = splitReleaseNoteBlocks(notes).map((text) => {
+    const sensitive = isSensitiveReleaseNoteBlock(text);
+    if (sensitive && !isStaff) {
+      return {
+        type: "staff-only",
+        message:
+          "This part may contain sensitive information and is only available to staff.",
+      };
+    }
+    return {
+      type: sensitive ? "staff" : "text",
+      text,
+      staffOnly: sensitive,
+    };
+  });
+  return {
+    version: String(version || ""),
+    createdAt: createdAt || null,
+    isStaff: !!isStaff,
+    hasStaffOnlyContent: splitReleaseNoteBlocks(notes).some((t) =>
+      isSensitiveReleaseNoteBlock(t)
+    ),
+    blocks,
+    // Full raw notes only for staff.
+    notes: isStaff ? notes : undefined,
+  };
+}
+
+async function ensureAppUpdateBroadcastsTable(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_app_update_broadcasts (
+      version TEXT PRIMARY KEY,
+      body TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      notified_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`ALTER TABLE synk_app_update_broadcasts ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''`;
+}
+
+async function getAppUpdateReleaseNotes(sql, version) {
+  const ver = String(version || "")
+    .trim()
+    .slice(0, 120);
+  await ensureAppUpdateBroadcastsTable(sql);
+  if (!ver || ver === "latest") {
+    const rows = await sql`
+      SELECT version, body, notes, created_at
+      FROM synk_app_update_broadcasts
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    if (!rows[0]) return null;
+    return {
+      version: rows[0].version,
+      body: String(rows[0].body || ""),
+      notes: String(rows[0].notes || ""),
+      createdAt: rows[0].created_at || null,
+    };
+  }
+  const rows = await sql`
+    SELECT version, body, notes, created_at
+    FROM synk_app_update_broadcasts
+    WHERE version = ${ver}
+    LIMIT 1
+  `;
+  if (!rows[0]) return null;
+  return {
+    version: rows[0].version,
+    body: String(rows[0].body || ""),
+    notes: String(rows[0].notes || ""),
+    createdAt: rows[0].created_at || null,
+  };
+}
+
+async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
   const ver = String(version || "")
     .trim()
     .slice(0, 120);
@@ -4067,14 +4183,11 @@ async function broadcastAppUpdate(sql, { version, body } = {}) {
     .trim()
     .slice(0, 500);
 
-  await sql`
-    CREATE TABLE IF NOT EXISTS synk_app_update_broadcasts (
-      version TEXT PRIMARY KEY,
-      body TEXT NOT NULL DEFAULT '',
-      notified_count INTEGER NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
+  const releaseNotes = String(notes || "")
+    .trim()
+    .slice(0, 20000);
+
+  await ensureAppUpdateBroadcastsTable(sql);
   await sql`
     CREATE TABLE IF NOT EXISTS synk_community_notifications (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -4104,6 +4217,8 @@ async function broadcastAppUpdate(sql, { version, body } = {}) {
     };
   }
 
+  const notifBody = `${message}\n\n<!--synk-version:${ver}-->`;
+
   const inserted = await sql`
     INSERT INTO synk_community_notifications (
       synk_profile_id, kind, actor_username, body
@@ -4112,7 +4227,7 @@ async function broadcastAppUpdate(sql, { version, body } = {}) {
       c.synk_profile_id,
       'app_update',
       'synk',
-      ${message}
+      ${notifBody}
     FROM synk_community_profiles c
     WHERE c.public_username IS NOT NULL
       AND btrim(c.public_username) <> ''
@@ -4121,8 +4236,8 @@ async function broadcastAppUpdate(sql, { version, body } = {}) {
   const notified = inserted.length;
 
   await sql`
-    INSERT INTO synk_app_update_broadcasts (version, body, notified_count)
-    VALUES (${ver}, ${message}, ${notified})
+    INSERT INTO synk_app_update_broadcasts (version, body, notes, notified_count)
+    VALUES (${ver}, ${message}, ${releaseNotes}, ${notified})
     ON CONFLICT (version) DO NOTHING
   `;
 
@@ -4132,6 +4247,7 @@ async function broadcastAppUpdate(sql, { version, body } = {}) {
     version: ver,
     notified,
     body: message,
+    notes: releaseNotes,
   };
 }
 
@@ -4163,6 +4279,10 @@ module.exports = {
   requireHubSession,
   extractHubSessionToken,
   broadcastAppUpdate,
+  buildReleaseNotesPayload,
+  getAppUpdateReleaseNotes,
+  isSensitiveReleaseNoteBlock,
+  splitReleaseNoteBlocks,
   normalizePublicUsername,
   normalizeDisplayName,
   normalizeBio,

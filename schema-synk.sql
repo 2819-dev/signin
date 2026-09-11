@@ -373,9 +373,11 @@ CREATE INDEX IF NOT EXISTS synk_community_notifications_profile_created_idx
 CREATE TABLE IF NOT EXISTS synk_app_update_broadcasts (
   version TEXT PRIMARY KEY,
   body TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
   notified_count INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE synk_app_update_broadcasts ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS synk_community_alt_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

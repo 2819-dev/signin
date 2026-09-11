@@ -1550,6 +1550,7 @@
     const actions = [];
     if (kind === "app_update" || kind === "app_updated" || kind === "update") {
       actions.push({ type: "refresh", label: "Refresh", primary: true });
+      actions.push({ type: "release-notes", label: "Release notes", primary: false });
     } else if (kind === "friend_request") {
       actions.push({ type: "friend-accept", label: "Accept", primary: true });
       actions.push({ type: "friend-decline", label: "Decline", primary: false });
@@ -1594,6 +1595,10 @@
         }
         if (action.type === "refresh") {
           return `<button class="${cls}" type="button" data-notif-refresh="1">${escapeHtml(action.label || "Refresh")}</button>`;
+        }
+        if (action.type === "release-notes") {
+          const version = escapeHtml(String((note && note.version) || ""));
+          return `<button class="${cls}" type="button" data-notif-release-notes="1" data-version="${version}">${escapeHtml(action.label || "Release notes")}</button>`;
         }
         return "";
       })
@@ -2494,6 +2499,10 @@ function applyViewState(data) {
     });
   }
 
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeReleaseNotesModal();
+  });
 
   window.addEventListener("popstate", () => {
     route = parseRoute();
@@ -4180,7 +4189,75 @@ function applyViewState(data) {
     const wrap = document.getElementById("notif-wrap");
     if (wrap && !wrap.contains(e.target)) setNotifOpen(false);
   });
-  document.addEventListener("click", async (e) => {
+  
+  function closeReleaseNotesModal() {
+    const modal = document.getElementById("release-notes-modal");
+    if (modal) modal.hidden = true;
+  }
+
+  function renderReleaseNotesBlocks(blocks) {
+    if (!Array.isArray(blocks) || !blocks.length) {
+      return `<p class="muted">No release notes for this update yet.</p>`;
+    }
+    return blocks
+      .map((block) => {
+        if (!block) return "";
+        if (block.type === "staff-only") {
+          return `<div class="release-notes-staff-lock" role="note">
+            <strong>Staff only</strong>
+            <span>${escapeHtml(block.message || "This part may contain sensitive information and is only available to staff.")}</span>
+          </div>`;
+        }
+        const cls = block.staffOnly ? "release-notes-block release-notes-staff" : "release-notes-block";
+        return `<p class="${cls}">${escapeHtml(block.text || "")}</p>`;
+      })
+      .filter(Boolean)
+      .join("");
+  }
+
+  async function openReleaseNotesModal(version) {
+    const modal = document.getElementById("release-notes-modal");
+    const body = document.getElementById("release-notes-body");
+    const sub = document.getElementById("release-notes-sub");
+    if (!modal || !body) return;
+    modal.hidden = false;
+    body.innerHTML = `<p class="muted">Loading…</p>`;
+    if (sub) sub.textContent = version ? `Update ${String(version).slice(0, 10)}` : "What’s new in this update";
+    try {
+      const ver = String(version || "").trim();
+      const queryVer = ver || "latest";
+      const res = await fetch(
+        `/api/synk-community?releaseNotes=${encodeURIComponent(queryVer)}`,
+        { headers: hubHeaders() }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Couldn't load release notes");
+      if (sub) {
+        const short = String(data.version || ver).slice(0, 10);
+        sub.textContent = data.isStaff
+          ? `Update ${short} · full staff notes`
+          : `Update ${short}`;
+      }
+      body.innerHTML = renderReleaseNotesBlocks(data.blocks || []);
+    } catch (err) {
+      body.innerHTML = `<p class="muted">${escapeHtml(err.message || "Couldn't load release notes")}</p>`;
+    }
+  }
+
+document.addEventListener("click", async (e) => {
+    const releaseBtn = e.target.closest("[data-notif-release-notes]");
+    if (releaseBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const version = releaseBtn.getAttribute("data-version") || "";
+      openReleaseNotesModal(version).catch(() => {});
+      return;
+    }
+    if (e.target.closest("[data-release-notes-close]")) {
+      e.preventDefault();
+      closeReleaseNotesModal();
+      return;
+    }
     const refreshBtn = e.target.closest("[data-notif-refresh]");
     if (refreshBtn) {
       e.preventDefault();

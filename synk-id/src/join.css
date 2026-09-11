@@ -8349,3 +8349,84 @@ body.community-body .reddit-notif-desc {
   font-size: 0.86rem;
   line-height: 1.4;
 }
+
+
+/* Release notes modal */
+.release-notes-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.release-notes-modal[hidden] { display: none !important; }
+.release-notes-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 15, 30, 0.48);
+}
+.release-notes-card {
+  position: relative;
+  z-index: 1;
+  width: min(560px, 100%);
+  max-height: min(78vh, 720px);
+  overflow: auto;
+  background: var(--r-card, #fff);
+  color: inherit;
+  border: 1px solid var(--r-line, rgba(0,0,0,.1));
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.22);
+  padding: 16px 16px 18px;
+}
+.release-notes-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.release-notes-card-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.release-notes-card-head .muted {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+}
+.release-notes-card-body {
+  display: grid;
+  gap: 10px;
+}
+.release-notes-block {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+.release-notes-staff {
+  border-left: 3px solid var(--r-accent, #041A55);
+  padding-left: 10px;
+}
+.release-notes-staff-lock {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed rgba(4, 26, 85, 0.35);
+  background: rgba(4, 26, 85, 0.06);
+  color: var(--r-muted, #667085);
+  font-size: 0.9rem;
+}
+.release-notes-staff-lock strong {
+  color: inherit;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+@media (prefers-color-scheme: dark) {
+  .release-notes-staff-lock {
+    border-color: rgba(147, 197, 253, 0.35);
+    background: rgba(59, 130, 246, 0.12);
+  }
+}

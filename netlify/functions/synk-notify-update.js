@@ -30,6 +30,7 @@ exports.handler = async (event) => {
     const result = await broadcastAppUpdate(sql, {
       version,
       body: body.body || body.message || undefined,
+      notes: body.notes || body.releaseNotes || body.changelog || undefined,
     });
     if (!result.ok) return json(400, { error: result.error || "Broadcast failed" });
     return json(200, result);

@@ -14,7 +14,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=hub-notif1" />
+    <link rel="stylesheet" href="/join.css?v=hub-release-notes1" />
     <script src="/force-refresh.js" defer></script>
   
     <style>
@@ -436,6 +436,7 @@
         const actions = [];
         if (kind === "app_update" || kind === "app_updated" || kind === "update") {
           actions.push({ type: "refresh", label: "Refresh", primary: true });
+          actions.push({ type: "release-notes", label: "Release notes", primary: false, version: note && note.version });
         } else if (kind === "friend_request") {
           actions.push({ type: "open", label: "Open inbox", href: "/community/inbox", primary: true });
           if (actor && actor !== "Someone") {
@@ -462,6 +463,10 @@
             const cls = action.primary ? "btn btn-primary btn-compact" : "btn btn-secondary btn-compact";
             if (action.type === "refresh") {
               return `<button class="${cls}" type="button" data-hub-notif-refresh="1">${escapeHubHtml(action.label || "Refresh")}</button>`;
+            }
+            if (action.type === "release-notes") {
+              const version = escapeHubHtml(String(action.version || ""));
+              return `<button class="${cls}" type="button" data-hub-notif-release-notes="1" data-version="${version}">${escapeHubHtml(action.label || "Release notes")}</button>`;
             }
             if (action.href) {
               return `<a class="${cls}" href="${escapeHubHtml(action.href)}">${escapeHubHtml(action.label || "Open")}</a>`;
@@ -494,6 +499,59 @@
             </div>`;
           })
           .join("");
+      }
+
+
+      function closeReleaseNotesModal() {
+        const modal = document.getElementById("release-notes-modal");
+        if (modal) modal.hidden = true;
+      }
+
+      function renderReleaseNotesBlocks(blocks) {
+        if (!Array.isArray(blocks) || !blocks.length) {
+          return `<p class="muted">No release notes for this update yet.</p>`;
+        }
+        return blocks
+          .map((block) => {
+            if (!block) return "";
+            if (block.type === "staff-only") {
+              return `<div class="release-notes-staff-lock" role="note">
+                <strong>Staff only</strong>
+                <span>${escapeHubHtml(block.message || "This part may contain sensitive information and is only available to staff.")}</span>
+              </div>`;
+            }
+            const cls = block.staffOnly ? "release-notes-block release-notes-staff" : "release-notes-block";
+            return `<p class="${cls}">${escapeHubHtml(block.text || "")}</p>`;
+          })
+          .filter(Boolean)
+          .join("");
+      }
+
+      async function openReleaseNotesModal(version) {
+        const modal = document.getElementById("release-notes-modal");
+        const body = document.getElementById("release-notes-body");
+        const sub = document.getElementById("release-notes-sub");
+        const session = readSession();
+        if (!modal || !body || !session) return;
+        modal.hidden = false;
+        body.innerHTML = `<p class="muted">Loading…</p>`;
+        if (sub) sub.textContent = version ? `Update ${String(version).slice(0, 10)}` : "What’s new in this update";
+        try {
+          const ver = String(version || "").trim();
+          const queryVer = ver || "latest";
+          const res = await fetch(`/api/synk-community?releaseNotes=${encodeURIComponent(queryVer)}`, {
+            headers: hubHeaders(session),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Couldn't load release notes");
+          if (sub) {
+            const short = String(data.version || ver).slice(0, 10);
+            sub.textContent = data.isStaff ? `Update ${short} · full staff notes` : `Update ${short}`;
+          }
+          body.innerHTML = renderReleaseNotesBlocks(data.blocks || []);
+        } catch (err) {
+          body.innerHTML = `<p class="muted">${escapeHubHtml(err.message || "Couldn't load release notes")}</p>`;
+        }
       }
 
       async function refreshHubNotifications() {
@@ -564,7 +622,22 @@
         });
       }
 
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeReleaseNotesModal();
+      });
+
       document.addEventListener("click", (e) => {
+        if (e.target.closest("[data-release-notes-close]")) {
+          closeReleaseNotesModal();
+          return;
+        }
+        const notesBtn = e.target.closest("[data-hub-notif-release-notes]");
+        if (notesBtn) {
+          e.preventDefault();
+          const version = notesBtn.getAttribute("data-version") || "";
+          openReleaseNotesModal(version).catch(() => {});
+          return;
+        }
         const refreshBtn = e.target.closest("[data-hub-notif-refresh]");
         if (refreshBtn) {
           e.preventDefault();
@@ -638,5 +711,22 @@
 
     </script>
       <script src="/support-chat.js?v=support4" defer></script>
+  
+    <div class="release-notes-modal" id="release-notes-modal" hidden>
+      <div class="release-notes-backdrop" data-release-notes-close="1"></div>
+      <div class="release-notes-card" role="dialog" aria-modal="true" aria-labelledby="release-notes-title">
+        <div class="release-notes-card-head">
+          <div>
+            <h2 id="release-notes-title">Release notes</h2>
+            <p class="muted" id="release-notes-sub">What’s new in this update</p>
+          </div>
+          <button class="btn btn-secondary btn-compact" type="button" id="release-notes-close" data-release-notes-close="1">Close</button>
+        </div>
+        <div class="release-notes-card-body" id="release-notes-body">
+          <p class="muted">Loading…</p>
+        </div>
+      </div>
+    </div>
+
   </body>
 </html>

@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-search-switch3" />
+    <link rel="stylesheet" href="/join.css?v=community-release-notes1" />
     <script src="/force-refresh.js?v=community-search-switch3" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -830,6 +830,23 @@
     </nav>
 
     <div id="toast" class="community-toast" role="status" aria-live="polite"></div>
-    <script src="/community.js?v=community-notif-actions1"></script>
+    
+    <div class="release-notes-modal" id="release-notes-modal" hidden>
+      <div class="release-notes-backdrop" data-release-notes-close="1"></div>
+      <div class="release-notes-card" role="dialog" aria-modal="true" aria-labelledby="release-notes-title">
+        <div class="release-notes-card-head">
+          <div>
+            <h2 id="release-notes-title">Release notes</h2>
+            <p class="muted" id="release-notes-sub">What’s new in this update</p>
+          </div>
+          <button class="btn btn-secondary btn-compact" type="button" id="release-notes-close" data-release-notes-close="1">Close</button>
+        </div>
+        <div class="release-notes-card-body" id="release-notes-body">
+          <p class="muted">Loading…</p>
+        </div>
+      </div>
+    </div>
+
+    <script src="/community.js?v=community-release-notes1"></script>
   </body>
 </html>

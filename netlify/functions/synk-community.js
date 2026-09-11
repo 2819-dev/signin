@@ -81,6 +81,8 @@ const {
   findCommunityProfileIdByUsername,
   logSynkEvent,
   clientIp,
+  buildReleaseNotesPayload,
+  getAppUpdateReleaseNotes,
 } = require("./lib/synk");
 
 const UUID_RE =
@@ -344,11 +346,19 @@ function notificationCopy({ kind, actorUsername, body }) {
   };
 }
 
+function parseNotificationMeta(body) {
+  const raw = String(body || "");
+  const match = raw.match(/<!--\s*synk-version:([^>]+?)\s*-->/i);
+  const version = match ? String(match[1] || "").trim() : "";
+  const text = raw.replace(/<!--\s*synk-version:[^>]*-->/gi, "").trim();
+  return { text, version };
+}
+
 function mapNotification(row) {
   const kind = row.kind;
   const actorUsername = row.actor_username || null;
-  const body = row.body || "";
-  const copy = notificationCopy({ kind, actorUsername, body });
+  const meta = parseNotificationMeta(row.body || "");
+  const copy = notificationCopy({ kind, actorUsername, body: meta.text });
   return {
     id: row.id,
     kind,
@@ -358,6 +368,7 @@ function mapNotification(row) {
     body: copy.description,
     title: copy.title,
     description: copy.description,
+    version: meta.version || null,
     readAt: row.read_at || null,
     createdAt: row.created_at,
   };
@@ -1371,6 +1382,34 @@ exports.handler = async (event) => {
     if (event.httpMethod === "GET") {
       const groupsRaw = await listCommunityGroups(sql);
       const groups = await markGroupsJoined(sql, groupsRaw, auth.profile.id);
+
+      const releaseNotesVersion = String(
+        qs.releaseNotes || qs.release_notes || qs.notesVersion || ""
+      ).trim();
+      if (releaseNotesVersion && releaseNotesVersion !== "1") {
+        const row = await getAppUpdateReleaseNotes(sql, releaseNotesVersion);
+        if (!row) return json(404, { error: "Release notes not found" });
+        const payload = buildReleaseNotesPayload(row.notes || row.body, {
+          isStaff: isCommunityStaffRole(role),
+          version: row.version,
+          body: row.body,
+          createdAt: row.createdAt,
+        });
+        return json(200, { ok: true, ...payload });
+      }
+      if (qs.releaseNotes === "1" || qs.release_notes === "1") {
+        const ver = String(qs.version || qs.v || "").trim();
+        if (!ver) return json(400, { error: "version required" });
+        const row = await getAppUpdateReleaseNotes(sql, ver);
+        if (!row) return json(404, { error: "Release notes not found" });
+        const payload = buildReleaseNotesPayload(row.notes || row.body, {
+          isStaff: isCommunityStaffRole(role),
+          version: row.version,
+          body: row.body,
+          createdAt: row.createdAt,
+        });
+        return json(200, { ok: true, ...payload });
+      }
 
       if (qs.inbox === "1" || qs.notifications === "1") {
         const notifications = await loadNotifications(sql, auth.profile.id, {

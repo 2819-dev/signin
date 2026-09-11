@@ -9,6 +9,26 @@
  */
 "use strict";
 
+function buildReleaseNotesFromGit(version) {
+  try {
+    const { execSync } = require("child_process");
+    const log = execSync('git log -20 --pretty=format:"- %s"', {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (!log) return "";
+    const short = String(version || "").slice(0, 10);
+    return [
+      short ? `## What's new in Synk (${short})` : "## What's new in Synk",
+      "",
+      log,
+    ].join("\n");
+  } catch (_) {
+    return "";
+  }
+}
+
+
 const fs = require("fs");
 const path = require("path");
 const { neon } = require("@neondatabase/serverless");
@@ -52,9 +72,13 @@ async function main() {
 
   const sql = neon(dbUrl);
   await ensureSynkCoreTables(sql);
+  const notes = buildReleaseNotesFromGit(version);
   const result = await broadcastAppUpdate(sql, {
     version,
     body: "Synk was updated. Refresh or reopen the app to get the latest.",
+    notes:
+      notes ||
+      "Synk was updated with improvements and fixes. Refresh to get the latest.",
   });
 
   if (!result.ok) {
