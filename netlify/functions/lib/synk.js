@@ -1924,6 +1924,15 @@ async function ensureSynkCoreTables(sql) {
   await sql`ALTER TABLE synk_admin_act_as_tokens ADD COLUMN IF NOT EXISTS hub_expires_at TIMESTAMPTZ`;
 
   await sql`
+    CREATE TABLE IF NOT EXISTS synk_app_update_broadcasts (
+      version TEXT PRIMARY KEY,
+      body TEXT NOT NULL DEFAULT '',
+      notified_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await sql`
     CREATE TABLE IF NOT EXISTS synk_community_profiles (
       synk_profile_id UUID PRIMARY KEY REFERENCES synk_profiles(id) ON DELETE CASCADE,
       public_username TEXT NOT NULL,
@@ -3915,6 +3924,86 @@ async function claimAdminActAsHandoff(sql, { token } = {}) {
 }
 
 
+async function broadcastAppUpdate(sql, { version, body } = {}) {
+  const ver = String(version || "")
+    .trim()
+    .slice(0, 120);
+  if (!ver) return { ok: false, error: "Version required", notified: 0 };
+
+  const message = String(
+    body || "Synk was updated. Refresh or reopen the app to get the latest."
+  )
+    .trim()
+    .slice(0, 500);
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_app_update_broadcasts (
+      version TEXT PRIMARY KEY,
+      body TEXT NOT NULL DEFAULT '',
+      notified_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_notifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      actor_username TEXT,
+      post_id UUID,
+      comment_id UUID,
+      body TEXT NOT NULL DEFAULT '',
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  const existing = await sql`
+    SELECT version, notified_count
+    FROM synk_app_update_broadcasts
+    WHERE version = ${ver}
+    LIMIT 1
+  `;
+  if (existing[0]) {
+    return {
+      ok: true,
+      alreadyBroadcast: true,
+      version: ver,
+      notified: Number(existing[0].notified_count) || 0,
+    };
+  }
+
+  const inserted = await sql`
+    INSERT INTO synk_community_notifications (
+      synk_profile_id, kind, actor_username, body
+    )
+    SELECT
+      c.synk_profile_id,
+      'app_update',
+      'synk',
+      ${message}
+    FROM synk_community_profiles c
+    WHERE c.public_username IS NOT NULL
+      AND btrim(c.public_username) <> ''
+    RETURNING id
+  `;
+  const notified = inserted.length;
+
+  await sql`
+    INSERT INTO synk_app_update_broadcasts (version, body, notified_count)
+    VALUES (${ver}, ${message}, ${notified})
+    ON CONFLICT (version) DO NOTHING
+  `;
+
+  return {
+    ok: true,
+    alreadyBroadcast: false,
+    version: ver,
+    notified,
+    body: message,
+  };
+}
+
 module.exports = {
   hashSecret,
   verifySecret,
@@ -3942,6 +4031,7 @@ module.exports = {
   createAdminActAsHandoff,
   requireHubSession,
   extractHubSessionToken,
+  broadcastAppUpdate,
   normalizePublicUsername,
   normalizeDisplayName,
   normalizeBio,

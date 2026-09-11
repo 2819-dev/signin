@@ -318,6 +318,15 @@ function notificationCopy({ kind, actorUsername, body }) {
       description: body && String(body).trim() ? String(body).trim() : `${actor} sent you a message.`,
     };
   }
+  if (k === "app_update" || k === "app_updated" || k === "update") {
+    return {
+      title: "App updated",
+      description:
+        body && String(body).trim()
+          ? String(body).trim()
+          : "Synk was updated. Refresh or reopen to get the latest.",
+    };
+  }
   return {
     title: "Notification",
     description: body && String(body).trim() ? String(body).trim() : `${actor} sent you a notification.`,

@@ -11,6 +11,7 @@ const outFile = path.join(root, "public", "version.json");
 
 const v =
   process.env.COMMIT_REF ||
+  process.env.COMMIT_REF ||
   process.env.DEPLOY_ID ||
   process.env.BUILD_ID ||
   `local-${Date.now()}`;

@@ -369,6 +369,13 @@ CREATE TABLE IF NOT EXISTS synk_community_notifications (
 CREATE INDEX IF NOT EXISTS synk_community_notifications_profile_created_idx
   ON synk_community_notifications (synk_profile_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS synk_app_update_broadcasts (
+  version TEXT PRIMARY KEY,
+  body TEXT NOT NULL DEFAULT '',
+  notified_count INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS synk_community_alt_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,

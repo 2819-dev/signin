@@ -1323,6 +1323,10 @@
     } else if (kind === "dm" || kind === "message") {
       title = title || "New message";
       description = description || `${actor} sent you a message.`;
+    } else if (kind === "app_update" || kind === "app_updated" || kind === "update") {
+      title = title || "App updated";
+      description =
+        description || "Synk was updated. Refresh or reopen to get the latest.";
     } else {
       title = title || "Notification";
       description = description || `${actor} sent you a notification.`;
