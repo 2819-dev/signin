@@ -3617,41 +3617,59 @@ textarea {
 
 
 .synk-tag-badge.has-icon {
-  background: #0b1416;
-  overflow: hidden;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+  width: auto;
+  height: auto;
+  border-radius: 0;
 }
 .synk-tag-badge.has-icon .synk-tag-badge-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: inherit;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  border-radius: 0;
   display: block;
+  background: transparent;
+}
+.synk-tag-badge.has-icon.is-compact .synk-tag-badge-img {
+  width: 18px;
+  height: 18px;
 }
 .synk-tag-popover-icon.has-image {
   background: transparent;
-  border-color: color-mix(in srgb, var(--tag-color, #6366f1) 50%, #fff);
-  overflow: hidden;
+  border: 0;
+  overflow: visible;
   padding: 0;
+  border-radius: 0;
+  width: 36px;
+  height: 36px;
 }
 .synk-tag-popover-icon.has-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
   display: block;
+  background: transparent;
 }
 .synk-tag-icon-preview {
   margin-top: 8px;
   width: 40px;
   height: 40px;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 2px solid var(--r-line, #ccc);
+  border-radius: 0;
+  overflow: visible;
+  border: 1px dashed var(--r-line, #ccc);
+  background: transparent;
+  display: grid;
+  place-items: center;
 }
 .synk-tag-icon-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
   display: block;
+  background: transparent;
 }
 .synk-tag-mod-actions {
   display: flex;
@@ -4540,4 +4558,95 @@ a.reddit-create-fakeinput {
   }
   .reddit-topnav { height: 52px !important; min-height: 52px !important; }
   .reddit-leftnav { top: 52px !important; height: calc(100dvh - 52px) !important; }
+}
+
+/* =========================================================
+   Tag role icons — transparent PNGs, no square frame
+   ========================================================= */
+.synk-tag-badge.has-icon {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  transform: none !important;
+}
+.synk-tag-badge.has-icon:hover,
+.synk-tag-badge.has-icon[aria-expanded="true"] {
+  border: 0 !important;
+  background: transparent !important;
+  transform: none !important;
+  filter: brightness(1.06);
+}
+.synk-tag-badge.has-icon.is-compact {
+  width: auto !important;
+  height: auto !important;
+  border-radius: 0 !important;
+  border-width: 0 !important;
+}
+.synk-tag-badge.has-icon .synk-tag-badge-img {
+  width: 22px !important;
+  height: 22px !important;
+  object-fit: contain !important;
+  border-radius: 0 !important;
+  display: block !important;
+  background: transparent !important;
+}
+.synk-tag-badge.has-icon.is-compact .synk-tag-badge-img {
+  width: 18px !important;
+  height: 18px !important;
+}
+/* Keep pin dot attached without implying a square badge */
+.synk-tag-badge.has-icon.is-pinned::after {
+  right: -2px !important;
+  bottom: -2px !important;
+  width: 7px !important;
+  height: 7px !important;
+  border-width: 1.5px !important;
+}
+
+/* Popover preview for custom icons — also no square tile */
+.synk-tag-popover-icon.has-image {
+  width: 36px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+.synk-tag-popover-icon.has-image img {
+  width: 36px !important;
+  height: 36px !important;
+  object-fit: contain !important;
+  border-radius: 0 !important;
+  display: block !important;
+  background: transparent !important;
+}
+
+/* Mod preview while uploading */
+.synk-tag-icon-preview {
+  background: transparent !important;
+  border-style: dashed !important;
+}
+.synk-tag-icon-preview img {
+  object-fit: contain !important;
+  background: transparent !important;
+}
+
+/* Role icons beside usernames / on profile */
+.reddit-post-meta .synk-tag-badge.has-icon,
+.community-user-link + .synk-tag-badge.has-icon,
+.community-profile-card .synk-tag-badge.has-icon,
+.synk-tag-badge-row .synk-tag-badge.has-icon {
+  margin-left: 4px;
+  vertical-align: -0.2em;
+}
+.reddit-post-meta {
+  align-items: center;
 }
