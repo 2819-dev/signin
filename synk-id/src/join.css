@@ -453,6 +453,69 @@ a:hover {
   background: var(--fill);
 }
 
+.product-type-grid {
+  display: grid;
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .product-type-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.product-type-card {
+  position: relative;
+  display: block;
+  margin: 0;
+  padding: 12px 14px 12px 38px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.product-type-card:hover {
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.product-type-card:has(input:checked),
+.product-type-card.is-selected {
+  border-color: rgba(37, 99, 235, 0.7);
+  background: rgba(37, 99, 235, 0.06);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+}
+
+.product-type-card input {
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  margin: 0;
+}
+
+.product-type-card strong {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.product-type-card span {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--muted, #5b6575);
+}
+
+.verify-action-panel {
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px dashed var(--line);
+  background: var(--fill);
+}
+
 .device-list {
   display: grid;
   gap: 10px;

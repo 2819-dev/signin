@@ -1234,6 +1234,7 @@
                   ${/visitor sign-?in/i.test(biz.name || "") ? " · system" : ""}
                   ${biz.hasPassword || /visitor sign-?in/i.test(biz.name || "") ? "" : " · needs portal password"}
                 </div>
+                ${biz.productSummary ? `<p class="muted" style="margin:6px 0 0;font-size:0.85rem;"><strong>Product:</strong> ${escapeHtml(biz.productSummary)}</p>` : ""}
                 ${biz.note ? `<p class="muted" style="margin:6px 0 0;font-size:0.82rem;">${escapeHtml(biz.note)}</p>` : ""}
                 <div class="btn-row" style="margin-top:8px;">
                   ${

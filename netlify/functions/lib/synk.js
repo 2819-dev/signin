@@ -308,6 +308,7 @@ async function ensureSynkCoreTables(sql) {
   await sql`ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS product_type TEXT NOT NULL DEFAULT 'custom'`;
   await sql`ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS website TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS preferred_verify_action TEXT NOT NULL DEFAULT 'identity'`;
+  await sql`ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS product_summary TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE synk_apps ADD COLUMN IF NOT EXISTS product_type TEXT NOT NULL DEFAULT 'custom'`;
 
   await ensureSynkAppMemberPolicies(sql);
@@ -566,10 +567,23 @@ function verifyActionLabel(action) {
   }
 }
 
+/** Kiosk / tablet pairing only makes sense for desk, door, or event surfaces. */
+function productUsesDevices(productType) {
+  const key = normalizeProductType(productType);
+  return key === "visitor_checkin" || key === "access_control" || key === "event_checkin";
+}
+
 function normalizeWebsite(value) {
   return String(value || "")
     .trim()
     .slice(0, 200);
+}
+
+function normalizeProductSummary(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 280);
 }
 
 async function seedVisitorSignInBusiness(sql) {
@@ -1171,7 +1185,9 @@ module.exports = {
   defaultVerifyActionForProduct,
   verifyActionAllowedForProduct,
   verifyActionLabel,
+  productUsesDevices,
   normalizeWebsite,
+  normalizeProductSummary,
   PASS_TTL_MS,
   HUB_SESSION_TTL_MS,
   RATE_MAX_ATTEMPTS,

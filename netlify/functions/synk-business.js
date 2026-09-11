@@ -19,7 +19,9 @@ const {
   defaultVerifyActionForProduct,
   verifyActionAllowedForProduct,
   verifyActionLabel,
+  productUsesDevices,
   normalizeWebsite,
+  normalizeProductSummary,
   PRODUCT_TYPES,
 } = require("./lib/synk");
 const {
@@ -69,8 +71,11 @@ function mapBusiness(row) {
     status: row.status,
     note: row.note || "",
     website: row.website || "",
+    productSummary: row.product_summary || "",
     productType,
     productLabel: getProductTypeConfig(productType).label,
+    productBlurb: getProductTypeConfig(productType).blurb,
+    usesDevices: productUsesDevices(productType),
     preferredVerifyAction: verifyActionAllowedForProduct(
       productType,
       row.preferred_verify_action || defaultVerifyActionForProduct(productType)
@@ -175,6 +180,9 @@ exports.handler = async (event) => {
       const password = String(body.password || "").trim();
       const note = normalizeNote(body.note || body.useCase || body.description);
       const website = normalizeWebsite(body.website || body.url);
+      const productSummary = normalizeProductSummary(
+        body.productSummary || body.summary || body.whatYouBuild || ""
+      );
       const productType = normalizeProductType(body.productType || body.useCaseType);
       const preferredVerifyAction = verifyActionAllowedForProduct(
         productType,
@@ -185,11 +193,14 @@ exports.handler = async (event) => {
       if (password.length < 8) {
         return json(400, { error: "Password must be at least 8 characters" });
       }
+      if (!productSummary) {
+        return json(400, { error: "Tell us what your product does" });
+      }
 
       try {
         const rows = await sql`
           INSERT INTO synk_business_accounts (
-            name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action
+            name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary
           )
           VALUES (
             ${name},
@@ -200,9 +211,10 @@ exports.handler = async (event) => {
             ${note},
             ${website},
             ${productType},
-            ${preferredVerifyAction}
+            ${preferredVerifyAction},
+            ${productSummary}
           )
-          RETURNING id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, created_at, updated_at, reviewed_at
+          RETURNING id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary, created_at, updated_at, reviewed_at
         `;
         await logSynkEvent(sql, {
           eventType: "business_request",
@@ -401,8 +413,16 @@ exports.handler = async (event) => {
         const nextWebsite =
           body.website != null ? normalizeWebsite(body.website) : undefined;
         const nextNote = body.note != null ? normalizeNote(body.note) : undefined;
+        const nextSummary =
+          body.productSummary != null
+            ? normalizeProductSummary(body.productSummary)
+            : undefined;
 
-        if (nextWebsite !== undefined || nextNote !== undefined) {
+        if (
+          nextWebsite !== undefined ||
+          nextNote !== undefined ||
+          nextSummary !== undefined
+        ) {
           await sql`
             UPDATE synk_business_accounts
             SET
@@ -410,6 +430,7 @@ exports.handler = async (event) => {
               preferred_verify_action = ${verifyAction},
               website = COALESCE(${nextWebsite ?? null}, website),
               note = COALESCE(${nextNote ?? null}, note),
+              product_summary = COALESCE(${nextSummary ?? null}, product_summary),
               updated_at = NOW()
             WHERE id = ${auth.business.id}
           `;
@@ -441,7 +462,7 @@ exports.handler = async (event) => {
         });
 
         const bizRows = await sql`
-          SELECT id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, created_at, updated_at, reviewed_at
+          SELECT id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary, created_at, updated_at, reviewed_at
           FROM synk_business_accounts
           WHERE id = ${auth.business.id}
           LIMIT 1
@@ -609,7 +630,7 @@ exports.handler = async (event) => {
 
       const devices = await listBusinessDevices(sql, auth.business.id);
       const bizRows = await sql`
-        SELECT id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, created_at, updated_at, reviewed_at
+        SELECT id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary, created_at, updated_at, reviewed_at
         FROM synk_business_accounts
         WHERE id = ${auth.business.id}
         LIMIT 1
@@ -630,7 +651,7 @@ exports.handler = async (event) => {
     if (event.httpMethod === "GET") {
       await seedVisitorSignInBusiness(sql);
       const rows = await sql`
-        SELECT id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, created_at, updated_at, reviewed_at
+        SELECT id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary, created_at, updated_at, reviewed_at
         FROM synk_business_accounts
         ORDER BY
           CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,
@@ -664,7 +685,7 @@ exports.handler = async (event) => {
           updated_at = NOW(),
           password_hash = COALESCE(${password ? hashSecret(password) : null}, password_hash)
         WHERE id = ${id}
-        RETURNING id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, created_at, updated_at, reviewed_at
+        RETURNING id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, product_summary, created_at, updated_at, reviewed_at
       `;
 
       let apiKey = null;

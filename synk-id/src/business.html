@@ -11,7 +11,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid11" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
-    <link rel="stylesheet" href="/join.css?v=layout4" />
+    <link rel="stylesheet" href="/join.css?v=product-onboard1" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body>
@@ -32,7 +32,7 @@
           <p class="eyebrow">Synk Business</p>
           <h1>API access for your product</h1>
           <p class="subtitle">
-            Tell us what you’re building. Synk verifies people once; your product chooses what happens next — login, check-in, access, or something custom.
+            Synk only verifies who someone is. What happens after that is up to your product — login, check-in, access, or anything custom.
           </p>
         </div>
       </header>
@@ -63,12 +63,24 @@
 
       <section class="card hidden" id="biz-request-card">
         <p class="section-label">Get approved</p>
-        <h2>Request a Synk Business account</h2>
-        <p class="muted">We’ll review your request. Once approved, you can sign in here for your API key and verify settings.</p>
+        <h2>Tell us what you’re building</h2>
+        <p class="muted">
+          Every app is different. We’ll learn what your product is, then recommend what Synk should do after someone verifies — not a one-size visitor desk flow.
+        </p>
         <form id="biz-request-form" class="form" autocomplete="on">
           <div class="field">
             <label for="req-name">Business / product name</label>
             <input id="req-name" type="text" maxlength="120" required placeholder="Acme Check-In" />
+          </div>
+          <div class="field">
+            <label for="req-summary">In one sentence, what does it do?</label>
+            <input
+              id="req-summary"
+              type="text"
+              maxlength="280"
+              required
+              placeholder="Members scan to unlock meeting rooms in our office app"
+            />
           </div>
           <div class="field">
             <label for="req-contact">Contact name</label>
@@ -87,27 +99,22 @@
             <input id="req-website" type="url" maxlength="200" placeholder="https://" />
           </div>
           <div class="field">
-            <label for="req-product-type">What are you building?</label>
-            <select id="req-product-type" required>
-              <option value="account_login">Account login / identity</option>
-              <option value="visitor_checkin">Visitor / front desk check-in</option>
-              <option value="access_control">Door, room, or gate access</option>
-              <option value="event_checkin">Event or attendance check-in</option>
-              <option value="custom" selected>Custom product / API</option>
-            </select>
-            <p id="req-product-blurb" class="muted" style="margin:6px 0 0;font-size:0.82rem;">
-              You handle the rest in your app after Synk verifies the person.
-            </p>
+            <span>What kind of product is this?</span>
+            <div class="product-type-grid" id="req-product-type-grid" role="radiogroup" aria-label="Product type"></div>
+            <input type="hidden" id="req-product-type" value="custom" />
+            <p id="req-product-blurb" class="muted" style="margin:8px 0 0;font-size:0.82rem;"></p>
           </div>
           <div class="field">
             <label for="req-verify-action">After Synk verifies someone</label>
-            <select id="req-verify-action"></select>
-            <p class="muted" style="margin:6px 0 0;font-size:0.82rem;">
-              This is a default for your app. You can change it later, and set per-person rules for people who’ve used your app.
-            </p>
+            <div class="verify-action-panel">
+              <select id="req-verify-action"></select>
+              <p id="req-verify-hint" class="muted" style="margin:8px 0 0;font-size:0.82rem;">
+                This is only a default for your app. Not every product needs staff approval — pick what fits yours.
+              </p>
+            </div>
           </div>
           <div class="field">
-            <label for="req-note">Anything else we should know?</label>
+            <label for="req-note">Anything else we should know? <span class="muted">(optional)</span></label>
             <textarea id="req-note" maxlength="500" rows="3" placeholder="Who uses it, where it runs, special requirements…"></textarea>
           </div>
           <p id="req-error" class="error hidden" role="alert"></p>
@@ -127,24 +134,26 @@
         </div>
 
         <div id="portal-apps"></div>
+        <p id="portal-summary" class="muted" style="margin:10px 0 0;font-size:0.88rem;"></p>
 
         <div class="field" style="margin-top:16px;">
-          <label for="product-type">What this app is</label>
-          <select id="product-type">
-            <option value="account_login">Account login / identity</option>
-            <option value="visitor_checkin">Visitor / front desk check-in</option>
-            <option value="access_control">Door, room, or gate access</option>
-            <option value="event_checkin">Event or attendance check-in</option>
-            <option value="custom">Custom product / API</option>
-          </select>
-          <p id="product-type-blurb" class="muted" style="margin:6px 0 0;font-size:0.82rem;"></p>
+          <label for="product-summary">What this product does</label>
+          <input id="product-summary" type="text" maxlength="280" placeholder="Short description of your product" />
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <span>What kind of product is this?</span>
+          <div class="product-type-grid" id="product-type-grid" role="radiogroup" aria-label="Product type"></div>
+          <input type="hidden" id="product-type" value="custom" />
+          <p id="product-type-blurb" class="muted" style="margin:8px 0 0;font-size:0.82rem;"></p>
         </div>
         <div class="field" style="margin-top:12px;">
           <label for="verify-action">After Synk verifies someone</label>
-          <select id="verify-action"></select>
-          <p class="muted" style="margin:6px 0 0;font-size:0.82rem;" id="verify-action-hint">
-            Defaults for your product. Not every app needs staff approval — pick what fits.
-          </p>
+          <div class="verify-action-panel">
+            <select id="verify-action"></select>
+            <p class="muted" style="margin:8px 0 0;font-size:0.82rem;" id="verify-action-hint">
+              Defaults for your product. Synk confirms identity; your app decides the rest unless you choose a built-in check-in/access action.
+            </p>
+          </div>
         </div>
         <div class="btn-row" style="margin-top:12px;">
           <button class="btn btn-primary" type="button" id="save-settings">Save settings</button>
@@ -165,66 +174,85 @@
         <p id="recent-members-empty" class="muted" style="font-size:0.88rem;">No recent Synk sign-ins for your app yet.</p>
         <p id="recent-members-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
 
-        <hr style="border:0;border-top:1px solid var(--line);margin:20px 0;" />
+        <div id="devices-section">
+          <hr style="border:0;border-top:1px solid var(--line);margin:20px 0;" />
 
-        <p class="section-label">Devices</p>
-        <h2 style="margin:0 0 6px;">Camera framing by device</h2>
-        <p class="muted" style="margin:0 0 12px;font-size:0.88rem;">
-          Each tablet or kiosk can have its own camera position. Add a device, set framing, then open that tablet’s sign-in page once with
-          <span class="code">?pair=CODE</span>.
-        </p>
-        <div id="device-list" class="device-list"></div>
-        <form id="add-device-form" class="form" style="margin-top:14px;" autocomplete="off">
-          <div class="field">
-            <label for="device-name">Device name</label>
-            <input id="device-name" type="text" maxlength="80" required placeholder="Lobby iPad" />
-          </div>
-          <div class="field">
-            <label for="device-camera">Camera framing</label>
-            <select id="device-camera">
-              <option value="left">Landscape — camera on left</option>
-              <option value="right">Landscape — camera on right</option>
-              <option value="center">Portrait / centered</option>
-            </select>
-          </div>
-          <button class="btn btn-primary" type="submit">Add device</button>
-          <p id="device-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
-        </form>
+          <p class="section-label">Devices</p>
+          <h2 style="margin:0 0 6px;">Camera framing by device</h2>
+          <p class="muted" style="margin:0 0 12px;font-size:0.88rem;">
+            For check-in or access tablets: each device can have its own camera position. Add a device, set framing, then open that tablet’s page once with
+            <span class="code">?pair=CODE</span>.
+          </p>
+          <div id="device-list" class="device-list"></div>
+          <form id="add-device-form" class="form" style="margin-top:14px;" autocomplete="off">
+            <div class="field">
+              <label for="device-name">Device name</label>
+              <input id="device-name" type="text" maxlength="80" required placeholder="Lobby iPad" />
+            </div>
+            <div class="field">
+              <label for="device-camera">Camera framing</label>
+              <select id="device-camera">
+                <option value="left">Landscape — camera on left</option>
+                <option value="right">Landscape — camera on right</option>
+                <option value="center">Portrait / centered</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" type="submit">Add device</button>
+            <p id="device-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
+          </form>
+        </div>
       </section>
     </main>
 
     <script>
       const STORAGE_KEY = "synk_business_session";
+      const PRODUCT_ORDER = [
+        "account_login",
+        "visitor_checkin",
+        "access_control",
+        "event_checkin",
+        "custom",
+      ];
       const PRODUCT_CATALOG = {
         account_login: {
           label: "Account login / identity",
           blurb: "Synk confirms who they are so your product can open their account.",
           defaultAction: "identity",
           actions: ["identity"],
+          usesDevices: false,
+          verifyHint: "Synk returns a verified identity. Your app signs them in or continues its own flow.",
         },
         visitor_checkin: {
           label: "Visitor / front desk check-in",
           blurb: "People check in on a tablet. Staff can approve, deny, or prefill details.",
           defaultAction: "pending",
           actions: ["pending", "autofill", "auto_admit", "auto_deny"],
+          usesDevices: true,
+          verifyHint: "Built for desk tablets. Choose wait for approval, autofill, or auto allow/block.",
         },
         access_control: {
           label: "Door, room, or gate access",
           blurb: "Synk verifies the person, then your system allows or blocks entry.",
           defaultAction: "auto_admit",
           actions: ["auto_admit", "auto_deny", "pending", "identity"],
+          usesDevices: true,
+          verifyHint: "Usually allow or block after verify. Or hand identity back to your access system.",
         },
         event_checkin: {
           label: "Event or attendance check-in",
           blurb: "Log that a member arrived. Optional staff review for restricted events.",
           defaultAction: "identity",
           actions: ["identity", "auto_admit", "pending"],
+          usesDevices: true,
+          verifyHint: "Confirm they showed up, auto-admit, or require a host check for gated events.",
         },
         custom: {
           label: "Custom product / API",
           blurb: "You handle the rest in your app after Synk verifies the person.",
           defaultAction: "identity",
           actions: ["identity", "pending", "autofill", "auto_admit", "auto_deny"],
+          usesDevices: false,
+          verifyHint: "Start with identity-only unless you want a built-in admit/deny/form action.",
         },
       };
       const ACTION_LABELS = {
@@ -243,8 +271,10 @@
       const portalKey = document.getElementById("portal-key");
       const verifyAction = document.getElementById("verify-action");
       const productTypeEl = document.getElementById("product-type");
+      const productSummaryEl = document.getElementById("product-summary");
       const reqProductType = document.getElementById("req-product-type");
       const reqVerifyAction = document.getElementById("req-verify-action");
+      const devicesSection = document.getElementById("devices-section");
       let sessionToken = localStorage.getItem(STORAGE_KEY) || "";
       let currentAppId = "";
       let currentAppSlug = "";
@@ -254,6 +284,35 @@
 
       function productConfig(type) {
         return PRODUCT_CATALOG[type] || PRODUCT_CATALOG.custom;
+      }
+
+      function renderProductTypeCards(containerId, hiddenInputId, selected, onChange) {
+        const grid = document.getElementById(containerId);
+        const hidden = document.getElementById(hiddenInputId);
+        if (!grid || !hidden) return;
+        const value = PRODUCT_CATALOG[selected] ? selected : "custom";
+        hidden.value = value;
+        grid.innerHTML = PRODUCT_ORDER.map((key) => {
+          const cfg = PRODUCT_CATALOG[key];
+          const checked = key === value ? "checked" : "";
+          const selectedClass = key === value ? "is-selected" : "";
+          return `
+            <label class="product-type-card ${selectedClass}">
+              <input type="radio" name="${containerId}" value="${key}" ${checked} />
+              <strong>${cfg.label}</strong>
+              <span>${cfg.blurb}</span>
+            </label>
+          `;
+        }).join("");
+        grid.querySelectorAll('input[type="radio"]').forEach((input) => {
+          input.addEventListener("change", () => {
+            hidden.value = input.value;
+            grid.querySelectorAll(".product-type-card").forEach((card) => {
+              card.classList.toggle("is-selected", card.querySelector("input") === input);
+            });
+            if (typeof onChange === "function") onChange(input.value);
+          });
+        });
       }
 
       function fillVerifySelect(selectEl, productType, selected) {
@@ -268,17 +327,46 @@
           .join("");
       }
 
-      function syncProductUi(productType, { request = false } = {}) {
+      function syncProductUi(productType, { request = false, preserveAction = false } = {}) {
         const cfg = productConfig(productType);
+        currentProductType = productType;
         if (request) {
           const blurb = document.getElementById("req-product-blurb");
           if (blurb) blurb.textContent = cfg.blurb;
-          fillVerifySelect(reqVerifyAction, productType, cfg.defaultAction);
+          const hint = document.getElementById("req-verify-hint");
+          if (hint) hint.textContent = cfg.verifyHint;
+          fillVerifySelect(
+            reqVerifyAction,
+            productType,
+            preserveAction && reqVerifyAction.value ? reqVerifyAction.value : cfg.defaultAction
+          );
         } else {
           const blurb = document.getElementById("product-type-blurb");
           if (blurb) blurb.textContent = cfg.blurb;
-          fillVerifySelect(verifyAction, productType, verifyAction.value || cfg.defaultAction);
+          const hint = document.getElementById("verify-action-hint");
+          if (hint) hint.textContent = cfg.verifyHint;
+          fillVerifySelect(
+            verifyAction,
+            productType,
+            preserveAction && verifyAction.value ? verifyAction.value : verifyAction.value || cfg.defaultAction
+          );
+          if (devicesSection) {
+            devicesSection.classList.toggle("hidden", !cfg.usesDevices);
+          }
         }
+      }
+
+      function memberPolicyOptionsHtml(selected) {
+        const cfg = productConfig(currentProductType);
+        const options = [
+          `<option value="default" ${selected === "default" ? "selected" : ""}>Use app default (${escapeHtml(memberPolicyLabel(appDefaultPolicy))})</option>`,
+        ];
+        cfg.actions.forEach((action) => {
+          options.push(
+            `<option value="${action}" ${selected === action ? "selected" : ""}>${escapeHtml(ACTION_LABELS[action] || action)}</option>`
+          );
+        });
+        return options.join("");
       }
 
       function show(view) {
@@ -301,6 +389,16 @@
         if (!res.ok) throw new Error(data.error || "Could not open portal");
         document.getElementById("portal-name").textContent = data.business.name;
         document.getElementById("portal-email").textContent = data.business.email;
+        const summaryLine = document.getElementById("portal-summary");
+        if (summaryLine) {
+          summaryLine.textContent = data.business.productSummary
+            ? data.business.productSummary
+            : "";
+          summaryLine.classList.toggle("hidden", !data.business.productSummary);
+        }
+        if (productSummaryEl) {
+          productSummaryEl.value = data.business.productSummary || "";
+        }
         const apps = data.apps || [];
         const app = apps[0];
         currentAppId = app ? app.id : "";
@@ -316,7 +414,10 @@
         if (app) {
           currentProductType = (data.business && data.business.productType) || app.productType || "custom";
           if (productTypeEl) productTypeEl.value = currentProductType;
-          syncProductUi(currentProductType);
+          renderProductTypeCards("product-type-grid", "product-type", currentProductType, (type) => {
+            syncProductUi(type, { preserveAction: false });
+          });
+          syncProductUi(currentProductType, { preserveAction: true });
           fillVerifySelect(
             verifyAction,
             currentProductType,
@@ -326,6 +427,9 @@
         } else {
           currentProductType = (data.business && data.business.productType) || "custom";
           if (productTypeEl) productTypeEl.value = currentProductType;
+          renderProductTypeCards("product-type-grid", "product-type", currentProductType, (type) => {
+            syncProductUi(type, { preserveAction: false });
+          });
           syncProductUi(currentProductType);
           appDefaultPolicy = productConfig(currentProductType).defaultAction;
         }
@@ -417,12 +521,7 @@
                 <div class="field" style="margin-top:10px;">
                   <label>When they verify</label>
                   <select class="member-policy-select">
-                    <option value="default" ${selected === "default" ? "selected" : ""}>Use app default (${escapeHtml(memberPolicyLabel(appDefaultPolicy))})</option>
-                    <option value="identity" ${selected === "identity" ? "selected" : ""}>Confirm identity only</option>
-                    <option value="autofill" ${selected === "autofill" ? "selected" : ""}>Return name to fill a form</option>
-                    <option value="auto_admit" ${selected === "auto_admit" ? "selected" : ""}>Allow automatically</option>
-                    <option value="auto_deny" ${selected === "auto_deny" ? "selected" : ""}>Block automatically</option>
-                    <option value="pending" ${selected === "pending" ? "selected" : ""}>Wait for approval</option>
+                    ${memberPolicyOptionsHtml(selected)}
                   </select>
                 </div>
               </article>
@@ -660,6 +759,7 @@
               email: document.getElementById("req-email").value,
               password: document.getElementById("req-password").value,
               website: (document.getElementById("req-website") || {}).value || "",
+              productSummary: (document.getElementById("req-summary") || {}).value || "",
               productType: (document.getElementById("req-product-type") || {}).value || "custom",
               preferredVerifyAction: (document.getElementById("req-verify-action") || {}).value || "identity",
               note: document.getElementById("req-note").value,
@@ -669,7 +769,10 @@
           if (!res.ok) throw new Error(data.error || "Could not submit");
           status.textContent = data.message || "Request submitted.";
           e.target.reset();
-          syncProductUi((document.getElementById("req-product-type") || {}).value || "custom", { request: true });
+          renderProductTypeCards("req-product-type-grid", "req-product-type", "custom", (type) => {
+            syncProductUi(type, { request: true });
+          });
+          syncProductUi("custom", { request: true });
         } catch (ex) {
           status.textContent = "";
           err.textContent = ex.message || "Could not submit";
@@ -688,6 +791,7 @@
               action: "save-settings",
               appId: currentAppId,
               productType: productTypeEl ? productTypeEl.value : currentProductType,
+              productSummary: productSummaryEl ? productSummaryEl.value : "",
               verifyAction: verifyAction.value,
             }),
           });
@@ -696,6 +800,15 @@
           portalStatus.textContent = "Settings saved";
           if (data.business && data.business.productType) currentProductType = data.business.productType;
           else if (productTypeEl) currentProductType = productTypeEl.value;
+          if (data.business && productSummaryEl) {
+            productSummaryEl.value = data.business.productSummary || productSummaryEl.value;
+            const summaryLine = document.getElementById("portal-summary");
+            if (summaryLine) {
+              summaryLine.textContent = data.business.productSummary || "";
+              summaryLine.classList.toggle("hidden", !data.business.productSummary);
+            }
+          }
+          syncProductUi(currentProductType, { preserveAction: true });
           appDefaultPolicy = (data.app && data.app.verifyAction) || verifyAction.value || appDefaultPolicy;
           loadRecentMembers().catch(() => {});
         } catch (ex) {
@@ -746,13 +859,14 @@
       }
 
       if (reqProductType) {
+        renderProductTypeCards("req-product-type-grid", "req-product-type", reqProductType.value || "custom", (type) => {
+          syncProductUi(type, { request: true });
+        });
         syncProductUi(reqProductType.value || "custom", { request: true });
-        reqProductType.addEventListener("change", () => syncProductUi(reqProductType.value, { request: true }));
       }
       if (productTypeEl) {
-        productTypeEl.addEventListener("change", () => {
-          currentProductType = productTypeEl.value;
-          syncProductUi(currentProductType);
+        renderProductTypeCards("product-type-grid", "product-type", productTypeEl.value || "custom", (type) => {
+          syncProductUi(type);
         });
       }
     </script>
