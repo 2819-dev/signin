@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-notifs2" />
+    <link rel="stylesheet" href="/join.css?v=community-dm-react1" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -312,6 +312,14 @@
                         </button>
                       </form>
                       <p class="muted" id="dm-chat-hint">Pick someone from the left, or message them from their profile.</p>
+                    </div>
+                  </div>
+                  <div id="dm-msg-sheet" class="community-dm-sheet" hidden>
+                    <button type="button" class="community-dm-sheet-backdrop" data-dm-sheet-close aria-label="Close"></button>
+                    <div class="community-dm-sheet-panel" role="dialog" aria-modal="true" aria-label="Message actions">
+                      <div class="community-dm-sheet-reacts" id="dm-sheet-reacts"></div>
+                      <div class="community-dm-sheet-actions" id="dm-sheet-actions"></div>
+                      <button type="button" class="community-dm-sheet-cancel" data-dm-sheet-close>Cancel</button>
                     </div>
                   </div>
                 </div>
@@ -811,6 +819,6 @@
     </nav>
 
     <div id="toast" class="community-toast" role="status" aria-live="polite"></div>
-    <script src="/community.js?v=community-notifs2"></script>
+    <script src="/community.js?v=community-dm-react1"></script>
   </body>
 </html>

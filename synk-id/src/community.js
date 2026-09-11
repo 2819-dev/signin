@@ -83,6 +83,10 @@
   let activeDmThreadId = "";
   let activeDmMessages = [];
   let editingDmMessageId = "";
+  let activeDmSheetMessageId = "";
+  let dmPressTimer = null;
+  let dmPressMoved = false;
+  const DM_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👏", "🎉"];
   let activePersona = "";
   let me = null;
   let groups = [];
@@ -3163,9 +3167,99 @@ function applyViewState(data) {
     if (sendBtn) sendBtn.setAttribute("aria-label", "Send");
   }
 
+  function clearDmPressTimer() {
+    if (dmPressTimer) {
+      clearTimeout(dmPressTimer);
+      dmPressTimer = null;
+    }
+  }
+
+  function closeDmMessageSheet() {
+    activeDmSheetMessageId = "";
+    const sheet = document.getElementById("dm-msg-sheet");
+    if (sheet) sheet.hidden = true;
+    document.querySelectorAll(".community-dm-msg.is-menu-open").forEach((el) => {
+      el.classList.remove("is-menu-open");
+    });
+  }
+
+  function openDmMessageSheet(messageId) {
+    const msg = (activeDmMessages || []).find((m) => String(m.id) === String(messageId));
+    if (!msg) return;
+    activeDmSheetMessageId = String(msg.id);
+    const sheet = document.getElementById("dm-msg-sheet");
+    const reacts = document.getElementById("dm-sheet-reacts");
+    const actions = document.getElementById("dm-sheet-actions");
+    if (!sheet || !reacts || !actions) return;
+
+    document.querySelectorAll(".community-dm-msg.is-menu-open").forEach((el) => {
+      el.classList.remove("is-menu-open");
+    });
+    const wrap = document.querySelector(
+      `[data-dm-message-id="${String(msg.id).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"]`
+    );
+    if (wrap) wrap.classList.add("is-menu-open");
+
+    reacts.innerHTML = DM_REACTION_EMOJIS.map(
+      (emoji) =>
+        `<button type="button" class="community-dm-sheet-emoji" data-dm-react="${escapeHtml(
+          String(msg.id)
+        )}" data-dm-emoji="${escapeHtml(emoji)}" aria-label="React ${escapeHtml(emoji)}">${emoji}</button>`
+    ).join("");
+
+    const actionBtns = [];
+    if (msg.canEdit) {
+      actionBtns.push(
+        `<button type="button" class="community-dm-sheet-action" data-dm-edit="${escapeHtml(
+          String(msg.id)
+        )}">Edit</button>`
+      );
+    }
+    if (msg.canDelete) {
+      actionBtns.push(
+        `<button type="button" class="community-dm-sheet-action is-danger" data-dm-delete="${escapeHtml(
+          String(msg.id)
+        )}" data-dm-delete-mode="${escapeHtml(
+          msg.deleteMode || (msg.canUnsend ? "unsend" : "for-me")
+        )}">${msg.canUnsend ? "Delete for everyone" : "Delete for me"}</button>`
+      );
+    }
+    actions.innerHTML = actionBtns.join("");
+    sheet.hidden = false;
+  }
+
+  async function toggleDmReaction(messageId, emoji) {
+    const id = String(messageId || "").trim();
+    const reaction = String(emoji || "").trim();
+    if (!id || !reaction) return;
+    try {
+      const data = await communityAction({
+        action: "dm-react",
+        messageId: id,
+        emoji: reaction,
+      });
+      if (data && data.message) {
+        activeDmMessages = (activeDmMessages || []).map((m) =>
+          String(m.id) === String(data.message.id) ? data.message : m
+        );
+        renderDmMessages(activeDmMessages, {
+          otherUser: activeDmUser,
+          preserveScroll: true,
+        });
+      } else if (activeDmUser) {
+        await openDmThread(activeDmUser);
+      }
+    } catch (err) {
+      showToast(err.message || "Could not react");
+    } finally {
+      closeDmMessageSheet();
+    }
+  }
+
   function startDmEdit(messageId) {
     const msg = (activeDmMessages || []).find((m) => String(m.id) === String(messageId));
     if (!msg || !msg.canEdit) return;
+    closeDmMessageSheet();
     editingDmMessageId = String(msg.id);
     const input = document.getElementById("dm-compose-input");
     const cancel = document.getElementById("dm-compose-cancel");
@@ -3181,22 +3275,35 @@ function applyViewState(data) {
     if (sendBtn) sendBtn.setAttribute("aria-label", "Save edit");
   }
 
-  function renderDmMessages(messages, { otherUser = "" } = {}) {
+  function renderDmMessages(messages, { otherUser = "", preserveScroll = false } = {}) {
     const list = document.getElementById("dm-message-list");
     const title = document.getElementById("dm-chat-title");
     const form = document.getElementById("dm-compose-form");
     const hint = document.getElementById("dm-chat-hint");
-    if (title) title.textContent = otherUser || "Select a conversation";
+    const meName = String(publicUsername || "")
+      .trim()
+      .toLowerCase();
+    const thread = (dmThreads || []).find(
+      (t) => String(t.otherUser || t.otherUsername || "").toLowerCase() === String(otherUser || "").toLowerCase()
+    );
+    const titleLabel = (thread && (thread.otherDisplayName || thread.otherUser)) || otherUser || "Select a conversation";
+    if (title) title.textContent = titleLabel;
     if (form) form.hidden = !otherUser;
     if (hint) hint.hidden = !!otherUser;
     if (!list) return;
+    const prevScroll = list.scrollTop;
+    const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
     const rows = Array.isArray(messages) ? messages : [];
     activeDmMessages = rows;
     list.innerHTML = rows
       .map((m) => {
-        const mine = String(m.senderUsername || m.sender || "") === publicUsername;
+        const sender = String(m.senderUsername || m.sender || "")
+          .trim()
+          .toLowerCase();
+        const mine = Boolean(meName && sender === meName) || Boolean(m.canEdit || m.canUnsend);
         const edited = Boolean(m.isEdited || (m.editHistory && m.editHistory.length));
         const history = Array.isArray(m.editHistory) ? m.editHistory : [];
+        const reactions = Array.isArray(m.reactions) ? m.reactions : [];
         const historyHtml = history.length
           ? `<div class="community-dm-history" hidden>
               ${history
@@ -3216,40 +3323,42 @@ function applyViewState(data) {
               String(m.id || "")
             )}" aria-expanded="false">Edited</button>`
           : "";
-        const tools =
-          mine || m.canDelete
-            ? `<div class="community-dm-tools">
-                ${
-                  m.canEdit
-                    ? `<button type="button" class="community-dm-tool" data-dm-edit="${escapeHtml(
-                        String(m.id || "")
-                      )}">Edit</button>`
-                    : ""
-                }
-                ${
-                  m.canDelete
-                    ? `<button type="button" class="community-dm-tool is-danger" data-dm-delete="${escapeHtml(
-                        String(m.id || "")
-                      )}" data-dm-delete-mode="${escapeHtml(
-                        m.deleteMode || (m.canUnsend ? "unsend" : "for-me")
-                      )}">${m.canUnsend ? "Delete" : "Delete for me"}</button>`
-                    : ""
-                }
-              </div>`
-            : "";
+        const reactionsHtml = reactions.length
+          ? `<div class="community-dm-reactions" aria-label="Reactions">
+              ${reactions
+                .map(
+                  (r) =>
+                    `<button type="button" class="community-dm-reaction ${r.me ? "is-mine" : ""}" data-dm-react="${escapeHtml(
+                      String(m.id || "")
+                    )}" data-dm-emoji="${escapeHtml(r.emoji || "")}" aria-pressed="${
+                      r.me ? "true" : "false"
+                    }"><span>${escapeHtml(r.emoji || "")}</span><span>${escapeHtml(
+                      String(r.count || 1)
+                    )}</span></button>`
+                )
+                .join("")}
+            </div>`
+          : "";
+        const when = m.createdAt
+          ? `<time class="community-dm-time" datetime="${escapeHtml(m.createdAt)}">${escapeHtml(
+              formatWhen(m.createdAt)
+            )}</time>`
+          : "";
         return `<div class="community-dm-msg ${mine ? "is-mine" : "is-theirs"}" data-dm-message-id="${escapeHtml(
           String(m.id || "")
         )}">
-          <div class="community-dm-bubble ${mine ? "is-mine" : "is-theirs"} ${edited ? "is-edited" : ""}">
+          <div class="community-dm-bubble ${mine ? "is-mine" : "is-theirs"} ${edited ? "is-edited" : ""}" tabindex="0">
             <div class="community-dm-msg-body">${escapeHtml(m.body || "")}</div>
             ${meta}
             ${historyHtml}
           </div>
-          ${tools}
+          ${reactionsHtml}
+          ${when}
         </div>`;
       })
       .join("");
-    list.scrollTop = list.scrollHeight;
+    if (preserveScroll && !nearBottom) list.scrollTop = prevScroll;
+    else list.scrollTop = list.scrollHeight;
   }
 
   async function loadDmThreads() {
@@ -3263,6 +3372,7 @@ function applyViewState(data) {
     if (!target) return;
     activeDmUser = target;
     clearDmEditMode();
+    closeDmMessageSheet();
     const data = await communityAction({ action: "dm-open", username: target });
     activeDmThreadId = (data.thread && data.thread.id) || "";
     renderDmThreads(dmThreads);
@@ -3347,6 +3457,33 @@ function applyViewState(data) {
     });
   }
 
+  async function handleDmDelete(messageId, mode) {
+    const confirmText =
+      mode === "unsend"
+        ? "Delete this message for everyone? They haven’t read it yet."
+        : "Delete this message for you only? The other person will still see it.";
+    if (!window.confirm(confirmText)) return;
+    closeDmMessageSheet();
+    try {
+      const result = await communityAction({
+        action: "dm-delete",
+        messageId,
+      });
+      if (editingDmMessageId && String(editingDmMessageId) === String(messageId)) {
+        clearDmEditMode();
+        const input = document.getElementById("dm-compose-input");
+        if (input) input.value = "";
+      }
+      showToast(result.mode === "unsend" ? "Message deleted" : "Deleted for you");
+      if (activeDmUser) {
+        await openDmThread(activeDmUser);
+        await loadDmThreads();
+      }
+    } catch (err) {
+      showToast(err.message || "Could not delete message.");
+    }
+  }
+
   const dmMessageList = document.getElementById("dm-message-list");
   if (dmMessageList) {
     dmMessageList.addEventListener("click", async (e) => {
@@ -3363,43 +3500,95 @@ function applyViewState(data) {
         return;
       }
 
+      const reactBtn = e.target.closest("[data-dm-react]");
+      if (reactBtn) {
+        e.preventDefault();
+        await toggleDmReaction(
+          reactBtn.getAttribute("data-dm-react"),
+          reactBtn.getAttribute("data-dm-emoji")
+        );
+      }
+    });
+
+    dmMessageList.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const msg = e.target.closest("[data-dm-message-id]");
+      if (!msg || e.target.closest("[data-dm-react], [data-dm-history-toggle], a, button")) return;
+      dmPressMoved = false;
+      clearDmPressTimer();
+      const id = msg.getAttribute("data-dm-message-id");
+      const startX = e.clientX;
+      const startY = e.clientY;
+      dmPressTimer = setTimeout(() => {
+        dmPressTimer = null;
+        if (dmPressMoved) return;
+        try {
+          if (navigator.vibrate) navigator.vibrate(12);
+        } catch (_) {}
+        openDmMessageSheet(id);
+      }, 420);
+      const onMove = (ev) => {
+        if (Math.abs(ev.clientX - startX) > 10 || Math.abs(ev.clientY - startY) > 10) {
+          dmPressMoved = true;
+          clearDmPressTimer();
+        }
+      };
+      const onUp = () => {
+        clearDmPressTimer();
+        dmMessageList.removeEventListener("pointermove", onMove);
+        dmMessageList.removeEventListener("pointerup", onUp);
+        dmMessageList.removeEventListener("pointercancel", onUp);
+      };
+      dmMessageList.addEventListener("pointermove", onMove);
+      dmMessageList.addEventListener("pointerup", onUp);
+      dmMessageList.addEventListener("pointercancel", onUp);
+    });
+
+    dmMessageList.addEventListener("contextmenu", (e) => {
+      const msg = e.target.closest("[data-dm-message-id]");
+      if (!msg) return;
+      e.preventDefault();
+      clearDmPressTimer();
+      openDmMessageSheet(msg.getAttribute("data-dm-message-id"));
+    });
+  }
+
+  const dmMsgSheet = document.getElementById("dm-msg-sheet");
+  if (dmMsgSheet) {
+    dmMsgSheet.addEventListener("click", async (e) => {
+      if (e.target.closest("[data-dm-sheet-close]")) {
+        e.preventDefault();
+        closeDmMessageSheet();
+        return;
+      }
+      const reactBtn = e.target.closest("[data-dm-react]");
+      if (reactBtn) {
+        e.preventDefault();
+        await toggleDmReaction(
+          reactBtn.getAttribute("data-dm-react"),
+          reactBtn.getAttribute("data-dm-emoji")
+        );
+        return;
+      }
       const editBtn = e.target.closest("[data-dm-edit]");
       if (editBtn) {
         e.preventDefault();
         startDmEdit(editBtn.getAttribute("data-dm-edit"));
         return;
       }
-
       const deleteBtn = e.target.closest("[data-dm-delete]");
       if (!deleteBtn) return;
       e.preventDefault();
-      const messageId = deleteBtn.getAttribute("data-dm-delete");
-      const mode = deleteBtn.getAttribute("data-dm-delete-mode") || "for-me";
-      const confirmText =
-        mode === "unsend"
-          ? "Delete this message for everyone? They haven’t read it yet."
-          : "Delete this message for you only? The other person will still see it.";
-      if (!window.confirm(confirmText)) return;
-      try {
-        const result = await communityAction({
-          action: "dm-delete",
-          messageId,
-        });
-        if (editingDmMessageId && String(editingDmMessageId) === String(messageId)) {
-          clearDmEditMode();
-          const input = document.getElementById("dm-compose-input");
-          if (input) input.value = "";
-        }
-        showToast(result.mode === "unsend" ? "Message deleted" : "Deleted for you");
-        if (activeDmUser) {
-          await openDmThread(activeDmUser);
-          await loadDmThreads();
-        }
-      } catch (err) {
-        showToast(err.message || "Could not delete message.");
-      }
+      await handleDmDelete(
+        deleteBtn.getAttribute("data-dm-delete"),
+        deleteBtn.getAttribute("data-dm-delete-mode") || "for-me"
+      );
     });
   }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDmMessageSheet();
+  });
 
   document.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-profile-action]");

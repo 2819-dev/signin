@@ -683,6 +683,7 @@ async function ensureSynkCommunityExtras(sql) {
   await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS deleted_for_sender BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS deleted_for_recipient BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS edit_history JSONB NOT NULL DEFAULT '[]'::jsonb`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS reactions JSONB NOT NULL DEFAULT '{}'::jsonb`;
 
   await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'standard'`;
   await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS is_official BOOLEAN NOT NULL DEFAULT FALSE`;
@@ -3152,6 +3153,8 @@ function mapDmThread(row, viewerUsername) {
   };
 }
 
+const DM_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👏", "🎉"];
+
 function parseDmEditHistory(value) {
   if (!value) return [];
   let raw = value;
@@ -3171,6 +3174,52 @@ function parseDmEditHistory(value) {
     .filter((entry) => entry.body);
 }
 
+function parseDmReactions(value) {
+  if (!value) return {};
+  let raw = value;
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value);
+    } catch (_) {
+      return {};
+    }
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [emoji, users] of Object.entries(raw)) {
+    const key = String(emoji || "").trim();
+    if (!key || !DM_REACTION_EMOJIS.includes(key)) continue;
+    const list = Array.isArray(users)
+      ? users
+          .map((u) => normalizePublicUsername(u))
+          .filter(Boolean)
+      : [];
+    const unique = Array.from(new Set(list));
+    if (unique.length) out[key] = unique;
+  }
+  return out;
+}
+
+function mapDmReactions(reactionsMap, viewerUsername = "") {
+  const viewer = normalizePublicUsername(viewerUsername);
+  return Object.entries(reactionsMap || {})
+    .map(([emoji, users]) => {
+      const list = Array.isArray(users) ? users : [];
+      return {
+        emoji,
+        count: list.length,
+        me: Boolean(viewer && list.includes(viewer)),
+        users: list,
+      };
+    })
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => {
+      const ai = DM_REACTION_EMOJIS.indexOf(a.emoji);
+      const bi = DM_REACTION_EMOJIS.indexOf(b.emoji);
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    });
+}
+
 function mapDmMessage(row, viewerUsername = "") {
   if (!row) return null;
   const viewer = normalizePublicUsername(viewerUsername);
@@ -3179,10 +3228,11 @@ function mapDmMessage(row, viewerUsername = "") {
   const readAt = row.read_at || null;
   const editedAt = row.edited_at || null;
   const editHistory = parseDmEditHistory(row.edit_history);
+  const reactionsMap = parseDmReactions(row.reactions);
   return {
     id: row.id,
     threadId: row.thread_id,
-    senderUsername: row.sender_username,
+    senderUsername: sender || row.sender_username,
     body: row.body,
     createdAt: row.created_at,
     editedAt,
@@ -3194,6 +3244,8 @@ function mapDmMessage(row, viewerUsername = "") {
     canUnsend: mine && !readAt && !row.unsent_at,
     deleteMode: mine ? (readAt ? "for-me" : "unsend") : "for-me",
     editHistory,
+    reactions: mapDmReactions(reactionsMap, viewer),
+    reactionEmojis: DM_REACTION_EMOJIS.slice(),
   };
 }
 
@@ -3326,7 +3378,8 @@ async function listDmMessages(sql, threadId, username) {
       unsent_at,
       deleted_for_sender,
       deleted_for_recipient,
-      edit_history
+      edit_history,
+      reactions
     FROM synk_community_dm_messages
     WHERE thread_id = ${id}
       AND unsent_at IS NULL
@@ -3363,7 +3416,7 @@ async function sendDm(sql, fromUsername, toUsername, body) {
     VALUES (${threadId}, ${from}, ${text})
     RETURNING
       id, thread_id, sender_username, body, created_at,
-      edited_at, read_at, unsent_at, deleted_for_sender, deleted_for_recipient, edit_history
+      edited_at, read_at, unsent_at, deleted_for_sender, deleted_for_recipient, edit_history, reactions
   `;
   const updated = await sql`
     UPDATE synk_community_dm_threads
@@ -3398,6 +3451,7 @@ async function editDmMessage(sql, messageId, username, body) {
       m.deleted_for_sender,
       m.deleted_for_recipient,
       m.edit_history,
+      m.reactions,
       t.user_a,
       t.user_b
     FROM synk_community_dm_messages m
@@ -3431,7 +3485,7 @@ async function editDmMessage(sql, messageId, username, body) {
     WHERE id = ${id}
     RETURNING
       id, thread_id, sender_username, body, created_at,
-      edited_at, read_at, unsent_at, deleted_for_sender, deleted_for_recipient, edit_history
+      edited_at, read_at, unsent_at, deleted_for_sender, deleted_for_recipient, edit_history, reactions
   `;
   return { ok: true, message: mapDmMessage(updated[0], name) };
 }
@@ -3454,6 +3508,7 @@ async function deleteDmMessage(sql, messageId, username) {
       m.deleted_for_sender,
       m.deleted_for_recipient,
       m.edit_history,
+      m.reactions,
       t.user_a,
       t.user_b
     FROM synk_community_dm_messages m
@@ -3485,7 +3540,8 @@ async function deleteDmMessage(sql, messageId, username) {
       SET
         unsent_at = NOW(),
         body = '',
-        edit_history = '[]'::jsonb
+        edit_history = '[]'::jsonb,
+        reactions = '{}'::jsonb
       WHERE id = ${id}
     `;
     return { ok: true, mode: "unsend", message: null };
@@ -3497,6 +3553,66 @@ async function deleteDmMessage(sql, messageId, username) {
     WHERE id = ${id}
   `;
   return { ok: true, mode: "for-me", message: null };
+}
+
+async function reactDmMessage(sql, messageId, username, emoji) {
+  const id = String(messageId || "").trim();
+  const name = normalizePublicUsername(username);
+  const reaction = String(emoji || "").trim();
+  if (!id || !name) return { ok: false, error: "Message required" };
+  if (!DM_REACTION_EMOJIS.includes(reaction)) {
+    return { ok: false, error: "Unsupported reaction" };
+  }
+
+  const rows = await sql`
+    SELECT
+      m.id,
+      m.thread_id,
+      m.sender_username,
+      m.body,
+      m.created_at,
+      m.edited_at,
+      m.read_at,
+      m.unsent_at,
+      m.deleted_for_sender,
+      m.deleted_for_recipient,
+      m.edit_history,
+      m.reactions,
+      t.user_a,
+      t.user_b
+    FROM synk_community_dm_messages m
+    JOIN synk_community_dm_threads t ON t.id = m.thread_id
+    WHERE m.id = ${id}
+      AND (t.user_a = ${name} OR t.user_b = ${name})
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return { ok: false, error: "Message not found" };
+  if (row.unsent_at) return { ok: false, error: "Message was deleted" };
+  const sender = normalizePublicUsername(row.sender_username);
+  const hiddenForViewer =
+    sender === name
+      ? Boolean(row.deleted_for_sender)
+      : Boolean(row.deleted_for_recipient);
+  if (hiddenForViewer) return { ok: false, error: "Message was deleted" };
+
+  const reactions = parseDmReactions(row.reactions);
+  const current = Array.isArray(reactions[reaction]) ? reactions[reaction].slice() : [];
+  const idx = current.indexOf(name);
+  if (idx >= 0) current.splice(idx, 1);
+  else current.push(name);
+  if (current.length) reactions[reaction] = current;
+  else delete reactions[reaction];
+
+  const updated = await sql`
+    UPDATE synk_community_dm_messages
+    SET reactions = ${JSON.stringify(reactions)}::jsonb
+    WHERE id = ${id}
+    RETURNING
+      id, thread_id, sender_username, body, created_at,
+      edited_at, read_at, unsent_at, deleted_for_sender, deleted_for_recipient, edit_history, reactions
+  `;
+  return { ok: true, message: mapDmMessage(updated[0], name) };
 }
 
 function friendshipViewerStatus(friendship) {
@@ -3847,6 +3963,7 @@ module.exports = {
   sendDm,
   editDmMessage,
   deleteDmMessage,
+  reactDmMessage,
   friendshipViewerStatus,
   getAvatarsByUsernames,
   setAvatarForUsername,

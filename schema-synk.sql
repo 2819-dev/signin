@@ -582,7 +582,8 @@ CREATE TABLE IF NOT EXISTS synk_community_dm_messages (
   unsent_at TIMESTAMPTZ,
   deleted_for_sender BOOLEAN NOT NULL DEFAULT FALSE,
   deleted_for_recipient BOOLEAN NOT NULL DEFAULT FALSE,
-  edit_history JSONB NOT NULL DEFAULT '[]'::jsonb
+  edit_history JSONB NOT NULL DEFAULT '[]'::jsonb,
+  reactions JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
 CREATE INDEX IF NOT EXISTS synk_community_dm_messages_thread_created_idx

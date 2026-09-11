@@ -63,6 +63,7 @@ const {
   sendDm,
   editDmMessage,
   deleteDmMessage,
+  reactDmMessage,
   friendshipViewerStatus,
   getAvatarsByUsernames,
   setAvatarForUsername,
@@ -1703,6 +1704,20 @@ exports.handler = async (event) => {
       return json(200, {
         ok: true,
         mode: result.mode,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-react") {
+      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const messageId = String(body.messageId || body.id || "").trim();
+      if (!isUuid(messageId)) return json(400, { error: "Invalid message id" });
+      const emoji = String(body.emoji || body.reaction || "").trim();
+      const result = await reactDmMessage(sql, messageId, primaryUsername, emoji);
+      if (!result.ok) return json(400, { error: result.error || "Could not react" });
+      return json(200, {
+        ok: true,
+        message: result.message,
         me: mePayload(auth, role, alts, myTags, myPinnedTag),
       });
     }
