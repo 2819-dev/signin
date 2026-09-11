@@ -4,8 +4,8 @@
   "description": "Synk helps you check in faster with your face",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#041a55",
+  "theme_color": "#041a55",
   "icons": [
     {
       "src": "/apple-touch-icon.png",

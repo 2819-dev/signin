@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
   --bg: #f4f6f8;
   --surface: #ffffff;
   --ink: #0b1f3a;
@@ -7,11 +7,23 @@
   --line: #d9e1ea;
   --fill: #eef2f6;
   --brand: #0b1f3a;
+  --brand-hover: #06246f;
+  --brand-contrast: #ffffff;
   --accent: #2f80ed;
   --accent-ink: #1d5bb8;
   --accent-soft: #e8f1fc;
   --danger: #b42318;
   --danger-soft: #fef3f2;
+  --page: #ffffff;
+  --band: #f7f9fc;
+  --band-alt: #ffffff;
+  --nav-light-bg: #ffffff;
+  --hero-ink: #041a55;
+  --community-bg: #dae0e6;
+  --chip-bg: rgba(15, 23, 42, 0.06);
+  --chip-ink: #334155;
+  --shadow: rgba(15, 23, 42, 0.12);
+  --placeholder: #9a9aa3;
   --tap: 48px;
   --radius: 12px;
   --radius-lg: 16px;
@@ -224,7 +236,7 @@ a:hover {
 }
 
 .field input::placeholder {
-  color: #9a9aa3;
+  color: var(--placeholder);
 }
 
 .row-2 {
@@ -328,13 +340,13 @@ a:hover {
 .btn-primary {
   width: 100%;
   background: var(--brand);
-  color: #fff;
+  color: var(--brand-contrast);
   border-color: var(--brand);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #06246f;
-  border-color: #06246f;
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
 }
 
 .btn-secondary {
@@ -471,7 +483,7 @@ a:hover {
   padding: 12px 14px 12px 38px;
   border-radius: 14px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
@@ -612,7 +624,7 @@ a:hover {
 
 /* —— Consumer marketing landing —— */
 body.marketing {
-  background: #ffffff;
+  background: var(--page);
 }
 
 .site-nav {
@@ -633,7 +645,7 @@ body.marketing {
 }
 
 .site-nav-light {
-  background: #ffffff;
+  background: var(--nav-light-bg);
   color: var(--ink);
   border-bottom: 1px solid var(--line);
 }
@@ -687,8 +699,8 @@ body.marketing {
 }
 
 .site-nav:not(.site-nav-light) .btn-nav.btn-primary {
-  background: #fff;
-  color: #041a55;
+  background: var(--surface);
+  color: var(--hero-ink);
   border-color: #fff;
 }
 
@@ -715,12 +727,12 @@ body.marketing {
   line-height: 1.05;
   letter-spacing: -0.035em;
   font-weight: 700;
-  color: #041a55;
+  color: var(--hero-ink);
 }
 
 .lead {
   margin: 0 0 24px;
-  color: #5b6b82;
+  color: var(--muted);
   font-size: 1.1rem;
   line-height: 1.55;
   max-width: 34rem;
@@ -743,9 +755,9 @@ body.marketing {
 
 .hero-card {
   width: min(100%, 340px);
-  background: #ffffff;
-  color: #041a55;
-  border: 1px solid #d7e0ee;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 16px;
   padding: 24px;
 }
@@ -764,7 +776,7 @@ body.marketing {
 
 .hero-card-body {
   margin: 0 0 18px;
-  color: #5b6b82;
+  color: var(--muted);
   font-size: 0.95rem;
   line-height: 1.45;
 }
@@ -794,20 +806,20 @@ body.marketing {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #041a55;
-  color: #fff;
+  background: var(--brand);
+  color: var(--brand-contrast);
   display: grid;
   place-items: center;
   font-size: 0.82rem;
 }
 
 .band {
-  background: #f7f9fc;
+  background: var(--band);
   padding: 52px 0;
 }
 
 .band-alt {
-  background: #ffffff;
+  background: var(--band-alt);
 }
 
 .band-inner {
@@ -824,7 +836,7 @@ body.marketing {
 
 .band-intro {
   margin: 0 0 24px;
-  color: #5b6b82;
+  color: var(--muted);
   font-size: 1.02rem;
 }
 
@@ -834,14 +846,14 @@ body.marketing {
 }
 
 .feature {
-  background: #ffffff;
-  border: 1px solid #d7e0ee;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 20px;
 }
 
 .band-alt .feature {
-  background: #f7f9fc;
+  background: var(--band);
 }
 
 .feature-num {
@@ -850,8 +862,8 @@ body.marketing {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: #041a55;
-  color: #fff;
+  background: var(--brand);
+  color: var(--brand-contrast);
   font-weight: 700;
   font-size: 0.82rem;
   margin-bottom: 12px;
@@ -865,7 +877,7 @@ body.marketing {
 
 .feature p {
   margin: 0;
-  color: #5b6b82;
+  color: var(--muted);
   font-size: 0.95rem;
   line-height: 1.5;
 }
@@ -900,15 +912,15 @@ body.marketing {
 }
 
 .btn-on-navy {
-  background: #fff;
-  color: #041a55;
+  background: var(--surface);
+  color: var(--hero-ink);
   border-color: #fff;
 }
 
 .btn-on-navy:hover:not(:disabled) {
   background: #eef3fa;
   border-color: #eef3fa;
-  color: #041a55;
+  color: var(--hero-ink);
 }
 
 .btn-on-dark {
@@ -924,8 +936,8 @@ body.marketing {
 }
 
 .site-footer {
-  border-top: 1px solid #d7e0ee;
-  background: #fff;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
   padding: 28px 0 calc(28px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -1022,8 +1034,8 @@ body.marketing {
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: #041a55;
-  color: #fff;
+  background: var(--brand);
+  color: var(--brand-contrast);
   display: grid;
   place-items: center;
   font-weight: 700;
@@ -1142,7 +1154,7 @@ body.marketing {
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface);
   cursor: pointer;
   color: inherit;
   font: inherit;
@@ -1192,8 +1204,8 @@ body.marketing {
 .community-group-chip {
   margin-left: 8px;
   border: 0;
-  background: rgba(15, 23, 42, 0.06);
-  color: #334155;
+  background: var(--chip-bg);
+  color: var(--chip-ink);
   border-radius: 999px;
   padding: 2px 8px;
   font-size: 0.75rem;
@@ -1325,7 +1337,7 @@ textarea {
 
 /* —— Community Reddit-style chrome —— */
 .community-body {
-  background: #dae0e6;
+  background: var(--community-bg);
 }
 
 .community-topnav {
@@ -1386,7 +1398,7 @@ textarea {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: #fff;
+  background: var(--surface);
 }
 
 .community-avatar {
@@ -1407,7 +1419,7 @@ textarea {
   gap: 0;
   padding: 0;
   overflow: hidden;
-  background: #fff;
+  background: var(--surface);
 }
 
 .community-post-rail {
@@ -1429,7 +1441,7 @@ textarea {
 
 .community-user-link,
 .community-group-chip {
-  color: #1a1a1b;
+  color: var(--ink);
   text-decoration: none;
   font-weight: 700;
 }
@@ -1444,7 +1456,7 @@ textarea {
   align-items: center;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.06);
+  background: var(--chip-bg);
   font-size: 0.75rem;
 }
 
@@ -1455,8 +1467,8 @@ textarea {
   border-radius: 999px;
   font-size: 0.7rem;
   font-weight: 700;
-  background: rgba(15, 23, 42, 0.08);
-  color: #334155;
+  background: var(--chip-bg);
+  color: var(--chip-ink);
 }
 
 .persona-switch {
@@ -1468,7 +1480,7 @@ textarea {
   align-items: center;
   gap: 6px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface);
   border-radius: 999px;
   padding: 6px 10px;
   cursor: pointer;
@@ -1492,8 +1504,8 @@ textarea {
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+  background: var(--surface);
+  box-shadow: 0 12px 30px var(--shadow);
   display: grid;
   gap: 4px;
   z-index: 50;
@@ -1584,4 +1596,79 @@ textarea {
 
 .community-profile-card .community-tag-list {
   margin-top: 10px;
+}
+
+/* —— Auto light / dark (follows system preference) —— */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220;
+    --surface: #141c2b;
+    --ink: #e8eef8;
+    --muted: #9aa8bc;
+    --line: #2a3548;
+    --fill: #1a2333;
+    --brand: #8eb6ff;
+    --brand-hover: #a8c7ff;
+    --brand-contrast: #041a55;
+    --accent: #5b9fff;
+    --accent-ink: #9ec5ff;
+    --accent-soft: rgba(91, 159, 255, 0.18);
+    --danger: #ff8b82;
+    --danger-soft: #3a1d1d;
+    --page: #0b1220;
+    --band: #101826;
+    --band-alt: #0b1220;
+    --nav-light-bg: #101826;
+    --hero-ink: #e8eef8;
+    --community-bg: #080e16;
+    --chip-bg: rgba(232, 238, 248, 0.1);
+    --chip-ink: #c5d0e0;
+    --shadow: rgba(0, 0, 0, 0.45);
+    --placeholder: #7d8ba0;
+  }
+
+  .site-nav-light .brand img,
+  .brand-footer img,
+  .hero-card > img {
+    filter: brightness(0) invert(1);
+  }
+
+  .community-badge-owner {
+    background: rgba(180, 83, 9, 0.22);
+    color: #f0a060;
+  }
+
+  .community-badge-admin {
+    background: rgba(91, 159, 255, 0.2);
+    color: #9ec5ff;
+  }
+
+  .error {
+    border-color: #6a3030;
+  }
+
+  .cta-band {
+    background: #071433;
+  }
+
+  .btn-on-dark {
+    background: var(--surface);
+    color: var(--ink);
+    border-color: var(--line);
+  }
+
+  .btn-on-dark:hover {
+    background: var(--fill);
+    color: var(--ink);
+    border-color: #3d4f6a;
+  }
+
+  .community-topnav {
+    background: rgba(16, 24, 38, 0.92);
+  }
+
+  .persona-menu-item:hover,
+  .persona-menu-item.is-selected {
+    background: rgba(255, 69, 0, 0.16);
+  }
 }
