@@ -340,6 +340,129 @@ async function ensureSynkCommunityExtras(sql) {
     ON CONFLICT (public_username, tag_id) DO NOTHING
   `;
 
+  // Post fields for typed posts, scoring, and polls.
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS title TEXT`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS post_type TEXT NOT NULL DEFAULT 'text'`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS link_url TEXT`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS image_url TEXT`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS score INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS poll_options JSONB`;
+  await sql`ALTER TABLE synk_community_posts ALTER COLUMN body SET DEFAULT ''`;
+  try {
+    await sql`ALTER TABLE synk_community_posts ALTER COLUMN body DROP NOT NULL`;
+  } catch (_) {
+    // Already nullable or unsupported.
+  }
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_posts_score_created_idx
+    ON synk_community_posts (score DESC, created_at DESC)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_comments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      parent_id UUID REFERENCES synk_community_comments(id) ON DELETE CASCADE,
+      author_username TEXT,
+      body TEXT NOT NULL,
+      score INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_comments_post_created_idx
+    ON synk_community_comments (post_id, created_at ASC)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_comments_parent_idx
+    ON synk_community_comments (parent_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_votes (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      target_type TEXT NOT NULL,
+      target_id UUID NOT NULL,
+      value SMALLINT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, target_type, target_id),
+      CONSTRAINT synk_community_votes_type_chk CHECK (target_type IN ('post', 'comment')),
+      CONSTRAINT synk_community_votes_value_chk CHECK (value IN (-1, 1))
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_votes_target_idx
+    ON synk_community_votes (target_type, target_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_saves (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, post_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_saves_profile_created_idx
+    ON synk_community_saves (synk_profile_id, created_at DESC)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_hides (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, post_id)
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_memberships (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, group_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_memberships_group_idx
+    ON synk_community_memberships (group_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_poll_votes (
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      option_index INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (post_id, synk_profile_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_poll_votes_post_idx
+    ON synk_community_poll_votes (post_id, option_index)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_notifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      actor_username TEXT,
+      post_id UUID REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      comment_id UUID REFERENCES synk_community_comments(id) ON DELETE CASCADE,
+      body TEXT NOT NULL DEFAULT '',
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_notifications_profile_created_idx
+    ON synk_community_notifications (synk_profile_id, created_at DESC)
+  `;
+
   await ensureCommunityOwner(sql);
   await ensureDefaultCommunityGroup(sql);
 }
