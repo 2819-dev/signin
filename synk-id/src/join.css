@@ -8554,6 +8554,52 @@ body.community-body .reddit-notif-desc {
   line-height: 1.45;
   font-size: 0.95rem;
 }
+.release-notes-md {
+  display: grid;
+  gap: 0.55rem;
+  line-height: 1.5;
+  font-size: 0.95rem;
+  min-width: 0;
+}
+.release-notes-md > :first-child { margin-top: 0; }
+.release-notes-md > :last-child { margin-bottom: 0; }
+.release-notes-md h1,
+.release-notes-md h2,
+.release-notes-md h3 {
+  margin: 0.35rem 0 0.15rem;
+  line-height: 1.25;
+  font-weight: 800;
+  color: inherit;
+}
+.release-notes-md h1 { font-size: 1.2rem; }
+.release-notes-md h2 { font-size: 1.08rem; }
+.release-notes-md h3 { font-size: 1rem; }
+.release-notes-md p {
+  margin: 0;
+}
+.release-notes-md ul,
+.release-notes-md ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.28rem;
+}
+.release-notes-md li {
+  margin: 0;
+}
+.release-notes-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  padding: 0.1em 0.35em;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--r-elev, #f2f4f7) 88%, #fff);
+}
+.release-notes-md a {
+  color: var(--r-brand, #041A55);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .release-notes-staff {
   border-left: 3px solid var(--r-accent, #041A55);
   padding-left: 10px;

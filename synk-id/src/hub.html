@@ -14,7 +14,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=hub-testing-portal1" />
+    <link rel="stylesheet" href="/join.css?v=release-notes-md1" />
     <script src="/force-refresh.js" defer></script>
   
     <style>
@@ -516,24 +516,107 @@
         if (modal) modal.hidden = true;
       }
 
+      function markdownToSafeHtml(source) {
+        let text = String(source || "").replace(/\r\n/g, "\n").trim();
+        if (!text) return "";
+
+        const codes = [];
+        text = text.replace(/`([^`\n]+)`/g, (_, code) => {
+          codes.push(escapeHubHtml(code));
+          return `§§CODE${codes.length - 1}§§`;
+        });
+
+        text = escapeHubHtml(text);
+        text = text.replace(/§§CODE(\d+)§§/g, (_, i) => `<code>${codes[Number(i)] || ""}</code>`);
+        text = text.replace(
+          /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+          '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+        );
+        text = text.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+        text = text.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+        text = text.replace(/(^|[^_])_([^_\n]+)_(?!_)/g, "$1<em>$2</em>");
+
+        const lines = text.split("\n");
+        const out = [];
+        let listType = "";
+        const closeList = () => {
+          if (!listType) return;
+          out.push(listType === "ol" ? "</ol>" : "</ul>");
+          listType = "";
+        };
+
+        for (const line of lines) {
+          const heading = line.match(/^(#{1,3})\s+(.+)$/);
+          if (heading) {
+            closeList();
+            const level = heading[1].length;
+            out.push(`<h${level}>${heading[2]}</h${level}>`);
+            continue;
+          }
+          const ul = line.match(/^[-*•+]\s+(.+)$/);
+          if (ul) {
+            if (listType !== "ul") {
+              closeList();
+              out.push("<ul>");
+              listType = "ul";
+            }
+            out.push(`<li>${ul[1]}</li>`);
+            continue;
+          }
+          const ol = line.match(/^\d+[.)]\s+(.+)$/);
+          if (ol) {
+            if (listType !== "ol") {
+              closeList();
+              out.push("<ol>");
+              listType = "ol";
+            }
+            out.push(`<li>${ol[1]}</li>`);
+            continue;
+          }
+          if (!String(line).trim()) {
+            closeList();
+            continue;
+          }
+          closeList();
+          out.push(`<p>${line}</p>`);
+        }
+        closeList();
+        return out.join("");
+      }
+
       function renderReleaseNotesBlocks(blocks) {
         if (!Array.isArray(blocks) || !blocks.length) {
           return `<p class="muted">No release notes for this update yet.</p>`;
         }
-        return blocks
-          .map((block) => {
-            if (!block) return "";
-            if (block.type === "staff-only") {
-              return `<div class="release-notes-staff-lock" role="note">
+        const parts = [];
+        let mdChunk = [];
+        let staffChunk = false;
+        const flushMd = () => {
+          if (!mdChunk.length) return;
+          const cls = staffChunk
+            ? "release-notes-md release-notes-staff"
+            : "release-notes-md";
+          parts.push(`<div class="${cls}">${markdownToSafeHtml(mdChunk.join("\n"))}</div>`);
+          mdChunk = [];
+          staffChunk = false;
+        };
+        blocks.forEach((block) => {
+          if (!block) return;
+          if (block.type === "staff-only") {
+            flushMd();
+            parts.push(`<div class="release-notes-staff-lock" role="note">
                 <strong>Staff only</strong>
                 <span>${escapeHubHtml(block.message || "This part may contain sensitive information and is only available to staff.")}</span>
-              </div>`;
-            }
-            const cls = block.staffOnly ? "release-notes-block release-notes-staff" : "release-notes-block";
-            return `<p class="${cls}">${escapeHubHtml(block.text || "")}</p>`;
-          })
-          .filter(Boolean)
-          .join("");
+              </div>`);
+            return;
+          }
+          const nextStaff = !!block.staffOnly;
+          if (mdChunk.length && nextStaff !== staffChunk) flushMd();
+          staffChunk = nextStaff;
+          mdChunk.push(String(block.text || ""));
+        });
+        flushMd();
+        return parts.join("") || `<p class="muted">No release notes for this update yet.</p>`;
       }
 
       async function openReleaseNotesModal(version) {
