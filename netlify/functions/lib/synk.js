@@ -300,6 +300,46 @@ async function ensureSynkCommunityExtras(sql) {
     // Constraint already exists.
   }
 
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS pinned_tag_id UUID`;
+  try {
+    await sql`
+      ALTER TABLE synk_community_alt_accounts
+      ADD CONSTRAINT synk_community_alt_accounts_pinned_tag_id_fkey
+      FOREIGN KEY (pinned_tag_id) REFERENCES synk_community_tags(id) ON DELETE SET NULL
+    `;
+  } catch (_) {
+    // Constraint already exists.
+  }
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_username_tags (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      public_username TEXT NOT NULL,
+      tag_id UUID NOT NULL REFERENCES synk_community_tags(id) ON DELETE CASCADE,
+      assigned_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (public_username, tag_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_username_tags_username_idx
+    ON synk_community_username_tags (public_username, created_at ASC)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_username_tags_tag_idx
+    ON synk_community_username_tags (tag_id)
+  `;
+
+  // Migrate legacy profile-scoped tags into username-scoped tags.
+  await sql`
+    INSERT INTO synk_community_username_tags (public_username, tag_id, assigned_by, created_at)
+    SELECT c.public_username, pt.tag_id, pt.assigned_by, pt.created_at
+    FROM synk_community_profile_tags pt
+    JOIN synk_community_profiles c ON c.synk_profile_id = pt.synk_profile_id
+    WHERE c.public_username IS NOT NULL AND btrim(c.public_username) <> ''
+    ON CONFLICT (public_username, tag_id) DO NOTHING
+  `;
+
   await ensureCommunityOwner(sql);
   await ensureDefaultCommunityGroup(sql);
 }
@@ -410,7 +450,7 @@ async function findCommunityPublicProfile(sql, username) {
       LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
       WHERE COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = ${name}
     `;
-    const tags = await listProfileTags(sql, primary[0].synk_profile_id);
+    const tags = await listUsernameTags(sql, name);
     const pinnedTag = tags.find((tag) => tag.pinned) || null;
     return {
       username: primary[0].public_username,
@@ -436,6 +476,8 @@ async function findCommunityPublicProfile(sql, username) {
     FROM synk_community_posts
     WHERE author_username = ${name}
   `;
+  const tags = await listUsernameTags(sql, name);
+  const pinnedTag = tags.find((tag) => tag.pinned) || null;
   return {
     username: alt[0].public_username,
     name: alt[0].label || "",
@@ -443,8 +485,8 @@ async function findCommunityPublicProfile(sql, username) {
     isAlt: true,
     joinedAt: alt[0].created_at,
     postCount: counts[0] ? Number(counts[0].post_count) : 0,
-    tags: [],
-    pinnedTag: null,
+    tags,
+    pinnedTag,
   };
 }
 
@@ -563,6 +605,55 @@ async function getPinnedTagForProfile(sql, profileId) {
   return mapCommunityTag(rows[0], { pinned: true });
 }
 
+async function listUsernameTags(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return [];
+  const rows = await sql`
+    SELECT
+      t.id,
+      t.name,
+      t.slug,
+      t.description,
+      t.color,
+      t.created_at,
+      t.updated_at,
+      CASE
+        WHEN COALESCE(c.pinned_tag_id, a.pinned_tag_id) = t.id THEN TRUE
+        ELSE FALSE
+      END AS pinned
+    FROM synk_community_username_tags ut
+    JOIN synk_community_tags t ON t.id = ut.tag_id
+    LEFT JOIN synk_community_profiles c ON c.public_username = ut.public_username
+    LEFT JOIN synk_community_alt_accounts a ON a.public_username = ut.public_username
+    WHERE ut.public_username = ${name}
+    ORDER BY
+      CASE WHEN COALESCE(c.pinned_tag_id, a.pinned_tag_id) = t.id THEN 0 ELSE 1 END,
+      t.name ASC
+  `;
+  return rows.map((row) => mapCommunityTag(row, { pinned: row.pinned }));
+}
+
+async function getPinnedTagForUsername(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return null;
+  const primary = await sql`
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    FROM synk_community_profiles c
+    JOIN synk_community_tags t ON t.id = c.pinned_tag_id
+    WHERE c.public_username = ${name}
+    LIMIT 1
+  `;
+  if (primary[0]) return mapCommunityTag(primary[0], { pinned: true });
+  const alt = await sql`
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    FROM synk_community_alt_accounts a
+    JOIN synk_community_tags t ON t.id = a.pinned_tag_id
+    WHERE a.public_username = ${name}
+    LIMIT 1
+  `;
+  return mapCommunityTag(alt[0], { pinned: true });
+}
+
 async function getPinnedTagsByUsernames(sql, usernames) {
   const names = Array.from(
     new Set((usernames || []).map((u) => normalizePublicUsername(u)).filter(Boolean))
@@ -570,7 +661,7 @@ async function getPinnedTagsByUsernames(sql, usernames) {
   if (!names.length) return {};
   const rows = await sql`
     SELECT
-      c.public_username,
+      x.public_username,
       t.id,
       t.name,
       t.slug,
@@ -578,15 +669,104 @@ async function getPinnedTagsByUsernames(sql, usernames) {
       t.color,
       t.created_at,
       t.updated_at
-    FROM synk_community_profiles c
-    JOIN synk_community_tags t ON t.id = c.pinned_tag_id
-    WHERE c.public_username = ANY(${names})
+    FROM (
+      SELECT public_username, pinned_tag_id
+      FROM synk_community_profiles
+      WHERE public_username = ANY(${names})
+        AND pinned_tag_id IS NOT NULL
+      UNION ALL
+      SELECT public_username, pinned_tag_id
+      FROM synk_community_alt_accounts
+      WHERE public_username = ANY(${names})
+        AND pinned_tag_id IS NOT NULL
+    ) x
+    JOIN synk_community_tags t ON t.id = x.pinned_tag_id
   `;
   const out = {};
   for (const row of rows) {
     out[row.public_username] = mapCommunityTag(row, { pinned: true });
   }
   return out;
+}
+
+async function assignUsernameTag(sql, username, tagId, assignedBy = null) {
+  const name = normalizePublicUsername(username);
+  if (!name || !tagId) return false;
+  await sql`
+    INSERT INTO synk_community_username_tags (public_username, tag_id, assigned_by)
+    VALUES (${name}, ${tagId}, ${assignedBy})
+    ON CONFLICT (public_username, tag_id) DO NOTHING
+  `;
+  // Keep legacy profile-tag rows in sync for primary usernames.
+  const profile = await sql`
+    SELECT synk_profile_id
+    FROM synk_community_profiles
+    WHERE public_username = ${name}
+    LIMIT 1
+  `;
+  if (profile[0]) {
+    await sql`
+      INSERT INTO synk_community_profile_tags (synk_profile_id, tag_id, assigned_by)
+      VALUES (${profile[0].synk_profile_id}, ${tagId}, ${assignedBy})
+      ON CONFLICT (synk_profile_id, tag_id) DO NOTHING
+    `;
+  }
+  return true;
+}
+
+async function unassignUsernameTag(sql, username, tagId) {
+  const name = normalizePublicUsername(username);
+  if (!name || !tagId) return false;
+  await sql`
+    DELETE FROM synk_community_username_tags
+    WHERE public_username = ${name}
+      AND tag_id = ${tagId}
+  `;
+  await sql`
+    UPDATE synk_community_profiles
+    SET pinned_tag_id = NULL
+    WHERE public_username = ${name}
+      AND pinned_tag_id = ${tagId}
+  `;
+  await sql`
+    UPDATE synk_community_alt_accounts
+    SET pinned_tag_id = NULL
+    WHERE public_username = ${name}
+      AND pinned_tag_id = ${tagId}
+  `;
+  const profile = await sql`
+    SELECT synk_profile_id
+    FROM synk_community_profiles
+    WHERE public_username = ${name}
+    LIMIT 1
+  `;
+  if (profile[0]) {
+    await sql`
+      DELETE FROM synk_community_profile_tags
+      WHERE synk_profile_id = ${profile[0].synk_profile_id}
+        AND tag_id = ${tagId}
+    `;
+  }
+  return true;
+}
+
+async function setPinnedTagForUsername(sql, username, tagId) {
+  const name = normalizePublicUsername(username);
+  if (!name) return false;
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET pinned_tag_id = ${tagId}, updated_at = NOW()
+    WHERE public_username = ${name}
+    RETURNING synk_profile_id
+  `;
+  if (primary[0]) return true;
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET pinned_tag_id = ${tagId}, updated_at = NOW()
+    WHERE public_username = ${name}
+    RETURNING id
+  `;
+  return Boolean(alt[0]);
 }
 
 async function findCommunityProfileIdByUsername(sql, username) {
@@ -1853,8 +2033,13 @@ module.exports = {
   listCommunityTags,
   findCommunityTag,
   listProfileTags,
+  listUsernameTags,
   getPinnedTagForProfile,
+  getPinnedTagForUsername,
   getPinnedTagsByUsernames,
+  assignUsernameTag,
+  unassignUsernameTag,
+  setPinnedTagForUsername,
   findCommunityProfileIdByUsername,
   normalizeCameraSide,
   generateDevicePairingCode,

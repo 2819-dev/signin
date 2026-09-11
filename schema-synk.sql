@@ -311,3 +311,21 @@ CREATE INDEX IF NOT EXISTS synk_community_profile_tags_tag_idx
 
 ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS pinned_tag_id UUID;
 
+ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS pinned_tag_id UUID;
+
+CREATE TABLE IF NOT EXISTS synk_community_username_tags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  public_username TEXT NOT NULL,
+  tag_id UUID NOT NULL REFERENCES synk_community_tags(id) ON DELETE CASCADE,
+  assigned_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (public_username, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_username_tags_username_idx
+  ON synk_community_username_tags (public_username, created_at ASC);
+
+CREATE INDEX IF NOT EXISTS synk_community_username_tags_tag_idx
+  ON synk_community_username_tags (tag_id);
+
+

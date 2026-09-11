@@ -239,13 +239,23 @@
     document.getElementById("composer-as").textContent = activePersona
       ? `Posting as @${activePersona}`
       : "Posting as —";
+    // Keep tags/pins in sync with the active account (primary or alt).
+    if (activePersona && me) {
+      if (activePersona === publicUsername) {
+        myTags = me.tags || [];
+      } else {
+        const alt = (alts || []).find((item) => item.username === activePersona);
+        myTags = (alt && alt.tags) || [];
+      }
+      if (typeof renderMyTags === "function") renderMyTags();
+    }
     personaMenu.innerHTML = personaOptions()
       .map((opt) => {
         const selected = opt.username === activePersona ? "is-selected" : "";
         return `
           <button class="persona-menu-item ${selected}" type="button" role="option" data-persona="${escapeHtml(opt.username)}">
             <strong>@${escapeHtml(opt.username)}</strong>
-            <span>${escapeHtml(opt.label)}${opt.isAlt ? " · alt" : ""}</span>
+            <span>${escapeHtml(opt.label || (opt.isAlt ? "Account" : "Primary"))}</span>
           </button>
         `;
       })
@@ -356,7 +366,7 @@
                 <a class="community-user-link" href="/u/${escapeHtml(username)}">u/${escapeHtml(username)}</a>
                 ${tagChip(author.pinnedTag, { compact: true })}
                 ${roleBadge(author.role)}
-                ${author.isAlt ? '<span class="community-badge">Alt</span>' : ""}
+                
                 <span class="muted">· ${escapeHtml(formatWhen(post.createdAt))}</span>
               </div>
               <p>${escapeHtml(post.body || "")}</p>
@@ -424,9 +434,7 @@
       const profile = data.profile || { username: route.username };
       document.getElementById("view-eyebrow").textContent = "Profile";
       document.getElementById("view-title").textContent = `u/${profile.username || route.username}`;
-      document.getElementById("view-blurb").textContent = profile.isAlt
-        ? "Alt account profile"
-        : "Member profile";
+      document.getElementById("view-blurb").textContent = "Member profile";
       document.getElementById("feed-label").textContent = "Posts";
       document.getElementById("feed-title").textContent = `Posts by u/${profile.username || route.username}`;
       profileMeta.hidden = false;
@@ -437,7 +445,7 @@
             <strong>u/${escapeHtml(profile.username || "")}</strong>
             ${tagChip(profile.pinnedTag, { compact: true })}
             ${roleBadge(profile.role)}
-            ${profile.isAlt ? '<span class="community-badge">Alt</span>' : ""}
+            
             <p class="muted" style="margin:4px 0 0;font-size:0.85rem;">
               ${Number(profile.postCount || 0)} posts
               ${profile.joinedAt ? ` · joined ${escapeHtml(formatWhen(profile.joinedAt))}` : ""}
@@ -447,7 +455,12 @@
                 (profile.tags || []).length
                   ? (profile.tags || [])
                       .map((tag) => {
-                        const canPin = me && me.publicUsername === profile.username;
+                        const canPin =
+                          me &&
+                          (me.publicUsername === profile.username ||
+                            activePersona === profile.username ||
+                            ((me.alts || []).some((alt) => alt.username === profile.username) &&
+                              me.isOwner));
                         return `
                           <div class="community-tag-row">
                             <div>
@@ -900,8 +913,16 @@
         headers: hubHeaders(),
         body: JSON.stringify(
           currentlyPinned
-            ? { action: "pin-tag", clear: true }
-            : { action: "pin-tag", tagId }
+            ? {
+                action: "pin-tag",
+                clear: true,
+                asUsername: activePersona || publicUsername,
+              }
+            : {
+                action: "pin-tag",
+                tagId,
+                asUsername: activePersona || publicUsername,
+              }
         ),
       });
       const data = await res.json().catch(() => ({}));
@@ -912,8 +933,18 @@
         pinned: !!(data.pinnedTag && data.pinnedTag.id === tag.id),
       }));
       if (me) {
-        me.tags = myTags;
-        me.pinnedTag = data.pinnedTag || null;
+        const pinUser = data.username || activePersona || publicUsername;
+        if (pinUser === publicUsername) {
+          me.tags = myTags;
+          me.pinnedTag = data.pinnedTag || null;
+        } else if (Array.isArray(me.alts)) {
+          me.alts = me.alts.map((alt) =>
+            alt.username === pinUser
+              ? { ...alt, tags: myTags, pinnedTag: data.pinnedTag || null }
+              : alt
+          );
+          alts = me.alts;
+        }
       }
       renderMyTags();
       await loadCommunity();

@@ -26,8 +26,13 @@ const {
   listCommunityTags,
   findCommunityTag,
   listProfileTags,
+  listUsernameTags,
   getPinnedTagForProfile,
+  getPinnedTagForUsername,
   getPinnedTagsByUsernames,
+  assignUsernameTag,
+  unassignUsernameTag,
+  setPinnedTagForUsername,
   findCommunityProfileIdByUsername,
   logSynkEvent,
   clientIp,
@@ -254,7 +259,16 @@ exports.handler = async (event) => {
     const qs = event.queryStringParameters || {};
     const ip = clientIp(event);
     const alts = role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
-    const myTags = await listProfileTags(sql, auth.profile.id);
+    if (alts.length) {
+      for (const alt of alts) {
+        alt.tags = await listUsernameTags(sql, alt.username);
+        alt.pinnedTag = alt.tags.find((tag) => tag.pinned) || null;
+      }
+    }
+    const primaryUsername = normalizePublicUsername(auth.profile.publicUsername);
+    const myTags = primaryUsername
+      ? await listUsernameTags(sql, primaryUsername)
+      : [];
     const myPinnedTag = myTags.find((tag) => tag.pinned) || null;
     const tagCatalog = await listCommunityTags(sql);
 
@@ -287,10 +301,7 @@ exports.handler = async (event) => {
         mappedPosts.map((post) => post.author && post.author.username).filter(Boolean)
       );
       for (const post of mappedPosts) {
-        if (!post.author || post.author.isAlt) {
-          if (post.author) post.author.pinnedTag = null;
-          continue;
-        }
+        if (!post.author) continue;
         post.author.pinnedTag = pinnedByUser[post.author.username] || null;
       }
 
@@ -633,9 +644,7 @@ exports.handler = async (event) => {
         ip,
         detail: `${group.slug}:${persona.username}:${rows[0].id}`,
       });
-      const pinnedTag = persona.isAlt
-        ? null
-        : (await getPinnedTagForProfile(sql, auth.profile.id)) || null;
+      const pinnedTag = (await getPinnedTagForUsername(sql, persona.username)) || null;
       return json(201, {
         ok: true,
         post: {
@@ -789,7 +798,10 @@ exports.handler = async (event) => {
       const username = normalizePublicUsername(body.username || body.publicUsername);
       if (!username) return json(400, { error: "Username is required" });
       const profileId = await findCommunityProfileIdByUsername(sql, username);
-      if (!profileId) {
+      const alt = profileId
+        ? null
+        : await findCommunityAltAccount(sql, { username });
+      if (!profileId && !alt) {
         return json(404, { error: "No community member with that username" });
       }
       const tag = await findCommunityTag(sql, {
@@ -797,11 +809,7 @@ exports.handler = async (event) => {
         slug: body.tag || body.slug,
       });
       if (!tag) return json(404, { error: "Tag not found" });
-      await sql`
-        INSERT INTO synk_community_profile_tags (synk_profile_id, tag_id, assigned_by)
-        VALUES (${profileId}, ${tag.id}, ${auth.profile.id})
-        ON CONFLICT (synk_profile_id, tag_id) DO NOTHING
-      `;
+      await assignUsernameTag(sql, username, tag.id, auth.profile.id);
       await logSynkEvent(sql, {
         eventType: "community_tag_assign",
         profileId: auth.profile.id,
@@ -811,7 +819,7 @@ exports.handler = async (event) => {
       return json(200, {
         ok: true,
         username,
-        tags: await listProfileTags(sql, profileId),
+        tags: await listUsernameTags(sql, username),
       });
     }
 
@@ -822,7 +830,8 @@ exports.handler = async (event) => {
       const username = normalizePublicUsername(body.username || body.publicUsername);
       if (!username) return json(400, { error: "Username is required" });
       const profileId = await findCommunityProfileIdByUsername(sql, username);
-      if (!profileId) {
+      const alt = profileId ? null : await findCommunityAltAccount(sql, { username });
+      if (!profileId && !alt) {
         return json(404, { error: "No community member with that username" });
       }
       const tag = await findCommunityTag(sql, {
@@ -830,18 +839,7 @@ exports.handler = async (event) => {
         slug: body.tag || body.slug,
       });
       if (!tag) return json(404, { error: "Tag not found" });
-      await sql`
-        DELETE FROM synk_community_profile_tags
-        WHERE synk_profile_id = ${profileId}
-          AND tag_id = ${tag.id}
-      `;
-      // Clear pin if that tag was pinned.
-      await sql`
-        UPDATE synk_community_profiles
-        SET pinned_tag_id = NULL
-        WHERE synk_profile_id = ${profileId}
-          AND pinned_tag_id = ${tag.id}
-      `;
+      await unassignUsernameTag(sql, username, tag.id);
       await logSynkEvent(sql, {
         eventType: "community_tag_unassign",
         profileId: auth.profile.id,
@@ -851,7 +849,7 @@ exports.handler = async (event) => {
       return json(200, {
         ok: true,
         username,
-        tags: await listProfileTags(sql, profileId),
+        tags: await listUsernameTags(sql, username),
       });
     }
 
@@ -859,32 +857,59 @@ exports.handler = async (event) => {
       if (!auth.profile.publicUsername) {
         return json(400, { error: "Choose a public username first" });
       }
+      const asUsername =
+        normalizePublicUsername(body.asUsername || body.username || body.persona) ||
+        auth.profile.publicUsername;
+      // Members pin on their primary username; owner may pin on an owned alt.
+      if (asUsername !== auth.profile.publicUsername) {
+        if (role !== "owner") {
+          return json(403, { error: "You can only pin tags on your own username" });
+        }
+        const alt = await findCommunityAltAccount(sql, {
+          username: asUsername,
+          ownerProfileId: auth.profile.id,
+        });
+        if (!alt) {
+          return json(403, { error: "You can only pin tags on your own accounts" });
+        }
+      }
+
       const clearPin =
         body.tagId == null &&
         body.id == null &&
         !body.tag &&
         !body.slug &&
         (body.clear === true || body.pin === false || body.pinned === false);
+
       if (clearPin) {
-        await sql`
-          UPDATE synk_community_profiles
-          SET pinned_tag_id = NULL, updated_at = NOW()
-          WHERE synk_profile_id = ${auth.profile.id}
-        `;
+        await setPinnedTagForUsername(sql, asUsername, null);
         await logSynkEvent(sql, {
           eventType: "community_tag_unpin",
           profileId: auth.profile.id,
           ip,
-          detail: auth.profile.publicUsername,
+          detail: asUsername,
         });
-        const tags = await listProfileTags(sql, auth.profile.id);
+        const tags = await listUsernameTags(sql, asUsername);
+        // Keep me.tags as the primary account tags; persona tags are in `tags` + alts[].
+        const primaryTags = primaryUsername
+          ? await listUsernameTags(sql, primaryUsername)
+          : [];
+        const primaryPinned = primaryTags.find((tag) => tag.pinned) || null;
+        if (alts.length) {
+          for (const alt of alts) {
+            alt.tags = await listUsernameTags(sql, alt.username);
+            alt.pinnedTag = alt.tags.find((tag) => tag.pinned) || null;
+          }
+        }
         return json(200, {
           ok: true,
+          username: asUsername,
           pinnedTag: null,
           tags,
-          me: mePayload(auth, role, alts, tags, null),
+          me: mePayload(auth, role, alts, primaryTags, primaryPinned),
         });
       }
+
       const tag = await findCommunityTag(sql, {
         id: body.tagId || body.id,
         slug: body.tag || body.slug,
@@ -892,32 +917,39 @@ exports.handler = async (event) => {
       if (!tag) return json(404, { error: "Tag not found" });
       const owned = await sql`
         SELECT 1
-        FROM synk_community_profile_tags
-        WHERE synk_profile_id = ${auth.profile.id}
+        FROM synk_community_username_tags
+        WHERE public_username = ${asUsername}
           AND tag_id = ${tag.id}
         LIMIT 1
       `;
       if (!owned[0]) {
         return json(403, { error: "You can only pin a tag assigned to you" });
       }
-      await sql`
-        UPDATE synk_community_profiles
-        SET pinned_tag_id = ${tag.id}, updated_at = NOW()
-        WHERE synk_profile_id = ${auth.profile.id}
-      `;
+      await setPinnedTagForUsername(sql, asUsername, tag.id);
       await logSynkEvent(sql, {
         eventType: "community_tag_pin",
         profileId: auth.profile.id,
         ip,
-        detail: tag.slug,
+        detail: `${asUsername}:${tag.slug}`,
       });
-      const tags = await listProfileTags(sql, auth.profile.id);
+      const tags = await listUsernameTags(sql, asUsername);
       const pinnedTag = tags.find((item) => item.pinned) || null;
+      const primaryTags = primaryUsername
+        ? await listUsernameTags(sql, primaryUsername)
+        : [];
+      const primaryPinned = primaryTags.find((tag) => tag.pinned) || null;
+      if (alts.length) {
+        for (const alt of alts) {
+          alt.tags = await listUsernameTags(sql, alt.username);
+          alt.pinnedTag = alt.tags.find((tag) => tag.pinned) || null;
+        }
+      }
       return json(200, {
         ok: true,
+        username: asUsername,
         pinnedTag,
         tags,
-        me: mePayload(auth, role, alts, tags, pinnedTag),
+        me: mePayload(auth, role, alts, primaryTags, primaryPinned),
       });
     }
 
