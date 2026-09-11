@@ -1129,25 +1129,15 @@
   }
 
   function renderGroups() {
-    groupList.innerHTML = groups
-      .map((group) => {
-        const count = group.postCount != null ? `${group.postCount}` : "";
-        const active = route.type === "group" && route.slug === group.slug ? "is-active" : "";
-        const initial = String(group.slug || "?").slice(0, 1).toUpperCase();
-        return `
-          <a class="reddit-nav-item community-group-link ${active}" href="/community/group/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
-            <span class="reddit-nav-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
-            <span class="reddit-nav-copy">
-              <strong>${escapeHtml(group.slug)}${group.isOfficial || group.slug === "synk" ? " ★" : ""}</strong>
-              <span>${escapeHtml(group.name)}${count ? ` · ${escapeHtml(count)}` : ""}</span>
-            </span>
-          </a>
-        `;
-      })
-      .join("");
+    // Groups stay off the left sidebar — browse them from Feed / Your groups.
+    if (groupList) {
+      groupList.innerHTML = "";
+      groupList.hidden = true;
+    }
     if (homeLink) homeLink.classList.toggle("is-active", route.type === "home");
     if (popularLink) popularLink.classList.toggle("is-active", route.type === "popular");
     renderRecent();
+    if (!postGroup) return;
     postGroup.innerHTML = groups
       .map((group) => `<option value="${escapeHtml(group.slug)}">${escapeHtml(group.slug)} — ${escapeHtml(group.name)}</option>`)
       .join("");
@@ -1157,7 +1147,6 @@
     else if (route.type === "group" && route.slug) postGroup.value = route.slug;
     else if (!postGroup.value && groups[0]) postGroup.value = groups[0].slug;
   }
-
   function renderStaff() {
     if (!staff.length) {
       staffList.innerHTML = '<p class="muted" style="margin:0;font-size:0.85rem;">No admins yet.</p>';
@@ -2412,14 +2401,16 @@ function applyViewState(data) {
     if (!personaSwitch.contains(e.target)) closePersonaMenu();
   });
 
-  groupList.addEventListener("click", (e) => {
-    const link = e.target.closest("[data-group]");
-    if (!link) return;
-    e.preventDefault();
-    navigate({ type: "group", slug: link.getAttribute("data-group") || "", username: "" }).catch((err) => {
-      document.getElementById("post-status").textContent = err.message || "Could not open group";
+  if (groupList) {
+    groupList.addEventListener("click", (e) => {
+      const link = e.target.closest("[data-group]");
+      if (!link) return;
+      e.preventDefault();
+      navigate({ type: "group", slug: link.getAttribute("data-group") || "", username: "" }).catch((err) => {
+        document.getElementById("post-status").textContent = err.message || "Could not open group";
+      });
     });
-  });
+  }
 
   homeLink.addEventListener("click", (e) => {
     e.preventDefault();

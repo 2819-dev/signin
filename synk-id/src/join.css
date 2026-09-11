@@ -1159,6 +1159,9 @@ body.marketing {
   gap: 8px;
   margin-top: 10px;
 }
+.community-group-list[hidden] {
+  display: none !important;
+}
 
 .community-group-link {
   display: grid;
@@ -2466,6 +2469,13 @@ textarea {
 .community-group-list {
   display: grid;
   gap: 2px;
+}
+#group-list[hidden],
+.reddit-group-list[hidden],
+.community-group-list[hidden],
+#recent-list[hidden],
+.reddit-recent-list[hidden] {
+  display: none !important;
 }
 
 /* Main column */
