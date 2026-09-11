@@ -62,6 +62,7 @@ const {
   canDm,
   getOrCreateDmThread,
   listDmThreads,
+  listFriends,
   getDmThreadById,
   listDmMessages,
   sendDm,
@@ -1934,6 +1935,24 @@ exports.handler = async (event) => {
         ok: true,
         username: target,
         friendship: { status: "none" },
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-friends") {
+      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const usernames = await listFriends(sql, primaryUsername);
+      const [names, avatars] = await Promise.all([
+        getDisplayNamesByUsernames(sql, usernames),
+        getAvatarsByUsernames(sql, usernames),
+      ]);
+      return json(200, {
+        ok: true,
+        friends: usernames.map((username) => ({
+          username,
+          displayName: names[username] || "",
+          avatarUrl: avatars[username] || "",
+        })),
         me: mePayload(auth, role, alts, myTags, myPinnedTag),
       });
     }

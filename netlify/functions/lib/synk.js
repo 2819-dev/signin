@@ -3454,7 +3454,17 @@ async function listDmThreads(sql, username) {
     WHERE t.user_a = ${name} OR t.user_b = ${name}
     ORDER BY t.last_message_at DESC
   `;
-  return rows.map((row) => mapDmThread(row, name));
+  const threads = rows.map((row) => mapDmThread(row, name));
+  const others = threads.map((t) => t.otherUser).filter(Boolean);
+  const [names, avatars] = await Promise.all([
+    getDisplayNamesByUsernames(sql, others),
+    getAvatarsByUsernames(sql, others),
+  ]);
+  return threads.map((t) => ({
+    ...t,
+    otherDisplayName: names[t.otherUser] || "",
+    otherAvatarUrl: avatars[t.otherUser] || "",
+  }));
 }
 
 async function getDmThreadById(sql, threadId, username) {

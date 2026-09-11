@@ -3466,11 +3466,39 @@ function applyViewState(data) {
     setInboxTab("notifications");
   }
 
+  let dmFriendsCache = [];
+  let dmNewOpen = false;
+
+  function setDmChatOpen(open) {
+    const shell = document.getElementById("dm-shell");
+    if (shell) shell.classList.toggle("is-chat-open", !!open);
+  }
+
+  function setDmNewOpen(open) {
+    dmNewOpen = !!open;
+    const panel = document.getElementById("dm-new-panel");
+    const btn = document.getElementById("dm-new-btn");
+    if (panel) panel.hidden = !dmNewOpen;
+    if (btn) btn.textContent = dmNewOpen ? "Close" : "New";
+    if (dmNewOpen) {
+      const search = document.getElementById("dm-new-search");
+      if (search) {
+        search.value = "";
+        search.focus();
+      }
+      renderDmFriends(dmFriendsCache);
+    }
+  }
+
   async function openMessages() {
     inboxTab = "messages";
     await navigate({ type: "inbox", slug: "", username: "" });
     setInboxTab("messages");
-    try { await loadDmThreads(); } catch (_) {}
+    setDmChatOpen(!!activeDmUser);
+    try {
+      await loadDmThreads();
+      if (activeDmUser) await openDmThread(activeDmUser);
+    } catch (_) {}
   }
 
   async function openDmWith(username) {
@@ -3479,6 +3507,7 @@ function applyViewState(data) {
     inboxTab = "messages";
     activeDmUser = target;
     await navigate({ type: "inbox", slug: "", username: "" });
+    setInboxTab("messages");
     await loadDmThreads();
     await openDmThread(target);
   }
@@ -3499,6 +3528,12 @@ function applyViewState(data) {
     if (messagesNavLink) messagesNavLink.classList.toggle("is-active", inboxTab === "messages");
     const notificationsNavLink = document.getElementById("notifications-nav-link");
     if (notificationsNavLink) notificationsNavLink.classList.toggle("is-active", inboxTab === "notifications");
+    if (inboxTab !== "messages") {
+      setDmNewOpen(false);
+      setDmChatOpen(false);
+    } else {
+      setDmChatOpen(!!activeDmUser);
+    }
   }
 
   function renderDmThreads(threads) {
@@ -3519,12 +3554,56 @@ function applyViewState(data) {
         const preview = escapeHtml(t.lastBody || t.preview || "No messages yet");
         const when = escapeHtml(formatWhen(t.lastMessageAt || t.updatedAt || t.createdAt));
         const label = escapeHtml(t.otherDisplayName || other);
-        return `<button type="button" class="community-dm-thread ${active}" data-dm-user="${escapeHtml(other)}">
-          <div class="community-dm-thread-top"><strong>${label}</strong><span>${when}</span></div>
-          <p>${preview}</p>
+        const handle = escapeHtml(other ? `@${other}` : "");
+        const avatar = avatarMarkup(t.otherAvatarUrl || "", t.otherDisplayName || other, "community-face community-dm-avatar");
+        return `<button type="button" class="community-dm-thread ${active}" data-dm-user="${escapeHtml(other)}" role="listitem">
+          ${avatar}
+          <span class="community-dm-thread-copy">
+            <span class="community-dm-thread-top"><strong>${label}</strong><span>${when}</span></span>
+            <span class="community-dm-thread-handle">${handle}</span>
+            <span class="community-dm-thread-preview">${preview}</span>
+          </span>
         </button>`;
       })
       .join("");
+  }
+
+  function renderDmFriends(friends, query = "") {
+    const list = document.getElementById("dm-friend-list");
+    const empty = document.getElementById("dm-friend-empty");
+    if (!list) return;
+    const q = String(query || "").trim().toLowerCase();
+    const rows = (Array.isArray(friends) ? friends : []).filter((f) => {
+      const username = String(f.username || "").toLowerCase();
+      const display = String(f.displayName || "").toLowerCase();
+      if (!q) return true;
+      return username.includes(q) || display.includes(q);
+    });
+    if (!rows.length) {
+      list.innerHTML = "";
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    list.innerHTML = rows
+      .map((f) => {
+        const username = String(f.username || "").trim();
+        const label = escapeHtml(f.displayName || username);
+        const handle = escapeHtml(username ? `@${username}` : "");
+        const avatar = avatarMarkup(f.avatarUrl || "", f.displayName || username, "community-face community-dm-avatar");
+        return `<button type="button" class="community-dm-friend" data-dm-friend="${escapeHtml(username)}" role="option">
+          ${avatar}
+          <span><strong>${label}</strong><span class="muted">${handle}</span></span>
+        </button>`;
+      })
+      .join("");
+  }
+
+  async function loadDmFriends() {
+    const data = await communityAction({ action: "dm-friends" });
+    dmFriendsCache = Array.isArray(data.friends) ? data.friends : [];
+    renderDmFriends(dmFriendsCache, (document.getElementById("dm-new-search") || {}).value || "");
+    return dmFriendsCache;
   }
 
   function clearDmEditMode() {
@@ -3533,7 +3612,7 @@ function applyViewState(data) {
     const cancel = document.getElementById("dm-compose-cancel");
     const sendBtn = document.getElementById("dm-compose-send");
     if (input) {
-      input.placeholder = "Message…";
+      input.placeholder = "Write a message…";
       input.removeAttribute("data-editing");
     }
     if (cancel) cancel.hidden = true;
@@ -3589,12 +3668,13 @@ function applyViewState(data) {
       );
     }
     if (msg.canDelete) {
+      const canUnsend = Boolean(msg.canUnsend || msg.deleteMode === "unsend");
       actionBtns.push(
         `<button type="button" class="community-dm-sheet-action is-danger" data-dm-delete="${escapeHtml(
           String(msg.id)
         )}" data-dm-delete-mode="${escapeHtml(
-          msg.deleteMode || (msg.canUnsend ? "unsend" : "for-me")
-        )}">${msg.canUnsend ? "Delete for everyone" : "Delete for me"}</button>`
+          msg.deleteMode || (canUnsend ? "unsend" : "for-me")
+        )}">${canUnsend ? "Delete for everyone" : "Delete for me"}</button>`
       );
     }
     actions.innerHTML = actionBtns.join("");
@@ -3651,6 +3731,10 @@ function applyViewState(data) {
   function renderDmMessages(messages, { otherUser = "", preserveScroll = false } = {}) {
     const list = document.getElementById("dm-message-list");
     const title = document.getElementById("dm-chat-title");
+    const sub = document.getElementById("dm-chat-sub");
+    const head = document.getElementById("dm-chat-head");
+    const profile = document.getElementById("dm-chat-profile");
+    const avatar = document.getElementById("dm-chat-avatar");
     const form = document.getElementById("dm-compose-form");
     const hint = document.getElementById("dm-chat-hint");
     const meName = String(publicUsername || "")
@@ -3661,8 +3745,13 @@ function applyViewState(data) {
     );
     const titleLabel = (thread && (thread.otherDisplayName || thread.otherUser)) || otherUser || "Select a conversation";
     if (title) title.textContent = titleLabel;
+    if (sub) sub.textContent = otherUser ? `@${otherUser}` : "";
+    if (profile) profile.href = otherUser ? `/user/${encodeURIComponent(otherUser)}` : "#";
+    if (avatar) paintAvatar(avatar, (thread && thread.otherAvatarUrl) || "", titleLabel);
+    if (head) head.hidden = !otherUser;
     if (form) form.hidden = !otherUser;
     if (hint) hint.hidden = !!otherUser;
+    setDmChatOpen(!!otherUser);
     if (!list) return;
     const prevScroll = list.scrollTop;
     const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
@@ -3746,12 +3835,22 @@ function applyViewState(data) {
     activeDmUser = target;
     clearDmEditMode();
     closeDmMessageSheet();
+    setDmNewOpen(false);
     const data = await communityAction({ action: "dm-open", username: target });
     activeDmThreadId = (data.thread && data.thread.id) || "";
+    if (data.thread) {
+      const idx = (dmThreads || []).findIndex(
+        (t) => String(t.otherUser || t.otherUsername || "").toLowerCase() === target
+      );
+      if (idx >= 0) dmThreads[idx] = { ...dmThreads[idx], ...data.thread };
+      else dmThreads = [data.thread, ...(dmThreads || [])];
+    }
     renderDmThreads(dmThreads);
     renderDmMessages(data.messages || [], { otherUser: target });
     const form = document.getElementById("dm-compose-form");
     if (form) form.hidden = false;
+    const input = document.getElementById("dm-compose-input");
+    if (input) input.focus();
   }
 
   document.querySelectorAll("[data-inbox-tab]").forEach((btn) => {
@@ -3774,6 +3873,51 @@ function applyViewState(data) {
       const btn = e.target.closest("[data-dm-user]");
       if (!btn) return;
       openDmThread(btn.getAttribute("data-dm-user")).catch((err) => {
+        showToast(err.message || "Could not open chat");
+      });
+    });
+  }
+
+  async function toggleNewMessagePanel() {
+    const next = !dmNewOpen;
+    setDmNewOpen(next);
+    if (next) {
+      try {
+        await loadDmFriends();
+      } catch (err) {
+        showToast(err.message || "Could not load friends");
+      }
+    }
+  }
+
+  const dmNewBtn = document.getElementById("dm-new-btn");
+  if (dmNewBtn) dmNewBtn.addEventListener("click", () => { toggleNewMessagePanel(); });
+  const dmEmptyNewBtn = document.getElementById("dm-empty-new-btn");
+  if (dmEmptyNewBtn) dmEmptyNewBtn.addEventListener("click", () => { toggleNewMessagePanel(); });
+  const dmBackBtn = document.getElementById("dm-back-btn");
+  if (dmBackBtn) {
+    dmBackBtn.addEventListener("click", () => {
+      activeDmUser = "";
+      activeDmThreadId = "";
+      clearDmEditMode();
+      closeDmMessageSheet();
+      renderDmMessages([], { otherUser: "" });
+      renderDmThreads(dmThreads);
+      setDmChatOpen(false);
+    });
+  }
+  const dmNewSearch = document.getElementById("dm-new-search");
+  if (dmNewSearch) {
+    dmNewSearch.addEventListener("input", () => {
+      renderDmFriends(dmFriendsCache, dmNewSearch.value);
+    });
+  }
+  const dmFriendList = document.getElementById("dm-friend-list");
+  if (dmFriendList) {
+    dmFriendList.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-dm-friend]");
+      if (!btn) return;
+      openDmThread(btn.getAttribute("data-dm-friend")).catch((err) => {
         showToast(err.message || "Could not open chat");
       });
     });
@@ -3833,7 +3977,7 @@ function applyViewState(data) {
   async function handleDmDelete(messageId, mode) {
     const confirmText =
       mode === "unsend"
-        ? "Delete this message for everyone? They haven’t read it yet."
+        ? "Delete this message for everyone?"
         : "Delete this message for you only? The other person will still see it.";
     if (!window.confirm(confirmText)) return;
     closeDmMessageSheet();
@@ -3960,7 +4104,10 @@ function applyViewState(data) {
   }
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeDmMessageSheet();
+    if (e.key === "Escape") {
+      closeDmMessageSheet();
+      if (dmNewOpen) setDmNewOpen(false);
+    }
   });
 
   document.addEventListener("click", async (e) => {

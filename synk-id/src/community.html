@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-testing-portal1" />
+    <link rel="stylesheet" href="/join.css?v=messages-redo1" />
     <script src="/force-refresh.js?v=community-search-switch3" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -305,25 +305,54 @@
                   <p class="muted" id="inbox-empty" hidden>You're all caught up.</p>
                 </div>
                 <div id="inbox-messages-pane" hidden>
-                  <div class="community-dm-layout">
-                    <div class="community-dm-threads">
-                      <div id="dm-thread-list" class="community-dm-thread-list"></div>
-                      <p class="muted" id="dm-thread-empty" hidden>No messages yet. Message a friend from their profile.</p>
-                    </div>
-                    <div class="community-dm-chat" id="dm-chat-pane">
-                      <div class="community-dm-chat-head">
-                        <strong id="dm-chat-title">Select a conversation</strong>
+                  <div class="community-dm-shell" id="dm-shell">
+                    <aside class="community-dm-sidebar" id="dm-sidebar">
+                      <div class="community-dm-sidebar-head">
+                        <div>
+                          <p class="community-dm-kicker">Direct messages</p>
+                          <h3>Messages</h3>
+                        </div>
+                        <button class="btn btn-primary btn-compact" type="button" id="dm-new-btn">New</button>
                       </div>
-                      <div id="dm-message-list" class="community-dm-message-list"></div>
+                      <div class="community-dm-new" id="dm-new-panel" hidden>
+                        <label class="community-dm-new-label" for="dm-new-search">Start a chat</label>
+                        <input id="dm-new-search" type="search" maxlength="40" placeholder="Search friends…" autocomplete="off" />
+                        <div id="dm-friend-list" class="community-dm-friend-list" role="listbox" aria-label="Friends"></div>
+                        <p class="muted community-dm-new-empty" id="dm-friend-empty" hidden>No friends to message yet.</p>
+                      </div>
+                      <div id="dm-thread-list" class="community-dm-thread-list" role="list"></div>
+                      <div class="community-dm-empty" id="dm-thread-empty" hidden>
+                        <strong>No conversations yet</strong>
+                        <p>Message a friend to start chatting.</p>
+                        <button class="btn btn-secondary btn-compact" type="button" id="dm-empty-new-btn">New message</button>
+                      </div>
+                    </aside>
+                    <section class="community-dm-chat" id="dm-chat-pane">
+                      <div class="community-dm-chat-head" id="dm-chat-head" hidden>
+                        <button class="community-dm-back" type="button" id="dm-back-btn" aria-label="Back to conversations">
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                        </button>
+                        <a class="community-dm-chat-person" id="dm-chat-profile" href="#">
+                          <span id="dm-chat-avatar" class="community-face community-dm-avatar" aria-hidden="true">?</span>
+                          <span class="community-dm-chat-person-copy">
+                            <strong id="dm-chat-title">Conversation</strong>
+                            <span class="muted" id="dm-chat-sub"></span>
+                          </span>
+                        </a>
+                      </div>
+                      <div id="dm-message-list" class="community-dm-message-list" aria-live="polite"></div>
                       <form id="dm-compose-form" class="community-dm-compose" hidden autocomplete="off">
-                        <input id="dm-compose-input" type="text" maxlength="1000" required placeholder="Message…" enterkeyhint="send" aria-label="Message" />
+                        <input id="dm-compose-input" type="text" maxlength="1000" required placeholder="Write a message…" enterkeyhint="send" aria-label="Message" />
                         <button class="btn btn-secondary btn-compact community-dm-cancel-edit" type="button" id="dm-compose-cancel" hidden>Cancel</button>
                         <button class="community-dm-send" type="submit" id="dm-compose-send" aria-label="Send">
                           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg>
                         </button>
                       </form>
-                      <p class="muted" id="dm-chat-hint">Pick someone from the left, or message them from their profile.</p>
-                    </div>
+                      <div class="community-dm-empty-chat" id="dm-chat-hint">
+                        <strong>Your messages</strong>
+                        <p>Pick a conversation on the left, or tap <em>New</em> to message a friend.</p>
+                      </div>
+                    </section>
                   </div>
                   <div id="dm-msg-sheet" class="community-dm-sheet" hidden>
                     <button type="button" class="community-dm-sheet-backdrop" data-dm-sheet-close aria-label="Close"></button>
@@ -847,6 +876,6 @@
       </div>
     </div>
 
-    <script src="/community.js?v=community-testing-portal1"></script>
+    <script src="/community.js?v=messages-redo1"></script>
   </body>
 </html>
