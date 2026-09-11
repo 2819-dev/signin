@@ -1141,6 +1141,194 @@ function serializeTagRow(row, { pinned = false } = {}) {
   };
 }
 
+
+function sanitizeSearchQuery(raw) {
+  return String(raw || "")
+    .trim()
+    .slice(0, 80)
+    .replace(/[%_\\]/g, "");
+}
+
+async function searchCommunityPosts(sql, { query, profileId = null, sort = "new", limit = 40 } = {}) {
+  const q = sanitizeSearchQuery(query);
+  if (!q) return [];
+  const pattern = `%${q}%`;
+  const capped = Math.min(Math.max(Number(limit) || 40, 1), 80);
+  const sortKey = String(sort || "new").toLowerCase();
+  const byScore = sortKey === "hot" || sortKey === "top" || sortKey === "best";
+  const hideForViewer = Boolean(profileId);
+
+  const rows = byScore
+    ? await sql`
+        SELECT
+          p.id,
+          p.title,
+          p.post_type,
+          p.body,
+          p.link_url,
+          p.image_url,
+          p.poll_options,
+          p.score,
+          p.created_at,
+          p.group_id,
+          p.author_username,
+          p.suggestion_status,
+          m.name,
+          c.public_username,
+          g.slug AS group_slug,
+          g.name AS group_name,
+          g.theme AS group_theme,
+          g.is_official AS group_is_official,
+          p.channel_id,
+          ch.slug AS channel_slug,
+          ch.name AS channel_name,
+          ch.emoji AS channel_emoji,
+          ch.kind AS channel_kind,
+          (
+            SELECT COUNT(*)::int
+            FROM synk_community_comments cc
+            WHERE cc.post_id = p.id
+          ) AS comment_count,
+          CASE
+            WHEN COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = c.public_username
+            THEN s.role
+            ELSE NULL
+          END AS author_role,
+          CASE WHEN a.id IS NOT NULL THEN TRUE ELSE FALSE END AS is_alt
+        FROM synk_community_posts p
+        JOIN synk_profiles m ON m.id = p.synk_profile_id
+        LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
+        LEFT JOIN synk_community_groups g ON g.id = p.group_id
+        LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
+        LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
+        LEFT JOIN synk_community_alt_accounts a
+          ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
+        WHERE (
+            COALESCE(p.title, '') ILIKE ${pattern}
+            OR COALESCE(p.body, '') ILIKE ${pattern}
+            OR COALESCE(g.slug, '') ILIKE ${pattern}
+            OR COALESCE(g.name, '') ILIKE ${pattern}
+          )
+          AND COALESCE(g.is_official, FALSE) = FALSE
+          AND (
+            ${hideForViewer ? 1 : 0} = 0
+            OR NOT EXISTS (
+              SELECT 1
+              FROM synk_community_hides hd
+              WHERE hd.synk_profile_id = ${profileId}
+                AND hd.post_id = p.id
+            )
+          )
+        ORDER BY p.score DESC, p.created_at DESC
+        LIMIT ${capped}
+      `
+    : await sql`
+        SELECT
+          p.id,
+          p.title,
+          p.post_type,
+          p.body,
+          p.link_url,
+          p.image_url,
+          p.poll_options,
+          p.score,
+          p.created_at,
+          p.group_id,
+          p.author_username,
+          p.suggestion_status,
+          m.name,
+          c.public_username,
+          g.slug AS group_slug,
+          g.name AS group_name,
+          g.theme AS group_theme,
+          g.is_official AS group_is_official,
+          p.channel_id,
+          ch.slug AS channel_slug,
+          ch.name AS channel_name,
+          ch.emoji AS channel_emoji,
+          ch.kind AS channel_kind,
+          (
+            SELECT COUNT(*)::int
+            FROM synk_community_comments cc
+            WHERE cc.post_id = p.id
+          ) AS comment_count,
+          CASE
+            WHEN COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = c.public_username
+            THEN s.role
+            ELSE NULL
+          END AS author_role,
+          CASE WHEN a.id IS NOT NULL THEN TRUE ELSE FALSE END AS is_alt
+        FROM synk_community_posts p
+        JOIN synk_profiles m ON m.id = p.synk_profile_id
+        LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
+        LEFT JOIN synk_community_groups g ON g.id = p.group_id
+        LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
+        LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
+        LEFT JOIN synk_community_alt_accounts a
+          ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
+        WHERE (
+            COALESCE(p.title, '') ILIKE ${pattern}
+            OR COALESCE(p.body, '') ILIKE ${pattern}
+            OR COALESCE(g.slug, '') ILIKE ${pattern}
+            OR COALESCE(g.name, '') ILIKE ${pattern}
+          )
+          AND COALESCE(g.is_official, FALSE) = FALSE
+          AND (
+            ${hideForViewer ? 1 : 0} = 0
+            OR NOT EXISTS (
+              SELECT 1
+              FROM synk_community_hides hd
+              WHERE hd.synk_profile_id = ${profileId}
+                AND hd.post_id = p.id
+            )
+          )
+        ORDER BY p.created_at DESC
+        LIMIT ${capped}
+      `;
+
+  return enrichPosts(sql, rows, profileId);
+}
+
+async function searchCommunityUsers(sql, query, limit = 30) {
+  const q = sanitizeSearchQuery(query);
+  if (!q) return [];
+  const pattern = `%${q}%`;
+  const capped = Math.min(Math.max(Number(limit) || 30, 1), 50);
+  const rows = await sql`
+    SELECT * FROM (
+      SELECT
+        c.public_username AS username,
+        COALESCE(c.display_name, '') AS display_name,
+        COALESCE(c.avatar_url, '') AS avatar_url,
+        FALSE AS is_alt,
+        c.created_at
+      FROM synk_community_profiles c
+      WHERE c.public_username ILIKE ${pattern}
+         OR COALESCE(c.display_name, '') ILIKE ${pattern}
+      UNION ALL
+      SELECT
+        a.public_username AS username,
+        COALESCE(NULLIF(btrim(a.display_name), ''), COALESCE(a.label, ''), a.public_username) AS display_name,
+        COALESCE(a.avatar_url, '') AS avatar_url,
+        TRUE AS is_alt,
+        a.created_at
+      FROM synk_community_alt_accounts a
+      WHERE a.public_username ILIKE ${pattern}
+         OR COALESCE(a.display_name, '') ILIKE ${pattern}
+         OR COALESCE(a.label, '') ILIKE ${pattern}
+    ) u
+    ORDER BY u.username ASC
+    LIMIT ${capped}
+  `;
+  return rows.map((row) => ({
+    username: row.username,
+    displayName: String(row.display_name || "").trim(),
+    avatarUrl: String(row.avatar_url || "").trim(),
+    isAlt: Boolean(row.is_alt),
+    joinedAt: row.created_at || null,
+  }));
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return json(204, {});
 
@@ -1279,6 +1467,51 @@ exports.handler = async (event) => {
           post,
           comments,
           posts: [post],
+          tags: tagCatalog,
+          ownerUsername: COMMUNITY_OWNER_USERNAME,
+          unreadCount,
+        };
+        if (isCommunityStaffRole(role)) {
+          payload.staff = await listCommunityStaff(sql);
+        }
+        return json(200, payload);
+      }
+
+      const searchQuery = sanitizeSearchQuery(qs.q || qs.search || qs.query || "");
+      if (searchQuery) {
+        const tabRaw = String(qs.tab || "all").trim().toLowerCase();
+        const tab = ["all", "popular", "groups", "users"].includes(tabRaw) ? tabRaw : "all";
+        const sort = String(qs.sort || "").trim().toLowerCase() || (tab === "popular" ? "hot" : "new");
+        const wantPosts = tab === "all" || tab === "popular";
+        const wantUsers = tab === "all" || tab === "users";
+        const wantGroups = tab === "all" || tab === "groups";
+
+        const posts = wantPosts
+          ? await searchCommunityPosts(sql, {
+              query: searchQuery,
+              profileId: auth.profile.id,
+              sort: tab === "popular" ? "hot" : sort,
+              limit: tab === "all" ? 30 : 50,
+            })
+          : [];
+        const users = wantUsers ? await searchCommunityUsers(sql, searchQuery, tab === "all" ? 12 : 40) : [];
+        const matchedGroups = wantGroups
+          ? groups.filter((g) => {
+              const hay = `${g.slug || ""} ${g.name || ""} ${g.description || ""}`.toLowerCase();
+              return hay.includes(searchQuery.toLowerCase());
+            })
+          : [];
+
+        if (wantPosts) await attachPinnedTagsToAuthors(sql, posts);
+
+        const payload = {
+          ok: true,
+          me: mePayload(auth, role, alts, myTags, myPinnedTag),
+          groups,
+          matchedGroups,
+          users,
+          posts,
+          search: { query: searchQuery, tab },
           tags: tagCatalog,
           ownerUsername: COMMUNITY_OWNER_USERNAME,
           unreadCount,

@@ -102,6 +102,7 @@
   let lastPosts = [];
   let lastComments = [];
   let lastNotifications = [];
+  let lastSearch = { query: "", posts: [], users: [], groups: [] };
   let currentSort = "new";
   let activePostId = "";
   let unreadCount = 0;
@@ -706,9 +707,26 @@
 
   function syncSortTabs() {
     const sort = route.type === "popular" ? "hot" : currentSort || "new";
-    document.querySelectorAll(".reddit-sort-tab").forEach((btn) => {
+    const sortHost = document.getElementById("sort-tabs");
+    const nodes = sortHost
+      ? sortHost.querySelectorAll(".reddit-sort-tab[data-sort]")
+      : document.querySelectorAll(".reddit-sort-tab[data-sort]");
+    nodes.forEach((btn) => {
       btn.classList.toggle("is-active", btn.getAttribute("data-sort") === sort);
     });
+  }
+
+  function syncSearchTabs() {
+    const host = document.getElementById("search-tabs");
+    if (!host) return;
+    const onSearch = route.type === "search";
+    host.hidden = !onSearch;
+    const tab = onSearch ? String(route.tab || "all") : "all";
+    host.querySelectorAll("[data-search-tab]").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.getAttribute("data-search-tab") === tab);
+    });
+    const sortHost = document.getElementById("sort-tabs");
+    if (sortHost) sortHost.hidden = onSearch && tab !== "all" && tab !== "popular";
   }
 
   function closeUserMenu() {
@@ -752,6 +770,7 @@
         route.type === "inbox" ||
         route.type === "groups" ||
         route.type === "user" ||
+        route.type === "search" ||
         (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 1100px)").matches);
       rightRail.hidden = hideRail;
       rightRail.classList.toggle("is-hidden", hideRail);
@@ -793,6 +812,17 @@
       if (statPosts) statPosts.textContent = String(posts.length);
       return;
     }
+    if (route.type === "search") {
+      const q = route.query || "";
+      if (aboutTitle) aboutTitle.textContent = q ? `Search: ${q}` : "Search";
+      if (aboutBlurb) aboutBlurb.textContent = "Posts, groups, and people matching your query.";
+      if (statPostsLabel) statPostsLabel.textContent = "Results";
+      if (statPosts) {
+        const n = (lastSearch.posts || []).length + (lastSearch.users || []).length + (lastSearch.groups || []).length;
+        statPosts.textContent = String(n);
+      }
+      return;
+    }
     if (route.type === "groups") {
       if (aboutTitle) aboutTitle.textContent = "Your groups";
       if (aboutBlurb) aboutBlurb.textContent = "Communities you can browse and join.";
@@ -812,6 +842,13 @@
     if (path === "/community/popular") return { type: "popular", slug: "", username: "" };
     if (path === "/community/inbox") return { type: "inbox", slug: "", username: "" };
     if (path === "/community/groups") return { type: "groups", slug: "", username: "" };
+    if (path === "/community/search") {
+      const params = new URLSearchParams(location.search || "");
+      const query = String(params.get("q") || params.get("query") || params.get("search") || "").trim();
+      const tabRaw = String(params.get("tab") || "all").trim().toLowerCase();
+      const tab = ["all", "popular", "groups", "users"].includes(tabRaw) ? tabRaw : "all";
+      return { type: "search", slug: "", username: "", query, tab };
+    }
     let m = path.match(/^\/community\/post\/([a-z0-9_-]+)$/i);
     if (m) return { type: "post", slug: "", username: "", postId: m[1] };
     m = path.match(/^\/community\/(?:group|g)\/([a-z0-9-]+)$/i);
@@ -838,6 +875,13 @@
     if (next.type === "popular") return "/community/popular";
     if (next.type === "inbox") return "/community/inbox";
     if (next.type === "groups") return "/community/groups";
+    if (next.type === "search") {
+      const params = new URLSearchParams();
+      if (next.query) params.set("q", next.query);
+      if (next.tab && next.tab !== "all") params.set("tab", next.tab);
+      const qs = params.toString();
+      return qs ? `/community/search?${qs}` : "/community/search";
+    }
     if (next.type === "post" && next.postId) return `/community/post/${encodeURIComponent(next.postId)}`;
     if (next.type === "group" && next.slug) {
       const base = `/community/group/${encodeURIComponent(next.slug)}`;
@@ -948,7 +992,8 @@
 
   function syncPersonaUi() {
     const isOwner = !!(me && me.isOwner);
-    if (personaSwitch) personaSwitch.hidden = !(isOwner && publicUsername);
+    const options = personaOptions();
+    if (personaSwitch) personaSwitch.hidden = !(isOwner && publicUsername && options.length > 1);
     closePersonaMenu();
     resolveActivePersona();
     const label = activeDisplayLabel();
@@ -968,8 +1013,13 @@
       myTags = tagsForActivePersona();
       if (typeof renderMyTags === "function") renderMyTags();
     }
+    const menuProfileLink = document.getElementById("menu-profile-link");
+    if (menuProfileLink && (activePersona || publicUsername)) {
+      menuProfileLink.href = `/user/${encodeURIComponent(activePersona || publicUsername)}`;
+      menuProfileLink.hidden = false;
+    }
     if (!isOwner || !personaMenu) return;
-    personaMenu.innerHTML = personaOptions()
+    personaMenu.innerHTML = options
       .map((opt) => {
         const selected = opt.username === activePersona ? "is-selected" : "";
         const optLabel = String(opt.displayName || opt.username || "?").trim();
@@ -1131,6 +1181,141 @@
         `
       )
       .join("");
+  }
+
+  function searchHitCard({ href, avatarUrl, label, title, subtitle, isGroup = false }) {
+    const initial = String(label || title || "?").trim().slice(0, 1).toUpperCase() || "?";
+    const avatar = avatarUrl
+      ? `<img src="${escapeHtml(avatarUrl)}" alt="" />`
+      : escapeHtml(initial);
+    return `<a class="search-hit-card" href="${escapeHtml(href)}">
+      <span class="search-hit-avatar${isGroup ? " is-group" : ""}" aria-hidden="true">${avatar}</span>
+      <span class="search-hit-copy">
+        <strong>${escapeHtml(title || label || "")}</strong>
+        <span>${escapeHtml(subtitle || "")}</span>
+      </span>
+    </a>`;
+  }
+
+  function renderSearchResults(data = {}) {
+    const query = String((data.search && data.search.query) || route.query || "").trim();
+    const tab = String(route.tab || "all").toLowerCase();
+    lastSearch = {
+      query,
+      posts: Array.isArray(data.posts) ? data.posts.slice() : lastSearch.posts || [],
+      users: Array.isArray(data.users) ? data.users.slice() : lastSearch.users || [],
+      groups: Array.isArray(data.matchedGroups)
+        ? data.matchedGroups.slice()
+        : Array.isArray(data.searchGroups)
+          ? data.searchGroups.slice()
+          : lastSearch.groups || [],
+    };
+    if (Array.isArray(data.posts)) lastPosts = data.posts.slice();
+
+    const users = lastSearch.users || [];
+    const matchedGroups = lastSearch.groups || [];
+    const posts = lastSearch.posts || [];
+    syncSearchTabs();
+    syncSortTabs();
+
+    if (tab === "users") {
+      if (!users.length) {
+        feedEl.innerHTML = "";
+        feedEmpty.hidden = false;
+        feedEmpty.textContent = query ? `No people found for “${query}”.` : "Search for people.";
+        return;
+      }
+      feedEmpty.hidden = true;
+      feedEl.innerHTML =
+        `<p class="search-section-title">People</p>` +
+        users
+          .map((u) =>
+            searchHitCard({
+              href: `/user/${encodeURIComponent(u.username || "")}`,
+              avatarUrl: u.avatarUrl || "",
+              label: u.displayName || u.username || "?",
+              title: u.displayName || u.username || "member",
+              subtitle: `@${u.username || ""}${u.isAlt ? " · alt" : ""}`,
+            })
+          )
+          .join("");
+      return;
+    }
+
+    if (tab === "groups") {
+      if (!matchedGroups.length) {
+        feedEl.innerHTML = "";
+        feedEmpty.hidden = false;
+        feedEmpty.textContent = query ? `No groups found for “${query}”.` : "Search for groups.";
+        return;
+      }
+      feedEmpty.hidden = true;
+      feedEl.innerHTML =
+        `<p class="search-section-title">Groups</p>` +
+        matchedGroups
+          .map((g) =>
+            searchHitCard({
+              href: `/community/group/${encodeURIComponent(g.slug || "")}`,
+              avatarUrl: "",
+              label: g.slug || g.name || "?",
+              title: g.name || g.slug || "group",
+              subtitle: `${g.slug || ""}${g.postCount != null ? ` · ${g.postCount} posts` : ""}`,
+              isGroup: true,
+            })
+          )
+          .join("");
+      return;
+    }
+
+    const showPreviews = tab === "all";
+    let html = "";
+    if (showPreviews && users.length) {
+      html += `<p class="search-section-title">People</p>`;
+      html += users
+        .slice(0, 4)
+        .map((u) =>
+          searchHitCard({
+            href: `/user/${encodeURIComponent(u.username || "")}`,
+            avatarUrl: u.avatarUrl || "",
+            label: u.displayName || u.username || "?",
+            title: u.displayName || u.username || "member",
+            subtitle: `@${u.username || ""}`,
+          })
+        )
+        .join("");
+    }
+    if (showPreviews && matchedGroups.length) {
+      html += `<p class="search-section-title">Groups</p>`;
+      html += matchedGroups
+        .slice(0, 4)
+        .map((g) =>
+          searchHitCard({
+            href: `/community/group/${encodeURIComponent(g.slug || "")}`,
+            avatarUrl: "",
+            label: g.slug || g.name || "?",
+            title: g.name || g.slug || "group",
+            subtitle: g.slug || "",
+            isGroup: true,
+          })
+        )
+        .join("");
+    }
+
+    const ordered = sortedPosts(posts).filter((p) => !p.hidden);
+    if (!ordered.length && !html) {
+      feedEl.innerHTML = "";
+      feedEmpty.hidden = false;
+      feedEmpty.textContent = query ? `No results for “${query}”.` : "Type something to search.";
+      return;
+    }
+    feedEmpty.hidden = true;
+    if (ordered.length) {
+      if (showPreviews) html += `<p class="search-section-title">Posts</p>`;
+      renderFeed(ordered);
+      if (html) feedEl.innerHTML = html + feedEl.innerHTML;
+      return;
+    }
+    feedEl.innerHTML = html;
   }
 
   function renderFeed(posts) {
@@ -1467,7 +1652,7 @@
     if (postView) postView.hidden = needsUsername || !onPost;
     if (inboxView) inboxView.hidden = needsUsername || !onInbox;
     if (composerCard) {
-      composerCard.hidden = needsUsername || !onFeed || route.type === "user";
+      composerCard.hidden = needsUsername || !onFeed || route.type === "user" || route.type === "search";
     }
     const settingsNav = document.getElementById("settings-nav-link");
     if (settingsNav) settingsNav.classList.toggle("is-active", onSettings);
@@ -1831,6 +2016,7 @@ function applyViewState(data) {
     const pageHead = document.getElementById("page-head");
     if (pageHead) pageHead.hidden = true;
     syncSortTabs();
+    syncSearchTabs();
 
     if (route.type !== "user") restoreJoinButton();
     const joinBtn = document.getElementById("join-community-btn");
@@ -1995,6 +2181,23 @@ function applyViewState(data) {
       updateAboutRail(data);
       return;
     }
+    if (route.type === "search") {
+      setBannerMode("search", false);
+      if (viewBlurb) {
+        viewBlurb.hidden = true;
+        viewBlurb.textContent = "";
+      }
+      if (pageHead) pageHead.hidden = false;
+      const q = route.query || "";
+      setText("page-head-title", q ? `Results for “${q}”` : "Search");
+      setText("page-head-sub", "All · Popular · Groups · Users");
+      const jumpInput = document.getElementById("jump-input");
+      if (jumpInput && q && document.activeElement !== jumpInput) jumpInput.value = q;
+      if (composerCard) composerCard.hidden = true;
+      syncSearchTabs();
+      updateAboutRail(data);
+      return;
+    }
     if (route.type === "popular") {
       setBannerMode("popular", false);
       if (viewBlurb) {
@@ -2045,6 +2248,11 @@ function applyViewState(data) {
       if (ch) url += `&channel=${encodeURIComponent(ch)}`;
     } else if (route.type === "user" && route.username) {
       url += `?user=${encodeURIComponent(route.username)}&sort=${encodeURIComponent(sort)}`;
+    } else if (route.type === "search") {
+      const q = route.query || "";
+      const tab = route.tab || "all";
+      const searchSort = tab === "popular" ? "hot" : sort;
+      url += `?q=${encodeURIComponent(q)}&tab=${encodeURIComponent(tab)}&sort=${encodeURIComponent(searchSort)}`;
     } else if (sort && sort !== "new") {
       url += `?sort=${encodeURIComponent(sort)}`;
     }
@@ -2127,6 +2335,11 @@ function applyViewState(data) {
     if (route.type === "settings" || route.type === "submit" || route.type === "mod") {
       return;
     }
+    if (route.type === "search") {
+      renderSearchResults(data);
+      return;
+    }
+    syncSearchTabs();
     renderFeed(data.posts || []);
   }
 
@@ -2235,28 +2448,41 @@ function applyViewState(data) {
 
   document.getElementById("jump-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    const raw = String(document.getElementById("jump-input").value || "")
-      .trim()
-      .toLowerCase();
+    const raw = String(document.getElementById("jump-input").value || "").trim();
     if (!raw) return;
-    if (raw.startsWith("g/") || raw.startsWith("r/")) {
-      navigate({ type: "group", slug: raw.slice(2).replace(/[^a-z0-9-]/g, ""), username: "" });
+    const lower = raw.toLowerCase();
+    if (lower.startsWith("g/") || lower.startsWith("r/")) {
+      navigate({ type: "group", slug: lower.slice(2).replace(/[^a-z0-9-]/g, ""), username: "" });
       return;
     }
-    if (raw.startsWith("u/") || raw.startsWith("@")) {
+    if (lower.startsWith("u/") || lower.startsWith("@")) {
       navigate({
         type: "user",
         slug: "",
-        username: raw.replace(/^u\//, "").replace(/^@/, "").replace(/[^a-z0-9_]/g, ""),
+        username: lower.replace(/^u\//, "").replace(/^@/, "").replace(/[^a-z0-9_]/g, ""),
       });
       return;
     }
-    if (/^[a-z0-9-]+$/.test(raw) && groups.some((g) => g.slug === raw)) {
-      navigate({ type: "group", slug: raw, username: "" });
-      return;
-    }
-    navigate({ type: "user", slug: "", username: raw.replace(/[^a-z0-9_]/g, "") });
-  });
+    navigate({ type: "search", slug: "", username: "", query: raw, tab: "all" }).catch(() => {});
+  })
+
+  const searchTabsEl = document.getElementById("search-tabs");
+  if (searchTabsEl) {
+    searchTabsEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-search-tab]");
+      if (!btn || route.type !== "search") return;
+      const tab = btn.getAttribute("data-search-tab") || "all";
+      if (tab === (route.tab || "all")) return;
+      navigate({
+        type: "search",
+        slug: "",
+        username: "",
+        query: route.query || "",
+        tab,
+      }).catch(() => {});
+    });
+  }
+
 
   window.addEventListener("popstate", () => {
     route = parseRoute();

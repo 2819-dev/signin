@@ -12,8 +12,8 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-discord-channels2" />
-    <script src="/force-refresh.js?v=community-discord-channels2" defer></script>
+    <link rel="stylesheet" href="/join.css?v=community-search-switch3" />
+    <script src="/force-refresh.js?v=community-search-switch3" defer></script>
   </head>
   <body class="community-body reddit-body">
     <header class="reddit-topnav">
@@ -80,16 +80,6 @@
             </a>
             <a class="reddit-user-item" href="/community/settings" id="settings-link" data-nav="settings" role="menuitem">Settings</a>
             <a class="reddit-user-item" href="/community/mod" id="mod-menu-link" role="menuitem" hidden>Mod Tools</a>
-            <div class="persona-switch" id="persona-switch" hidden>
-              <button class="persona-switch-btn reddit-user-item is-button" type="button" id="persona-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="persona-menu" role="menuitem">
-                <span class="reddit-account-avatar" id="persona-avatar" aria-hidden="true">S</span>
-                <span class="reddit-account-meta">
-                  <span class="reddit-account-kicker">Switch account</span>
-                  <span class="reddit-account-name" id="persona-label">vision</span>
-                </span>
-              </button>
-              <div class="persona-menu" id="persona-menu" hidden role="listbox" aria-label="Switch account"></div>
-            </div>
             <button class="reddit-user-item is-button is-danger" type="button" id="signout-btn" role="menuitem">Sign out</button>
           </div>
         </div>
@@ -99,14 +89,27 @@
     <div class="reddit-backdrop" id="nav-backdrop" hidden></div>
     <aside class="reddit-leftnav reddit-sidemenu" id="left-nav" aria-label="Community menu" hidden>
       <div class="reddit-leftnav-scroll">
-        <a class="settings-profile-card" href="#" id="menu-profile-link">
-          <span class="settings-profile-avatar" id="menu-profile-avatar" aria-hidden="true">S</span>
-          <span class="settings-profile-copy">
-            <strong id="menu-profile-name">Member</strong>
-            <span id="menu-profile-handle">Account</span>
-          </span>
-          <svg class="r-ico settings-profile-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
-        </a>
+        <div class="menu-profile-wrap">
+          <a class="settings-profile-card" href="#" id="menu-profile-link">
+            <span class="settings-profile-avatar" id="menu-profile-avatar" aria-hidden="true">S</span>
+            <span class="settings-profile-copy">
+              <strong id="menu-profile-name">Member</strong>
+              <span id="menu-profile-handle">Account</span>
+            </span>
+            <svg class="r-ico settings-profile-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </a>
+          <div class="persona-switch menu-persona-switch" id="persona-switch" hidden>
+            <button class="persona-switch-btn menu-persona-btn" type="button" id="persona-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="persona-menu">
+              <span class="reddit-account-avatar" id="persona-avatar" aria-hidden="true">S</span>
+              <span class="reddit-account-meta">
+                <span class="reddit-account-kicker">Switch account</span>
+                <span class="reddit-account-name" id="persona-label">—</span>
+              </span>
+              <svg class="r-ico menu-persona-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="persona-menu" id="persona-menu" hidden role="listbox" aria-label="Switch account"></div>
+          </div>
+        </div>
 
         <nav class="reddit-nav-flat" aria-label="Menu">
           <a class="reddit-nav-item is-active" href="/community" id="home-link">
@@ -236,7 +239,14 @@
                   <p class="muted" id="composer-as" hidden>Posting as —</p>
                 </section>
 
-                <section class="reddit-sortbar" aria-label="Sort">
+                <section class="reddit-sortbar reddit-search-tabs" id="search-tabs" hidden aria-label="Search results">
+                  <button class="reddit-sort-tab is-active" type="button" data-search-tab="all" id="search-tab-all">All</button>
+                  <button class="reddit-sort-tab" type="button" data-search-tab="popular" id="search-tab-popular">Popular</button>
+                  <button class="reddit-sort-tab" type="button" data-search-tab="groups" id="search-tab-groups">Groups</button>
+                  <button class="reddit-sort-tab" type="button" data-search-tab="users" id="search-tab-users">Users</button>
+                </section>
+
+                <section class="reddit-sortbar" id="sort-tabs" aria-label="Sort">
                   <button class="reddit-sort-tab" type="button" data-sort="hot" id="sort-hot">Hot</button>
                   <button class="reddit-sort-tab is-active" type="button" data-sort="new" id="sort-new">New</button>
                   <button class="reddit-sort-tab" type="button" data-sort="top" id="sort-top">Top</button>
@@ -588,7 +598,7 @@
                       <span class="mod-panel-chevron" aria-hidden="true"></span>
                     </summary>
                     <div class="mod-panel-body">
-                      <p class="muted">Switch accounts from the top-right account menu.</p>
+                      <p class="muted">Switch accounts from the Switch account control under your profile in the side menu.</p>
                       <div id="alt-list" class="community-staff-list"></div>
                       <form id="create-alt-form" class="form" style="margin-top: 12px">
                         <div class="field">
@@ -820,6 +830,6 @@
     </nav>
 
     <div id="toast" class="community-toast" role="status" aria-live="polite"></div>
-    <script src="/community.js?v=community-discord-channels2"></script>
+    <script src="/community.js?v=community-search-switch3"></script>
   </body>
 </html>
