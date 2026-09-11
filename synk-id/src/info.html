@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6f8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Synk info page" />
+    <title>Synk — Learn more</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
+    <link rel="stylesheet" href="/join.css?v=community-polish2" />
+    <script src="/force-refresh.js" defer></script>
+  </head>
+  <body>
+    <header class="site-nav site-nav-light">
+      <a class="brand" href="/hub" aria-label="Synk hub">
+        <img src="/synk-logo.svg?v=circles2" alt="" width="28" height="28" />
+        <span>Synk</span>
+      </a>
+      <nav class="nav-actions" aria-label="Account">
+        <a class="nav-link" href="/community">Community</a>
+        <a class="nav-link" href="/hub">Hub</a>
+      </nav>
+    </header>
+
+    <main class="shell shell-app info-page-shell">
+      <section class="card" id="info-locked" hidden>
+        <p class="section-label">Session</p>
+        <h2>Sign in to read this page</h2>
+        <p class="muted">Learn more pages are for Synk members.</p>
+        <div class="btn-row" style="margin-top:14px;">
+          <a class="btn btn-primary" href="/verify?autostart=1">Sign in</a>
+        </div>
+      </section>
+
+      <section class="card" id="info-error" hidden>
+        <p class="section-label">Page</p>
+        <h2 id="info-error-title">Not found</h2>
+        <p class="muted" id="info-error-body">This Learn more page isn’t available.</p>
+        <div class="btn-row" style="margin-top:14px;">
+          <a class="btn btn-secondary" href="/community">Back to Community</a>
+        </div>
+      </section>
+
+      <article class="card" id="info-panel" hidden>
+        <div class="info-page-hero" id="info-hero"></div>
+        <div class="info-page-body" id="info-body"></div>
+      </article>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "synk_member_session";
+      const locked = document.getElementById("info-locked");
+      const errorCard = document.getElementById("info-error");
+      const panel = document.getElementById("info-panel");
+      const hero = document.getElementById("info-hero");
+      const bodyEl = document.getElementById("info-body");
+
+      function escapeHtml(str) {
+        return String(str || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function readSession() {
+        try {
+          let raw = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          const data = JSON.parse(raw);
+          if (!data || !data.hubSession || !data.hubSession.token) return null;
+          const expiresAt = Number(data.expiresAt) || 0;
+          if (expiresAt && Date.now() > expiresAt) return null;
+          return data;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function pageRef() {
+        const parts = location.pathname.split("/").filter(Boolean);
+        const slug = parts[0] === "info" ? parts[1] || "" : "";
+        const id = new URLSearchParams(location.search).get("id") || "";
+        return { slug, id };
+      }
+
+      function renderBlocks(blocks) {
+        const list = Array.isArray(blocks) ? blocks : [];
+        if (!list.length) return '<p class="muted">No content yet.</p>';
+        return list
+          .map((block) => {
+            const type = String((block && block.type) || "").toLowerCase();
+            if (type === "heading") {
+              return `<div class="info-block"><h2>${escapeHtml(block.text || "")}</h2></div>`;
+            }
+            if (type === "paragraph" || type === "text") {
+              return `<div class="info-block"><p>${escapeHtml(block.text || "").replace(/\n/g, "<br/>")}</p></div>`;
+            }
+            if (type === "image") {
+              const url = escapeHtml(block.url || block.src || "");
+              const alt = escapeHtml(block.alt || "");
+              if (!url) return "";
+              return `<div class="info-block"><img src="${url}" alt="${alt}" /></div>`;
+            }
+            return "";
+          })
+          .join("");
+      }
+
+      async function loadPage() {
+        const session = readSession();
+        locked.hidden = !!session;
+        errorCard.hidden = true;
+        panel.hidden = true;
+        if (!session) return;
+
+        const { slug, id } = pageRef();
+        if (!slug && !id) {
+          errorCard.hidden = false;
+          document.getElementById("info-error-title").textContent = "Missing page";
+          document.getElementById("info-error-body").textContent = "Open this page from a tag’s Learn more button.";
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Synk-Hub-Session": session.hubSession.token,
+            },
+            body: JSON.stringify({ action: "get-info-page", slug, pageId: id }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Page not found");
+          const page = data.page || {};
+          document.title = `${page.title || "Learn more"} — Synk`;
+          hero.innerHTML = `
+            <p class="eyebrow">Learn more</p>
+            <h1>${escapeHtml(page.title || "Learn more")}</h1>
+            ${page.summary ? `<p class="subtitle">${escapeHtml(page.summary)}</p>` : ""}
+            ${page.heroImageUrl ? `<img src="${escapeHtml(page.heroImageUrl)}" alt="" />` : ""}
+          `;
+          bodyEl.innerHTML = renderBlocks(page.blocks);
+          panel.hidden = false;
+        } catch (err) {
+          errorCard.hidden = false;
+          document.getElementById("info-error-title").textContent = "Couldn’t open page";
+          document.getElementById("info-error-body").textContent = err.message || "Page not found";
+        }
+      }
+
+      loadPage();
+    </script>
+    <script src="/support-chat.js?v=support4" defer></script>
+  </body>
+</html>

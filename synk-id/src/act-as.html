@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#0b1220" />
+    <title>Synk — Act as member</title>
+    <link rel="stylesheet" href="/join.css?v=places1" />
+    <script src="/force-refresh.js" defer></script>
+    <style>
+      .act-as-shell { max-width: 520px; margin: 48px auto; }
+      .act-as-banner {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        padding: 10px 14px;
+        background: #7c2d12;
+        color: #fff7ed;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: none;
+      }
+      .act-as-banner.is-on { display: block; }
+      .act-as-banner .muted { color: #ffedd5; font-weight: 500; }
+    </style>
+  </head>
+  <body>
+    <div class="act-as-banner" id="act-as-banner" role="status"></div>
+    <main class="shell act-as-shell">
+      <section class="card">
+        <p class="eyebrow">Synk Admin</p>
+        <h1>Opening member session…</h1>
+        <p class="muted" id="act-as-status">Checking your one-time link.</p>
+        <div class="btn-row" style="margin-top:14px;" id="act-as-actions" hidden>
+          <a class="btn btn-primary" id="act-as-hub" href="/hub">Open hub</a>
+          <a class="btn btn-secondary" id="act-as-community" href="/community">Open community</a>
+        </div>
+      </section>
+    </main>
+    <script>
+      const STORAGE_KEY = "synk_member_session";
+      const ACT_AS_KEY = "synk_admin_act_as";
+      const statusEl = document.getElementById("act-as-status");
+      const actions = document.getElementById("act-as-actions");
+      const banner = document.getElementById("act-as-banner");
+
+      function params() {
+        const q = new URLSearchParams(location.search);
+        return {
+          token: q.get("token") || "",
+          next: q.get("next") || "/hub",
+        };
+      }
+
+      function safeNext(path) {
+        const raw = String(path || "/hub");
+        if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("://")) return "/hub";
+        return raw;
+      }
+
+      async function claim() {
+        const { token, next } = params();
+        if (!token) {
+          statusEl.textContent = "Missing act-as token. Start again from Synk Admin.";
+          return;
+        }
+        try {
+          const res = await fetch("/api/synk-admin-act-as", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "claim", token }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not open member session");
+
+          const expiresAt = Number(data.expiresAt) || Date.now() + 60 * 60 * 1000;
+          const session = {
+            profile: {
+              id: data.profile && data.profile.id,
+              name: (data.profile && data.profile.name) || "Member",
+              synkCode: (data.profile && data.profile.synkCode) || "",
+              photoUrl: (data.profile && data.profile.photoUrl) || "",
+            },
+            pass: null,
+            hubSession: {
+              token: data.hubSession && data.hubSession.token,
+              expiresAt: (data.hubSession && data.hubSession.expiresAt) || new Date(expiresAt).toISOString(),
+              ttlSeconds: (data.hubSession && data.hubSession.ttlSeconds) || null,
+              staySignedIn: false,
+            },
+            staySignedIn: false,
+            verifiedAt: Date.now(),
+            expiresAt,
+            actAs: {
+              adminUsername: (data.actAs && data.actAs.adminUsername) || "",
+              expiresAt: (data.actAs && data.actAs.expiresAt) || new Date(expiresAt).toISOString(),
+              memberName: (data.profile && data.profile.name) || "Member",
+              memberCode: (data.profile && data.profile.synkCode) || "",
+            },
+          };
+
+          localStorage.removeItem(STORAGE_KEY);
+          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+          sessionStorage.setItem(ACT_AS_KEY, JSON.stringify(session.actAs));
+
+          const dest = safeNext(data.nextPath || next);
+          statusEl.textContent = `Signed in as ${session.profile.name} (${session.profile.synkCode || "member"}). Redirecting…`;
+          banner.classList.add("is-on");
+          banner.innerHTML = `Acting as <strong>${session.profile.name}</strong> <span class="muted">· Synk Admin</span>`;
+          actions.hidden = false;
+          document.getElementById("act-as-hub").href = "/hub";
+          document.getElementById("act-as-community").href = "/community";
+          setTimeout(() => {
+            location.replace(dest);
+          }, 500);
+        } catch (err) {
+          statusEl.textContent = err.message || "Could not open member session";
+          actions.hidden = false;
+        }
+      }
+
+      claim();
+    </script>
+  </body>
+</html>

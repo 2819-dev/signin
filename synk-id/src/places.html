@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6f8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Places that use Synk — a curated list for members." />
+    <title>Synk — Places</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
+    <link rel="stylesheet" href="/join.css?v=places-logo2" />
+    <script src="/force-refresh.js?v=places-logo2" defer></script>
+  </head>
+  <body>
+    <header class="site-nav site-nav-light">
+      <a class="brand" href="/hub" aria-label="Synk hub">
+        <img src="/synk-logo.svg?v=circles2" alt="" width="28" height="28" />
+        <span>Synk</span>
+      </a>
+      <nav class="nav-actions" aria-label="Account">
+        <a class="nav-link" href="/hub">Hub</a>
+        <a class="nav-link" href="/community">Community</a>
+        <a class="nav-link" href="/docs">Docs</a>
+        <a class="btn btn-secondary btn-nav" href="/verify">Sign in</a>
+      </nav>
+    </header>
+
+    <main class="shell shell-app shell-wide">
+      <header class="page-head">
+        <p class="eyebrow">Directory</p>
+        <h1>Connected places</h1>
+        <p class="subtitle">
+          Places Synk highlights for members. This list is curated in Synk Admin — not every Business
+          account appears here.
+        </p>
+      </header>
+
+      <section class="card" id="places-locked" hidden>
+        <p class="section-label">Session</p>
+        <h2>Sign in to browse places</h2>
+        <p class="muted">Verify with face or Synk code, then open this list from your hub.</p>
+        <div class="btn-row" style="margin-top:14px;">
+          <a class="btn btn-primary" href="/verify?autostart=1">Sign in</a>
+          <a class="btn btn-secondary" href="/hub">Back to hub</a>
+        </div>
+      </section>
+
+      <section class="card" id="places-panel" hidden>
+        <p class="section-label">Where Synk shows up</p>
+        <div id="places-list" class="places-list" aria-live="polite"></div>
+        <p id="places-empty" class="muted places-empty" hidden>No places listed yet. Check back soon.</p>
+        <p id="places-error" class="muted places-empty" hidden></p>
+      </section>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "synk_member_session";
+      const locked = document.getElementById("places-locked");
+      const panel = document.getElementById("places-panel");
+      const listEl = document.getElementById("places-list");
+      const emptyEl = document.getElementById("places-empty");
+      const errorEl = document.getElementById("places-error");
+
+      function escapeHtml(str) {
+        return String(str || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function readSession() {
+        try {
+          let store = localStorage;
+          let raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) {
+            raw = sessionStorage.getItem(STORAGE_KEY);
+            store = sessionStorage;
+          }
+          if (!raw) return null;
+          const data = JSON.parse(raw);
+          if (!data || !data.profile) return null;
+
+          let expiresAt = Number(data.expiresAt) || 0;
+          const hubExp =
+            data.hubSession && data.hubSession.expiresAt
+              ? new Date(data.hubSession.expiresAt).getTime()
+              : 0;
+          if (hubExp && (!expiresAt || hubExp > expiresAt)) expiresAt = hubExp;
+          if (expiresAt && Date.now() > expiresAt) {
+            store.removeItem(STORAGE_KEY);
+            return null;
+          }
+          if (!data.hubSession || !data.hubSession.token) return null;
+          return data;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function initials(name) {
+        const parts = String(name || "P")
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean);
+        if (!parts.length) return "P";
+        if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+      }
+
+      function renderPlaces(places) {
+        errorEl.hidden = true;
+        if (!places.length) {
+          listEl.innerHTML = "";
+          emptyEl.hidden = false;
+          return;
+        }
+        emptyEl.hidden = true;
+        listEl.innerHTML = places
+          .map((place) => {
+            const mark = escapeHtml(initials(place.name));
+            const logo = place.logoUrl
+              ? `<img class="place-logo" src="${escapeHtml(
+                  place.logoUrl
+                )}" alt="" loading="lazy" decoding="async" data-fallback="${mark}" />`
+              : `<div class="place-logo place-logo-fallback" aria-hidden="true">${mark}</div>`;
+            const website = place.websiteUrl
+              ? `<a class="place-link" href="${escapeHtml(
+                  place.websiteUrl
+                )}" target="_blank" rel="noopener noreferrer">Visit website</a>`
+              : "";
+            const desc = place.description
+              ? `<p class="place-desc">${escapeHtml(place.description)}</p>`
+              : "";
+            return `
+              <article class="place-card">
+                ${logo}
+                <div class="place-meta">
+                  <strong>${escapeHtml(place.name)}</strong>
+                  ${desc}
+                  ${website}
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+        listEl.querySelectorAll("img.place-logo[data-fallback]").forEach((img) => {
+          img.addEventListener("error", () => {
+            const fallback = document.createElement("div");
+            fallback.className = "place-logo place-logo-fallback";
+            fallback.setAttribute("aria-hidden", "true");
+            fallback.textContent = img.getAttribute("data-fallback") || "P";
+            img.replaceWith(fallback);
+          });
+        });
+      }
+
+      async function loadPlaces() {
+        try {
+          const res = await fetch("/api/synk-places");
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not load places");
+          renderPlaces(data.places || []);
+        } catch (err) {
+          listEl.innerHTML = "";
+          emptyEl.hidden = true;
+          errorEl.hidden = false;
+          errorEl.textContent = err.message || "Could not load places";
+        }
+      }
+
+      function boot() {
+        const signedIn = Boolean(readSession());
+        locked.hidden = signedIn;
+        panel.hidden = !signedIn;
+        if (signedIn) loadPlaces();
+      }
+
+      boot();
+    </script>
+    <script src="/support-chat.js?v=support4" defer></script>
+  </body>
+</html>

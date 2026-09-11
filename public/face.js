@@ -391,7 +391,7 @@
         if (videoEl.videoWidth > 0) finish();
       };
       const timer = setTimeout(() => {
-        finish(new Error("Camera is taking too long to start. Try again."));
+        finish(new Error("The camera is taking too long to start. Please try again."));
       }, timeoutMs);
       videoEl.addEventListener("loadeddata", onReady);
       videoEl.addEventListener("loadedmetadata", onReady);
@@ -462,7 +462,7 @@
       } catch (playErr) {
         stopCamera(videoEl);
         throw new Error(
-          (playErr && playErr.message) || "Could not start the camera preview. Try again."
+          (playErr && playErr.message) || "Unable to start the camera preview. Please try again."
         );
       }
     }

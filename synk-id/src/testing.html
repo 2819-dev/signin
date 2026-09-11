@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6f8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Synk beta testing — clock in, agenda checklist, and feedback." />
+    <title>Synk — Testing</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
+    <link rel="stylesheet" href="/join.css?v=testing-clock1" />
+    <script src="/force-refresh.js" defer></script>
+  </head>
+  <body>
+    <header class="site-nav site-nav-light">
+      <a class="brand" href="/hub" aria-label="Synk hub">
+        <img src="/synk-logo.svg?v=circles2" alt="" width="28" height="28" />
+        <span>Synk</span>
+      </a>
+      <nav class="nav-actions" aria-label="Account">
+        <a class="nav-link" href="/hub">Hub</a>
+        <a class="nav-link" href="/community">Community</a>
+        <a class="btn btn-secondary btn-nav" href="/verify">Sign in</a>
+      </nav>
+    </header>
+
+    <main class="shell shell-app shell-wide">
+      <header class="page-head">
+        <p class="eyebrow">Beta</p>
+        <h1>Testing</h1>
+        <p class="subtitle">Clock in, work through each update’s agenda items, then move to the next update.</p>
+      </header>
+
+      <section class="card" id="testing-locked" hidden>
+        <p class="section-label">Session</p>
+        <h2>Sign in to open Testing</h2>
+        <p class="muted">This area is for members with the Beta tester tag.</p>
+        <div class="btn-row" style="margin-top:14px;">
+          <a class="btn btn-primary" href="/verify?autostart=1">Sign in</a>
+          <a class="btn btn-secondary" href="/hub">Back to hub</a>
+        </div>
+      </section>
+
+      <section class="card" id="testing-denied" hidden>
+        <p class="section-label">Access</p>
+        <h2>Beta testers only</h2>
+        <p class="muted">If you were invited to test, ask an owner to assign the Beta tester tag.</p>
+        <div class="btn-row" style="margin-top:14px;">
+          <a class="btn btn-secondary" href="/hub">Back to hub</a>
+        </div>
+      </section>
+
+      <section class="card" id="testing-panel" hidden>
+        <p class="section-label" id="testing-status">Loading…</p>
+
+        <div class="testing-clock" id="testing-clock">
+          <div>
+            <h2>Clock in</h2>
+            <p class="muted" id="testing-clock-copy">Clock in when you start testing this update.</p>
+          </div>
+          <div class="btn-row testing-clock-actions">
+            <button class="btn btn-primary btn-compact" type="button" id="testing-clock-in-btn">Clock in</button>
+            <button class="btn btn-secondary btn-compact" type="button" id="testing-clock-out-btn" hidden>Clock out</button>
+          </div>
+        </div>
+
+        <div class="testing-progress" id="testing-progress" hidden>
+          <p class="testing-progress-label" id="testing-progress-label"></p>
+        </div>
+
+        <div class="testing-layout">
+          <div>
+            <div class="testing-agenda-head">
+              <div>
+                <h2>Agenda</h2>
+                <p class="muted" id="testing-agenda-copy">Mark items as you try them.</p>
+              </div>
+              <button class="btn btn-primary btn-compact" type="button" id="testing-complete-btn" hidden>
+                Complete Agenda
+              </button>
+            </div>
+            <div id="testing-agenda" class="testing-feedback-list" aria-live="polite"></div>
+          </div>
+          <div>
+            <h2>Messages</h2>
+            <p class="muted">Tell us what’s wrong, what’s good, or what feels off.</p>
+            <form id="testing-feedback-form" class="form">
+              <div class="field">
+                <label for="testing-feedback-body">Your note</label>
+                <textarea id="testing-feedback-body" rows="4" maxlength="2000" required placeholder="The new sidebar feels clearer, but the top bar still jumps on iPhone…"></textarea>
+              </div>
+              <p id="testing-feedback-status" class="muted" style="font-size:0.85rem;"></p>
+              <button class="btn btn-primary btn-compact" type="submit">Send feedback</button>
+            </form>
+            <div id="testing-feedback-list" class="testing-feedback-list" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "synk_member_session";
+      const locked = document.getElementById("testing-locked");
+      const denied = document.getElementById("testing-denied");
+      const panel = document.getElementById("testing-panel");
+      const statusEl = document.getElementById("testing-status");
+      const agendaEl = document.getElementById("testing-agenda");
+      const agendaCopy = document.getElementById("testing-agenda-copy");
+      const feedbackList = document.getElementById("testing-feedback-list");
+      const feedbackForm = document.getElementById("testing-feedback-form");
+      const feedbackStatus = document.getElementById("testing-feedback-status");
+      const clockCopy = document.getElementById("testing-clock-copy");
+      const clockInBtn = document.getElementById("testing-clock-in-btn");
+      const clockOutBtn = document.getElementById("testing-clock-out-btn");
+      const completeBtn = document.getElementById("testing-complete-btn");
+      const progressEl = document.getElementById("testing-progress");
+      const progressLabel = document.getElementById("testing-progress-label");
+
+      let dashboardState = {
+        clock: { clockedIn: false },
+        progress: {},
+        agenda: [],
+      };
+
+      function escapeHtml(str) {
+        return String(str || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function cleanDetail(detail) {
+        return String(detail || "")
+          .replace(/<!--\s*synk-update:[^>]*-->/gi, "")
+          .trim();
+      }
+
+      function shortVersion(ver) {
+        const value = String(ver || "").trim();
+        if (!value) return "";
+        return value.length > 10 ? value.slice(0, 7) : value;
+      }
+
+      function readSession() {
+        try {
+          let raw = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          const data = JSON.parse(raw);
+          if (!data || !data.hubSession || !data.hubSession.token) return null;
+          const expiresAt = Number(data.expiresAt) || 0;
+          if (expiresAt && Date.now() > expiresAt) return null;
+          return data;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function hubHeaders() {
+        const session = readSession();
+        return {
+          "Content-Type": "application/json",
+          "X-Synk-Hub-Session": session.hubSession.token,
+        };
+      }
+
+      function renderClock(clock) {
+        const clockedIn = !!(clock && clock.clockedIn);
+        clockInBtn.hidden = clockedIn;
+        clockOutBtn.hidden = !clockedIn;
+        if (clockedIn) {
+          const when = clock.clockedInAt ? new Date(clock.clockedInAt).toLocaleString() : "now";
+          clockCopy.textContent = `You are clocked in since ${when}. Check off agenda items, then complete the agenda.`;
+        } else {
+          clockCopy.textContent = "Clock in when you start testing. Agenda changes stay locked until you do.";
+        }
+      }
+
+      function renderProgress(progress) {
+        const current = progress && progress.currentVersion;
+        const next = progress && progress.nextVersion;
+        const caughtUp = !!(progress && progress.caughtUp);
+        const done = Number(progress && progress.updateDoneCount) || 0;
+        const total = Number(progress && progress.updateItemCount) || 0;
+
+        if (caughtUp && !current) {
+          progressEl.hidden = false;
+          progressLabel.textContent = "You’re caught up. When the next update ships, its agenda will appear here.";
+          agendaCopy.textContent = "Standing checklist items (if any) stay available below.";
+          completeBtn.hidden = true;
+          return;
+        }
+
+        progressEl.hidden = false;
+        const verLabel = shortVersion(current) || "current update";
+        progressLabel.textContent = total
+          ? `Testing update ${verLabel} — ${done} of ${total} items done${next ? `. Next: ${shortVersion(next)}` : ""}.`
+          : `Testing update ${verLabel}.`;
+        agendaCopy.textContent = "Each release adds multiple checklist items. Finish this update, then move to the next.";
+        completeBtn.hidden = !(progress && progress.canCompleteAgenda);
+      }
+
+      function renderAgenda(items, clockedIn) {
+        if (!items.length) {
+          agendaEl.innerHTML = '<p class="muted">No agenda items for this update yet. Check back when an update ships.</p>';
+          return;
+        }
+        agendaEl.innerHTML = items
+          .map((item) => {
+            const detail = cleanDetail(item.detail);
+            const disabled = clockedIn ? "" : "disabled";
+            return `
+          <label class="testing-agenda-item ${item.done ? "is-done" : ""} ${clockedIn ? "" : "is-locked"}">
+            <input type="checkbox" data-agenda-id="${escapeHtml(item.id)}" ${item.done ? "checked" : ""} ${disabled} />
+            <span>
+              <strong>${escapeHtml(item.title)}</strong>
+              ${detail ? `<div class="muted">${escapeHtml(detail)}</div>` : ""}
+            </span>
+          </label>`;
+          })
+          .join("");
+      }
+
+      function renderFeedback(items) {
+        if (!items.length) {
+          feedbackList.innerHTML = '<p class="muted">No messages yet. Be the first.</p>';
+          return;
+        }
+        feedbackList.innerHTML = items
+          .map((f) => {
+            const when = f.createdAt ? new Date(f.createdAt).toLocaleString() : "";
+            return `<div class="testing-feedback-item"><p>${escapeHtml(f.body)}</p><p class="muted">${escapeHtml(when)}</p></div>`;
+          })
+          .join("");
+      }
+
+      async function loadDashboard() {
+        const session = readSession();
+        locked.hidden = !!session;
+        denied.hidden = true;
+        panel.hidden = !session;
+        if (!session) return;
+
+        statusEl.textContent = "Loading…";
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: hubHeaders(),
+            body: JSON.stringify({ action: "beta-dashboard" }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.status === 403) {
+            panel.hidden = true;
+            denied.hidden = false;
+            return;
+          }
+          if (!res.ok) throw new Error(data.error || "Could not load testing");
+          dashboardState = {
+            clock: data.clock || { clockedIn: false },
+            progress: data.progress || {},
+            agenda: data.agenda || [],
+          };
+          statusEl.textContent = "Beta testing";
+          renderClock(dashboardState.clock);
+          renderProgress(dashboardState.progress);
+          renderAgenda(dashboardState.agenda, !!(dashboardState.clock && dashboardState.clock.clockedIn));
+          renderFeedback(data.feedback || []);
+        } catch (err) {
+          statusEl.textContent = err.message || "Could not load testing";
+        }
+      }
+
+      async function postAction(action, payload) {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({ action, ...(payload || {}) }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        return data;
+      }
+
+      clockInBtn.addEventListener("click", async () => {
+        clockInBtn.disabled = true;
+        try {
+          await postAction("beta-clock-in");
+          await loadDashboard();
+        } catch (err) {
+          statusEl.textContent = err.message || "Could not clock in";
+        } finally {
+          clockInBtn.disabled = false;
+        }
+      });
+
+      clockOutBtn.addEventListener("click", async () => {
+        clockOutBtn.disabled = true;
+        try {
+          await postAction("beta-clock-out");
+          await loadDashboard();
+        } catch (err) {
+          statusEl.textContent = err.message || "Could not clock out";
+        } finally {
+          clockOutBtn.disabled = false;
+        }
+      });
+
+      completeBtn.addEventListener("click", async () => {
+        if (!confirm("Mark this update’s agenda complete and move to the next update?")) return;
+        completeBtn.disabled = true;
+        try {
+          const data = await postAction("beta-complete-agenda");
+          if (data.caughtUp) {
+            statusEl.textContent = "Agenda complete — you’re caught up for now.";
+          } else if (data.nextVersion) {
+            statusEl.textContent = `Agenda complete — now testing update ${shortVersion(data.nextVersion)}.`;
+          } else {
+            statusEl.textContent = "Agenda complete.";
+          }
+          await loadDashboard();
+        } catch (err) {
+          statusEl.textContent = err.message || "Could not complete agenda";
+        } finally {
+          completeBtn.disabled = false;
+        }
+      });
+
+      agendaEl.addEventListener("change", async (e) => {
+        const input = e.target.closest("[data-agenda-id]");
+        if (!input) return;
+        const itemId = input.getAttribute("data-agenda-id");
+        const done = !!input.checked;
+        input.disabled = true;
+        try {
+          await postAction("beta-toggle-agenda", { itemId, done });
+          const row = input.closest(".testing-agenda-item");
+          if (row) row.classList.toggle("is-done", done);
+          await loadDashboard();
+        } catch (err) {
+          input.checked = !done;
+          statusEl.textContent = err.message || "Could not update agenda";
+        } finally {
+          input.disabled = !(dashboardState.clock && dashboardState.clock.clockedIn);
+        }
+      });
+
+      feedbackForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        feedbackStatus.textContent = "Sending…";
+        try {
+          const body = document.getElementById("testing-feedback-body").value;
+          await postAction("beta-send-feedback", { body });
+          document.getElementById("testing-feedback-body").value = "";
+          feedbackStatus.textContent = "Sent — thank you";
+          await loadDashboard();
+        } catch (err) {
+          feedbackStatus.textContent = err.message || "Could not send";
+        }
+      });
+
+      loadDashboard();
+    </script>
+    <script src="/support-chat.js?v=support4" defer></script>
+  </body>
+</html>

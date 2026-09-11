@@ -14,17 +14,110 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=community-reddit1" />
+    <link rel="stylesheet" href="/join.css?v=pro-copy1" />
     <script src="/force-refresh.js" defer></script>
-  </head>
+    <script src="/push-client.js?v=pro-copy1" defer></script>
+  
+    <style>
+      .act-as-banner {
+        position: sticky;
+        top: 0;
+        z-index: 80;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 14px;
+        background: #7c2d12;
+        color: #fff7ed;
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+      .act-as-banner[hidden] { display: none !important; }
+      .act-as-banner .muted { color: #ffedd5; font-weight: 500; }
+      .act-as-banner button {
+        border: 1px solid rgba(255,255,255,.35);
+        background: transparent;
+        color: inherit;
+        border-radius: 999px;
+        padding: 4px 10px;
+        cursor: pointer;
+        font: inherit;
+      }
+      .hub-notif-wrap {
+        display: inline-flex;
+        align-items: center;
+        position: relative;
+      }
+      .hub-notif-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 999px;
+        border: 1px solid var(--line, rgba(0,0,0,.12));
+        background: var(--surface, #fff);
+        color: inherit;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        position: relative;
+      }
+      .hub-notif-btn:hover {
+        background: var(--elev, rgba(0,0,0,.04));
+      }
+      .site-nav-light .hub-notif-btn {
+        border-color: rgba(0,0,0,.1);
+      }
+      .hub-notif-panel {
+        right: 0;
+        left: auto;
+        z-index: 120;
+      }
+      @media (max-width: 720px) {
+        .hub-notif-panel {
+          position: fixed;
+          top: 64px;
+          left: 8px;
+          right: 8px;
+          width: auto;
+        }
+      }
+    </style>
+</head>
   <body>
+    <div id="act-as-banner" class="act-as-banner" hidden role="status"></div>
+
     <header class="site-nav site-nav-light">
       <a class="brand" href="/hub" aria-label="Synk hub">
         <img src="/synk-logo.svg?v=circles2" alt="" width="28" height="28" />
         <span>Synk</span>
       </a>
       <nav class="nav-actions" aria-label="Account">
+        <div class="reddit-notif-wrap hub-notif-wrap" id="hub-notif-wrap" hidden>
+          <button
+            class="reddit-icon-btn reddit-notif-btn hub-notif-btn"
+            type="button"
+            id="hub-notif-btn"
+            aria-label="Notifications"
+            aria-haspopup="true"
+            aria-expanded="false"
+            title="Notifications"
+          >
+            <svg class="r-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 9a5.5 5.5 0 0 1 11 0c0 7 2.5 7 2.5 7H4s2.5 0 2.5-7"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+            <span class="reddit-notif-dot" id="hub-notif-dot" hidden aria-hidden="true"></span>
+          </button>
+          <div class="reddit-notif-panel hub-notif-panel" id="hub-notif-panel" hidden role="dialog" aria-label="Notifications">
+            <div class="reddit-notif-head">
+              <strong>Notifications</strong>
+              <button class="reddit-notif-mark" type="button" id="hub-notif-clear">Clear all</button>
+            </div>
+            <div class="reddit-notif-list" id="hub-notif-list">
+              <p class="muted reddit-notif-empty">No new notifications</p>
+            </div>
+            <a class="reddit-notif-footer" href="/community/inbox">Open inbox</a>
+          </div>
+        </div>
         <a class="nav-link" href="/community">Community</a>
+        <a class="nav-link" href="/docs">Docs</a>
         <a class="nav-link" href="/business">Business</a>
         <button class="btn btn-secondary btn-nav" type="button" id="hub-signout">Sign out</button>
       </nav>
@@ -34,7 +127,7 @@
       <header class="page-head">
         <p class="eyebrow">Member hub</p>
         <h1 id="hub-greeting">Welcome</h1>
-        <p class="subtitle" id="hub-subtitle">Your Synk tools in one place.</p>
+        <p class="subtitle" id="hub-subtitle">Access your Synk identity and tools.</p>
       </header>
 
       <section class="card hub-identity" id="hub-identity-card">
@@ -49,47 +142,60 @@
         </div>
         <div class="btn-row" style="margin-top:14px;">
           <button class="btn btn-secondary" type="button" id="hub-copy-code">Copy code</button>
-          <a class="btn btn-primary" href="/verify?autostart=1">Re-verify</a>
+          <a class="btn btn-primary" href="/verify?autostart=1">Verify again</a>
+        </div>
+        <div class="hub-photo-actions">
+          <input id="hub-photo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+          <button class="btn btn-secondary btn-compact" type="button" id="hub-photo-btn">Update login photo</button>
+          <p class="muted hub-photo-status" id="hub-photo-status" role="status"></p>
         </div>
       </section>
 
       <section class="card" id="hub-features-card">
         <p class="section-label">Features</p>
-        <h2>What you can do</h2>
+        <h2>Available tools</h2>
         <div class="hub-grid">
           <a class="hub-tile" href="/community">
             <strong>Synk Community</strong>
-            <span>Pick a public username and talk about security with other members.</span>
+            <span>Choose a public username and discuss security with other members.</span>
           </a>
           <a class="hub-tile" href="/verify?autostart=1">
             <strong>Face check-in</strong>
-            <span>Verify again for a fresh pass when a place asks for Synk.</span>
+            <span>Verify again to issue a fresh pass when a location requires Synk.</span>
           </a>
           <a class="hub-tile" href="#hub-identity-card">
             <strong>Show Synk code</strong>
-            <span>Use your code and recovery passphrase if the camera isn’t available.</span>
+            <span>Use your Synk code and recovery passphrase when camera verification is unavailable.</span>
           </a>
           <a class="hub-tile" href="/business">
             <strong>Synk Business</strong>
             <span>Request an API key for your product or desk.</span>
           </a>
+          <a class="hub-tile" href="/docs">
+            <strong>Documentation</strong>
+            <span>Learn how Synk works and how to configure your API key.</span>
+          </a>
           <a class="hub-tile" href="/join">
             <strong>Invite someone</strong>
-            <span>Send people to Get Synk so they can request membership.</span>
+            <span>Invite others to request Synk membership.</span>
           </a>
-          <div class="hub-tile hub-tile-static">
+          <a class="hub-tile" href="/places">
             <strong>Connected places</strong>
-            <span>Check in faster wherever Synk is offered.</span>
-          </div>
+            <span>View locations that use Synk.</span>
+          </a>
+          <a class="hub-tile" href="/testing" id="hub-testing-tile" hidden>
+            <strong>Testing</strong>
+            <span>Clock in, complete each update’s agenda items, then move to the next.</span>
+          </a>
         </div>
       </section>
 
       <section class="card" id="hub-locked" hidden>
         <p class="section-label">Session</p>
-        <h2>Sign in to open your hub</h2>
-        <p class="muted">Verify with face or Synk code to unlock these tools.</p>
+        <h2>Sign in to access your hub</h2>
+        <p class="muted">Verify with face recognition or your Synk code to unlock these tools.</p>
         <div class="btn-row" style="margin-top:14px;">
-          <a class="btn btn-primary" href="/verify?autostart=1">Log in</a>
+          <a class="btn btn-primary" href="/verify?autostart=1">Sign in</a>
           <a class="btn btn-secondary" href="/join">Get Synk</a>
         </div>
       </section>
@@ -163,9 +269,12 @@
         featuresCard.hidden = !signedIn;
         locked.hidden = signedIn;
 
+        const notifWrap = document.getElementById("hub-notif-wrap");
+        if (notifWrap) notifWrap.hidden = !signedIn;
         if (!signedIn) {
           greeting.textContent = "Your Synk hub";
-          subtitle.textContent = "Log in to see your ID, community, and tools.";
+          subtitle.textContent = "Sign in to see your ID, community, and tools.";
+          setHubNotifOpen(false);
           return;
         }
 
@@ -186,6 +295,69 @@
           avatar.style.backgroundImage = "";
           avatar.textContent = (profile.name || "S").slice(0, 1).toUpperCase();
         }
+        refreshHubNotifications().catch(() => {});
+        try {
+          if (window.SynkPush && session.hubSession && session.hubSession.token) {
+            window.SynkPush.bootstrapPush(hubHeaders(session), { offerBanner: true }).catch(() => {});
+          }
+        } catch (_) {}
+      }
+
+
+      function writeSession(data) {
+        try {
+          const raw = JSON.stringify(data);
+          if (localStorage.getItem(STORAGE_KEY)) localStorage.setItem(STORAGE_KEY, raw);
+          else sessionStorage.setItem(STORAGE_KEY, raw);
+        } catch (_) {}
+      }
+
+      function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("Could not read image"));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const photoBtn = document.getElementById("hub-photo-btn");
+      const photoFile = document.getElementById("hub-photo-file");
+      const photoStatus = document.getElementById("hub-photo-status");
+      if (photoBtn && photoFile) {
+        photoBtn.addEventListener("click", () => photoFile.click());
+        photoFile.addEventListener("change", async () => {
+          const session = readSession();
+          const file = photoFile.files && photoFile.files[0];
+          if (!session || !file) return;
+          if (photoStatus) photoStatus.textContent = "Uploading…";
+          photoBtn.disabled = true;
+          try {
+            if (file.size > 3.5 * 1024 * 1024) throw new Error("Image too large (max ~3.5MB)");
+            const imageData = await readFileAsDataUrl(file);
+            const res = await fetch("/api/synk-community", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Synk-Hub-Session": session.hubSession.token,
+              },
+              body: JSON.stringify({ action: "set-synk-photo", imageData }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not update photo");
+            const nextUrl = data.photoUrl || "";
+            session.profile = session.profile || {};
+            session.profile.photoUrl = nextUrl;
+            writeSession(session);
+            if (photoStatus) photoStatus.textContent = "Login photo updated";
+            render();
+          } catch (err) {
+            if (photoStatus) photoStatus.textContent = err.message || "Could not update photo";
+          } finally {
+            photoBtn.disabled = false;
+            photoFile.value = "";
+          }
+        });
       }
 
       document.getElementById("hub-copy-code").addEventListener("click", async () => {
@@ -205,7 +377,470 @@
         location.href = "/verify";
       });
 
+
+      let hubNotifCache = [];
+      let hubNotifLoaded = false;
+      let hubBetaTester = false;
+
+      function escapeHubHtml(str) {
+        return String(str || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function hubHeaders(session) {
+        return {
+          "Content-Type": "application/json",
+          "X-Synk-Hub-Session": session.hubSession.token,
+        };
+      }
+
+      function setHubNotifOpen(open) {
+        const panel = document.getElementById("hub-notif-panel");
+        const btn = document.getElementById("hub-notif-btn");
+        if (!panel || !btn) return;
+        panel.hidden = !open;
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+
+      function setHubNotifDot(count) {
+        const dot = document.getElementById("hub-notif-dot");
+        if (!dot) return;
+        const n = Number(count) || 0;
+        dot.hidden = n <= 0;
+      }
+
+      function describeHubNotification(note) {
+        const kind = String((note && note.kind) || "").trim().toLowerCase().replace(/-/g, "_");
+        const actor = String((note && (note.actorUsername || note.actor)) || "").trim() || "Someone";
+        let title = String((note && note.title) || "").trim();
+        let description = String((note && (note.description || note.body)) || "").trim();
+        if (kind === "friend_request") {
+          title = title || "Friend request";
+          description = description || `${actor} sent you a friend request.`;
+        } else if (kind === "friend_accept" || kind === "friend_accepted") {
+          title = title || "Friend request accepted";
+          description = description || `${actor} accepted your friend request.`;
+        } else if (kind === "comment") {
+          title = title || "New comment";
+          description = description || `${actor} commented on your post.`;
+        } else if (kind === "reply" || kind === "comment_reply_on_post") {
+          title = title || "New reply";
+          description = description || `${actor} replied to your comment.`;
+        } else if (kind === "dm" || kind === "message") {
+          title = title || "New message";
+          description = description || `${actor} sent you a message.`;
+        } else if (kind === "app_update" || kind === "app_updated" || kind === "update") {
+          title = title || "App updated";
+          description = description || "Synk was updated. Refresh to get the latest.";
+        } else {
+          title = title || "Notification";
+          description = description || `${actor} sent you a notification.`;
+        }
+        if (description && !/[.!?]$/.test(description)) description += ".";
+        const actions = [];
+        if (kind === "app_update" || kind === "app_updated" || kind === "update") {
+          actions.push({ type: "refresh", label: "Refresh", primary: true });
+          actions.push({ type: "release-notes", label: "Release notes", primary: false, version: note && note.version });
+          if (hubBetaTester) {
+            actions.push({
+              type: "open",
+              label: "Open testing portal",
+              href: "/testing",
+              primary: false,
+            });
+          }
+        } else if (kind === "friend_request") {
+          actions.push({ type: "open", label: "Open inbox", href: "/community/inbox", primary: true });
+          if (actor && actor !== "Someone") {
+            actions.push({ type: "profile", label: "View profile", href: `/user/${encodeURIComponent(actor)}`, primary: false });
+          }
+        } else if (kind === "friend_accept" || kind === "friend_accepted") {
+          if (actor && actor !== "Someone") {
+            actions.push({ type: "profile", label: "View profile", href: `/user/${encodeURIComponent(actor)}`, primary: true });
+            actions.push({ type: "open", label: "Message", href: `/community/inbox?dm=${encodeURIComponent(actor)}`, primary: false });
+          }
+        } else if (kind === "dm" || kind === "message") {
+          if (actor && actor !== "Someone") {
+            actions.push({ type: "open", label: "Open chat", href: `/community/inbox?dm=${encodeURIComponent(actor)}`, primary: true });
+          }
+        } else if (note && note.postId) {
+          actions.push({ type: "open", label: "View post", href: `/community/post/${encodeURIComponent(note.postId)}`, primary: true });
+        }
+        return { kind, actor, title, description, actions };
+      }
+
+      function renderHubNotifActions(meta) {
+        return (meta.actions || [])
+          .map((action) => {
+            const cls = action.primary ? "btn btn-primary btn-compact" : "btn btn-secondary btn-compact";
+            if (action.type === "refresh") {
+              return `<button class="${cls}" type="button" data-hub-notif-refresh="1">${escapeHubHtml(action.label || "Refresh")}</button>`;
+            }
+            if (action.type === "release-notes") {
+              const version = escapeHubHtml(String(action.version || ""));
+              return `<button class="${cls}" type="button" data-hub-notif-release-notes="1" data-version="${version}">${escapeHubHtml(action.label || "Release notes")}</button>`;
+            }
+            if (action.href) {
+              return `<a class="${cls}" href="${escapeHubHtml(action.href)}">${escapeHubHtml(action.label || "Open")}</a>`;
+            }
+            return "";
+          })
+          .filter(Boolean)
+          .join("");
+      }
+
+      function renderHubNotifications(notes) {
+        const list = document.getElementById("hub-notif-list");
+        if (!list) return;
+        hubNotifCache = Array.isArray(notes) ? notes.slice() : [];
+        if (!hubNotifCache.length) {
+          list.innerHTML = `<p class="muted reddit-notif-empty">No new notifications</p>`;
+          return;
+        }
+        list.innerHTML = hubNotifCache
+          .map((note) => {
+            const meta = describeHubNotification(note);
+            const unread = !note.readAt;
+            const actions = renderHubNotifActions(meta);
+            return `<div class="reddit-notif-row ${unread ? "is-unread" : ""}">
+              <div class="reddit-notif-copy">
+                <strong class="reddit-notif-title">${escapeHubHtml(meta.title)}</strong>
+                <p class="reddit-notif-desc">${escapeHubHtml(meta.description)}</p>
+                ${actions ? `<div class="reddit-notif-actions">${actions}</div>` : ""}
+              </div>
+            </div>`;
+          })
+          .join("");
+      }
+
+
+      function closeReleaseNotesModal() {
+        const modal = document.getElementById("release-notes-modal");
+        if (modal) modal.hidden = true;
+      }
+
+      function markdownToSafeHtml(source) {
+        let text = String(source || "").replace(/\r\n/g, "\n").trim();
+        if (!text) return "";
+
+        const codes = [];
+        text = text.replace(/`([^`\n]+)`/g, (_, code) => {
+          codes.push(escapeHubHtml(code));
+          return `§§CODE${codes.length - 1}§§`;
+        });
+
+        text = escapeHubHtml(text);
+        text = text.replace(/§§CODE(\d+)§§/g, (_, i) => `<code>${codes[Number(i)] || ""}</code>`);
+        text = text.replace(
+          /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+          '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+        );
+        text = text.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+        text = text.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+        text = text.replace(/(^|[^_])_([^_\n]+)_(?!_)/g, "$1<em>$2</em>");
+
+        const lines = text.split("\n");
+        const out = [];
+        let listType = "";
+        const closeList = () => {
+          if (!listType) return;
+          out.push(listType === "ol" ? "</ol>" : "</ul>");
+          listType = "";
+        };
+
+        for (const line of lines) {
+          const heading = line.match(/^(#{1,3})\s+(.+)$/);
+          if (heading) {
+            closeList();
+            const level = heading[1].length;
+            out.push(`<h${level}>${heading[2]}</h${level}>`);
+            continue;
+          }
+          const ul = line.match(/^[-*•+]\s+(.+)$/);
+          if (ul) {
+            if (listType !== "ul") {
+              closeList();
+              out.push("<ul>");
+              listType = "ul";
+            }
+            out.push(`<li>${ul[1]}</li>`);
+            continue;
+          }
+          const ol = line.match(/^\d+[.)]\s+(.+)$/);
+          if (ol) {
+            if (listType !== "ol") {
+              closeList();
+              out.push("<ol>");
+              listType = "ol";
+            }
+            out.push(`<li>${ol[1]}</li>`);
+            continue;
+          }
+          if (!String(line).trim()) {
+            closeList();
+            continue;
+          }
+          closeList();
+          out.push(`<p>${line}</p>`);
+        }
+        closeList();
+        return out.join("");
+      }
+
+      function renderReleaseNotesBlocks(blocks) {
+        if (!Array.isArray(blocks) || !blocks.length) {
+          return `<p class="muted">No release notes for this update yet.</p>`;
+        }
+        const parts = [];
+        let mdChunk = [];
+        let staffChunk = false;
+        const flushMd = () => {
+          if (!mdChunk.length) return;
+          const cls = staffChunk
+            ? "release-notes-md release-notes-staff"
+            : "release-notes-md";
+          parts.push(`<div class="${cls}">${markdownToSafeHtml(mdChunk.join("\n"))}</div>`);
+          mdChunk = [];
+          staffChunk = false;
+        };
+        blocks.forEach((block) => {
+          if (!block) return;
+          if (block.type === "staff-only") {
+            flushMd();
+            parts.push(`<div class="release-notes-staff-lock" role="note">
+                <strong>Staff only</strong>
+                <span>${escapeHubHtml(block.message || "This part may contain sensitive information and is only available to staff.")}</span>
+              </div>`);
+            return;
+          }
+          const nextStaff = !!block.staffOnly;
+          if (mdChunk.length && nextStaff !== staffChunk) flushMd();
+          staffChunk = nextStaff;
+          mdChunk.push(String(block.text || ""));
+        });
+        flushMd();
+        return parts.join("") || `<p class="muted">No release notes for this update yet.</p>`;
+      }
+
+      async function openReleaseNotesModal(version) {
+        const modal = document.getElementById("release-notes-modal");
+        const body = document.getElementById("release-notes-body");
+        const sub = document.getElementById("release-notes-sub");
+        const session = readSession();
+        if (!modal || !body || !session) return;
+        modal.hidden = false;
+        body.innerHTML = `<p class="muted">Loading…</p>`;
+        if (sub) sub.textContent = version ? `Update ${String(version).slice(0, 10)}` : "What’s new in this update";
+        try {
+          const ver = String(version || "").trim();
+          const queryVer = ver || "latest";
+          const res = await fetch(`/api/synk-community?releaseNotes=${encodeURIComponent(queryVer)}`, {
+            headers: hubHeaders(session),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Unable to load release notes");
+          if (sub) {
+            const short = String(data.version || ver).slice(0, 10);
+            sub.textContent = data.isStaff ? `Update ${short} · full staff notes` : `Update ${short}`;
+          }
+          body.innerHTML = renderReleaseNotesBlocks(data.blocks || []);
+        } catch (err) {
+          body.innerHTML = `<p class="muted">${escapeHubHtml(err.message || "Unable to load release notes")}</p>`;
+        }
+      }
+
+      async function refreshHubNotifications() {
+        const session = readSession();
+        const wrap = document.getElementById("hub-notif-wrap");
+        if (!session || !session.hubSession || !session.hubSession.token) {
+          if (wrap) wrap.hidden = true;
+          return;
+        }
+        if (wrap) wrap.hidden = false;
+        try {
+          const res = await fetch("/api/synk-community?inbox=1", { headers: hubHeaders(session) });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Unable to load notifications");
+          hubNotifLoaded = true;
+          renderHubNotifications(data.notifications || []);
+          setHubNotifDot(typeof data.unreadCount === "number" ? data.unreadCount : (data.notifications || []).filter((n) => !n.readAt).length);
+        } catch (_) {
+          const list = document.getElementById("hub-notif-list");
+          if (list && !hubNotifLoaded) {
+            list.innerHTML = `<p class="muted reddit-notif-empty">Unable to load notifications</p>`;
+          }
+        }
+      }
+
+      const hubNotifBtn = document.getElementById("hub-notif-btn");
+      if (hubNotifBtn) {
+        hubNotifBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const panel = document.getElementById("hub-notif-panel");
+          const willOpen = !!(panel && panel.hidden);
+          if (!willOpen) {
+            setHubNotifOpen(false);
+            return;
+          }
+          if (hubNotifLoaded) renderHubNotifications(hubNotifCache);
+          else {
+            const list = document.getElementById("hub-notif-list");
+            if (list) list.innerHTML = `<p class="muted reddit-notif-empty">Loading…</p>`;
+          }
+          setHubNotifOpen(true);
+          refreshHubNotifications().catch(() => {});
+        });
+      }
+
+      const hubNotifClear = document.getElementById("hub-notif-clear");
+      if (hubNotifClear) {
+        hubNotifClear.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const session = readSession();
+          if (!session) return;
+          try {
+            const res = await fetch("/api/synk-community", {
+              method: "POST",
+              headers: hubHeaders(session),
+              body: JSON.stringify({ action: "mark-read" }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Unable to clear notifications");
+            renderHubNotifications(data.notifications || []);
+            setHubNotifDot(typeof data.unreadCount === "number" ? data.unreadCount : 0);
+          } catch (err) {
+            const list = document.getElementById("hub-notif-list");
+            if (list) list.innerHTML = `<p class="muted reddit-notif-empty">${escapeHubHtml(err.message || "Unable to clear")}</p>`;
+          }
+        });
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeReleaseNotesModal();
+      });
+
+      document.addEventListener("click", (e) => {
+        if (e.target.closest("[data-release-notes-close]")) {
+          closeReleaseNotesModal();
+          return;
+        }
+        const notesBtn = e.target.closest("[data-hub-notif-release-notes]");
+        if (notesBtn) {
+          e.preventDefault();
+          const version = notesBtn.getAttribute("data-version") || "";
+          openReleaseNotesModal(version).catch(() => {});
+          return;
+        }
+        const refreshBtn = e.target.closest("[data-hub-notif-refresh]");
+        if (refreshBtn) {
+          e.preventDefault();
+          try {
+            if (window.synkForceRefresh) window.synkForceRefresh();
+            else location.reload();
+          } catch (_) {
+            location.reload();
+          }
+          return;
+        }
+        const wrap = document.getElementById("hub-notif-wrap");
+        if (wrap && !wrap.contains(e.target)) setHubNotifOpen(false);
+      });
+
+
+      async function loadFeatureFlags() {
+        const session = readSession();
+        const tile = document.getElementById("hub-testing-tile");
+        if (!tile) return;
+        if (!session) {
+          hubBetaTester = false;
+          tile.hidden = true;
+          return;
+        }
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Synk-Hub-Session": session.hubSession.token,
+            },
+            body: JSON.stringify({ action: "hub-feature-flags" }),
+          });
+          const data = await res.json().catch(() => ({}));
+          hubBetaTester = !!(res.ok && data.betaTester);
+          tile.hidden = !hubBetaTester;
+          if (hubNotifLoaded) renderHubNotifications(hubNotifCache);
+        } catch (_) {
+          hubBetaTester = false;
+          tile.hidden = true;
+        }
+      }
+
       render();
+      loadFeatureFlags();
+
+      (function showActAsBanner() {
+        const ACT_AS_KEY = "synk_admin_act_as";
+        const STORAGE_KEY = "synk_member_session";
+        let act = null;
+        try {
+          act = JSON.parse(sessionStorage.getItem(ACT_AS_KEY) || "null");
+        } catch (_) {}
+        const banner = document.getElementById("act-as-banner");
+        if (!banner || !act) return;
+        const session = (typeof readSession === "function" && readSession()) || null;
+        const name = (act && act.memberName) || (session && session.profile && session.profile.name) || "member";
+        const code = (act && act.memberCode) || (session && session.profile && session.profile.synkCode) || "";
+        banner.hidden = false;
+        banner.innerHTML = `<span>Acting as <strong>${name}</strong>${code ? ` <span class="muted">(${code})</span>` : ""} <span class="muted">· Synk Admin</span></span>
+          <button type="button" id="act-as-exit">Exit</button>`;
+        const exit = document.getElementById("act-as-exit");
+        if (exit) {
+          exit.addEventListener("click", () => {
+            try {
+              localStorage.removeItem(STORAGE_KEY);
+              sessionStorage.removeItem(STORAGE_KEY);
+              sessionStorage.removeItem(ACT_AS_KEY);
+            } catch (_) {}
+            location.href = "/verify";
+          });
+        }
+      })();
+
     </script>
+      <script src="/support-chat.js?v=support4" defer></script>
+      <script>
+        document.addEventListener("DOMContentLoaded", () => {
+          if (!navigator.serviceWorker) return;
+          navigator.serviceWorker.addEventListener("message", (event) => {
+            const data = event && event.data;
+            if (!data || data.type !== "synk-notification-click" || !data.url) return;
+            try {
+              window.location.href = data.url;
+            } catch (_) {}
+          });
+        });
+      </script>
+  
+    <div class="release-notes-modal" id="release-notes-modal" hidden>
+      <div class="release-notes-backdrop" data-release-notes-close="1"></div>
+      <div class="release-notes-card" role="dialog" aria-modal="true" aria-labelledby="release-notes-title">
+        <div class="release-notes-card-head">
+          <div>
+            <h2 id="release-notes-title">Release notes</h2>
+            <p class="muted" id="release-notes-sub">What’s new in this update</p>
+          </div>
+          <button class="btn btn-secondary btn-compact" type="button" id="release-notes-close" data-release-notes-close="1">Close</button>
+        </div>
+        <div class="release-notes-card-body" id="release-notes-body">
+          <p class="muted">Loading…</p>
+        </div>
+      </div>
+    </div>
+
   </body>
 </html>
