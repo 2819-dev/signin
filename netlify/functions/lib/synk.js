@@ -292,6 +292,7 @@ async function ensureSynkCommunityExtras(sql) {
 
   await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS pinned_tag_id UUID`;
   await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS display_name TEXT`;
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT`;
   try {
     await sql`
       ALTER TABLE synk_community_profiles
@@ -304,6 +305,7 @@ async function ensureSynkCommunityExtras(sql) {
 
   await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS pinned_tag_id UUID`;
   await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS display_name TEXT`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS avatar_url TEXT`;
   try {
     await sql`
       ALTER TABLE synk_community_alt_accounts
@@ -493,7 +495,7 @@ async function isCommunityUsernameTaken(sql, username, { exceptProfileId = null,
 async function listOwnerAltAccounts(sql, ownerProfileId) {
   if (!ownerProfileId) return [];
   const rows = await sql`
-    SELECT id, owner_synk_profile_id, public_username, label, display_name, created_at, updated_at
+    SELECT id, owner_synk_profile_id, public_username, label, display_name, avatar_url, created_at, updated_at
     FROM synk_community_alt_accounts
     WHERE owner_synk_profile_id = ${ownerProfileId}
     ORDER BY created_at ASC
@@ -503,6 +505,7 @@ async function listOwnerAltAccounts(sql, ownerProfileId) {
     username: row.public_username,
     label: row.label || "",
     displayName: String(row.display_name || "").trim(),
+    avatarUrl: String(row.avatar_url || "").trim(),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     isAlt: true,
@@ -562,6 +565,7 @@ async function findCommunityPublicProfile(sql, username) {
       c.synk_profile_id,
       c.public_username,
       c.display_name,
+      c.avatar_url,
       c.created_at,
       s.role
     FROM synk_community_profiles c
@@ -581,6 +585,7 @@ async function findCommunityPublicProfile(sql, username) {
     return {
       username: primary[0].public_username,
       displayName: String(primary[0].display_name || "").trim(),
+      avatarUrl: String(primary[0].avatar_url || "").trim(),
       role: normalizeCommunityRole(primary[0].role),
       isAlt: false,
       joinedAt: primary[0].created_at,
@@ -591,7 +596,7 @@ async function findCommunityPublicProfile(sql, username) {
   }
 
   const alt = await sql`
-    SELECT id, public_username, label, display_name, created_at
+    SELECT id, public_username, label, display_name, avatar_url, created_at
     FROM synk_community_alt_accounts
     WHERE public_username = ${name}
     LIMIT 1
@@ -607,6 +612,7 @@ async function findCommunityPublicProfile(sql, username) {
   return {
     username: alt[0].public_username,
     displayName: String(alt[0].display_name || "").trim() || String(alt[0].label || "").trim(),
+    avatarUrl: String(alt[0].avatar_url || "").trim(),
     role: null,
     isAlt: true,
     joinedAt: alt[0].created_at,
@@ -2047,7 +2053,7 @@ async function requireHubSession(sql, event, body = {}) {
   const rows = await sql`
     SELECT s.id, s.synk_profile_id, s.expires_at, s.revoked_at,
            p.synk_code, p.name, p.photo_url, p.enabled,
-           c.public_username, c.display_name
+           c.public_username, c.display_name, c.avatar_url
     FROM synk_hub_sessions s
     JOIN synk_profiles p ON p.id = s.synk_profile_id
     LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.id
@@ -2075,6 +2081,7 @@ async function requireHubSession(sql, event, body = {}) {
       photoUrl: row.photo_url || "",
       publicUsername: row.public_username || "",
       displayName: String(row.display_name || "").trim(),
+      avatarUrl: String(row.avatar_url || "").trim(),
     },
   };
 }
@@ -2189,6 +2196,73 @@ function mapBusinessDevice(row) {
   };
 }
 
+
+async function getAvatarsByUsernames(sql, usernames) {
+  const names = Array.from(
+    new Set((usernames || []).map((u) => normalizePublicUsername(u)).filter(Boolean))
+  );
+  if (!names.length) return {};
+  const rows = await sql`
+    SELECT public_username, avatar_url
+    FROM (
+      SELECT public_username, avatar_url
+      FROM synk_community_profiles
+      WHERE public_username = ANY(${names})
+      UNION ALL
+      SELECT public_username, avatar_url
+      FROM synk_community_alt_accounts
+      WHERE public_username = ANY(${names})
+    ) x
+  `;
+  const out = {};
+  for (const row of rows) {
+    const url = String(row.avatar_url || "").trim();
+    if (url) out[row.public_username] = url;
+  }
+  return out;
+}
+
+async function setAvatarForUsername(sql, username, avatarUrl, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  const next = String(avatarUrl || "").trim() || null;
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET avatar_url = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, avatar_url
+  `;
+  if (primary[0]) {
+    return { ok: true, username: primary[0].public_username, avatarUrl: String(primary[0].avatar_url || "").trim() };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET avatar_url = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, avatar_url
+  `;
+  if (alt[0]) {
+    return { ok: true, username: alt[0].public_username, avatarUrl: String(alt[0].avatar_url || "").trim() };
+  }
+  return { ok: false, error: "Profile not found" };
+}
+
+async function updateSynkProfilePhoto(sql, profileId, photoUrl) {
+  const url = String(photoUrl || "").trim();
+  if (!profileId || !url) return { ok: false, error: "Photo required" };
+  const rows = await sql`
+    UPDATE synk_profiles
+    SET photo_url = ${url}, updated_at = NOW()
+    WHERE id = ${profileId}
+    RETURNING id, photo_url
+  `;
+  if (!rows[0]) return { ok: false, error: "Profile not found" };
+  return { ok: true, photoUrl: rows[0].photo_url || "" };
+}
+
+
 module.exports = {
   hashSecret,
   verifySecret,
@@ -2215,6 +2289,9 @@ module.exports = {
   normalizeDisplayName,
   getDisplayNamesByUsernames,
   setDisplayNameForUsername,
+  getAvatarsByUsernames,
+  setAvatarForUsername,
+  updateSynkProfilePhoto,
   normalizeGroupSlug,
   normalizeGroupName,
   normalizeGroupDescription,

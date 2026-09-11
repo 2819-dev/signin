@@ -1,6 +1,7 @@
 "use strict";
 
 const { randomUUID } = require("crypto");
+const { signedPhotoUrl } = require("./lib/synk-admin-auth");
 const { getStore, connectLambda } = require("@netlify/blobs");
 const { getSql, json } = require("./lib/db");
 const {
@@ -34,6 +35,9 @@ const {
   getPinnedTagsByUsernames,
   getDisplayNamesByUsernames,
   setDisplayNameForUsername,
+  getAvatarsByUsernames,
+  setAvatarForUsername,
+  updateSynkProfilePhoto,
   normalizeDisplayName,
   assignUsernameTag,
   unassignUsernameTag,
@@ -198,6 +202,7 @@ function mapPost(row) {
     author: {
       username,
       displayName: "",
+      avatarUrl: "",
       role: isPrimary ? row.author_role || null : null,
       isAlt: Boolean(row.is_alt) || (!isPrimary && Boolean(username)),
     },
@@ -220,6 +225,7 @@ function mapComment(row) {
     author: {
       username,
       displayName: "",
+      avatarUrl: "",
       role: isPrimary ? row.author_role || null : null,
       isAlt: Boolean(row.is_alt) || (!isPrimary && Boolean(username)),
       pinnedTag: null,
@@ -247,6 +253,8 @@ function mePayload(auth, role, alts = [], tags = [], pinnedTag = null) {
     synkCode: auth.profile.synkCode,
     publicUsername: auth.profile.publicUsername || "",
     displayName: auth.profile.displayName || "",
+    photoUrl: signedPhotoUrl(auth.profile.photoUrl || ""),
+    avatarUrl: auth.profile.avatarUrl || "",
     role: role || null,
     isStaff: isCommunityStaffRole(role),
     isOwner: role === "owner",
@@ -421,14 +429,16 @@ async function attachPinnedTagsToAuthors(sql, items) {
   const usernames = items
     .map((item) => item.author && item.author.username)
     .filter(Boolean);
-  const [pinnedByUser, displayByUser] = await Promise.all([
+  const [pinnedByUser, displayByUser, avatarByUser] = await Promise.all([
     getPinnedTagsByUsernames(sql, usernames),
     getDisplayNamesByUsernames(sql, usernames),
+    getAvatarsByUsernames(sql, usernames),
   ]);
   for (const item of items) {
     if (!item.author) continue;
     item.author.pinnedTag = pinnedByUser[item.author.username] || null;
     item.author.displayName = displayByUser[item.author.username] || item.author.displayName || "";
+    item.author.avatarUrl = avatarByUser[item.author.username] || item.author.avatarUrl || "";
   }
   return items;
 }
@@ -831,6 +841,93 @@ async function saveCommunityTagIcon(event, rawInput) {
   return `/api/community-tag-icon?id=${encodeURIComponent(id)}&v=${Date.now()}`;
 }
 
+
+const AVATAR_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"]);
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+const SYNK_PHOTO_MAX_BYTES = 3.5 * 1024 * 1024;
+
+function allowedCommunityAvatarUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (raw.startsWith("/api/community-avatar?id=")) return raw.split("&")[0];
+  try {
+    const u = new URL(raw, "https://synkid.netlify.app");
+    if (u.pathname === "/api/community-avatar" && u.searchParams.get("id")) {
+      const id = u.searchParams.get("id");
+      if (/^[0-9a-f-]{36}$/i.test(id)) return `/api/community-avatar?id=${encodeURIComponent(id)}`;
+    }
+  } catch (_) {}
+  return undefined;
+}
+
+async function saveImageToStore(event, rawInput, { keyPrefix, maxBytes, source }) {
+  const raw = String(rawInput || "").trim();
+  if (!raw) return null;
+  let contentType = "image/png";
+  let base64 = raw;
+  const dataMatch = /^data:(image\/(png|jpeg|jpg|webp|gif));base64,(.+)$/i.exec(raw);
+  if (dataMatch) {
+    contentType = dataMatch[1].toLowerCase().replace("image/jpg", "image/jpeg");
+    base64 = dataMatch[3];
+  } else if (raw.includes(",")) {
+    base64 = raw.split(",").pop();
+  }
+  if (!AVATAR_TYPES.has(contentType) && !AVATAR_TYPES.has(contentType.replace("image/jpg", "image/jpeg"))) {
+    const err = new Error("Use a PNG, JPG, WebP, or GIF image");
+    err.statusCode = 400;
+    throw err;
+  }
+  let buffer;
+  try {
+    buffer = Buffer.from(base64, "base64");
+  } catch {
+    const err = new Error("Could not read image data");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!buffer.length) {
+    const err = new Error("Could not read image");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (buffer.length > maxBytes) {
+    const err = new Error("Image too large");
+    err.statusCode = 400;
+    throw err;
+  }
+  connectLambda(event);
+  const store = getStore("kiosk-media");
+  const id = randomUUID();
+  await store.set(`${keyPrefix}-${id}`, buffer, {
+    metadata: {
+      contentType: contentType === "image/jpg" ? "image/jpeg" : contentType,
+      updatedAt: new Date().toISOString(),
+      source,
+    },
+  });
+  return { id, contentType, bytes: buffer.length };
+}
+
+async function saveCommunityAvatar(event, rawInput) {
+  const saved = await saveImageToStore(event, rawInput, {
+    keyPrefix: "community-avatar",
+    maxBytes: AVATAR_MAX_BYTES,
+    source: "community-avatar",
+  });
+  if (!saved) return null;
+  return `/api/community-avatar?id=${encodeURIComponent(saved.id)}&v=${Date.now()}`;
+}
+
+async function saveMemberSynkPhoto(event, rawInput) {
+  const saved = await saveImageToStore(event, rawInput, {
+    keyPrefix: "synk",
+    maxBytes: SYNK_PHOTO_MAX_BYTES,
+    source: "member-synk-photo",
+  });
+  if (!saved) return null;
+  return `/api/synk-image?id=${encodeURIComponent(saved.id)}&v=${Date.now()}`;
+}
+
 function serializeTagRow(row, { pinned = false } = {}) {
   return {
     id: row.id,
@@ -1085,7 +1182,64 @@ exports.handler = async (event) => {
       });
     }
 
-    if (action === "create-alt") {
+    
+    if (action === "set-avatar") {
+      const primary = normalizePublicUsername(auth.profile.publicUsername);
+      if (!primary) return json(400, { error: "Set a username first" });
+      const requested = normalizePublicUsername(body.username || body.asUsername || primary) || primary;
+      let avatarUrl = null;
+      if (body.clear || body.remove) {
+        avatarUrl = null;
+      } else if (body.avatarUrl && allowedCommunityAvatarUrl(body.avatarUrl) !== undefined) {
+        const allowed = allowedCommunityAvatarUrl(body.avatarUrl);
+        if (allowed === undefined) return json(400, { error: "Invalid avatar URL" });
+        avatarUrl = allowed;
+      } else if (body.imageData || body.avatarData || body.data) {
+        try {
+          avatarUrl = await saveCommunityAvatar(event, body.imageData || body.avatarData || body.data);
+        } catch (err) {
+          return json(err.statusCode || 400, { error: err.message || "Could not save avatar" });
+        }
+      } else {
+        return json(400, { error: "Choose an image" });
+      }
+      const result = await setAvatarForUsername(sql, requested, avatarUrl, auth.profile.id);
+      if (!result.ok) return json(400, { error: result.error || "Could not save avatar" });
+      if (requested === primary) auth.profile.avatarUrl = result.avatarUrl;
+      const nextAlts = role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
+      if (nextAlts.length) {
+        for (const alt of nextAlts) {
+          alt.tags = await listUsernameTags(sql, alt.username);
+          alt.pinnedTag = alt.tags.find((tag) => tag.pinned) || null;
+        }
+      }
+      return json(200, {
+        ok: true,
+        username: result.username,
+        avatarUrl: result.avatarUrl,
+        me: mePayload(auth, role, nextAlts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "set-synk-photo") {
+      let photoUrl = "";
+      try {
+        photoUrl = await saveMemberSynkPhoto(event, body.imageData || body.photoData || body.data);
+      } catch (err) {
+        return json(err.statusCode || 400, { error: err.message || "Could not save photo" });
+      }
+      if (!photoUrl) return json(400, { error: "Choose an image" });
+      const result = await updateSynkProfilePhoto(sql, auth.profile.id, photoUrl);
+      if (!result.ok) return json(400, { error: result.error || "Could not update Synk photo" });
+      auth.profile.photoUrl = result.photoUrl;
+      return json(200, {
+        ok: true,
+        photoUrl: signedPhotoUrl(result.photoUrl),
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+if (action === "create-alt") {
       if (role !== "owner") {
         return json(403, { error: "Only the owner can create alt accounts" });
       }

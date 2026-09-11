@@ -168,6 +168,7 @@ CREATE TABLE IF NOT EXISTS synk_community_profiles (
   synk_profile_id UUID PRIMARY KEY REFERENCES synk_profiles(id) ON DELETE CASCADE,
   public_username TEXT NOT NULL,
   display_name TEXT,
+  avatar_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -324,6 +325,7 @@ CREATE TABLE IF NOT EXISTS synk_community_alt_accounts (
   public_username TEXT NOT NULL,
   label TEXT NOT NULL DEFAULT '',
   display_name TEXT,
+  avatar_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -411,8 +413,10 @@ CREATE INDEX IF NOT EXISTS synk_community_profile_tags_tag_idx
 
 ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS pinned_tag_id UUID;
 ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS pinned_tag_id UUID;
 ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
 CREATE TABLE IF NOT EXISTS synk_community_username_tags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

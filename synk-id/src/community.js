@@ -72,6 +72,8 @@
   let hubToken = "";
   let publicUsername = "";
   let displayName = "";
+  let photoUrl = "";
+  let avatarUrl = "";
   let activePersona = "";
   let me = null;
   let groups = [];
@@ -194,16 +196,77 @@
   }
 
 
+
+  function activeDisplayLabel() {
+    if (activePersona && activePersona !== publicUsername) {
+      const alt = (alts || []).find((a) => a.username === activePersona);
+      return String((alt && alt.displayName) || activePersona || "").trim() || activePersona;
+    }
+    return String(displayName || publicUsername || "Member").trim() || "Member";
+  }
+
+  function activeCommunityAvatarUrl() {
+    if (activePersona && activePersona !== publicUsername) {
+      const alt = (alts || []).find((a) => a.username === activePersona);
+      return String((alt && alt.avatarUrl) || "").trim();
+    }
+    return String(avatarUrl || (me && me.avatarUrl) || "").trim();
+  }
+
+  function avatarMarkup(url, label, cls = "community-face") {
+    const initial = String(label || "?").trim().slice(0, 1).toUpperCase() || "?";
+    const safeUrl = String(url || "").trim();
+    if (safeUrl) {
+      return `<span class="${cls} has-image"><img src="${escapeHtml(safeUrl)}" alt="" loading="lazy" decoding="async" /></span>`;
+    }
+    return `<span class="${cls}" aria-hidden="true">${escapeHtml(initial)}</span>`;
+  }
+
+  function paintAvatar(el, url, label) {
+    if (!el) return;
+    const initial = String(label || "?").trim().slice(0, 1).toUpperCase() || "?";
+    const safeUrl = String(url || "").trim();
+    el.classList.add("community-face");
+    if (safeUrl) {
+      el.classList.add("has-image");
+      el.innerHTML = `<img src="${escapeHtml(safeUrl)}" alt="" loading="lazy" decoding="async" />`;
+    } else {
+      el.classList.remove("has-image");
+      el.textContent = initial;
+    }
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Could not read image"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function updateSessionPhotoUrl(nextPhotoUrl) {
+    try {
+      const session = readSession();
+      if (!session || !session.profile) return;
+      session.profile.photoUrl = nextPhotoUrl || "";
+      const raw = JSON.stringify(session);
+      if (localStorage.getItem(STORAGE_KEY)) localStorage.setItem(STORAGE_KEY, raw);
+      else sessionStorage.setItem(STORAGE_KEY, raw);
+    } catch (_) {}
+  }
+
   function authorLabel(author) {
     const username = String((author && author.username) || "member").trim() || "member";
     const label = String((author && author.displayName) || "").trim() || username;
     return { username, label };
   }
 
-  function renderAuthorLink(author, { compactTag = true } = {}) {
+  function renderAuthorLink(author, { compactTag = true, withAvatar = false } = {}) {
     const { username, label } = authorLabel(author);
     const tag = author && author.pinnedTag ? tagChip(author.pinnedTag, { compact: compactTag }) : "";
-    return `<span class="author-with-tag"><a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(label)}</a>${tag}</span>`;
+    const avatar = withAvatar ? avatarMarkup(author && author.avatarUrl, label, "community-face is-inline") : "";
+    return `<span class="author-with-tag">${avatar}<a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(label)}</a>${tag}</span>`;
   }
 
   function tagChip(tag, { compact = false, canPin = false } = {}) {
@@ -706,18 +769,27 @@
       sessionStorage.setItem(PERSONA_KEY, activePersona);
     } catch (_) {}
     syncPersonaUi();
+    syncTabBar();
   }
 
   function personaOptions() {
     const options = [];
     if (publicUsername) {
-      options.push({ username: publicUsername, label: "Primary", isAlt: false });
+      options.push({
+        username: publicUsername,
+        label: "Primary",
+        isAlt: false,
+        displayName: displayName || "",
+        avatarUrl: avatarUrl || "",
+      });
     }
     (alts || []).forEach((alt) => {
       options.push({
         username: alt.username,
         label: alt.label || "Alt",
         isAlt: true,
+        displayName: alt.displayName || "",
+        avatarUrl: alt.avatarUrl || "",
       });
     });
     return options;
@@ -745,40 +817,38 @@
 
   function syncPersonaUi() {
     const isOwner = !!(me && me.isOwner);
-    personaSwitch.hidden = !(isOwner && publicUsername);
-    // Always keep the account menu closed unless the user opens it.
-    // (display:grid on .persona-menu would otherwise fight the hidden attribute.)
+    if (personaSwitch) personaSwitch.hidden = !(isOwner && publicUsername);
     closePersonaMenu();
-    if (!isOwner) return;
     resolveActivePersona();
-    const name = activePersona || "—";
-    personaLabel.textContent = name;
-    const personaAvatar = document.getElementById("persona-avatar");
-    if (personaAvatar) {
-      personaAvatar.textContent = String(activePersona || publicUsername || "S").slice(0, 1).toUpperCase();
+    const label = activeDisplayLabel();
+    const faceUrl = activeCommunityAvatarUrl();
+    if (personaLabel) personaLabel.textContent = activePersona || publicUsername || "—";
+    paintAvatar(document.getElementById("persona-avatar"), faceUrl, label);
+    paintAvatar(document.getElementById("composer-avatar"), faceUrl, label);
+    const composerAs = document.getElementById("composer-as");
+    if (composerAs) {
+      composerAs.textContent = activePersona
+        ? `Posting as ${activePersona}`
+        : publicUsername
+          ? `Posting as ${publicUsername}`
+          : "Posting as —";
     }
-    const composerAvatar = document.getElementById("composer-avatar");
-    if (composerAvatar) {
-      composerAvatar.textContent = String(activePersona || publicUsername || "S").slice(0, 1).toUpperCase();
-    }
-    document.getElementById("composer-as").textContent = activePersona
-      ? `Posting as ${activePersona}`
-      : "Posting as —";
-    // Keep tags/pins in sync with the active account (primary or alt).
     if (activePersona && me) {
       myTags = tagsForActivePersona();
       if (typeof renderMyTags === "function") renderMyTags();
     }
+    if (!isOwner || !personaMenu) return;
     personaMenu.innerHTML = personaOptions()
       .map((opt) => {
         const selected = opt.username === activePersona ? "is-selected" : "";
-        const initial = String(opt.username || "?").slice(0, 1).toUpperCase();
+        const optLabel = String(opt.displayName || opt.username || "?").trim();
+        const optAvatar = String(opt.avatarUrl || "").trim();
         return `
           <button class="persona-menu-item ${selected}" type="button" role="option" data-persona="${escapeHtml(opt.username)}">
-            <span class="persona-menu-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
+            ${avatarMarkup(optAvatar, optLabel, "persona-menu-avatar community-face")}
             <span class="persona-menu-copy">
-              <strong>${escapeHtml(opt.username)}</strong>
-              <span>${escapeHtml(opt.label || (opt.isAlt ? "Account" : "Primary"))}</span>
+              <strong>${escapeHtml(optLabel)}</strong>
+              <span>${escapeHtml(opt.label || (opt.isAlt ? "u/" + opt.username : "Primary"))}</span>
             </span>
           </button>
         `;
@@ -935,7 +1005,7 @@
                     : ""
                 }
                 <span class="muted">by</span>
-                ${renderAuthorLink(author)}
+                ${renderAuthorLink(author, { withAvatar: true })}
                 <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
               </div>
               <a class="reddit-post-title-link" href="/community/post/${pid}" data-open-post="${pid}">
@@ -983,7 +1053,7 @@
           <div class="reddit-post-meta">
             ${group.slug ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>` : ""}
             <span class="muted">by</span>
-            ${renderAuthorLink(author)}
+            ${renderAuthorLink(author, { withAvatar: true })}
             <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
           </div>
           <h1 class="reddit-post-title reddit-post-title-lg">${escapeHtml(title)}</h1>
@@ -1025,7 +1095,7 @@
             </div>
             <div class="reddit-comment-main">
               <div class="reddit-post-meta">
-                ${renderAuthorLink(author)}
+                ${renderAuthorLink(author, { withAvatar: true })}
                 <span class="muted">• ${escapeHtml(formatRelative(comment.createdAt))}</span>
               </div>
               <div class="reddit-comment-body">${escapeHtml(comment.body || "")}</div>
@@ -1117,12 +1187,16 @@
         myProfileLink.href = `/user/${encodeURIComponent(publicUsername)}`;
       }
       {
-        let menuLabel = displayName || publicUsername;
-        if (activePersona && activePersona !== publicUsername) {
-          const alt = (alts || []).find((a) => a.username === activePersona);
-          menuLabel = (alt && alt.displayName) || activePersona;
-        }
+        const menuLabel = activeDisplayLabel();
+        const faceUrl = activeCommunityAvatarUrl();
         if (myProfileLabel) myProfileLabel.textContent = menuLabel;
+        const menuName = document.getElementById("user-menu-name");
+        const menuSub = document.getElementById("user-menu-sub");
+        if (menuName) menuName.textContent = menuLabel;
+        if (menuSub) menuSub.textContent = activePersona || publicUsername ? `u/${activePersona || publicUsername}` : "Account";
+        paintAvatar(document.getElementById("user-menu-avatar"), faceUrl, menuLabel);
+        paintAvatar(document.getElementById("settings-synk-photo-preview"), photoUrl || (me && me.photoUrl) || "", (me && me.name) || "S");
+        paintAvatar(document.getElementById("settings-avatar-preview"), faceUrl, menuLabel);
       }
     } else if (myProfileLink) {
       myProfileLink.hidden = true;
@@ -1139,6 +1213,25 @@
           : "Posting as —";
     }
     syncPersonaUi();
+  }
+
+  function syncTabBar() {
+    const bar = document.getElementById("community-tabbar");
+    if (!bar) return;
+    const show = !!(me && publicUsername);
+    bar.hidden = !show;
+    const tab = route.type === "popular"
+      ? "popular"
+      : route.type === "submit"
+        ? "submit"
+        : route.type === "inbox"
+          ? "inbox"
+          : route.type === "settings"
+            ? "settings"
+            : "home";
+    bar.querySelectorAll("[data-tab]").forEach((el) => {
+      el.classList.toggle("is-active", el.getAttribute("data-tab") === tab);
+    });
   }
 
   function applyStaffState() {
@@ -1218,7 +1311,7 @@
       const uname = profile.username || route.username || "";
       const dname = String(profile.displayName || "").trim() || uname;
       setBannerMode("user", true);
-      if (viewIcon) viewIcon.textContent = (dname || "?").slice(0, 1).toUpperCase();
+      paintAvatar(viewIcon, profile.avatarUrl || "", dname);
       setText("view-title", dname);
       setText(
         "view-sub",
@@ -1233,7 +1326,7 @@
         profileMeta.hidden = false;
         profileMeta.innerHTML = `
         <div class="community-profile-card">
-          <div class="community-avatar" aria-hidden="true">${escapeHtml((dname || "?").slice(0, 1).toUpperCase())}</div>
+          ${avatarMarkup(profile.avatarUrl || "", dname, "community-avatar community-face is-lg")}
           <div>
             <div class="community-profile-name-row author-with-tag">
               <strong>${escapeHtml(dname)}</strong>
@@ -1336,6 +1429,8 @@
     me = data.me || null;
     publicUsername = (me && me.publicUsername) || "";
     displayName = (me && me.displayName) || "";
+    photoUrl = (me && me.photoUrl) || "";
+    avatarUrl = (me && me.avatarUrl) || "";
     alts = (me && me.alts) || [];
     myTags = (me && me.tags) || [];
     tags = data.tags || [];
@@ -1557,6 +1652,110 @@
       status.textContent = err.message || "Could not save";
     }
   });
+
+
+  async function uploadSettingsImage({ fileInput, statusEl, action, extra = {}, onSuccess }) {
+    const file = fileInput && fileInput.files && fileInput.files[0];
+    if (!file) return;
+    if (statusEl) statusEl.textContent = "Uploading…";
+    try {
+      if (file.size > 3.5 * 1024 * 1024) throw new Error("Image too large (max ~3.5MB)");
+      const dataUrl = await readFileAsDataUrl(file);
+      const res = await fetch("/api/synk-community", {
+        method: "POST",
+        headers: hubHeaders(),
+        body: JSON.stringify({ action, imageData: dataUrl, ...extra }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      if (typeof onSuccess === "function") onSuccess(data);
+      if (statusEl) statusEl.textContent = "Saved";
+      await loadCommunity();
+    } catch (err) {
+      if (statusEl) statusEl.textContent = err.message || "Upload failed";
+    } finally {
+      if (fileInput) fileInput.value = "";
+    }
+  }
+
+  const synkPhotoBtn = document.getElementById("settings-synk-photo-btn");
+  const synkPhotoFile = document.getElementById("settings-synk-photo-file");
+  if (synkPhotoBtn && synkPhotoFile) {
+    synkPhotoBtn.addEventListener("click", () => synkPhotoFile.click());
+    synkPhotoFile.addEventListener("change", () => {
+      uploadSettingsImage({
+        fileInput: synkPhotoFile,
+        statusEl: document.getElementById("settings-synk-photo-status"),
+        action: "set-synk-photo",
+        onSuccess: (data) => {
+          photoUrl = data.photoUrl || photoUrl;
+          if (me) me.photoUrl = photoUrl;
+          updateSessionPhotoUrl(photoUrl);
+        },
+      });
+    });
+  }
+
+  const avatarBtn = document.getElementById("settings-avatar-btn");
+  const avatarFile = document.getElementById("settings-avatar-file");
+  const avatarClearBtn = document.getElementById("settings-avatar-clear-btn");
+  if (avatarBtn && avatarFile) {
+    avatarBtn.addEventListener("click", () => avatarFile.click());
+    avatarFile.addEventListener("change", () => {
+      uploadSettingsImage({
+        fileInput: avatarFile,
+        statusEl: document.getElementById("settings-avatar-status"),
+        action: "set-avatar",
+        extra: { username: activePersona || publicUsername },
+        onSuccess: (data) => {
+          const savedFor = String(data.username || activePersona || publicUsername).trim().toLowerCase();
+          const next = data.avatarUrl || "";
+          if (savedFor === publicUsername) {
+            avatarUrl = next;
+            if (me) me.avatarUrl = next;
+          } else {
+            alts = (alts || []).map((alt) =>
+              alt.username === savedFor ? { ...alt, avatarUrl: next } : alt
+            );
+            if (me) me.alts = alts;
+          }
+        },
+      });
+    });
+  }
+  if (avatarClearBtn) {
+    avatarClearBtn.addEventListener("click", async () => {
+      const status = document.getElementById("settings-avatar-status");
+      if (status) status.textContent = "Removing…";
+      try {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({
+            action: "set-avatar",
+            clear: true,
+            username: activePersona || publicUsername,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not remove");
+        const savedFor = String(data.username || activePersona || publicUsername).trim().toLowerCase();
+        if (savedFor === publicUsername) {
+          avatarUrl = "";
+          if (me) me.avatarUrl = "";
+        } else {
+          alts = (alts || []).map((alt) =>
+            alt.username === savedFor ? { ...alt, avatarUrl: "" } : alt
+          );
+          if (me) me.alts = alts;
+        }
+        if (status) status.textContent = "Removed";
+        await loadCommunity();
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not remove";
+      }
+    });
+  }
 
   const displayForm = document.getElementById("settings-display-form");
   if (displayForm) {
