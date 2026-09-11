@@ -248,6 +248,57 @@ async function ensureSynkCommunityExtras(sql) {
       AND (p.author_username IS NULL OR btrim(p.author_username) = '')
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_tags (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      color TEXT NOT NULL DEFAULT '#6366f1',
+      created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_community_tags_slug_idx
+    ON synk_community_tags (slug)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_tags_created_idx
+    ON synk_community_tags (created_at DESC)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_profile_tags (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      tag_id UUID NOT NULL REFERENCES synk_community_tags(id) ON DELETE CASCADE,
+      assigned_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (synk_profile_id, tag_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_profile_tags_profile_idx
+    ON synk_community_profile_tags (synk_profile_id, created_at ASC)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_profile_tags_tag_idx
+    ON synk_community_profile_tags (tag_id)
+  `;
+
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS pinned_tag_id UUID`;
+  try {
+    await sql`
+      ALTER TABLE synk_community_profiles
+      ADD CONSTRAINT synk_community_profiles_pinned_tag_id_fkey
+      FOREIGN KEY (pinned_tag_id) REFERENCES synk_community_tags(id) ON DELETE SET NULL
+    `;
+  } catch (_) {
+    // Constraint already exists.
+  }
+
   await ensureCommunityOwner(sql);
   await ensureDefaultCommunityGroup(sql);
 }
@@ -358,6 +409,8 @@ async function findCommunityPublicProfile(sql, username) {
       LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
       WHERE COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = ${name}
     `;
+    const tags = await listProfileTags(sql, primary[0].synk_profile_id);
+    const pinnedTag = tags.find((tag) => tag.pinned) || null;
     return {
       username: primary[0].public_username,
       name: primary[0].name || "",
@@ -365,6 +418,8 @@ async function findCommunityPublicProfile(sql, username) {
       isAlt: false,
       joinedAt: primary[0].created_at,
       postCount: counts[0] ? Number(counts[0].post_count) : 0,
+      tags,
+      pinnedTag,
     };
   }
 
@@ -387,7 +442,162 @@ async function findCommunityPublicProfile(sql, username) {
     isAlt: true,
     joinedAt: alt[0].created_at,
     postCount: counts[0] ? Number(counts[0].post_count) : 0,
+    tags: [],
+    pinnedTag: null,
   };
+}
+
+function normalizeTagName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 32);
+}
+
+function normalizeTagSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
+function normalizeTagDescription(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 200);
+}
+
+function normalizeTagColor(value) {
+  const raw = String(value || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+    const h = raw.toLowerCase();
+    return `#${h[1]}${h[1]}${h[2]}${h[2]}${h[3]}${h[3]}`;
+  }
+  return "";
+}
+
+function mapCommunityTag(row, { pinned = false } = {}) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description || "",
+    color: row.color || "#6366f1",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    pinned: Boolean(pinned || row.pinned),
+  };
+}
+
+async function listCommunityTags(sql) {
+  const rows = await sql`
+    SELECT id, name, slug, description, color, created_by, created_at, updated_at
+    FROM synk_community_tags
+    ORDER BY name ASC
+  `;
+  return rows.map((row) => mapCommunityTag(row));
+}
+
+async function findCommunityTag(sql, { id, slug } = {}) {
+  const tagId = String(id || "").trim();
+  const tagSlug = normalizeTagSlug(slug);
+  if (tagId) {
+    const rows = await sql`
+      SELECT id, name, slug, description, color, created_by, created_at, updated_at
+      FROM synk_community_tags
+      WHERE id = ${tagId}
+      LIMIT 1
+    `;
+    return mapCommunityTag(rows[0]);
+  }
+  if (tagSlug) {
+    const rows = await sql`
+      SELECT id, name, slug, description, color, created_by, created_at, updated_at
+      FROM synk_community_tags
+      WHERE slug = ${tagSlug}
+      LIMIT 1
+    `;
+    return mapCommunityTag(rows[0]);
+  }
+  return null;
+}
+
+async function listProfileTags(sql, profileId) {
+  if (!profileId) return [];
+  const rows = await sql`
+    SELECT
+      t.id,
+      t.name,
+      t.slug,
+      t.description,
+      t.color,
+      t.created_at,
+      t.updated_at,
+      CASE WHEN c.pinned_tag_id = t.id THEN TRUE ELSE FALSE END AS pinned
+    FROM synk_community_profile_tags pt
+    JOIN synk_community_tags t ON t.id = pt.tag_id
+    LEFT JOIN synk_community_profiles c ON c.synk_profile_id = pt.synk_profile_id
+    WHERE pt.synk_profile_id = ${profileId}
+    ORDER BY
+      CASE WHEN c.pinned_tag_id = t.id THEN 0 ELSE 1 END,
+      t.name ASC
+  `;
+  return rows.map((row) => mapCommunityTag(row, { pinned: row.pinned }));
+}
+
+async function getPinnedTagForProfile(sql, profileId) {
+  if (!profileId) return null;
+  const rows = await sql`
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    FROM synk_community_profiles c
+    JOIN synk_community_tags t ON t.id = c.pinned_tag_id
+    WHERE c.synk_profile_id = ${profileId}
+    LIMIT 1
+  `;
+  return mapCommunityTag(rows[0], { pinned: true });
+}
+
+async function getPinnedTagsByUsernames(sql, usernames) {
+  const names = Array.from(
+    new Set((usernames || []).map((u) => normalizePublicUsername(u)).filter(Boolean))
+  );
+  if (!names.length) return {};
+  const rows = await sql`
+    SELECT
+      c.public_username,
+      t.id,
+      t.name,
+      t.slug,
+      t.description,
+      t.color,
+      t.created_at,
+      t.updated_at
+    FROM synk_community_profiles c
+    JOIN synk_community_tags t ON t.id = c.pinned_tag_id
+    WHERE c.public_username = ANY(${names})
+  `;
+  const out = {};
+  for (const row of rows) {
+    out[row.public_username] = mapCommunityTag(row, { pinned: true });
+  }
+  return out;
+}
+
+async function findCommunityProfileIdByUsername(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return null;
+  const rows = await sql`
+    SELECT synk_profile_id
+    FROM synk_community_profiles
+    WHERE public_username = ${name}
+    LIMIT 1
+  `;
+  return rows[0] ? rows[0].synk_profile_id : null;
 }
 
 async function ensureCommunityOwner(sql) {
@@ -1632,6 +1842,17 @@ module.exports = {
   listOwnerAltAccounts,
   findCommunityAltAccount,
   findCommunityPublicProfile,
+  normalizeTagName,
+  normalizeTagSlug,
+  normalizeTagDescription,
+  normalizeTagColor,
+  mapCommunityTag,
+  listCommunityTags,
+  findCommunityTag,
+  listProfileTags,
+  getPinnedTagForProfile,
+  getPinnedTagsByUsernames,
+  findCommunityProfileIdByUsername,
   normalizeCameraSide,
   generateDevicePairingCode,
   mapBusinessDevice,

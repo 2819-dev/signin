@@ -21,6 +21,10 @@
   const profileMeta = document.getElementById("profile-meta");
   const crumbsEl = document.getElementById("crumbs");
   const homeLink = document.getElementById("home-link");
+  const tagCatalog = document.getElementById("tag-catalog");
+  const assignTagSelect = document.getElementById("assign-tag-id");
+  const myTagsCard = document.getElementById("my-tags-card");
+  const myTagsList = document.getElementById("my-tags-list");
 
   let hubToken = "";
   let publicUsername = "";
@@ -30,6 +34,8 @@
   let staff = [];
   let alts = [];
   let ownerUsername = "vision";
+  let tags = [];
+  let myTags = [];
   let route = { type: "home", slug: "", username: "" };
 
   function readSession() {
@@ -74,6 +80,69 @@
     } catch {
       return "";
     }
+  }
+
+
+  function tagChip(tag, { compact = false } = {}) {
+    if (!tag) return "";
+    const color = escapeHtml(tag.color || "#6366f1");
+    const title = escapeHtml(tag.description || tag.name || "");
+    const name = escapeHtml(tag.name || "");
+    const cls = compact ? "community-tag-chip is-compact" : "community-tag-chip";
+    return `<span class="${cls}" style="--tag-color:${color}" title="${title}">${name}</span>`;
+  }
+
+  function renderTagCatalog() {
+    if (!tagCatalog) return;
+    if (!tags.length) {
+      tagCatalog.innerHTML = '<p class="muted" style="margin:0;font-size:0.85rem;">No tags yet.</p>';
+    } else {
+      tagCatalog.innerHTML = tags
+        .map((tag) => {
+          return `
+            <div class="community-staff-row">
+              <div>
+                ${tagChip(tag)}
+                <div class="muted" style="font-size:0.78rem;margin-top:4px;">${escapeHtml(tag.description || "")}</div>
+              </div>
+              <button class="btn btn-secondary btn-compact" type="button" data-delete-tag="${escapeHtml(tag.id)}">Delete</button>
+            </div>
+          `;
+        })
+        .join("");
+    }
+    if (assignTagSelect) {
+      assignTagSelect.innerHTML = tags.length
+        ? tags.map((tag) => `<option value="${escapeHtml(tag.id)}">${escapeHtml(tag.name)}</option>`).join("")
+        : '<option value="">No tags yet</option>';
+    }
+  }
+
+  function renderMyTags() {
+    if (!myTagsCard || !myTagsList) return;
+    myTags = (me && me.tags) || [];
+    if (!myTags.length) {
+      myTagsCard.hidden = true;
+      myTagsList.innerHTML = "";
+      return;
+    }
+    myTagsCard.hidden = false;
+    myTagsList.innerHTML = myTags
+      .map((tag) => {
+        const pinned = !!tag.pinned;
+        return `
+          <div class="community-tag-row">
+            <div>
+              ${tagChip(tag)}
+              <div class="muted" style="font-size:0.78rem;margin-top:4px;">${escapeHtml(tag.description || "")}</div>
+            </div>
+            <button class="btn ${pinned ? "btn-primary" : "btn-secondary"} btn-compact" type="button" data-pin-tag="${escapeHtml(tag.id)}">
+              ${pinned ? "Pinned" : "Pin"}
+            </button>
+          </div>
+        `;
+      })
+      .join("");
   }
 
   function roleBadge(role) {
@@ -276,6 +345,7 @@
                 }
                 <span class="muted">Posted by</span>
                 <a class="community-user-link" href="/u/${escapeHtml(username)}">u/${escapeHtml(username)}</a>
+                ${tagChip(author.pinnedTag, { compact: true })}
                 ${roleBadge(author.role)}
                 ${author.isAlt ? '<span class="community-badge">Alt</span>' : ""}
                 <span class="muted">· ${escapeHtml(formatWhen(post.createdAt))}</span>
@@ -316,6 +386,7 @@
     document.getElementById("owner-label").textContent = `@${ownerUsername}`;
     renderStaff();
     renderAlts();
+    renderTagCatalog();
     syncPersonaUi();
   }
 
@@ -338,12 +409,37 @@
           <div class="community-avatar" aria-hidden="true">${escapeHtml((profile.username || "?").slice(0, 1).toUpperCase())}</div>
           <div>
             <strong>u/${escapeHtml(profile.username || "")}</strong>
+            ${tagChip(profile.pinnedTag, { compact: true })}
             ${roleBadge(profile.role)}
             ${profile.isAlt ? '<span class="community-badge">Alt</span>' : ""}
             <p class="muted" style="margin:4px 0 0;font-size:0.85rem;">
               ${Number(profile.postCount || 0)} posts
               ${profile.joinedAt ? ` · joined ${escapeHtml(formatWhen(profile.joinedAt))}` : ""}
             </p>
+            <div class="community-tag-list" style="margin-top:10px;">
+              ${
+                (profile.tags || []).length
+                  ? (profile.tags || [])
+                      .map((tag) => {
+                        const canPin = me && me.publicUsername === profile.username;
+                        return `
+                          <div class="community-tag-row">
+                            <div>
+                              ${tagChip(tag)}
+                              <div class="muted" style="font-size:0.78rem;margin-top:4px;">${escapeHtml(tag.description || "")}</div>
+                            </div>
+                            ${
+                              canPin
+                                ? `<button class="btn ${tag.pinned ? "btn-primary" : "btn-secondary"} btn-compact" type="button" data-pin-tag="${escapeHtml(tag.id)}">${tag.pinned ? "Pinned" : "Pin"}</button>`
+                                : ""
+                            }
+                          </div>
+                        `;
+                      })
+                      .join("")
+                  : '<p class="muted" style="margin:0;font-size:0.85rem;">No tags yet.</p>'
+              }
+            </div>
           </div>
         </div>
       `;
@@ -382,12 +478,15 @@
     me = data.me || null;
     publicUsername = (me && me.publicUsername) || "";
     alts = (me && me.alts) || [];
+    myTags = (me && me.tags) || [];
+    tags = data.tags || [];
     groups = data.groups || [];
     staff = data.staff || [];
     ownerUsername = data.ownerUsername || "vision";
     applyUsernameState();
     applyStaffState();
     renderGroups();
+    renderMyTags();
     applyViewState(data);
     renderFeed(data.posts || []);
   }
@@ -666,6 +765,122 @@
       status.textContent = err.message || "Could not delete alt";
     }
   });
+
+
+  document.getElementById("create-tag-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const status = document.getElementById("tag-status");
+    status.textContent = "Creating…";
+    try {
+      const res = await fetch("/api/synk-community", {
+        method: "POST",
+        headers: hubHeaders(),
+        body: JSON.stringify({
+          action: "create-tag",
+          name: document.getElementById("tag-name").value,
+          description: document.getElementById("tag-description").value,
+          color: document.getElementById("tag-color").value,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not create tag");
+      document.getElementById("tag-name").value = "";
+      document.getElementById("tag-description").value = "";
+      tags = data.tags || [];
+      renderTagCatalog();
+      status.textContent = `Created ${data.tag.name}`;
+    } catch (err) {
+      status.textContent = err.message || "Could not create tag";
+    }
+  });
+
+  document.getElementById("assign-tag-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const status = document.getElementById("assign-tag-status");
+    status.textContent = "Assigning…";
+    try {
+      const res = await fetch("/api/synk-community", {
+        method: "POST",
+        headers: hubHeaders(),
+        body: JSON.stringify({
+          action: "assign-tag",
+          username: document.getElementById("assign-tag-username").value,
+          tagId: document.getElementById("assign-tag-id").value,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not assign tag");
+      document.getElementById("assign-tag-username").value = "";
+      status.textContent = `Tagged @${data.username}`;
+      await loadCommunity();
+    } catch (err) {
+      status.textContent = err.message || "Could not assign tag";
+    }
+  });
+
+  if (tagCatalog) {
+    tagCatalog.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-delete-tag]");
+      if (!btn) return;
+      const tagId = btn.getAttribute("data-delete-tag");
+      const status = document.getElementById("tag-status");
+      status.textContent = "Deleting…";
+      try {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({ action: "delete-tag", tagId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not delete tag");
+        tags = data.tags || [];
+        renderTagCatalog();
+        status.textContent = "Tag deleted";
+        await loadCommunity();
+      } catch (err) {
+        status.textContent = err.message || "Could not delete tag";
+      }
+    });
+  }
+
+  async function handlePinClick(e) {
+    const btn = e.target.closest("[data-pin-tag]");
+    if (!btn) return;
+    const tagId = btn.getAttribute("data-pin-tag");
+    const status = document.getElementById("my-tags-status");
+    if (status) status.textContent = "Updating…";
+    try {
+      const currentlyPinned = myTags.find((tag) => tag.id === tagId && tag.pinned);
+      const res = await fetch("/api/synk-community", {
+        method: "POST",
+        headers: hubHeaders(),
+        body: JSON.stringify(
+          currentlyPinned
+            ? { action: "pin-tag", clear: true }
+            : { action: "pin-tag", tagId }
+        ),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not update pin");
+      if (data.me) me = data.me;
+      myTags = (data.tags || (me && me.tags) || []).map((tag) => ({
+        ...tag,
+        pinned: !!(data.pinnedTag && data.pinnedTag.id === tag.id),
+      }));
+      if (me) {
+        me.tags = myTags;
+        me.pinnedTag = data.pinnedTag || null;
+      }
+      renderMyTags();
+      await loadCommunity();
+      if (status) status.textContent = data.pinnedTag ? `Pinned ${data.pinnedTag.name}` : "Pin cleared";
+    } catch (err) {
+      if (status) status.textContent = err.message || "Could not update pin";
+    }
+  }
+
+  if (myTagsList) myTagsList.addEventListener("click", handlePinClick);
+  if (profileMeta) profileMeta.addEventListener("click", handlePinClick);
 
   document.getElementById("signout-btn").addEventListener("click", () => {
     localStorage.removeItem(STORAGE_KEY);

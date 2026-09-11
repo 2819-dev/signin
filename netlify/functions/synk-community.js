@@ -19,6 +19,16 @@ const {
   listOwnerAltAccounts,
   findCommunityAltAccount,
   findCommunityPublicProfile,
+  normalizeTagName,
+  normalizeTagSlug,
+  normalizeTagDescription,
+  normalizeTagColor,
+  listCommunityTags,
+  findCommunityTag,
+  listProfileTags,
+  getPinnedTagForProfile,
+  getPinnedTagsByUsernames,
+  findCommunityProfileIdByUsername,
   logSynkEvent,
   clientIp,
 } = require("./lib/synk");
@@ -62,7 +72,7 @@ function mapPost(row) {
   };
 }
 
-function mePayload(auth, role, alts = []) {
+function mePayload(auth, role, alts = [], tags = [], pinnedTag = null) {
   return {
     profileId: auth.profile.id,
     name: auth.profile.name,
@@ -73,6 +83,8 @@ function mePayload(auth, role, alts = []) {
     isOwner: role === "owner",
     isAdmin: role === "admin" || role === "owner",
     alts: role === "owner" ? alts : [],
+    tags: tags || [],
+    pinnedTag: pinnedTag || null,
   };
 }
 
@@ -242,6 +254,9 @@ exports.handler = async (event) => {
     const qs = event.queryStringParameters || {};
     const ip = clientIp(event);
     const alts = role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
+    const myTags = await listProfileTags(sql, auth.profile.id);
+    const myPinnedTag = myTags.find((tag) => tag.pinned) || null;
+    const tagCatalog = await listCommunityTags(sql);
 
     if (event.httpMethod === "GET") {
       const groups = await listCommunityGroups(sql);
@@ -266,13 +281,27 @@ exports.handler = async (event) => {
         });
       }
 
+      const mappedPosts = posts.map(mapPost);
+      const pinnedByUser = await getPinnedTagsByUsernames(
+        sql,
+        mappedPosts.map((post) => post.author && post.author.username).filter(Boolean)
+      );
+      for (const post of mappedPosts) {
+        if (!post.author || post.author.isAlt) {
+          if (post.author) post.author.pinnedTag = null;
+          continue;
+        }
+        post.author.pinnedTag = pinnedByUser[post.author.username] || null;
+      }
+
       const payload = {
         ok: true,
-        me: mePayload(auth, role, alts),
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
         groups,
         group: activeGroup,
         profile,
-        posts: posts.map(mapPost),
+        posts: mappedPosts,
+        tags: tagCatalog,
         ownerUsername: COMMUNITY_OWNER_USERNAME,
       };
       if (isCommunityStaffRole(role)) {
@@ -604,6 +633,9 @@ exports.handler = async (event) => {
         ip,
         detail: `${group.slug}:${persona.username}:${rows[0].id}`,
       });
+      const pinnedTag = persona.isAlt
+        ? null
+        : (await getPinnedTagForProfile(sql, auth.profile.id)) || null;
       return json(201, {
         ok: true,
         post: {
@@ -616,8 +648,276 @@ exports.handler = async (event) => {
             name: persona.isAlt ? "" : auth.profile.name,
             role: persona.isAlt ? null : role || null,
             isAlt: persona.isAlt,
+            pinnedTag,
           },
         },
+      });
+    }
+
+    if (action === "create-tag") {
+      if (role !== "owner") {
+        return json(403, { error: "Only the owner can create tags" });
+      }
+      const name = normalizeTagName(body.name || body.title);
+      const slug = normalizeTagSlug(body.slug || name);
+      const description = normalizeTagDescription(body.description || body.about || "");
+      const color = normalizeTagColor(body.color || "#6366f1") || "#6366f1";
+      if (!name || name.length < 2) {
+        return json(400, { error: "Tag name needs at least 2 characters" });
+      }
+      if (!slug) return json(400, { error: "Tag name is invalid" });
+      try {
+        const rows = await sql`
+          INSERT INTO synk_community_tags (name, slug, description, color, created_by)
+          VALUES (${name}, ${slug}, ${description}, ${color}, ${auth.profile.id})
+          RETURNING id, name, slug, description, color, created_at, updated_at
+        `;
+        await logSynkEvent(sql, {
+          eventType: "community_tag_create",
+          profileId: auth.profile.id,
+          ip,
+          detail: slug,
+        });
+        return json(201, {
+          ok: true,
+          tag: {
+            id: rows[0].id,
+            name: rows[0].name,
+            slug: rows[0].slug,
+            description: rows[0].description || "",
+            color: rows[0].color,
+            createdAt: rows[0].created_at,
+            updatedAt: rows[0].updated_at,
+            pinned: false,
+          },
+          tags: await listCommunityTags(sql),
+        });
+      } catch (err) {
+        if (String(err.message || "").includes("unique") || err.code === "23505") {
+          return json(409, { error: "A tag with that name already exists" });
+        }
+        throw err;
+      }
+    }
+
+    if (action === "update-tag") {
+      if (role !== "owner") {
+        return json(403, { error: "Only the owner can edit tags" });
+      }
+      const existing = await findCommunityTag(sql, {
+        id: body.tagId || body.id,
+        slug: body.slug,
+      });
+      if (!existing) return json(404, { error: "Tag not found" });
+      const name = normalizeTagName(body.name || body.title || existing.name);
+      const slug = normalizeTagSlug(body.slug || name);
+      const description = normalizeTagDescription(
+        body.description != null ? body.description : existing.description
+      );
+      const color =
+        normalizeTagColor(body.color != null ? body.color : existing.color) || existing.color;
+      if (!name || name.length < 2) {
+        return json(400, { error: "Tag name needs at least 2 characters" });
+      }
+      if (!slug) return json(400, { error: "Tag name is invalid" });
+      try {
+        const rows = await sql`
+          UPDATE synk_community_tags
+          SET
+            name = ${name},
+            slug = ${slug},
+            description = ${description},
+            color = ${color},
+            updated_at = NOW()
+          WHERE id = ${existing.id}
+          RETURNING id, name, slug, description, color, created_at, updated_at
+        `;
+        await logSynkEvent(sql, {
+          eventType: "community_tag_update",
+          profileId: auth.profile.id,
+          ip,
+          detail: slug,
+        });
+        return json(200, {
+          ok: true,
+          tag: {
+            id: rows[0].id,
+            name: rows[0].name,
+            slug: rows[0].slug,
+            description: rows[0].description || "",
+            color: rows[0].color,
+            createdAt: rows[0].created_at,
+            updatedAt: rows[0].updated_at,
+            pinned: false,
+          },
+          tags: await listCommunityTags(sql),
+        });
+      } catch (err) {
+        if (String(err.message || "").includes("unique") || err.code === "23505") {
+          return json(409, { error: "A tag with that name already exists" });
+        }
+        throw err;
+      }
+    }
+
+    if (action === "delete-tag") {
+      if (role !== "owner") {
+        return json(403, { error: "Only the owner can delete tags" });
+      }
+      const existing = await findCommunityTag(sql, {
+        id: body.tagId || body.id,
+        slug: body.slug,
+      });
+      if (!existing) return json(404, { error: "Tag not found" });
+      await sql`DELETE FROM synk_community_tags WHERE id = ${existing.id}`;
+      await logSynkEvent(sql, {
+        eventType: "community_tag_delete",
+        profileId: auth.profile.id,
+        ip,
+        detail: existing.slug,
+      });
+      return json(200, {
+        ok: true,
+        tags: await listCommunityTags(sql),
+      });
+    }
+
+    if (action === "assign-tag") {
+      if (role !== "owner") {
+        return json(403, { error: "Only the owner can assign tags" });
+      }
+      const username = normalizePublicUsername(body.username || body.publicUsername);
+      if (!username) return json(400, { error: "Username is required" });
+      const profileId = await findCommunityProfileIdByUsername(sql, username);
+      if (!profileId) {
+        return json(404, { error: "No community member with that username" });
+      }
+      const tag = await findCommunityTag(sql, {
+        id: body.tagId || body.id,
+        slug: body.tag || body.slug,
+      });
+      if (!tag) return json(404, { error: "Tag not found" });
+      await sql`
+        INSERT INTO synk_community_profile_tags (synk_profile_id, tag_id, assigned_by)
+        VALUES (${profileId}, ${tag.id}, ${auth.profile.id})
+        ON CONFLICT (synk_profile_id, tag_id) DO NOTHING
+      `;
+      await logSynkEvent(sql, {
+        eventType: "community_tag_assign",
+        profileId: auth.profile.id,
+        ip,
+        detail: `${username}:${tag.slug}`,
+      });
+      return json(200, {
+        ok: true,
+        username,
+        tags: await listProfileTags(sql, profileId),
+      });
+    }
+
+    if (action === "unassign-tag") {
+      if (role !== "owner") {
+        return json(403, { error: "Only the owner can remove tags" });
+      }
+      const username = normalizePublicUsername(body.username || body.publicUsername);
+      if (!username) return json(400, { error: "Username is required" });
+      const profileId = await findCommunityProfileIdByUsername(sql, username);
+      if (!profileId) {
+        return json(404, { error: "No community member with that username" });
+      }
+      const tag = await findCommunityTag(sql, {
+        id: body.tagId || body.id,
+        slug: body.tag || body.slug,
+      });
+      if (!tag) return json(404, { error: "Tag not found" });
+      await sql`
+        DELETE FROM synk_community_profile_tags
+        WHERE synk_profile_id = ${profileId}
+          AND tag_id = ${tag.id}
+      `;
+      // Clear pin if that tag was pinned.
+      await sql`
+        UPDATE synk_community_profiles
+        SET pinned_tag_id = NULL
+        WHERE synk_profile_id = ${profileId}
+          AND pinned_tag_id = ${tag.id}
+      `;
+      await logSynkEvent(sql, {
+        eventType: "community_tag_unassign",
+        profileId: auth.profile.id,
+        ip,
+        detail: `${username}:${tag.slug}`,
+      });
+      return json(200, {
+        ok: true,
+        username,
+        tags: await listProfileTags(sql, profileId),
+      });
+    }
+
+    if (action === "pin-tag") {
+      if (!auth.profile.publicUsername) {
+        return json(400, { error: "Choose a public username first" });
+      }
+      const clearPin =
+        body.tagId == null &&
+        body.id == null &&
+        !body.tag &&
+        !body.slug &&
+        (body.clear === true || body.pin === false || body.pinned === false);
+      if (clearPin) {
+        await sql`
+          UPDATE synk_community_profiles
+          SET pinned_tag_id = NULL, updated_at = NOW()
+          WHERE synk_profile_id = ${auth.profile.id}
+        `;
+        await logSynkEvent(sql, {
+          eventType: "community_tag_unpin",
+          profileId: auth.profile.id,
+          ip,
+          detail: auth.profile.publicUsername,
+        });
+        const tags = await listProfileTags(sql, auth.profile.id);
+        return json(200, {
+          ok: true,
+          pinnedTag: null,
+          tags,
+          me: mePayload(auth, role, alts, tags, null),
+        });
+      }
+      const tag = await findCommunityTag(sql, {
+        id: body.tagId || body.id,
+        slug: body.tag || body.slug,
+      });
+      if (!tag) return json(404, { error: "Tag not found" });
+      const owned = await sql`
+        SELECT 1
+        FROM synk_community_profile_tags
+        WHERE synk_profile_id = ${auth.profile.id}
+          AND tag_id = ${tag.id}
+        LIMIT 1
+      `;
+      if (!owned[0]) {
+        return json(403, { error: "You can only pin a tag assigned to you" });
+      }
+      await sql`
+        UPDATE synk_community_profiles
+        SET pinned_tag_id = ${tag.id}, updated_at = NOW()
+        WHERE synk_profile_id = ${auth.profile.id}
+      `;
+      await logSynkEvent(sql, {
+        eventType: "community_tag_pin",
+        profileId: auth.profile.id,
+        ip,
+        detail: tag.slug,
+      });
+      const tags = await listProfileTags(sql, auth.profile.id);
+      const pinnedTag = tags.find((item) => item.pinned) || null;
+      return json(200, {
+        ok: true,
+        pinnedTag,
+        tags,
+        me: mePayload(auth, role, alts, tags, pinnedTag),
       });
     }
 

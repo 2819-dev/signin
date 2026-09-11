@@ -276,3 +276,38 @@ ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS website TEXT NOT NUL
 ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS preferred_verify_action TEXT NOT NULL DEFAULT 'identity';
 ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS product_summary TEXT NOT NULL DEFAULT '';
 ALTER TABLE synk_apps ADD COLUMN IF NOT EXISTS product_type TEXT NOT NULL DEFAULT 'custom';
+
+CREATE TABLE IF NOT EXISTS synk_community_tags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  color TEXT NOT NULL DEFAULT '#6366f1',
+  created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS synk_community_tags_slug_idx
+  ON synk_community_tags (slug);
+
+CREATE INDEX IF NOT EXISTS synk_community_tags_created_idx
+  ON synk_community_tags (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS synk_community_profile_tags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  tag_id UUID NOT NULL REFERENCES synk_community_tags(id) ON DELETE CASCADE,
+  assigned_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (synk_profile_id, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_profile_tags_profile_idx
+  ON synk_community_profile_tags (synk_profile_id, created_at ASC);
+
+CREATE INDEX IF NOT EXISTS synk_community_profile_tags_tag_idx
+  ON synk_community_profile_tags (tag_id);
+
+ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS pinned_tag_id UUID;
+

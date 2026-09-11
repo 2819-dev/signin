@@ -11,7 +11,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-reddit2" />
+    <link rel="stylesheet" href="/join.css?v=community-tags2" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body">
@@ -130,6 +130,41 @@
                   <p id="alt-status" class="muted" style="font-size:0.85rem;"></p>
                   <button class="btn btn-secondary btn-compact" type="submit">Create alt</button>
                 </form>
+
+                <hr class="community-divider" />
+                <p class="section-label">Tags</p>
+                <p class="muted" style="font-size:0.82rem;margin:0 0 8px;">
+                  Create colored tags, then assign them to members. They can pin one next to their name.
+                </p>
+                <div id="tag-catalog" class="community-staff-list"></div>
+                <form id="create-tag-form" class="form" style="margin-top:10px;">
+                  <div class="field">
+                    <label for="tag-name">Tag name</label>
+                    <input id="tag-name" type="text" maxlength="32" required placeholder="Moderator" />
+                  </div>
+                  <div class="field">
+                    <label for="tag-description">Description</label>
+                    <input id="tag-description" type="text" maxlength="200" placeholder="Helps keep Community healthy" />
+                  </div>
+                  <div class="field">
+                    <label for="tag-color">Color</label>
+                    <input id="tag-color" type="color" value="#6366f1" />
+                  </div>
+                  <p id="tag-status" class="muted" style="font-size:0.85rem;"></p>
+                  <button class="btn btn-secondary btn-compact" type="submit">Create tag</button>
+                </form>
+                <form id="assign-tag-form" class="form" style="margin-top:12px;">
+                  <div class="field">
+                    <label for="assign-tag-username">Assign to username</label>
+                    <input id="assign-tag-username" type="text" maxlength="24" required placeholder="username" spellcheck="false" />
+                  </div>
+                  <div class="field">
+                    <label for="assign-tag-id">Tag</label>
+                    <select id="assign-tag-id" required></select>
+                  </div>
+                  <p id="assign-tag-status" class="muted" style="font-size:0.85rem;"></p>
+                  <button class="btn btn-secondary btn-compact" type="submit">Assign tag</button>
+                </form>
               </div>
             </div>
           </aside>
@@ -161,6 +196,14 @@
               </form>
             </section>
 
+            <section class="card" id="my-tags-card" hidden>
+              <p class="section-label">Your tags</p>
+              <h2>Pin one next to your name</h2>
+              <p class="muted">Only one tag can show beside your username in the feed.</p>
+              <div id="my-tags-list" class="community-tag-list"></div>
+              <p id="my-tags-status" class="muted" style="font-size:0.85rem;"></p>
+            </section>
+
             <section class="card" id="feed-card">
               <p class="section-label" id="feed-label">Feed</p>
               <h2 id="feed-title">Recent posts</h2>
@@ -172,6 +215,6 @@
       </div>
     </main>
 
-    <script src="/community.js?v=reddit2"></script>
+    <script src="/community.js?v=tags3"></script>
   </body>
 </html>

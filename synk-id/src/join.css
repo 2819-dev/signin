@@ -1542,3 +1542,46 @@ textarea {
     max-width: none;
   }
 }
+
+/* Community tags */
+.community-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.2;
+  color: #fff;
+  background: var(--tag-color, #6366f1);
+  vertical-align: middle;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.community-tag-chip.is-compact {
+  font-size: 0.68rem;
+  padding: 1px 7px;
+}
+
+.community-tag-list,
+.community-tag-row {
+  display: grid;
+  gap: 8px;
+}
+
+.community-tag-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--fill, #f8fafc);
+}
+
+.community-profile-card .community-tag-list {
+  margin-top: 10px;
+}
