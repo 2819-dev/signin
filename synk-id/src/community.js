@@ -688,7 +688,7 @@
         return `
           <div class="community-staff-row">
             <div>
-              <a class="community-user-link" href="/user/${escapeHtml(person.username || "")}">@${escapeHtml(person.username || "member")}</a>
+              <a class="community-user-link" href="/user/${escapeHtml(person.username || "")}">${escapeHtml(person.username || "member")}</a>
               ${roleBadge(person.role, { staffOnly: true })}
             </div>
             ${
@@ -763,7 +763,7 @@
                 <span class="muted">Posted by</span>
                 <a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(username)}</a>
                 ${tagChip(author.pinnedTag, { compact: true })}
-                <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
+                <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
               </div>
               <a class="reddit-post-title-link" href="/community/post/${pid}" data-open-post="${pid}">
                 <h3 class="reddit-post-title">${escapeHtml(title)}</h3>
@@ -1603,7 +1603,7 @@
       if (me) me.alts = alts;
       renderAlts();
       syncPersonaUi();
-      status.textContent = `Created @${data.alt.username}`;
+      status.textContent = `Created ${data.alt.username}`;
     } catch (err) {
       status.textContent = err.message || "Could not create alt";
     }
@@ -1679,7 +1679,7 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not assign tag");
       document.getElementById("assign-tag-username").value = "";
-      status.textContent = `Tagged @${data.username}`;
+      status.textContent = `Tagged ${data.username}`;
       await loadCommunity();
     } catch (err) {
       status.textContent = err.message || "Could not assign tag";
