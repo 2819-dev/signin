@@ -137,7 +137,8 @@
     return name.slice(0, 1).toUpperCase() || "?";
   }
 
-  function canManageTagsFor(username) {
+  /** Pin control is only for the username you are currently acting as (tag owner). */
+  function canPinTagsFor(username) {
     if (!me || !username) return false;
     const u = String(username || "")
       .trim()
@@ -146,10 +147,14 @@
     const acting = String(activePersona || me.publicUsername || "")
       .trim()
       .toLowerCase();
-    const primary = String(me.publicUsername || "")
-      .trim()
-      .toLowerCase();
-    return acting === u || primary === u;
+    return acting === u;
+  }
+
+  function tagsForActivePersona() {
+    if (!me) return [];
+    if (!activePersona || activePersona === publicUsername) return me.tags || [];
+    const alt = (alts || []).find((item) => item.username === activePersona);
+    return (alt && alt.tags) || [];
   }
 
   function tagChip(tag, { compact = false, canPin = false } = {}) {
@@ -222,6 +227,7 @@
       pinBtn.classList.toggle("btn-primary", pinned);
       pinBtn.classList.toggle("btn-secondary", !pinned);
       pinBtn.setAttribute("data-pin-tag", tagId);
+      pinBtn.setAttribute("data-tag-pinned", pinned ? "1" : "0");
     }
     document.querySelectorAll(".synk-tag-badge[aria-expanded='true']").forEach((el) => {
       if (el !== btn) el.setAttribute("aria-expanded", "false");
@@ -279,7 +285,7 @@
 
   function renderMyTags() {
     if (!myTagsCard || !myTagsList) return;
-    myTags = (me && me.tags) || [];
+    myTags = tagsForActivePersona();
     if (!myTags.length) {
       myTagsCard.hidden = true;
       myTagsList.innerHTML = "";
@@ -687,12 +693,7 @@
       : "Posting as —";
     // Keep tags/pins in sync with the active account (primary or alt).
     if (activePersona && me) {
-      if (activePersona === publicUsername) {
-        myTags = me.tags || [];
-      } else {
-        const alt = (alts || []).find((item) => item.username === activePersona);
-        myTags = (alt && alt.tags) || [];
-      }
+      myTags = tagsForActivePersona();
       if (typeof renderMyTags === "function") renderMyTags();
     }
     personaMenu.innerHTML = personaOptions()
@@ -1158,7 +1159,7 @@
                   ? (profile.tags || [])
                       .map((tag) =>
                         tagChip(tag, {
-                          canPin: canManageTagsFor(profile.username),
+                          canPin: canPinTagsFor(profile.username),
                         })
                       )
                       .join("")
@@ -1795,12 +1796,17 @@
     });
   }
 
-  async function pinTagById(tagId) {
+  async function pinTagById(tagId, { clear } = {}) {
     if (!tagId) return;
     const status = document.getElementById("my-tags-status");
     if (status) status.textContent = "Updating…";
     try {
-      const currentlyPinned = myTags.find((tag) => String(tag.id) === String(tagId) && tag.pinned);
+      const liveTags = tagsForActivePersona();
+      const currentlyPinned =
+        typeof clear === "boolean"
+          ? clear
+          : !!(liveTags.find((tag) => String(tag.id) === String(tagId) && tag.pinned) ||
+              myTags.find((tag) => String(tag.id) === String(tagId) && tag.pinned));
       const res = await fetch("/api/synk-community", {
         method: "POST",
         headers: hubHeaders(),
@@ -1853,7 +1859,10 @@
     if (!btn) return;
     e.preventDefault();
     e.stopPropagation();
-    await pinTagById(btn.getAttribute("data-pin-tag"));
+    const clearAttr = btn.getAttribute("data-tag-pinned");
+    await pinTagById(btn.getAttribute("data-pin-tag"), {
+      clear: clearAttr == null ? undefined : clearAttr === "1",
+    });
   }
 
   document.addEventListener("click", (e) => {
@@ -1861,7 +1870,9 @@
     if (pinFromPop) {
       e.preventDefault();
       e.stopPropagation();
-      pinTagById(pinFromPop.getAttribute("data-pin-tag")).catch(() => {});
+      pinTagById(pinFromPop.getAttribute("data-pin-tag"), {
+        clear: pinFromPop.getAttribute("data-tag-pinned") === "1",
+      }).catch(() => {});
       return;
     }
     const badge = e.target.closest("[data-tag-badge]");
