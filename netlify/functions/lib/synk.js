@@ -1375,8 +1375,29 @@ async function ensureSynkCoreTables(sql) {
   await sql`ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS product_summary TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE synk_apps ADD COLUMN IF NOT EXISTS product_type TEXT NOT NULL DEFAULT 'custom'`;
 
+  await ensureSynkPlacesTable(sql);
   await ensureSynkAppMemberPolicies(sql);
   await seedVisitorSignInBusiness(sql);
+}
+
+async function ensureSynkPlacesTable(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_places (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      website_url TEXT NOT NULL DEFAULT '',
+      logo_url TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_places_enabled_sort_idx
+    ON synk_places (enabled, sort_order ASC, name ASC)
+  `;
 }
 
 async function ensureSynkAppMemberPolicies(sql) {
@@ -2784,6 +2805,7 @@ module.exports = {
   clientIp,
   sleep,
   ensureSynkCoreTables,
+  ensureSynkPlacesTable,
   logSynkEvent,
   assertNotRateLimited,
   issuePass,

@@ -14,7 +14,7 @@
     <title>Synk Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synk-admin12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin12" />
-    <link rel="stylesheet" href="/admin.css?v=synk-chat2" />
+    <link rel="stylesheet" href="/admin.css?v=places1" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js?v=facefix4" defer></script>
   </head>
@@ -116,6 +116,7 @@
             <button class="btn btn-secondary btn-compact" type="button" data-jump="requests">Review requests</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="business">Business accounts</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="apps">Manage apps</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-jump="places">Hub places</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="activity">View activity</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="settings">Settings</button>
           </div>
@@ -220,6 +221,61 @@
           </form>
           <div id="synk-apps" class="synk-apps" style="margin-top:14px;"></div>
           <p id="synk-apps-empty" class="chat-empty-note">No applications registered.</p>
+        </section>
+      </div>
+
+
+      <div id="pane-places" class="admin-pane hidden">
+        <header class="admin-header">
+          <div>
+            <button type="button" class="text-back" data-jump="more">← More</button>
+            <h1>Places</h1>
+            <p class="muted">
+              Curated list shown on the member hub under Connected places. Add real or demo entries —
+              this is not pulled from Synk Business.
+            </p>
+          </div>
+        </header>
+
+        <section class="panel">
+          <form id="synk-place-form" class="synk-enroll-form" autocomplete="off">
+            <input type="hidden" id="synk-place-id" value="" />
+            <div class="field">
+              <label for="synk-place-name">Name</label>
+              <input id="synk-place-name" type="text" maxlength="120" required placeholder="Café Synk" />
+            </div>
+            <div class="field">
+              <label for="synk-place-description">Description</label>
+              <textarea id="synk-place-description" rows="3" maxlength="500" placeholder="What members should know"></textarea>
+            </div>
+            <div class="field">
+              <label for="synk-place-website">Website</label>
+              <input id="synk-place-website" type="url" maxlength="500" placeholder="https://example.com" />
+            </div>
+            <div class="field">
+              <label for="synk-place-logo-url">Logo URL (optional)</label>
+              <input id="synk-place-logo-url" type="url" maxlength="800" placeholder="https://… or upload below" />
+            </div>
+            <div class="field">
+              <label for="synk-place-logo-file">Upload logo</label>
+              <input id="synk-place-logo-file" type="file" accept="image/jpeg,image/png,image/webp" />
+            </div>
+            <div class="field">
+              <label for="synk-place-sort">Sort order</label>
+              <input id="synk-place-sort" type="number" step="1" value="0" />
+            </div>
+            <label class="check-row" style="display:flex;gap:8px;align-items:center;margin:8px 0 12px;">
+              <input id="synk-place-enabled" type="checkbox" checked />
+              <span>Visible on member hub</span>
+            </label>
+            <div class="btn-row">
+              <button class="btn" type="submit" id="synk-place-btn">Add place</button>
+              <button class="btn btn-secondary" type="button" id="synk-place-cancel" hidden>Cancel edit</button>
+            </div>
+            <p id="synk-place-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
+          </form>
+          <div id="synk-places" class="synk-apps" style="margin-top:14px;"></div>
+          <p id="synk-places-empty" class="chat-empty-note">No places yet. Add one above.</p>
         </section>
       </div>
 
@@ -364,6 +420,10 @@
               <span class="more-nav-title">Apps</span>
               <span class="more-nav-meta">Registered API applications</span>
             </button>
+            <button type="button" class="more-nav-item" data-jump="places">
+              <span class="more-nav-title">Places</span>
+              <span class="more-nav-meta">Curated hub directory (logo, site, description)</span>
+            </button>
             <button type="button" class="more-nav-item" data-jump="activity">
               <span class="more-nav-title">Activity</span>
               <span class="more-nav-meta">Events, filters, and CSV export</span>
@@ -394,6 +454,7 @@
           <div class="synk-link-list">
             <a href="https://synkid.netlify.app/verify" target="_blank" rel="noopener">Member log in</a>
             <a href="https://synkid.netlify.app/hub" target="_blank" rel="noopener">Member hub</a>
+            <a href="https://synkid.netlify.app/places" target="_blank" rel="noopener">Connected places</a>
             <a href="https://synkid.netlify.app/community" target="_blank" rel="noopener">Synk Community</a>
             <a href="https://synkid.netlify.app/join" target="_blank" rel="noopener">Get Synk</a>
             <a href="https://synkid.netlify.app/business" target="_blank" rel="noopener">Synk Business</a>
@@ -541,6 +602,7 @@
         chat: document.getElementById("pane-chat"),
         more: document.getElementById("pane-more"),
         apps: document.getElementById("pane-apps"),
+        places: document.getElementById("pane-places"),
         activity: document.getElementById("pane-activity"),
         settings: document.getElementById("pane-settings"),
       };
@@ -552,7 +614,7 @@
         chat: document.getElementById("tab-chat"),
         more: document.getElementById("tab-more"),
       };
-      const MORE_PANES = new Set(["apps", "activity", "settings", "more"]);
+      const MORE_PANES = new Set(["apps", "places", "activity", "settings", "more"]);
       const TAB_PANES = new Set(["overview", "members", "requests", "chat", "business", "more"]);
 
       const synkEnrollForm = document.getElementById("synk-enroll-form");
@@ -573,6 +635,22 @@
       const synkAppStatus = document.getElementById("synk-app-status");
       const synkAppsEl = document.getElementById("synk-apps");
       const synkAppsEmpty = document.getElementById("synk-apps-empty");
+      const synkPlaceForm = document.getElementById("synk-place-form");
+      const synkPlaceId = document.getElementById("synk-place-id");
+      const synkPlaceName = document.getElementById("synk-place-name");
+      const synkPlaceDescription = document.getElementById("synk-place-description");
+      const synkPlaceWebsite = document.getElementById("synk-place-website");
+      const synkPlaceLogoUrl = document.getElementById("synk-place-logo-url");
+      const synkPlaceLogoFile = document.getElementById("synk-place-logo-file");
+      const synkPlaceSort = document.getElementById("synk-place-sort");
+      const synkPlaceEnabled = document.getElementById("synk-place-enabled");
+      const synkPlaceBtn = document.getElementById("synk-place-btn");
+      const synkPlaceCancel = document.getElementById("synk-place-cancel");
+      const synkPlaceStatus = document.getElementById("synk-place-status");
+      const synkPlacesEl = document.getElementById("synk-places");
+      const synkPlacesEmpty = document.getElementById("synk-places-empty");
+      let synkPlacesCache = [];
+
       const synkBusinessRequestsEl = document.getElementById("synk-business-requests");
       const synkBusinessRequestsEmpty = document.getElementById("synk-business-requests-empty");
       const synkBusinessAccountsEl = document.getElementById("synk-business-accounts");
@@ -701,7 +779,7 @@
         Object.keys(tabs).forEach((key) => {
           const active =
             key === next ||
-            (key === "more" && (next === "apps" || next === "activity" || next === "settings"));
+            (key === "more" && (next === "apps" || next === "places" || next === "activity" || next === "settings"));
           tabs[key].classList.toggle("active", Boolean(active));
         });
         localStorage.setItem(PANE_KEY, next);
@@ -727,6 +805,9 @@
         }
         if (next === "apps") {
           refreshSynkApps().catch(() => {});
+        }
+        if (next === "places") {
+          refreshSynkPlaces().catch(() => {});
         }
         window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
       }
@@ -1074,6 +1155,83 @@
         renderSynkApps(data.apps || []);
         return data;
       }
+
+      function resetSynkPlaceForm() {
+        synkPlaceId.value = "";
+        synkPlaceForm.reset();
+        synkPlaceEnabled.checked = true;
+        synkPlaceSort.value = "0";
+        synkPlaceBtn.textContent = "Add place";
+        synkPlaceCancel.hidden = true;
+        synkPlaceStatus.textContent = "";
+        if (synkPlaceLogoFile) synkPlaceLogoFile.value = "";
+      }
+
+      function fillSynkPlaceForm(place) {
+        synkPlaceId.value = place.id || "";
+        synkPlaceName.value = place.name || "";
+        synkPlaceDescription.value = place.description || "";
+        synkPlaceWebsite.value = place.websiteUrl || "";
+        synkPlaceLogoUrl.value = place.logoUrl || "";
+        synkPlaceSort.value = String(place.sortOrder != null ? place.sortOrder : 0);
+        synkPlaceEnabled.checked = place.enabled !== false;
+        synkPlaceBtn.textContent = "Save place";
+        synkPlaceCancel.hidden = false;
+        synkPlaceStatus.textContent = "Editing — save when ready";
+        if (synkPlaceLogoFile) synkPlaceLogoFile.value = "";
+        synkPlaceName.focus();
+      }
+
+      function renderSynkPlaces(places) {
+        synkPlacesCache = places || [];
+        if (!synkPlacesCache.length) {
+          synkPlacesEl.innerHTML = "";
+          synkPlacesEmpty.classList.remove("hidden");
+          return;
+        }
+        synkPlacesEmpty.classList.add("hidden");
+        synkPlacesEl.innerHTML = synkPlacesCache
+          .map((place) => {
+            const logo = place.logoUrl
+              ? `<img src="${escapeHtml(place.logoUrl)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:10px;border:1px solid var(--line);" />`
+              : `<div style="width:48px;height:48px;border-radius:10px;border:1px solid var(--line);display:grid;place-items:center;font-weight:700;background:var(--fill);">${escapeHtml(String(place.name || "?").slice(0,1).toUpperCase())}</div>`;
+            const site = place.websiteUrl
+              ? `<div class="muted" style="font-size:0.82rem;word-break:break-all;">${escapeHtml(place.websiteUrl)}</div>`
+              : "";
+            const desc = place.description
+              ? `<div class="muted" style="font-size:0.85rem;margin-top:4px;">${escapeHtml(place.description)}</div>`
+              : "";
+            return `
+              <article class="synk-app-card ${place.enabled ? "" : "disabled"}" data-synk-place-id="${escapeHtml(place.id)}" style="display:grid;grid-template-columns:48px 1fr;gap:12px;">
+                ${logo}
+                <div>
+                  <strong>${escapeHtml(place.name)}</strong>
+                  <div class="muted" style="font-size:0.82rem;margin:2px 0 6px;">
+                    sort ${escapeHtml(String(place.sortOrder ?? 0))}
+                    ${place.enabled ? "" : " · hidden"}
+                  </div>
+                  ${desc}
+                  ${site}
+                  <div class="synk-profile-actions" style="margin-top:10px;">
+                    <button class="btn btn-secondary btn-compact" type="button" data-synk-place-action="edit">Edit</button>
+                    <button class="btn btn-secondary btn-compact" type="button" data-synk-place-action="toggle">${place.enabled ? "Hide" : "Show"}</button>
+                    <button class="btn btn-danger btn-compact" type="button" data-synk-place-action="delete">Remove</button>
+                  </div>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      async function refreshSynkPlaces() {
+        const res = await fetch("/api/synk-places", { headers: adminHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load places");
+        renderSynkPlaces(data.places || []);
+        return data;
+      }
+
 
       async function refreshSynkActivity() {
         const qs = new URLSearchParams({ limit: "150" });
@@ -1885,6 +2043,7 @@
         await Promise.all([
           refreshSynkProfiles(),
           refreshSynkApps(),
+          refreshSynkPlaces().catch(() => {}),
           refreshSynkActivity(),
           refreshSynkPasses().catch(() => {}),
           refreshSynkRequests().catch(() => {}),
@@ -2521,7 +2680,101 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
         }
       });
 
-      synkAppForm.addEventListener("submit", async (e) => {
+      
+      synkPlaceCancel.addEventListener("click", () => resetSynkPlaceForm());
+
+      synkPlaceForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = synkPlaceName.value.trim();
+        if (!name) return;
+        synkPlaceBtn.disabled = true;
+        synkPlaceStatus.textContent = "Saving…";
+        try {
+          let logoUrl = synkPlaceLogoUrl.value.trim();
+          const file = synkPlaceLogoFile && synkPlaceLogoFile.files && synkPlaceLogoFile.files[0];
+          if (file) {
+            synkPlaceStatus.textContent = "Uploading logo…";
+            const uploaded = await uploadSynkPhoto(file);
+            logoUrl = uploaded.url || logoUrl;
+            synkPlaceLogoUrl.value = logoUrl;
+          }
+          const payload = {
+            name,
+            description: synkPlaceDescription.value.trim(),
+            websiteUrl: synkPlaceWebsite.value.trim(),
+            logoUrl,
+            sortOrder: Number(synkPlaceSort.value || 0),
+            enabled: synkPlaceEnabled.checked,
+          };
+          const editingId = synkPlaceId.value.trim();
+          const res = await fetch("/api/synk-places", {
+            method: editingId ? "PATCH" : "POST",
+            headers: adminHeaders(),
+            body: JSON.stringify(editingId ? { id: editingId, ...payload } : payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not save place");
+          resetSynkPlaceForm();
+          synkPlaceStatus.textContent = editingId ? "Place updated" : "Place added";
+          showToast(editingId ? "Place updated" : "Place added");
+          await refreshSynkPlaces();
+        } catch (err) {
+          synkPlaceStatus.textContent = err.message || "Could not save place";
+          showToast(err.message || "Could not save place");
+        } finally {
+          synkPlaceBtn.disabled = false;
+        }
+      });
+
+      synkPlacesEl.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-synk-place-action]");
+        const card = e.target.closest("[data-synk-place-id]");
+        if (!btn || !card) return;
+        const id = card.getAttribute("data-synk-place-id");
+        const action = btn.getAttribute("data-synk-place-action");
+        const place = synkPlacesCache.find((p) => p.id === id);
+        if (!place) return;
+
+        if (action === "edit") {
+          fillSynkPlaceForm(place);
+          return;
+        }
+
+        if (action === "toggle") {
+          try {
+            const res = await fetch("/api/synk-places", {
+              method: "PATCH",
+              headers: adminHeaders(),
+              body: JSON.stringify({ id, enabled: !place.enabled }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not update place");
+            showToast(place.enabled ? "Place hidden" : "Place visible");
+            await refreshSynkPlaces();
+          } catch (err) {
+            showToast(err.message || "Could not update place");
+          }
+        }
+
+        if (action === "delete") {
+          if (!confirm(`Remove ${place.name} from the hub list?`)) return;
+          try {
+            const res = await fetch(`/api/synk-places?id=${encodeURIComponent(id)}`, {
+              method: "DELETE",
+              headers: adminHeaders(),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not remove place");
+            if (synkPlaceId.value === id) resetSynkPlaceForm();
+            showToast("Place removed");
+            await refreshSynkPlaces();
+          } catch (err) {
+            showToast(err.message || "Could not remove place");
+          }
+        }
+      });
+
+synkAppForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const name = synkAppName.value.trim();
         const slug = synkAppSlug.value.trim();
