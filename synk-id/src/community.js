@@ -689,12 +689,17 @@
     const rightRail = document.getElementById("right-rail");
     const posts = (data && data.posts) || [];
     if (rightRail) {
-      rightRail.hidden =
+      // Desktop-only chrome. Mobile/tablet CSS also forces this off.
+      const hideRail =
         route.type === "settings" ||
         route.type === "submit" ||
         route.type === "mod" ||
         route.type === "post" ||
-        route.type === "inbox";
+        route.type === "inbox" ||
+        route.type === "user" ||
+        (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 1100px)").matches);
+      rightRail.hidden = hideRail;
+      rightRail.classList.toggle("is-hidden", hideRail);
     }
     const aboutMeta = document.getElementById("about-meta");
     if (aboutMeta) aboutMeta.hidden = true;
@@ -1263,20 +1268,21 @@
     syncPersonaUi();
   }
 
-  function syncTabBar() {
+    function syncTabBar() {
     const bar = document.getElementById("community-tabbar");
     if (!bar) return;
     const show = !!(me && publicUsername);
     bar.hidden = !show;
-    const tab = route.type === "popular"
-      ? "popular"
-      : route.type === "submit"
-        ? "submit"
-        : route.type === "inbox"
-          ? "inbox"
-          : route.type === "settings"
-            ? "settings"
-            : "home";
+    const meTab = document.getElementById("tab-me");
+    if (meTab && publicUsername) {
+      meTab.href = `/user/${encodeURIComponent(publicUsername)}`;
+    }
+    let tab = "home";
+    if (route.type === "popular") tab = "popular";
+    else if (route.type === "submit") tab = "submit";
+    else if (route.type === "inbox") tab = "inbox";
+    else if (route.type === "user" && publicUsername && route.username === publicUsername) tab = "me";
+    else if (route.type === "settings") tab = "me";
     bar.querySelectorAll("[data-tab]").forEach((el) => {
       el.classList.toggle("is-active", el.getAttribute("data-tab") === tab);
     });
@@ -2495,6 +2501,17 @@
   bindNav(document.getElementById("mod-nav-link"), { type: "mod", slug: "", username: "" });
   bindNav(document.getElementById("mod-menu-link"), { type: "mod", slug: "", username: "" });
 
+  // Reddit-style bottom tabs (mobile)
+  bindNav(document.getElementById("tab-home"), { type: "home", slug: "", username: "" });
+  bindNav(document.getElementById("tab-popular"), { type: "popular", slug: "", username: "" });
+  bindNav(document.getElementById("tab-create"), { type: "submit", slug: "", username: "" });
+  bindNav(document.getElementById("tab-inbox"), { type: "inbox", slug: "", username: "" });
+  bindNav(document.getElementById("tab-me"), () => ({
+    type: "user",
+    slug: "",
+    username: publicUsername || "",
+  }));
+
   // —— Bio & DM privacy settings ——
   const bioForm = document.getElementById("settings-bio-form");
   if (bioForm) {
@@ -2776,6 +2793,27 @@
   }
   // Start closed — sidebar only via hamburger.
   setNavOpen(false);
+
+  try {
+    const railMq = window.matchMedia("(max-width: 1100px)");
+    const syncRailMq = () => {
+      const rail = document.getElementById("right-rail");
+      if (!rail) return;
+      const forceHide =
+        railMq.matches ||
+        route.type === "settings" ||
+        route.type === "submit" ||
+        route.type === "mod" ||
+        route.type === "post" ||
+        route.type === "inbox" ||
+        route.type === "user";
+      rail.hidden = forceHide;
+      rail.classList.toggle("is-hidden", forceHide);
+    };
+    if (railMq.addEventListener) railMq.addEventListener("change", syncRailMq);
+    else if (railMq.addListener) railMq.addListener(syncRailMq);
+    syncRailMq();
+  } catch (_) {}
   if (navToggle) navToggle.addEventListener("click", () => setNavOpen(!document.body.classList.contains("reddit-nav-open")));
   if (backdrop) backdrop.addEventListener("click", () => setNavOpen(false));
   if (leftNav) {

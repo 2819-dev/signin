@@ -5701,3 +5701,347 @@ body.community-body #about-join-btn.is-profile-hidden {
 #view-banner-strip {
   height: 48px !important;
 }
+
+
+/* ===== REDDIT MOBILE v1 — final authority ===== */
+/*
+ * Invert the layout contract:
+ * - Default = full-width single column (phones + iPads)
+ * - Right rail only on true desktop (>=1101px)
+ * - Left nav is a hamburger drawer only
+ * - Bottom tab bar on <=1100px like Reddit mobile
+ */
+
+/* Kill reserved half-screen columns */
+.reddit-layout,
+.community-layout.reddit-layout,
+#community-main .reddit-layout,
+#community-main .community-layout {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+  align-items: start !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+/* Full-bleed shell on mobile/tablet */
+body.community-body,
+body.reddit-body.community-body {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: var(--r-bg, #dae0e6) !important;
+  overflow-x: hidden !important;
+}
+
+body.community-body .shell,
+body.community-body .shell-wide,
+body.community-body .shell-app,
+body.community-body .community-shell,
+body.community-body .reddit-shell,
+body.community-body .community-shell.reddit-shell,
+body.reddit-body .community-shell.reddit-shell {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Sticky Reddit top bar — full width */
+body.community-body .reddit-topnav {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 200 !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  padding: 0 8px 0 max(8px, env(safe-area-inset-left)) !important;
+  padding-right: max(8px, env(safe-area-inset-right)) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  background: var(--r-card, #fff) !important;
+  border-bottom: 1px solid var(--r-line, #ccc) !important;
+  box-sizing: border-box !important;
+}
+
+body.community-body .reddit-search {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+body.community-body .reddit-nav-toggle,
+body.community-body #nav-toggle {
+  display: inline-flex !important;
+  width: 36px !important;
+  height: 36px !important;
+  flex: 0 0 auto !important;
+}
+
+/* Main column uses the whole screen */
+body.community-body .reddit-main,
+body.community-body .community-main-col,
+body.community-body #feed-view,
+body.community-body #community-main {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+/* Right rail OFF by default (and when hidden) */
+.reddit-right,
+#right-rail,
+aside.reddit-right {
+  display: none !important;
+}
+.reddit-right[hidden],
+#right-rail[hidden],
+.reddit-right.is-hidden,
+#right-rail.is-hidden {
+  display: none !important;
+}
+
+/* Desktop only: optional about rail */
+@media (min-width: 1101px) {
+  body.community-body .shell,
+  body.community-body .community-shell.reddit-shell {
+    width: min(1120px, 100%) !important;
+    max-width: 1120px !important;
+    margin: 0 auto !important;
+    padding: 16px 16px 40px !important;
+  }
+  .reddit-layout,
+  .community-layout.reddit-layout {
+    grid-template-columns: minmax(0, 1fr) 300px !important;
+    gap: 20px !important;
+  }
+  .reddit-right:not([hidden]):not(.is-hidden),
+  #right-rail:not([hidden]):not(.is-hidden) {
+    display: grid !important;
+    gap: 14px !important;
+  }
+}
+
+/* Drawer nav — closed via [hidden], open as fixed panel */
+.reddit-leftnav[hidden],
+#left-nav[hidden] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+body.reddit-nav-open .reddit-leftnav,
+body.reddit-nav-open #left-nav,
+#left-nav:not([hidden]) {
+  position: fixed !important;
+  top: 48px !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  width: min(300px, 86vw) !important;
+  max-width: 300px !important;
+  height: auto !important;
+  max-height: none !important;
+  z-index: 220 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  transform: none !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  background: var(--r-card, #fff) !important;
+  border-right: 1px solid var(--r-line, #ccc) !important;
+  border-radius: 0 !important;
+  box-shadow: 8px 0 28px rgba(0,0,0,.18) !important;
+}
+.reddit-leftnav-scroll {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.reddit-leftnav-foot {
+  flex: 0 0 auto !important;
+  position: relative !important;
+}
+.reddit-backdrop:not([hidden]),
+#nav-backdrop:not([hidden]) {
+  position: fixed !important;
+  inset: 48px 0 0 0 !important;
+  background: rgba(0,0,0,.45) !important;
+  z-index: 210 !important;
+  display: block !important;
+}
+
+/* Feed cards — Reddit mobile edge-to-edge */
+@media (max-width: 1100px) {
+  body.community-body {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body.community-body .reddit-brand-text,
+  body.community-body .reddit-create-label,
+  body.community-body .reddit-user-copy,
+  body.community-body .reddit-chip-caret {
+    display: none !important;
+  }
+  body.community-body .reddit-sortbar,
+  body.community-body .reddit-feed-wrap,
+  body.community-body #feed-card,
+  body.community-body .reddit-post,
+  body.community-body .reddit-community-header,
+  body.community-body #view-banner,
+  body.community-body .reddit-create,
+  body.community-body #composer-card {
+    border-radius: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  body.community-body .reddit-post {
+    border-bottom: 1px solid var(--r-line, #ccc) !important;
+    margin-bottom: 0 !important;
+  }
+  body.community-body .reddit-feed-wrap,
+  body.community-body #feed-card {
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  body.community-body .community-feed,
+  body.community-body #feed {
+    display: grid !important;
+    gap: 0 !important;
+  }
+  /* Vote row under title on narrow screens like Reddit app */
+  body.community-body .reddit-post {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+  body.community-body .reddit-vote {
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    padding: 4px 12px 10px !important;
+    gap: 8px !important;
+    order: 2 !important;
+  }
+  body.community-body .reddit-post-main {
+    order: 1 !important;
+    padding: 10px 12px 4px !important;
+  }
+
+  /* Bottom tab bar — always when logged-in bar is shown */
+  .community-tabbar:not([hidden]),
+  #community-tabbar:not([hidden]) {
+    display: grid !important;
+    grid-template-columns: repeat(5, 1fr) !important;
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 230 !important;
+    height: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 4px 2px calc(4px + env(safe-area-inset-bottom, 0px)) !important;
+    background: var(--r-card, #fff) !important;
+    border-top: 1px solid var(--r-line, #ccc) !important;
+    box-shadow: 0 -4px 16px rgba(0,0,0,.08) !important;
+  }
+  .community-tabbar[hidden],
+  #community-tabbar[hidden] {
+    display: none !important;
+  }
+  .community-tab {
+    display: grid !important;
+    justify-items: center !important;
+    align-content: center !important;
+    gap: 2px !important;
+    text-decoration: none !important;
+    color: var(--r-muted, #7a7a7a) !important;
+    font-size: 0.62rem !important;
+    font-weight: 600 !important;
+    min-width: 0 !important;
+    padding: 4px 2px !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+  .community-tab.is-active {
+    color: var(--r-accent-ink, #1a3a5c) !important;
+  }
+  .community-tab-create-ico,
+  .community-tab-create .community-tab-create-ico {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 999px !important;
+    display: grid !important;
+    place-items: center !important;
+    background: var(--r-accent, #1a3a5c) !important;
+    color: #fff !important;
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+  }
+}
+
+/* Profile: no banner, no Join — Reddit user header */
+#view-banner[data-mode="user"] .reddit-community-banner,
+#view-banner[data-mode="user"] #view-banner-strip,
+#view-banner[data-mode="user"] #view-banner-strip {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+}
+#view-banner[data-mode="user"] {
+  background: var(--r-card, #fff) !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--r-line, #ccc) !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  padding: 12px 12px 8px !important;
+}
+#view-banner[data-mode="user"] .reddit-community-head {
+  margin-top: 0 !important;
+  padding: 0 !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+#view-banner[data-mode="user"] .reddit-community-icon,
+#view-banner[data-mode="user"] #view-icon {
+  width: 64px !important;
+  height: 64px !important;
+  margin: 0 !important;
+  border: 2px solid var(--r-line, #ddd) !important;
+}
+#view-banner[data-mode="user"] #join-community-btn,
+#view-banner[data-mode="user"] .reddit-join-btn,
+#view-banner[data-mode="user"] .reddit-about-join {
+  display: none !important;
+}
+#view-banner[data-mode="user"] .reddit-community-actions,
+#view-banner[data-mode="user"] #view-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin-left: auto !important;
+}
+
+/* Sort bar sticky under topnav */
+@media (max-width: 1100px) {
+  body.community-body .reddit-sortbar {
+    position: sticky !important;
+    top: 48px !important;
+    z-index: 40 !important;
+    background: var(--r-bg, #dae0e6) !important;
+    padding: 8px 10px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--r-line, #ccc) !important;
+  }
+}
