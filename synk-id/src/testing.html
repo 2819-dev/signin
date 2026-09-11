@@ -7,12 +7,12 @@
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6f8" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="Synk beta testing — agenda and feedback." />
+    <meta name="description" content="Synk beta testing — clock in, agenda checklist, and feedback." />
     <title>Synk — Testing</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=community-polish2" />
+    <link rel="stylesheet" href="/join.css?v=testing-clock1" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body>
@@ -32,7 +32,7 @@
       <header class="page-head">
         <p class="eyebrow">Beta</p>
         <h1>Testing</h1>
-        <p class="subtitle">Try new updates, check off the agenda, and send feedback.</p>
+        <p class="subtitle">Clock in, work through each update’s agenda items, then move to the next update.</p>
       </header>
 
       <section class="card" id="testing-locked" hidden>
@@ -56,10 +56,33 @@
 
       <section class="card" id="testing-panel" hidden>
         <p class="section-label" id="testing-status">Loading…</p>
+
+        <div class="testing-clock" id="testing-clock">
+          <div>
+            <h2>Clock in</h2>
+            <p class="muted" id="testing-clock-copy">Clock in when you start testing this update.</p>
+          </div>
+          <div class="btn-row testing-clock-actions">
+            <button class="btn btn-primary btn-compact" type="button" id="testing-clock-in-btn">Clock in</button>
+            <button class="btn btn-secondary btn-compact" type="button" id="testing-clock-out-btn" hidden>Clock out</button>
+          </div>
+        </div>
+
+        <div class="testing-progress" id="testing-progress" hidden>
+          <p class="testing-progress-label" id="testing-progress-label"></p>
+        </div>
+
         <div class="testing-layout">
           <div>
-            <h2>Agenda</h2>
-            <p class="muted">Mark items as you try them.</p>
+            <div class="testing-agenda-head">
+              <div>
+                <h2>Agenda</h2>
+                <p class="muted" id="testing-agenda-copy">Mark items as you try them.</p>
+              </div>
+              <button class="btn btn-primary btn-compact" type="button" id="testing-complete-btn" hidden>
+                Complete Agenda
+              </button>
+            </div>
             <div id="testing-agenda" class="testing-feedback-list" aria-live="polite"></div>
           </div>
           <div>
@@ -86,9 +109,22 @@
       const panel = document.getElementById("testing-panel");
       const statusEl = document.getElementById("testing-status");
       const agendaEl = document.getElementById("testing-agenda");
+      const agendaCopy = document.getElementById("testing-agenda-copy");
       const feedbackList = document.getElementById("testing-feedback-list");
       const feedbackForm = document.getElementById("testing-feedback-form");
       const feedbackStatus = document.getElementById("testing-feedback-status");
+      const clockCopy = document.getElementById("testing-clock-copy");
+      const clockInBtn = document.getElementById("testing-clock-in-btn");
+      const clockOutBtn = document.getElementById("testing-clock-out-btn");
+      const completeBtn = document.getElementById("testing-complete-btn");
+      const progressEl = document.getElementById("testing-progress");
+      const progressLabel = document.getElementById("testing-progress-label");
+
+      let dashboardState = {
+        clock: { clockedIn: false },
+        progress: {},
+        agenda: [],
+      };
 
       function escapeHtml(str) {
         return String(str || "")
@@ -96,6 +132,18 @@
           .replace(/</g, "&lt;")
           .replace(/>/g, "&gt;")
           .replace(/"/g, "&quot;");
+      }
+
+      function cleanDetail(detail) {
+        return String(detail || "")
+          .replace(/<!--\s*synk-update:[^>]*-->/gi, "")
+          .trim();
+      }
+
+      function shortVersion(ver) {
+        const value = String(ver || "").trim();
+        if (!value) return "";
+        return value.length > 10 ? value.slice(0, 7) : value;
       }
 
       function readSession() {
@@ -120,22 +168,60 @@
         };
       }
 
-      function renderAgenda(items) {
+      function renderClock(clock) {
+        const clockedIn = !!(clock && clock.clockedIn);
+        clockInBtn.hidden = clockedIn;
+        clockOutBtn.hidden = !clockedIn;
+        if (clockedIn) {
+          const when = clock.clockedInAt ? new Date(clock.clockedInAt).toLocaleString() : "now";
+          clockCopy.textContent = `You are clocked in since ${when}. Check off agenda items, then complete the agenda.`;
+        } else {
+          clockCopy.textContent = "Clock in when you start testing. Agenda changes stay locked until you do.";
+        }
+      }
+
+      function renderProgress(progress) {
+        const current = progress && progress.currentVersion;
+        const next = progress && progress.nextVersion;
+        const caughtUp = !!(progress && progress.caughtUp);
+        const done = Number(progress && progress.updateDoneCount) || 0;
+        const total = Number(progress && progress.updateItemCount) || 0;
+
+        if (caughtUp && !current) {
+          progressEl.hidden = false;
+          progressLabel.textContent = "You’re caught up. When the next update ships, its agenda will appear here.";
+          agendaCopy.textContent = "Standing checklist items (if any) stay available below.";
+          completeBtn.hidden = true;
+          return;
+        }
+
+        progressEl.hidden = false;
+        const verLabel = shortVersion(current) || "current update";
+        progressLabel.textContent = total
+          ? `Testing update ${verLabel} — ${done} of ${total} items done${next ? `. Next: ${shortVersion(next)}` : ""}.`
+          : `Testing update ${verLabel}.`;
+        agendaCopy.textContent = "Each release adds multiple checklist items. Finish this update, then move to the next.";
+        completeBtn.hidden = !(progress && progress.canCompleteAgenda);
+      }
+
+      function renderAgenda(items, clockedIn) {
         if (!items.length) {
-          agendaEl.innerHTML = '<p class="muted">No agenda items yet. Check back when an update ships.</p>';
+          agendaEl.innerHTML = '<p class="muted">No agenda items for this update yet. Check back when an update ships.</p>';
           return;
         }
         agendaEl.innerHTML = items
-          .map(
-            (item) => `
-          <label class="testing-agenda-item ${item.done ? "is-done" : ""}">
-            <input type="checkbox" data-agenda-id="${escapeHtml(item.id)}" ${item.done ? "checked" : ""} />
+          .map((item) => {
+            const detail = cleanDetail(item.detail);
+            const disabled = clockedIn ? "" : "disabled";
+            return `
+          <label class="testing-agenda-item ${item.done ? "is-done" : ""} ${clockedIn ? "" : "is-locked"}">
+            <input type="checkbox" data-agenda-id="${escapeHtml(item.id)}" ${item.done ? "checked" : ""} ${disabled} />
             <span>
               <strong>${escapeHtml(item.title)}</strong>
-              ${item.detail ? `<div class="muted">${escapeHtml(item.detail)}</div>` : ""}
+              ${detail ? `<div class="muted">${escapeHtml(detail)}</div>` : ""}
             </span>
-          </label>`
-          )
+          </label>`;
+          })
           .join("");
       }
 
@@ -173,13 +259,75 @@
             return;
           }
           if (!res.ok) throw new Error(data.error || "Could not load testing");
+          dashboardState = {
+            clock: data.clock || { clockedIn: false },
+            progress: data.progress || {},
+            agenda: data.agenda || [],
+          };
           statusEl.textContent = "Beta testing";
-          renderAgenda(data.agenda || []);
+          renderClock(dashboardState.clock);
+          renderProgress(dashboardState.progress);
+          renderAgenda(dashboardState.agenda, !!(dashboardState.clock && dashboardState.clock.clockedIn));
           renderFeedback(data.feedback || []);
         } catch (err) {
           statusEl.textContent = err.message || "Could not load testing";
         }
       }
+
+      async function postAction(action, payload) {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({ action, ...(payload || {}) }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        return data;
+      }
+
+      clockInBtn.addEventListener("click", async () => {
+        clockInBtn.disabled = true;
+        try {
+          await postAction("beta-clock-in");
+          await loadDashboard();
+        } catch (err) {
+          statusEl.textContent = err.message || "Could not clock in";
+        } finally {
+          clockInBtn.disabled = false;
+        }
+      });
+
+      clockOutBtn.addEventListener("click", async () => {
+        clockOutBtn.disabled = true;
+        try {
+          await postAction("beta-clock-out");
+          await loadDashboard();
+        } catch (err) {
+          statusEl.textContent = err.message || "Could not clock out";
+        } finally {
+          clockOutBtn.disabled = false;
+        }
+      });
+
+      completeBtn.addEventListener("click", async () => {
+        if (!confirm("Mark this update’s agenda complete and move to the next update?")) return;
+        completeBtn.disabled = true;
+        try {
+          const data = await postAction("beta-complete-agenda");
+          if (data.caughtUp) {
+            statusEl.textContent = "Agenda complete — you’re caught up for now.";
+          } else if (data.nextVersion) {
+            statusEl.textContent = `Agenda complete — now testing update ${shortVersion(data.nextVersion)}.`;
+          } else {
+            statusEl.textContent = "Agenda complete.";
+          }
+          await loadDashboard();
+        } catch (err) {
+          statusEl.textContent = err.message || "Could not complete agenda";
+        } finally {
+          completeBtn.disabled = false;
+        }
+      });
 
       agendaEl.addEventListener("change", async (e) => {
         const input = e.target.closest("[data-agenda-id]");
@@ -188,20 +336,15 @@
         const done = !!input.checked;
         input.disabled = true;
         try {
-          const res = await fetch("/api/synk-community", {
-            method: "POST",
-            headers: hubHeaders(),
-            body: JSON.stringify({ action: "beta-toggle-agenda", itemId, done }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not update");
+          await postAction("beta-toggle-agenda", { itemId, done });
           const row = input.closest(".testing-agenda-item");
           if (row) row.classList.toggle("is-done", done);
+          await loadDashboard();
         } catch (err) {
           input.checked = !done;
           statusEl.textContent = err.message || "Could not update agenda";
         } finally {
-          input.disabled = false;
+          input.disabled = !(dashboardState.clock && dashboardState.clock.clockedIn);
         }
       });
 
@@ -210,13 +353,7 @@
         feedbackStatus.textContent = "Sending…";
         try {
           const body = document.getElementById("testing-feedback-body").value;
-          const res = await fetch("/api/synk-community", {
-            method: "POST",
-            headers: hubHeaders(),
-            body: JSON.stringify({ action: "beta-send-feedback", body }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not send");
+          await postAction("beta-send-feedback", { body });
           document.getElementById("testing-feedback-body").value = "";
           feedbackStatus.textContent = "Sent — thank you";
           await loadDashboard();

@@ -84,6 +84,9 @@ const {
   clientIp,
   buildReleaseNotesPayload,
   getAppUpdateReleaseNotes,
+  ensureBetaTestingTables,
+  getBetaTesterClock,
+  resolveBetaCurrentUpdate,
 } = require("./lib/synk");
 const {
   getVapidConfig,
@@ -3603,6 +3606,7 @@ if (action === "create-alt") {
 
     if (action === "beta-dashboard") {
       const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
       const usernames = await sql`
         SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
         UNION
@@ -3616,13 +3620,39 @@ if (action === "create-alt") {
       if (!beta && role !== "owner" && role !== "admin") {
         return json(403, { error: "Beta testing is only for beta testers" });
       }
-      const items = await sql`
-        SELECT id, title, detail, sort_order, active, created_at, updated_at
-        FROM synk_beta_agenda_items
-        WHERE active = TRUE
-        ORDER BY sort_order ASC, created_at ASC
-        LIMIT 100
-      `;
+
+      const progress = await resolveBetaCurrentUpdate(sql, profileId);
+      const clock = await getBetaTesterClock(sql, profileId);
+      const currentVersion = progress.currentVersion;
+
+      const items = currentVersion
+        ? await sql`
+            SELECT id, title, detail, sort_order, active, created_at, updated_at, update_version
+            FROM synk_beta_agenda_items
+            WHERE active = TRUE
+              AND (
+                update_version = ${currentVersion}
+                OR update_version IS NULL
+                OR btrim(update_version) = ''
+              )
+            ORDER BY
+              CASE
+                WHEN update_version = ${currentVersion} THEN 0
+                ELSE 1
+              END ASC,
+              sort_order ASC,
+              created_at ASC
+            LIMIT 100
+          `
+        : await sql`
+            SELECT id, title, detail, sort_order, active, created_at, updated_at, update_version
+            FROM synk_beta_agenda_items
+            WHERE active = TRUE
+              AND (update_version IS NULL OR btrim(update_version) = '')
+            ORDER BY sort_order ASC, created_at ASC
+            LIMIT 100
+          `;
+
       const checks = await sql`
         SELECT agenda_item_id, completed_at
         FROM synk_beta_agenda_checks
@@ -3636,17 +3666,34 @@ if (action === "create-alt") {
         ORDER BY created_at DESC
         LIMIT 50
       `;
+
+      const agenda = items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        detail: item.detail || "",
+        sortOrder: item.sort_order,
+        updateVersion: item.update_version || null,
+        done: checkMap.has(item.id),
+        completedAt: checkMap.get(item.id) || null,
+      }));
+      const updateItems = agenda.filter((item) => item.updateVersion === currentVersion);
+      const doneCount = updateItems.filter((item) => item.done).length;
+
       return json(200, {
         ok: true,
         isBetaTester: true,
-        agenda: items.map((item) => ({
-          id: item.id,
-          title: item.title,
-          detail: item.detail || "",
-          sortOrder: item.sort_order,
-          done: checkMap.has(item.id),
-          completedAt: checkMap.get(item.id) || null,
-        })),
+        clock,
+        progress: {
+          currentVersion,
+          nextVersion: progress.nextVersion,
+          caughtUp: progress.caughtUp,
+          completedVersions: progress.completedVersions,
+          pendingVersions: progress.pendingVersions,
+          updateItemCount: updateItems.length,
+          updateDoneCount: doneCount,
+          canCompleteAgenda: !!currentVersion && clock.clockedIn && updateItems.length > 0,
+        },
+        agenda,
         feedback: feedback.map((f) => ({
           id: f.id,
           body: f.body,
@@ -3655,8 +3702,107 @@ if (action === "create-alt") {
       });
     }
 
+    if (action === "beta-clock-in" || action === "beta-clock-out") {
+      const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = role === "owner" || role === "admin";
+      if (!beta) {
+        for (const row of usernames) {
+          const tags = await listUsernameTags(sql, row.public_username);
+          if (tags.some(isBetaTesterTag)) { beta = true; break; }
+        }
+      }
+      if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
+
+      if (action === "beta-clock-in") {
+        await sql`
+          INSERT INTO synk_beta_tester_clock (synk_profile_id, clocked_in_at, clocked_out_at, updated_at)
+          VALUES (${profileId}, NOW(), NULL, NOW())
+          ON CONFLICT (synk_profile_id) DO UPDATE
+          SET clocked_in_at = NOW(), clocked_out_at = NULL, updated_at = NOW()
+        `;
+      } else {
+        await sql`
+          INSERT INTO synk_beta_tester_clock (synk_profile_id, clocked_in_at, clocked_out_at, updated_at)
+          VALUES (${profileId}, NULL, NOW(), NOW())
+          ON CONFLICT (synk_profile_id) DO UPDATE
+          SET clocked_out_at = NOW(),
+              clocked_in_at = NULL,
+              updated_at = NOW()
+        `;
+      }
+      const clock = await getBetaTesterClock(sql, profileId);
+      return json(200, { ok: true, clock });
+    }
+
+    if (action === "beta-complete-agenda") {
+      const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = role === "owner" || role === "admin";
+      if (!beta) {
+        for (const row of usernames) {
+          const tags = await listUsernameTags(sql, row.public_username);
+          if (tags.some(isBetaTesterTag)) { beta = true; break; }
+        }
+      }
+      if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
+
+      const clock = await getBetaTesterClock(sql, profileId);
+      if (!clock.clockedIn) {
+        return json(400, { error: "Clock in before completing the agenda" });
+      }
+
+      const progress = await resolveBetaCurrentUpdate(sql, profileId);
+      const currentVersion = progress.currentVersion;
+      if (!currentVersion) {
+        return json(400, { error: "No update agenda to complete right now" });
+      }
+
+      const items = await sql`
+        SELECT id
+        FROM synk_beta_agenda_items
+        WHERE active = TRUE AND update_version = ${currentVersion}
+      `;
+      if (!items.length) {
+        return json(400, { error: "No agenda items for this update" });
+      }
+
+      for (const item of items) {
+        await sql`
+          INSERT INTO synk_beta_agenda_checks (agenda_item_id, synk_profile_id)
+          VALUES (${item.id}, ${profileId})
+          ON CONFLICT (agenda_item_id, synk_profile_id) DO UPDATE SET completed_at = NOW()
+        `;
+      }
+
+      await sql`
+        INSERT INTO synk_beta_update_completions (synk_profile_id, update_version, completed_at)
+        VALUES (${profileId}, ${currentVersion}, NOW())
+        ON CONFLICT (synk_profile_id, update_version) DO UPDATE SET completed_at = NOW()
+      `;
+
+      const nextProgress = await resolveBetaCurrentUpdate(sql, profileId);
+      return json(200, {
+        ok: true,
+        completedVersion: currentVersion,
+        nextVersion: nextProgress.currentVersion,
+        caughtUp: nextProgress.caughtUp,
+      });
+    }
+
     if (action === "beta-toggle-agenda") {
       const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
       // access check reuse: any beta tag on profile usernames or staff
       const usernames = await sql`
         SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
@@ -3671,10 +3817,29 @@ if (action === "create-alt") {
         }
       }
       if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
+      const clock = await getBetaTesterClock(sql, profileId);
+      if (!clock.clockedIn) {
+        return json(400, { error: "Clock in before updating the agenda" });
+      }
       const itemId = String(body.itemId || body.id || "").trim();
       if (!itemId) return json(400, { error: "Agenda item required" });
-      const item = await sql`SELECT id FROM synk_beta_agenda_items WHERE id = ${itemId} AND active = TRUE LIMIT 1`;
+      const item = await sql`
+        SELECT id, update_version
+        FROM synk_beta_agenda_items
+        WHERE id = ${itemId} AND active = TRUE
+        LIMIT 1
+      `;
       if (!item[0]) return json(404, { error: "Agenda item not found" });
+
+      const progress = await resolveBetaCurrentUpdate(sql, profileId);
+      const itemVersion = item[0].update_version ? String(item[0].update_version) : "";
+      if (itemVersion && progress.currentVersion && itemVersion !== progress.currentVersion) {
+        return json(400, { error: "Finish your current update agenda before working on later ones" });
+      }
+      if (itemVersion && progress.completedVersions.includes(itemVersion)) {
+        return json(400, { error: "This update agenda is already complete" });
+      }
+
       const done = body.done !== false && body.completed !== false;
       if (done) {
         await sql`
@@ -3693,6 +3858,7 @@ if (action === "create-alt") {
 
     if (action === "beta-send-feedback") {
       const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
       const usernames = await sql`
         SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
         UNION
@@ -3723,8 +3889,9 @@ if (action === "create-alt") {
       if (role !== "owner" && role !== "admin") {
         return json(403, { error: "Only staff can manage the beta agenda" });
       }
+      await ensureBetaTestingTables(sql);
       const items = await sql`
-        SELECT id, title, detail, sort_order, active, created_at, updated_at
+        SELECT id, title, detail, sort_order, active, created_at, updated_at, update_version
         FROM synk_beta_agenda_items
         ORDER BY sort_order ASC, created_at ASC
         LIMIT 200
@@ -3736,6 +3903,7 @@ if (action === "create-alt") {
           title: item.title,
           detail: item.detail || "",
           sortOrder: item.sort_order,
+          updateVersion: item.update_version || null,
           active: item.active !== false,
           createdAt: item.created_at,
           updatedAt: item.updated_at,
@@ -3747,26 +3915,33 @@ if (action === "create-alt") {
       if (role !== "owner" && role !== "admin") {
         return json(403, { error: "Only staff can manage the beta agenda" });
       }
+      await ensureBetaTestingTables(sql);
       const title = String(body.title || "").trim().replace(/\s+/g, " ").slice(0, 160);
       const detail = String(body.detail || "").trim().slice(0, 1000);
       const sortOrder = Number.isFinite(Number(body.sortOrder)) ? Math.round(Number(body.sortOrder)) : 0;
       const active = body.active !== false;
+      const updateVersion = String(body.updateVersion || body.version || "").trim().slice(0, 120) || null;
       const id = String(body.itemId || body.id || "").trim();
       if (!title) return json(400, { error: "Title is required" });
       if (id) {
         const rows = await sql`
           UPDATE synk_beta_agenda_items
-          SET title = ${title}, detail = ${detail}, sort_order = ${sortOrder}, active = ${active}, updated_at = NOW()
+          SET title = ${title},
+              detail = ${detail},
+              sort_order = ${sortOrder},
+              active = ${active},
+              update_version = ${updateVersion},
+              updated_at = NOW()
           WHERE id = ${id}
-          RETURNING id, title, detail, sort_order, active, created_at, updated_at
+          RETURNING id, title, detail, sort_order, active, created_at, updated_at, update_version
         `;
         if (!rows[0]) return json(404, { error: "Agenda item not found" });
         return json(200, { ok: true, item: rows[0] });
       }
       const rows = await sql`
-        INSERT INTO synk_beta_agenda_items (title, detail, sort_order, active, created_by)
-        VALUES (${title}, ${detail}, ${sortOrder}, ${active}, ${auth.profile.id})
-        RETURNING id, title, detail, sort_order, active, created_at, updated_at
+        INSERT INTO synk_beta_agenda_items (title, detail, sort_order, active, created_by, update_version)
+        VALUES (${title}, ${detail}, ${sortOrder}, ${active}, ${auth.profile.id}, ${updateVersion})
+        RETURNING id, title, detail, sort_order, active, created_at, updated_at, update_version
       `;
       return json(201, { ok: true, item: rows[0] });
     }
@@ -3775,6 +3950,7 @@ if (action === "create-alt") {
       if (role !== "owner" && role !== "admin") {
         return json(403, { error: "Only staff can manage the beta agenda" });
       }
+      await ensureBetaTestingTables(sql);
       const id = String(body.itemId || body.id || "").trim();
       if (!id) return json(400, { error: "Agenda item required" });
       await sql`DELETE FROM synk_beta_agenda_items WHERE id = ${id}`;

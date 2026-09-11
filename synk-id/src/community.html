@@ -769,7 +769,7 @@
                       <span class="mod-panel-chevron" aria-hidden="true"></span>
                     </summary>
                     <div class="mod-panel-body">
-                      <p class="muted">Checklist shown to Beta tester members on the Testing hub tile.</p>
+                      <p class="muted">Checklist shown to Beta tester members on the Testing hub tile. App updates add one item per change.</p>
                       <div id="beta-agenda-admin-list" class="community-staff-list"></div>
                       <form id="beta-agenda-form" class="form" style="margin-top:12px">
                         <input type="hidden" id="beta-agenda-id" value="" />
@@ -780,6 +780,10 @@
                         <div class="field">
                           <label for="beta-agenda-detail">Details <span class="muted">(optional)</span></label>
                           <input id="beta-agenda-detail" type="text" maxlength="1000" placeholder="Open Community and scroll the menu" />
+                        </div>
+                        <div class="field">
+                          <label for="beta-agenda-version">Update version <span class="muted">(optional)</span></label>
+                          <input id="beta-agenda-version" type="text" maxlength="120" placeholder="Leave blank for standing items" />
                         </div>
                         <div class="field">
                           <label for="beta-agenda-sort">Sort order</label>
@@ -889,6 +893,6 @@
     </div>
 
     <script src="/push-client.js?v=pro-copy1"></script>
-    <script src="/community.js?v=pro-copy1"></script>
+    <script src="/community.js?v=testing-clock1"></script>
   </body>
 </html>

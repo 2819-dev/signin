@@ -7290,6 +7290,47 @@ body.reddit-body .reddit-create {
 .info-block p { margin: 0; }
 
 /* Testing hub */
+.testing-clock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  margin: 0 0 14px;
+  border: 1px solid var(--line, #d5dbe6);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fill, #fff) 92%, #6366f1 8%);
+}
+.testing-clock h2 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+}
+.testing-clock-actions {
+  margin: 0;
+}
+.testing-progress {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--line, #d5dbe6);
+  background: var(--fill, #fff);
+}
+.testing-progress-label {
+  margin: 0;
+  font-size: 0.92rem;
+}
+.testing-agenda-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.testing-agenda-head h2 {
+  margin: 0 0 4px;
+}
 .testing-layout {
   display: grid;
   gap: 14px;
@@ -7309,6 +7350,9 @@ body.reddit-body .reddit-create {
   border: 1px solid var(--line, #d5dbe6);
   border-radius: 10px;
   background: var(--fill, #fff);
+}
+.testing-agenda-item.is-locked {
+  opacity: 0.78;
 }
 .testing-agenda-item.is-done {
   opacity: 0.72;

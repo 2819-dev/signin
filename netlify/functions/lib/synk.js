@@ -405,39 +405,7 @@ async function ensureSynkCommunityExtras(sql) {
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS synk_info_pages_slug_idx ON synk_info_pages (slug)`;
   await sql`CREATE INDEX IF NOT EXISTS synk_info_pages_updated_idx ON synk_info_pages (updated_at DESC)`;
 
-  await sql`
-    CREATE TABLE IF NOT EXISTS synk_beta_agenda_items (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      title TEXT NOT NULL,
-      detail TEXT NOT NULL DEFAULT '',
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      active BOOLEAN NOT NULL DEFAULT TRUE,
-      created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-  await sql`CREATE INDEX IF NOT EXISTS synk_beta_agenda_active_idx ON synk_beta_agenda_items (active, sort_order ASC, created_at ASC)`;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS synk_beta_agenda_checks (
-      agenda_item_id UUID NOT NULL REFERENCES synk_beta_agenda_items(id) ON DELETE CASCADE,
-      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
-      completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (agenda_item_id, synk_profile_id)
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS synk_beta_feedback (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
-      body TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_created_idx ON synk_beta_feedback (created_at DESC)`;
-  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_profile_idx ON synk_beta_feedback (synk_profile_id, created_at DESC)`;
+  await ensureBetaTestingTables(sql);
 
 
   await sql`
@@ -4193,12 +4161,7 @@ function memberFacingReleaseNoteLines(text) {
     .filter(Boolean);
 }
 
-async function ensureBetaAgendaForAppUpdate(sql, { version, body, notes } = {}) {
-  const ver = String(version || "")
-    .trim()
-    .slice(0, 120);
-  if (!ver) return { created: 0, skipped: true };
-
+async function ensureBetaTestingTables(sql) {
   await sql`
     CREATE TABLE IF NOT EXISTS synk_beta_agenda_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -4211,46 +4174,175 @@ async function ensureBetaAgendaForAppUpdate(sql, { version, body, notes } = {}) 
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE synk_beta_agenda_items ADD COLUMN IF NOT EXISTS update_version TEXT`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_agenda_active_idx ON synk_beta_agenda_items (active, sort_order ASC, created_at ASC)`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_agenda_update_version_idx ON synk_beta_agenda_items (update_version, sort_order ASC, created_at ASC)`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_agenda_checks (
+      agenda_item_id UUID NOT NULL REFERENCES synk_beta_agenda_items(id) ON DELETE CASCADE,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (agenda_item_id, synk_profile_id)
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_feedback (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_created_idx ON synk_beta_feedback (created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_profile_idx ON synk_beta_feedback (synk_profile_id, created_at DESC)`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_tester_clock (
+      synk_profile_id UUID PRIMARY KEY REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      clocked_in_at TIMESTAMPTZ,
+      clocked_out_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_update_completions (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      update_version TEXT NOT NULL,
+      completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, update_version)
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_update_completions_profile_idx ON synk_beta_update_completions (synk_profile_id, completed_at DESC)`;
+}
+
+async function getBetaTesterClock(sql, profileId) {
+  const rows = await sql`
+    SELECT clocked_in_at, clocked_out_at, updated_at
+    FROM synk_beta_tester_clock
+    WHERE synk_profile_id = ${profileId}
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row || !row.clocked_in_at) {
+    return {
+      clockedIn: false,
+      clockedInAt: null,
+      clockedOutAt: row && row.clocked_out_at ? row.clocked_out_at : null,
+    };
+  }
+  return {
+    clockedIn: true,
+    clockedInAt: row.clocked_in_at,
+    clockedOutAt: null,
+  };
+}
+
+async function listBetaUpdateVersions(sql) {
+  const rows = await sql`
+    SELECT update_version AS version, MIN(created_at) AS first_seen
+    FROM synk_beta_agenda_items
+    WHERE active = TRUE
+      AND update_version IS NOT NULL
+      AND btrim(update_version) <> ''
+    GROUP BY update_version
+    ORDER BY MIN(created_at) ASC, update_version ASC
+  `;
+  return rows.map((row) => ({
+    version: String(row.version || ""),
+    firstSeen: row.first_seen || null,
+  }));
+}
+
+async function resolveBetaCurrentUpdate(sql, profileId) {
+  const versions = await listBetaUpdateVersions(sql);
+  if (!versions.length) {
+    return {
+      currentVersion: null,
+      nextVersion: null,
+      completedVersions: [],
+      pendingVersions: [],
+      caughtUp: true,
+    };
+  }
+  const doneRows = await sql`
+    SELECT update_version, completed_at
+    FROM synk_beta_update_completions
+    WHERE synk_profile_id = ${profileId}
+  `;
+  const completed = new Set(doneRows.map((r) => String(r.update_version || "")));
+  const pending = versions.filter((v) => !completed.has(v.version));
+  const current = pending[0] || null;
+  const next = pending[1] || null;
+  return {
+    currentVersion: current ? current.version : null,
+    nextVersion: next ? next.version : null,
+    completedVersions: versions.filter((v) => completed.has(v.version)).map((v) => v.version),
+    pendingVersions: pending.map((v) => v.version),
+    caughtUp: !current,
+  };
+}
+
+async function ensureBetaAgendaForAppUpdate(sql, { version, body, notes } = {}) {
+  const ver = String(version || "")
+    .trim()
+    .slice(0, 120);
+  if (!ver) return { created: 0, skipped: true };
+
+  await ensureBetaTestingTables(sql);
 
   const marker = `<!--synk-update:${ver}-->`;
   const existing = await sql`
     SELECT id
     FROM synk_beta_agenda_items
-    WHERE detail LIKE ${"%" + marker + "%"}
+    WHERE update_version = ${ver}
+       OR detail LIKE ${"%" + marker + "%"}
     LIMIT 1
   `;
   if (existing[0]) return { created: 0, already: true, version: ver };
 
   const short = ver.length > 10 ? ver.slice(0, 7) : ver;
-  const publicLines = memberFacingReleaseNoteLines(notes || body || "").slice(0, 12);
-  const detailLines = publicLines.length
-    ? publicLines.map((line) => `• ${line}`)
+  const publicLines = memberFacingReleaseNoteLines(notes || body || "").slice(0, 20);
+  const lines = publicLines.length
+    ? publicLines
     : [
         String(
           body ||
             "Synk was updated. Please try the latest build and report anything that feels broken."
-        ).trim(),
+        )
+          .trim()
+          .slice(0, 160) || "Try the latest Synk update and report anything that feels broken.",
       ];
-  const title = `Test app update (${short})`.slice(0, 160);
-  const detail = `${detailLines.join("\n")}\n\n${marker}`.trim().slice(0, 1000);
 
   const sortRows = await sql`
     SELECT COALESCE(MIN(sort_order), 0)::int AS min_sort
     FROM synk_beta_agenda_items
   `;
-  const sortOrder = (Number(sortRows[0] && sortRows[0].min_sort) || 0) - 1;
+  let sortOrder = (Number(sortRows[0] && sortRows[0].min_sort) || 0) - lines.length;
+  const createdIds = [];
 
-  const rows = await sql`
-    INSERT INTO synk_beta_agenda_items (title, detail, sort_order, active, created_by)
-    VALUES (${title}, ${detail}, ${sortOrder}, TRUE, NULL)
-    RETURNING id
-  `;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = String(lines[i] || "").trim();
+    if (!line) continue;
+    const title = line.slice(0, 160);
+    const detail = `Update ${short}\n\n${marker}`.slice(0, 1000);
+    const rows = await sql`
+      INSERT INTO synk_beta_agenda_items (title, detail, sort_order, active, created_by, update_version)
+      VALUES (${title}, ${detail}, ${sortOrder}, TRUE, NULL, ${ver})
+      RETURNING id
+    `;
+    if (rows[0]) createdIds.push(rows[0].id);
+    sortOrder += 1;
+  }
 
   return {
-    created: rows[0] ? 1 : 0,
+    created: createdIds.length,
     already: false,
     version: ver,
-    agendaItemId: rows[0] ? rows[0].id : null,
+    agendaItemIds: createdIds,
+    agendaItemId: createdIds[0] || null,
   };
 }
 
@@ -4391,7 +4483,11 @@ module.exports = {
   requireHubSession,
   extractHubSessionToken,
   broadcastAppUpdate,
+  ensureBetaTestingTables,
   ensureBetaAgendaForAppUpdate,
+  getBetaTesterClock,
+  listBetaUpdateVersions,
+  resolveBetaCurrentUpdate,
   buildReleaseNotesPayload,
   getAppUpdateReleaseNotes,
   isSensitiveReleaseNoteBlock,

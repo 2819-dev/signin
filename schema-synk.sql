@@ -476,6 +476,7 @@ CREATE TABLE IF NOT EXISTS synk_beta_agenda_items (
   detail TEXT NOT NULL DEFAULT '',
   sort_order INTEGER NOT NULL DEFAULT 0,
   active BOOLEAN NOT NULL DEFAULT TRUE,
+  update_version TEXT,
   created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -483,6 +484,8 @@ CREATE TABLE IF NOT EXISTS synk_beta_agenda_items (
 
 CREATE INDEX IF NOT EXISTS synk_beta_agenda_active_idx
   ON synk_beta_agenda_items (active, sort_order ASC, created_at ASC);
+CREATE INDEX IF NOT EXISTS synk_beta_agenda_update_version_idx
+  ON synk_beta_agenda_items (update_version, sort_order ASC, created_at ASC);
 
 CREATE TABLE IF NOT EXISTS synk_beta_agenda_checks (
   agenda_item_id UUID NOT NULL REFERENCES synk_beta_agenda_items(id) ON DELETE CASCADE,
@@ -500,6 +503,23 @@ CREATE TABLE IF NOT EXISTS synk_beta_feedback (
 
 CREATE INDEX IF NOT EXISTS synk_beta_feedback_created_idx ON synk_beta_feedback (created_at DESC);
 CREATE INDEX IF NOT EXISTS synk_beta_feedback_profile_idx ON synk_beta_feedback (synk_profile_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS synk_beta_tester_clock (
+  synk_profile_id UUID PRIMARY KEY REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  clocked_in_at TIMESTAMPTZ,
+  clocked_out_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS synk_beta_update_completions (
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  update_version TEXT NOT NULL,
+  completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (synk_profile_id, update_version)
+);
+
+CREATE INDEX IF NOT EXISTS synk_beta_update_completions_profile_idx
+  ON synk_beta_update_completions (synk_profile_id, completed_at DESC);
 
 CREATE INDEX IF NOT EXISTS synk_community_tags_created_idx
   ON synk_community_tags (created_at DESC);

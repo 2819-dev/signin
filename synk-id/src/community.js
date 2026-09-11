@@ -5305,7 +5305,7 @@ document.addEventListener("click", async (e) => {
           <div>
             <strong>${escapeHtml(item.title)}</strong>
             <div class="muted" style="font-size:0.78rem;">${escapeHtml(item.detail || "")}</div>
-            <div class="muted" style="font-size:0.75rem;">sort ${escapeHtml(String(item.sortOrder ?? 0))} · ${item.active === false ? "inactive" : "active"}</div>
+            <div class="muted" style="font-size:0.75rem;">sort ${escapeHtml(String(item.sortOrder ?? 0))} · ${item.active === false ? "inactive" : "active"}${item.updateVersion ? ` · update ${escapeHtml(item.updateVersion)}` : " · standing"}</div>
           </div>
           <div class="btn-row">
             <button class="btn btn-secondary btn-compact" type="button" data-edit-agenda="${escapeHtml(item.id)}">Edit</button>
@@ -5431,6 +5431,7 @@ document.addEventListener("click", async (e) => {
             itemId: document.getElementById("beta-agenda-id").value || undefined,
             title: document.getElementById("beta-agenda-title").value,
             detail: document.getElementById("beta-agenda-detail").value,
+            updateVersion: document.getElementById("beta-agenda-version").value,
             sortOrder: Number(document.getElementById("beta-agenda-sort").value || 0),
             active: document.getElementById("beta-agenda-active").checked,
           }),
@@ -5440,6 +5441,7 @@ document.addEventListener("click", async (e) => {
         document.getElementById("beta-agenda-id").value = "";
         document.getElementById("beta-agenda-title").value = "";
         document.getElementById("beta-agenda-detail").value = "";
+        document.getElementById("beta-agenda-version").value = "";
         document.getElementById("beta-agenda-sort").value = "0";
         document.getElementById("beta-agenda-active").checked = true;
         if (status) status.textContent = "Saved";
@@ -5455,6 +5457,7 @@ document.addEventListener("click", async (e) => {
       document.getElementById("beta-agenda-id").value = "";
       document.getElementById("beta-agenda-title").value = "";
       document.getElementById("beta-agenda-detail").value = "";
+      document.getElementById("beta-agenda-version").value = "";
       document.getElementById("beta-agenda-sort").value = "0";
       document.getElementById("beta-agenda-active").checked = true;
       const status = document.getElementById("beta-agenda-status");
@@ -5474,6 +5477,7 @@ document.addEventListener("click", async (e) => {
         document.getElementById("beta-agenda-id").value = item.id;
         document.getElementById("beta-agenda-title").value = item.title || "";
         document.getElementById("beta-agenda-detail").value = item.detail || "";
+        document.getElementById("beta-agenda-version").value = item.updateVersion || "";
         document.getElementById("beta-agenda-sort").value = String(item.sortOrder ?? 0);
         document.getElementById("beta-agenda-active").checked = item.active !== false;
         return;
