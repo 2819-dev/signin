@@ -696,6 +696,7 @@
         route.type === "mod" ||
         route.type === "post" ||
         route.type === "inbox" ||
+        route.type === "groups" ||
         route.type === "user" ||
         (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 1100px)").matches);
       rightRail.hidden = hideRail;
@@ -738,6 +739,11 @@
       if (statPosts) statPosts.textContent = String(posts.length);
       return;
     }
+    if (route.type === "groups") {
+      if (aboutTitle) aboutTitle.textContent = "Your groups";
+      if (aboutBlurb) aboutBlurb.textContent = "Communities you can browse and join.";
+      return;
+    }
     if (aboutTitle) aboutTitle.textContent = "Feed";
     if (aboutBlurb) aboutBlurb.textContent = "Your community feed across all groups.";
     if (statPostsLabel) statPostsLabel.textContent = "Visible posts";
@@ -751,6 +757,7 @@
     if (path === "/community/mod" || path === "/community/mod-tools") return { type: "mod", slug: "", username: "" };
     if (path === "/community/popular") return { type: "popular", slug: "", username: "" };
     if (path === "/community/inbox") return { type: "inbox", slug: "", username: "" };
+    if (path === "/community/groups") return { type: "groups", slug: "", username: "" };
     let m = path.match(/^\/community\/post\/([a-z0-9_-]+)$/i);
     if (m) return { type: "post", slug: "", username: "", postId: m[1] };
     m = path.match(/^\/community\/(?:group|g)\/([a-z0-9-]+)$/i);
@@ -768,6 +775,7 @@
     if (next.type === "mod") return "/community/mod";
     if (next.type === "popular") return "/community/popular";
     if (next.type === "inbox") return "/community/inbox";
+    if (next.type === "groups") return "/community/groups";
     if (next.type === "post" && next.postId) return `/community/post/${encodeURIComponent(next.postId)}`;
     if (next.type === "group" && next.slug) return `/community/group/${encodeURIComponent(next.slug)}`;
     if (next.type === "user" && next.username) return `/user/${encodeURIComponent(next.username)}`;
@@ -938,6 +946,27 @@
   function setText(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
+  }
+
+  
+  function renderGroupsPage() {
+    const host = document.getElementById("feed") || document.getElementById("feed-list") || document.getElementById("posts-list");
+    if (!host) return;
+    if (!groups.length) {
+      host.innerHTML = `<article class="card"><p class="muted" style="margin:0;">No groups yet.</p></article>`;
+      return;
+    }
+    host.innerHTML = groups.map((group) => {
+      const count = group.postCount != null ? `${group.postCount} post${Number(group.postCount) === 1 ? "" : "s"}` : "";
+      const initial = String(group.slug || "?").slice(0, 1).toUpperCase();
+      return `<a class="card community-group-card" href="/community/group/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}" style="display:grid;grid-template-columns:48px 1fr;gap:12px;align-items:center;text-decoration:none;color:inherit;">
+        <span class="reddit-nav-avatar" aria-hidden="true" style="width:48px;height:48px;border-radius:12px;display:grid;place-items:center;font-weight:700;">${escapeHtml(initial)}</span>
+        <span>
+          <strong style="display:block;">${escapeHtml(group.name || group.slug)}</strong>
+          <span class="muted" style="font-size:0.85rem;">${escapeHtml(group.slug)}${count ? ` · ${escapeHtml(count)}` : ""}</span>
+        </span>
+      </a>`;
+    }).join("");
   }
 
   function renderGroups() {
@@ -1201,8 +1230,9 @@
     const onMod = route.type === "mod";
     const onPost = route.type === "post";
     const onInbox = route.type === "inbox";
+    const onGroups = route.type === "groups";
     const onFeed = !onSettings && !onSubmit && !onMod && !onPost && !onInbox;
-    if (feedView) feedView.hidden = needsUsername || !onFeed;
+    if (feedView) feedView.hidden = needsUsername || !(onFeed || onGroups);
     if (settingsView) settingsView.hidden = needsUsername || !onSettings;
     if (submitView) submitView.hidden = needsUsername || !onSubmit;
     if (modView) modView.hidden = needsUsername || !onMod;
@@ -1220,6 +1250,12 @@
     if (popularLink) popularLink.classList.toggle("is-active", route.type === "popular");
     const inboxBtn = document.getElementById("inbox-btn");
     if (inboxBtn) inboxBtn.classList.toggle("is-active", onInbox);
+
+    const messagesNavLink = document.getElementById("messages-nav-link");
+    if (messagesNavLink) messagesNavLink.classList.toggle("is-active", onInbox && inboxTab === "messages");
+    const groupsNavLink = document.getElementById("groups-nav-link");
+    if (groupsNavLink) groupsNavLink.classList.toggle("is-active", route.type === "groups");
+
     if (onInbox) {
       try { setNotifOpen(false); } catch (_) {}
     }
@@ -1255,7 +1291,17 @@
         if (menuName) menuName.textContent = menuLabel;
         if (menuSub) menuSub.textContent = activePersona || publicUsername || "Account";
         paintAvatar(document.getElementById("user-menu-avatar"), faceUrl, menuLabel);
+        paintAvatar(document.getElementById("menu-profile-avatar"), faceUrl, menuLabel);
         paintAvatar(document.getElementById("settings-avatar-preview"), faceUrl, menuLabel);
+        const sideMenuName = document.getElementById("menu-profile-name");
+        const sideMenuHandle = document.getElementById("menu-profile-handle");
+        if (sideMenuName) sideMenuName.textContent = menuLabel;
+        if (sideMenuHandle) sideMenuHandle.textContent = activePersona || publicUsername ? `@${activePersona || publicUsername}` : "Account";
+        const menuProfileLink = document.getElementById("menu-profile-link");
+        if (menuProfileLink && publicUsername) {
+          menuProfileLink.href = `/user/${encodeURIComponent(publicUsername)}`;
+          menuProfileLink.hidden = false;
+        }
       }
     } else if (myProfileLink) {
       myProfileLink.hidden = true;
@@ -1543,6 +1589,9 @@
     if (route.type !== "inbox") renderGroups();
     renderMyTags();
 
+    if (route.type === "groups") {
+      renderGroupsPage();
+    }
     if (route.type === "inbox") {
       setInboxTab(inboxTab);
       if (inboxTab === "messages") {
@@ -2514,6 +2563,36 @@
   bindNav(document.getElementById("tab-popular"), { type: "popular", slug: "", username: "" });
   bindNav(document.getElementById("tab-create"), { type: "submit", slug: "", username: "" });
   bindNav(document.getElementById("tab-inbox"), { type: "inbox", slug: "", username: "" });
+
+  bindNav(document.getElementById("groups-nav-link"), { type: "groups", slug: "", username: "" });
+  const messagesNav = document.getElementById("messages-nav-link");
+  if (messagesNav) {
+    messagesNav.addEventListener("click", (e) => {
+      e.preventDefault();
+      openMessages().catch(() => {});
+    });
+  }
+  const menuProfileLink = document.getElementById("menu-profile-link");
+  if (menuProfileLink) {
+    menuProfileLink.addEventListener("click", (e) => {
+      if (!publicUsername) return;
+      e.preventDefault();
+      navigate({ type: "user", slug: "", username: publicUsername }).catch(() => {});
+    });
+  }
+  const menuSignout = document.getElementById("menu-signout-btn");
+  if (menuSignout) {
+    menuSignout.addEventListener("click", () => {
+      const legacy = document.getElementById("signout-btn");
+      if (legacy) legacy.click();
+      else {
+        localStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(STORAGE_KEY);
+        location.href = "/verify";
+      }
+    });
+  }
+
   bindNav(document.getElementById("tab-me"), () => ({
     type: "user",
     slug: "",
@@ -2563,6 +2642,13 @@
         if (status) status.textContent = err.message || "Couldn't save. Try again.";
       }
     });
+  }
+
+  async function openMessages() {
+    inboxTab = "messages";
+    await navigate({ type: "inbox", slug: "", username: "" });
+    setInboxTab("messages");
+    try { await loadDmThreads(); } catch (_) {}
   }
 
   async function openDmWith(username) {
@@ -2972,6 +3058,7 @@
         route.type === "mod" ||
         route.type === "post" ||
         route.type === "inbox" ||
+        route.type === "groups" ||
         route.type === "user";
       rail.hidden = forceHide;
       rail.classList.toggle("is-hidden", forceHide);
