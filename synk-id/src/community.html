@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=drawer-profile3" />
+    <link rel="stylesheet" href="/join.css?v=nav-drawer5" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -106,8 +106,9 @@
           </form>
         </section>
 
-        <div class="community-layout reddit-layout" id="community-main" hidden>
-          <aside class="reddit-leftnav" id="left-nav" aria-label="Community navigation">
+        <div id="community-main" hidden>
+          <!-- Drawer nav is outside the content grid so it never sticky-scrolls or steals a column -->
+          <aside class="reddit-leftnav" id="left-nav" aria-label="Community navigation" hidden>
             <div class="reddit-leftnav-scroll">
               <nav class="reddit-nav-block" aria-label="Feeds">
                 <p class="reddit-nav-heading">Feeds</p>
@@ -155,6 +156,7 @@
             </div>
           </aside>
 
+          <div class="community-layout reddit-layout">
           <div class="community-main-col reddit-main">
             <div id="feed-view">
               <section class="reddit-page-head" id="page-head" hidden>
@@ -163,14 +165,14 @@
               </section>
 
               <section class="reddit-community-header" id="view-banner" hidden>
-                <div class="reddit-community-banner" id="view-banner-strip" aria-hidden="true"></div>
+                <div class="reddit-community-banner" id="view-banner-strip" aria-hidden="true" hidden></div>
                 <div class="reddit-community-head">
                   <div class="reddit-community-icon" id="view-icon" aria-hidden="true">S</div>
                   <div class="reddit-community-titles">
                     <h1 id="view-title">Feed</h1>
                     <p class="reddit-community-sub" id="view-sub">general</p>
                   </div>
-                  <div class="reddit-community-actions">
+                  <div class="reddit-community-actions" id="view-actions">
                     <button class="btn btn-primary btn-compact reddit-join-btn" type="button" id="join-community-btn" hidden>Join</button>
                   </div>
                 </div>
@@ -620,7 +622,7 @@
       </a>
     </nav>
 
-    <script src="/community.js?v=drawer-profile3"></script>
+    <script src="/community.js?v=nav-drawer5"></script>
       <div id="toast" class="community-toast" role="status" aria-live="polite"></div>
   </body>
 </html>

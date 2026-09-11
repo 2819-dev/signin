@@ -919,6 +919,13 @@
     if (!banner) return null;
     banner.dataset.mode = mode || "";
     banner.hidden = !visible;
+    const strip = document.getElementById("view-banner-strip");
+    if (strip) {
+      // Blue banner strip is for communities only — never on user profiles.
+      const showStrip = visible && mode === "group";
+      strip.hidden = !showStrip;
+      strip.setAttribute("aria-hidden", showStrip ? "false" : "true");
+    }
     return banner;
   }
 
@@ -1402,10 +1409,11 @@
         } else {
           actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="add-friend" data-username="${escapeHtml(uname)}">Add friend</button>`;
         }
+        // Reddit-style Chat/DM — never Join on profiles.
         if (canMessage || friendship === "friends") {
-          actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" ${canMessage ? "" : "disabled"}>Message</button>`;
+          actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" ${canMessage ? "" : "disabled"}>Chat</button>`;
         } else {
-          actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" disabled title="Messaging not available">Message</button>`;
+          actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" disabled title="Messaging not available">Chat</button>`;
         }
       } else if (isSelf) {
         actions += `<a class="btn btn-secondary btn-compact" href="/community/settings">Edit profile</a>`;
@@ -2752,19 +2760,33 @@
 
   const navToggle = document.getElementById("nav-toggle");
   const backdrop = document.getElementById("nav-backdrop");
+  const leftNav = document.getElementById("left-nav");
   function setNavOpen(open) {
-    document.body.classList.toggle("reddit-nav-open", !!open);
-    if (backdrop) backdrop.hidden = !open;
+    const next = !!open;
+    document.body.classList.toggle("reddit-nav-open", next);
+    if (backdrop) backdrop.hidden = !next;
+    if (leftNav) {
+      leftNav.hidden = !next;
+      leftNav.setAttribute("aria-hidden", next ? "false" : "true");
+    }
+    if (navToggle) {
+      navToggle.setAttribute("aria-expanded", next ? "true" : "false");
+      navToggle.setAttribute("aria-label", next ? "Close menu" : "Open menu");
+    }
   }
+  // Start closed — sidebar only via hamburger.
+  setNavOpen(false);
   if (navToggle) navToggle.addEventListener("click", () => setNavOpen(!document.body.classList.contains("reddit-nav-open")));
   if (backdrop) backdrop.addEventListener("click", () => setNavOpen(false));
-  const leftNav = document.getElementById("left-nav");
   if (leftNav) {
     leftNav.addEventListener("click", (e) => {
       const link = e.target.closest("a[href]");
       if (link) setNavOpen(false);
     });
   }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") setNavOpen(false);
+  });
 
   document.getElementById("signout-btn").addEventListener("click", () => {
     localStorage.removeItem(STORAGE_KEY);
