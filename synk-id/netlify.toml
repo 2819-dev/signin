@@ -39,6 +39,11 @@
   status = 200
 
 [[redirects]]
+  from = "/community/settings"
+  to = "/community.html"
+  status = 200
+
+[[redirects]]
   from = "/community/g/*"
   to = "/community.html"
   status = 200

@@ -14,7 +14,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=theme-auto1" />
+    <link rel="stylesheet" href="/join.css?v=community-reddit1" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body>
@@ -109,12 +109,17 @@
 
       function readSession() {
         try {
-          const raw = localStorage.getItem(STORAGE_KEY);
+          let store = localStorage;
+          let raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) {
+            raw = sessionStorage.getItem(STORAGE_KEY);
+            store = sessionStorage;
+          }
           if (!raw) return null;
           const data = JSON.parse(raw);
           if (!data || !data.profile) return null;
           if (data.expiresAt && Date.now() > Number(data.expiresAt)) {
-            localStorage.removeItem(STORAGE_KEY);
+            store.removeItem(STORAGE_KEY);
             return null;
           }
           return data;
@@ -168,6 +173,7 @@
 
       document.getElementById("hub-signout").addEventListener("click", () => {
         localStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(STORAGE_KEY);
         location.href = "/verify";
       });
 

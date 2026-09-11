@@ -9,6 +9,7 @@ const {
 const SCRYPT_KEYLEN = 64;
 const PASS_TTL_MS = 2 * 60 * 1000;
 const HUB_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const HUB_SESSION_SHORT_TTL_MS = 12 * 60 * 60 * 1000;
 const RATE_WINDOW_MS = 60 * 1000;
 const RATE_MAX_ATTEMPTS = 8;
 
@@ -1697,10 +1698,11 @@ async function requireSynkApp(sql, event, body = {}) {
   return { ok: false, error: "Unauthorized Synk app" };
 }
 
-async function issueHubSession(sql, { profileId }) {
+async function issueHubSession(sql, { profileId, staySignedIn = true }) {
   const token = mintPassToken();
   const tokenHash = hashToken(token);
-  const expiresAt = new Date(Date.now() + HUB_SESSION_TTL_MS).toISOString();
+  const ttlMs = staySignedIn ? HUB_SESSION_TTL_MS : HUB_SESSION_SHORT_TTL_MS;
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
   await sql`
     INSERT INTO synk_hub_sessions (synk_profile_id, token_hash, expires_at)
     VALUES (${profileId}, ${tokenHash}, ${expiresAt}::timestamptz)
@@ -1708,7 +1710,8 @@ async function issueHubSession(sql, { profileId }) {
   return {
     token,
     expiresAt,
-    ttlSeconds: Math.round(HUB_SESSION_TTL_MS / 1000),
+    ttlSeconds: Math.round(ttlMs / 1000),
+    staySignedIn: Boolean(staySignedIn),
   };
 }
 
@@ -1878,5 +1881,6 @@ module.exports = {
   normalizeProductSummary,
   PASS_TTL_MS,
   HUB_SESSION_TTL_MS,
+  HUB_SESSION_SHORT_TTL_MS,
   RATE_MAX_ATTEMPTS,
 };

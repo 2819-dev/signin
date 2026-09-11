@@ -1672,3 +1672,234 @@ textarea {
     background: rgba(255, 69, 0, 0.16);
   }
 }
+
+
+/* —— Stay signed in —— */
+.stay-signed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 4px;
+  font-size: 0.92rem;
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+}
+
+.stay-signed-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand);
+}
+
+/* —— Community Reddit-like refinements —— */
+.community-body {
+  background: var(--community-bg, #dae0e6);
+}
+
+.community-topnav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.community-shell {
+  max-width: 1120px;
+}
+
+.community-layout {
+  display: grid;
+  gap: 16px;
+  margin-top: 12px;
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .community-layout {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+}
+
+.community-sidebar {
+  position: sticky;
+  top: 72px;
+  display: grid;
+  gap: 4px;
+  padding: 14px !important;
+}
+
+.community-side-section {
+  display: grid;
+  gap: 8px;
+}
+
+.community-side-link,
+.community-group-link {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  color: inherit;
+  background: transparent;
+}
+
+.community-side-link:hover,
+.community-group-link:hover,
+.community-side-link.is-active,
+.community-group-link.is-active {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.community-side-link strong,
+.community-group-link strong {
+  font-size: 0.92rem;
+}
+
+.community-side-link span,
+.community-group-link span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.community-prefixed-input {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.community-prefixed-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.community-prefix {
+  flex: 0 0 auto;
+  padding: 0 0 0 12px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.community-prefixed-input input {
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.community-persona-panel {
+  width: 100%;
+}
+
+.community-persona-panel .persona-switch-btn {
+  width: 100%;
+  justify-content: flex-start;
+  background: var(--surface);
+}
+
+.community-persona-panel .persona-menu {
+  left: 0;
+  right: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.community-side-details {
+  margin-top: 8px;
+}
+
+.community-side-details > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 6px 0;
+}
+
+.community-side-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.community-username-gate {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.community-view-card h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.community-composer-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.community-feed {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.community-post {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.community-post-rail {
+  background: linear-gradient(180deg, #ff4500, #ff8717);
+}
+
+.community-post-body {
+  padding: 12px 14px;
+}
+
+.community-post-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+}
+
+.community-group-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--chip-bg, rgba(15, 23, 42, 0.06));
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .community-search {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .community-sidebar {
+    position: static;
+  }
+}

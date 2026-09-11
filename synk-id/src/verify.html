@@ -18,7 +18,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid11" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
-    <link rel="stylesheet" href="/join.css?v=theme-auto1" />
+    <link rel="stylesheet" href="/join.css?v=community-reddit1" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js?v=facefix4" defer></script>
   </head>
@@ -90,6 +90,10 @@
         </div>
         <p id="synk-status" class="status muted">Select Start camera to begin</p>
         <p id="synk-error" class="error hidden" role="alert"></p>
+        <label class="stay-signed-row" for="stay-signed-in">
+          <input id="stay-signed-in" type="checkbox" checked />
+          <span>Stay signed in on this device</span>
+        </label>
         <div class="btn-row">
           <button class="btn btn-secondary" type="button" id="synk-start-btn">Start camera</button>
           <button class="btn btn-primary" type="button" id="synk-scan-btn" disabled>Verify</button>
@@ -116,6 +120,10 @@
             <input id="synk-secret-input" type="password" maxlength="200" required />
           </div>
           <p id="synk-code-error" class="error hidden" role="alert"></p>
+          <label class="stay-signed-row" for="stay-signed-in-code">
+            <input id="stay-signed-in-code" type="checkbox" checked />
+            <span>Stay signed in on this device</span>
+          </label>
           <div class="btn-row">
             <button class="btn btn-secondary" type="button" id="synk-back-pod-btn">Back</button>
             <button class="btn btn-primary" type="submit">Verify</button>
@@ -263,42 +271,67 @@
         }, 2200);
       }
 
+      function wantStaySignedIn() {
+        const a = document.getElementById("stay-signed-in");
+        const b = document.getElementById("stay-signed-in-code");
+        // Prefer the visible form's checkbox; both stay in sync.
+        if (a && !a.closest(".hidden")) return !!a.checked;
+        if (b && !b.closest(".hidden")) return !!b.checked;
+        return !!(a && a.checked);
+      }
+
+      function syncStaySignedCheckboxes(source) {
+        const a = document.getElementById("stay-signed-in");
+        const b = document.getElementById("stay-signed-in-code");
+        const on = !!(source && source.checked);
+        if (a && source !== a) a.checked = on;
+        if (b && source !== b) b.checked = on;
+      }
+
       function showSuccess(data) {
         stopCamera();
         const profile = (data && data.profile) || {};
         const pass = (data && data.pass) || {};
+        const staySignedIn = data && data.hubSession && data.hubSession.staySignedIn != null
+          ? !!data.hubSession.staySignedIn
+          : wantStaySignedIn();
         const expiresAt =
           pass.expiresAt ||
           (pass.ttlSeconds ? Date.now() + Number(pass.ttlSeconds) * 1000 : Date.now() + 120000);
 
         try {
-          localStorage.setItem(
-            "synk_member_session",
-            JSON.stringify({
-              profile: {
-                id: profile.id || null,
-                name: profile.name || "Member",
-                synkCode: profile.synkCode || "",
-                photoUrl: profile.photoUrl || "",
-              },
-              pass: {
-                token: pass.token || "",
-                assertion: pass.assertion || "",
-                ttlSeconds: pass.ttlSeconds || 120,
-              },
-              hubSession: data.hubSession
-                ? {
-                    token: data.hubSession.token || "",
-                    expiresAt: data.hubSession.expiresAt || null,
-                    ttlSeconds: data.hubSession.ttlSeconds || null,
-                  }
-                : null,
-              verifiedAt: Date.now(),
-              expiresAt: data.hubSession && data.hubSession.expiresAt
-                ? new Date(data.hubSession.expiresAt).getTime()
-                : Number(expiresAt) || Date.now() + 120000,
-            })
-          );
+          const session = {
+            profile: {
+              id: profile.id || null,
+              name: profile.name || "Member",
+              synkCode: profile.synkCode || "",
+              photoUrl: profile.photoUrl || "",
+            },
+            pass: {
+              token: pass.token || "",
+              assertion: pass.assertion || "",
+              ttlSeconds: pass.ttlSeconds || 120,
+            },
+            hubSession: data.hubSession
+              ? {
+                  token: data.hubSession.token || "",
+                  expiresAt: data.hubSession.expiresAt || null,
+                  ttlSeconds: data.hubSession.ttlSeconds || null,
+                  staySignedIn,
+                }
+              : null,
+            staySignedIn,
+            verifiedAt: Date.now(),
+            expiresAt: data.hubSession && data.hubSession.expiresAt
+              ? new Date(data.hubSession.expiresAt).getTime()
+              : Number(expiresAt) || Date.now() + 120000,
+          };
+          const raw = JSON.stringify(session);
+          // Always clear both, then write to the chosen store.
+          localStorage.removeItem("synk_member_session");
+          sessionStorage.removeItem("synk_member_session");
+          if (staySignedIn) localStorage.setItem("synk_member_session", raw);
+          else sessionStorage.setItem("synk_member_session", raw);
         } catch (_) {}
 
         document.getElementById("synk-success-name").textContent = profile.name || "Member";
@@ -329,7 +362,7 @@
         const res = await fetch("/api/synk-auth", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload, appSlug, intent }),
+          body: JSON.stringify({ ...payload, appSlug, intent, staySignedIn: wantStaySignedIn() }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Verification failed");
@@ -467,6 +500,11 @@
           codeError.classList.remove("hidden");
         }
       });
+
+      const stayPod = document.getElementById("stay-signed-in");
+      const stayCode = document.getElementById("stay-signed-in-code");
+      if (stayPod) stayPod.addEventListener("change", () => syncStaySignedCheckboxes(stayPod));
+      if (stayCode) stayCode.addEventListener("change", () => syncStaySignedCheckboxes(stayCode));
 
       // Warm models in the background so Verify is faster after the camera opens.
       function warmFaceModels() {

@@ -194,6 +194,7 @@ exports.handler = async (event) => {
     }
 
     const intent = String(body.intent || "").trim().toLowerCase(); // visitor | identity
+    const staySignedIn = body.staySignedIn !== false && body.rememberMe !== false && body.stay_signed_in !== false;
     const descriptors = Array.isArray(body.descriptors)
       ? body.descriptors.map(normalizeDescriptor).filter(Boolean)
       : [];
@@ -299,7 +300,7 @@ exports.handler = async (event) => {
 
     let hubSession = null;
     if (intent !== "visitor" && appSlug !== "visitor-signin") {
-      hubSession = await issueHubSession(sql, { profileId: matched.id });
+      hubSession = await issueHubSession(sql, { profileId: matched.id, staySignedIn });
     }
 
     await logSynkEvent(sql, {

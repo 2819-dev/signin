@@ -40,12 +40,17 @@
 
   function readSession() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      let store = localStorage;
+      let raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        raw = sessionStorage.getItem(STORAGE_KEY);
+        store = sessionStorage;
+      }
       if (!raw) return null;
       const data = JSON.parse(raw);
       if (!data || !data.profile) return null;
       if (data.expiresAt && Date.now() > Number(data.expiresAt)) {
-        localStorage.removeItem(STORAGE_KEY);
+        store.removeItem(STORAGE_KEY);
         return null;
       }
       return data;
@@ -126,7 +131,7 @@
       myTagsList.innerHTML = "";
       return;
     }
-    myTagsCard.hidden = false;
+    myTagsCard.hidden = route.type !== "settings";
     myTagsList.innerHTML = myTags
       .map((tag) => {
         const pinned = !!tag.pinned;
@@ -153,6 +158,7 @@
 
   function parseRoute() {
     const path = (location.pathname || "/community").replace(/\/+$/, "") || "/community";
+    if (path === "/community/settings") return { type: "settings", slug: "", username: "" };
     let m = path.match(/^\/community\/g\/([a-z0-9-]+)$/i);
     if (m) return { type: "group", slug: m[1].toLowerCase(), username: "" };
     m = path.match(/^\/(?:community\/)?u\/([a-z0-9_]+)$/i);
@@ -161,6 +167,7 @@
   }
 
   function routeUrl(next) {
+    if (next.type === "settings") return "/community/settings";
     if (next.type === "group" && next.slug) return `/community/g/${encodeURIComponent(next.slug)}`;
     if (next.type === "user" && next.username) return `/u/${encodeURIComponent(next.username)}`;
     return "/community";
@@ -247,7 +254,9 @@
 
   function renderCrumbs() {
     const parts = ['<a href="/community">community</a>'];
-    if (route.type === "group" && route.slug) {
+    if (route.type === "settings") {
+      parts.push(`<span>/</span><span>settings</span>`);
+    } else if (route.type === "group" && route.slug) {
       parts.push(`<span>/</span><span>g/${escapeHtml(route.slug)}</span>`);
     } else if (route.type === "user" && route.username) {
       parts.push(`<span>/</span><span>u/${escapeHtml(route.username)}</span>`);
@@ -270,7 +279,7 @@
       .join("");
     homeLink.classList.toggle("is-active", route.type === "home");
     postGroup.innerHTML = groups
-      .map((group) => `<option value="${escapeHtml(group.slug)}">${escapeHtml(group.name)}</option>`)
+      .map((group) => `<option value="${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)} — ${escapeHtml(group.name)}</option>`)
       .join("");
     if (route.type === "group" && route.slug) postGroup.value = route.slug;
     else if (!postGroup.value && groups[0]) postGroup.value = groups[0].slug;
@@ -359,22 +368,36 @@
   }
 
   function applyUsernameState() {
-    const title = document.getElementById("username-title");
-    const help = document.getElementById("username-help");
-    const btn = document.getElementById("username-btn");
-    communityMain.hidden = !publicUsername;
-    composerCard.hidden = !publicUsername || route.type === "user";
-    if (publicUsername) {
-      title.textContent = "Your public username";
-      help.textContent = "You can change this anytime.";
-      btn.textContent = "Update username";
-      document.getElementById("public-username").value = publicUsername;
-    } else {
-      title.textContent = "Choose how you appear";
-      help.textContent =
-        "This is separate from your legal Synk name. Letters, numbers, and underscores only.";
-      btn.textContent = "Save username";
+    const usernameCard = document.getElementById("username-card");
+    const settingsView = document.getElementById("settings-view");
+    const feedView = document.getElementById("feed-view");
+    const myProfileLink = document.getElementById("my-profile-link");
+    const myProfileLabel = document.getElementById("my-profile-label");
+    const settingsUsername = document.getElementById("settings-username");
+    const needsUsername = !publicUsername;
+    if (usernameCard) usernameCard.hidden = !needsUsername;
+    communityMain.hidden = needsUsername;
+    const onSettings = route.type === "settings";
+    if (feedView) feedView.hidden = needsUsername || onSettings;
+    if (settingsView) settingsView.hidden = needsUsername || !onSettings;
+    if (composerCard) {
+      composerCard.hidden = needsUsername || onSettings || route.type === "user";
     }
+    if (publicUsername) {
+      const gateInput = document.getElementById("public-username");
+      if (gateInput) gateInput.value = publicUsername;
+      if (settingsUsername) settingsUsername.value = publicUsername;
+      if (myProfileLink) {
+        myProfileLink.hidden = false;
+        myProfileLink.href = `/u/${encodeURIComponent(publicUsername)}`;
+      }
+      if (myProfileLabel) myProfileLabel.textContent = `u/${publicUsername}`;
+    } else if (myProfileLink) {
+      myProfileLink.hidden = true;
+    }
+    const settingsLink = document.getElementById("settings-link");
+    if (settingsLink) settingsLink.classList.toggle("is-active", onSettings);
+    if (homeLink) homeLink.classList.toggle("is-active", route.type === "home");
     syncPersonaUi();
   }
 
@@ -394,6 +417,9 @@
     renderCrumbs();
     profileMeta.hidden = true;
     profileMeta.innerHTML = "";
+    if (route.type === "settings") {
+      return;
+    }
     if (route.type === "user") {
       const profile = data.profile || { username: route.username };
       document.getElementById("view-eyebrow").textContent = "Profile";
@@ -449,7 +475,7 @@
     if (route.type === "group") {
       const group = data.group || groups.find((g) => g.slug === route.slug) || null;
       document.getElementById("view-eyebrow").textContent = group ? `g/${group.slug}` : "Group";
-      document.getElementById("view-title").textContent = group ? group.name : route.slug;
+      document.getElementById("view-title").textContent = group ? `g/${group.slug}` : `g/${route.slug}`;
       document.getElementById("view-blurb").textContent =
         (group && group.description) || "Posts in this community.";
       document.getElementById("feed-label").textContent = "Feed";
@@ -459,7 +485,7 @@
       return;
     }
     document.getElementById("view-eyebrow").textContent = "Home feed";
-    document.getElementById("view-title").textContent = "All groups";
+    document.getElementById("view-title").textContent = "Home";
     document.getElementById("view-blurb").textContent = "Posts from every group, newest first.";
     document.getElementById("feed-label").textContent = "Feed";
     document.getElementById("feed-title").textContent = "Recent posts";
@@ -587,25 +613,41 @@
     loadCommunity().catch(() => {});
   });
 
+  async function saveUsername(username, statusEl) {
+    statusEl.textContent = "Saving…";
+    const res = await fetch("/api/synk-community", {
+      method: "POST",
+      headers: hubHeaders(),
+      body: JSON.stringify({ action: "set-username", username }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not save username");
+    publicUsername = data.publicUsername;
+    storePersona(publicUsername);
+    statusEl.textContent = "Saved";
+    await loadCommunity();
+  }
+
+  document.getElementById("settings-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    navigate({ type: "settings", slug: "", username: "" }).catch(() => {});
+  });
+
+  document.getElementById("settings-username-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const status = document.getElementById("settings-username-status");
+    try {
+      await saveUsername(document.getElementById("settings-username").value, status);
+    } catch (err) {
+      status.textContent = err.message || "Could not save";
+    }
+  });
+
   document.getElementById("username-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const status = document.getElementById("username-status");
-    status.textContent = "Saving…";
     try {
-      const res = await fetch("/api/synk-community", {
-        method: "POST",
-        headers: hubHeaders(),
-        body: JSON.stringify({
-          action: "set-username",
-          username: document.getElementById("public-username").value,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Could not save username");
-      publicUsername = data.publicUsername;
-      storePersona(publicUsername);
-      status.textContent = "Saved";
-      await loadCommunity();
+      await saveUsername(document.getElementById("public-username").value, status);
     } catch (err) {
       status.textContent = err.message || "Could not save";
     }
@@ -651,7 +693,9 @@
         body: JSON.stringify({
           action: "create-group",
           name: document.getElementById("group-name").value,
-          slug: document.getElementById("group-slug").value,
+          slug: String(document.getElementById("group-slug").value || "")
+            .trim()
+            .replace(/^g\//i, ""),
           description: document.getElementById("group-description").value,
         }),
       });
@@ -884,6 +928,7 @@
 
   document.getElementById("signout-btn").addEventListener("click", () => {
     localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
     try {
       sessionStorage.removeItem(PERSONA_KEY);
     } catch (_) {}
