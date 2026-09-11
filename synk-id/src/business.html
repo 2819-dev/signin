@@ -125,6 +125,18 @@
 
         <hr style="border:0;border-top:1px solid var(--line);margin:20px 0;" />
 
+        <p class="section-label">Recent Synk sign-ins</p>
+        <h2 style="margin:0 0 6px;">Members who used your app</h2>
+        <p class="muted" style="margin:0 0 12px;font-size:0.88rem;">
+          Only people who recently signed in to <strong>your</strong> app appear here. Names only — no photos or personal details.
+          Set auto deny, auto accept, or refill name for each person.
+        </p>
+        <div id="recent-members" class="synk-members"></div>
+        <p id="recent-members-empty" class="muted" style="font-size:0.88rem;">No recent Synk sign-ins for your app yet.</p>
+        <p id="recent-members-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
+
+        <hr style="border:0;border-top:1px solid var(--line);margin:20px 0;" />
+
         <p class="section-label">Devices</p>
         <h2 style="margin:0 0 6px;">Camera framing by device</h2>
         <p class="muted" style="margin:0 0 12px;font-size:0.88rem;">
@@ -162,6 +174,8 @@
       const verifyAction = document.getElementById("verify-action");
       let sessionToken = localStorage.getItem(STORAGE_KEY) || "";
       let currentAppId = "";
+      let currentAppSlug = "";
+      let appDefaultPolicy = "pending";
       const pairAppSlug = (new URLSearchParams(location.search).get("pairApp") || "").trim().slice(0, 80);
 
       function show(view) {
@@ -187,6 +201,7 @@
         const apps = data.apps || [];
         const app = apps[0];
         currentAppId = app ? app.id : "";
+        currentAppSlug = app ? app.slug : "";
         document.getElementById("portal-apps").innerHTML = apps.length
           ? apps
               .map(
@@ -196,8 +211,10 @@
               .join("")
           : `<p class="muted">No API app yet — ask Synk Admin to approve your account.</p>`;
         if (app) verifyAction.value = app.verifyAction || "pending";
+        appDefaultPolicy = (app && app.verifyAction) || "pending";
         renderDevices(data.devices || []);
         show("portal");
+        loadRecentMembers().catch(() => {});
         if (pairAppSlug) {
           try {
             const pairRes = await fetch("/api/synk-business", {
@@ -238,6 +255,130 @@
           .replace(/>/g, "&gt;")
           .replace(/"/g, "&quot;");
       }
+
+      function memberPolicyLabel(policy) {
+        if (policy === "auto_admit") return "Auto accept";
+        if (policy === "auto_deny") return "Auto deny";
+        if (policy === "autofill") return "Refill name";
+        return "Require approval";
+      }
+
+      function formatMemberSeen(iso) {
+        try {
+          const then = new Date(iso).getTime();
+          if (!Number.isFinite(then)) return "";
+          const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+          if (mins < 1) return "Just now";
+          if (mins < 60) return `${mins}m ago`;
+          const hours = Math.round(mins / 60);
+          if (hours < 48) return `${hours}h ago`;
+          return `${Math.round(hours / 24)}d ago`;
+        } catch {
+          return "";
+        }
+      }
+
+      function renderRecentMembers(members) {
+        const list = document.getElementById("recent-members");
+        const empty = document.getElementById("recent-members-empty");
+        if (!list || !empty) return;
+        if (!members.length) {
+          list.innerHTML = "";
+          empty.classList.remove("hidden");
+          return;
+        }
+        empty.classList.add("hidden");
+        list.innerHTML = members
+          .map((member) => {
+            const selected = member.hasOverride ? member.policy : "default";
+            const seen = formatMemberSeen(member.lastSeenAt);
+            return `
+              <article class="pass-box" style="margin-top:0;" data-member-id="${escapeHtml(member.id)}">
+                <div class="muted" style="font-size:0.78rem;">Synk member</div>
+                <strong>${escapeHtml(member.name)}</strong>
+                <div class="muted" style="margin-top:4px;font-size:0.82rem;">
+                  ${seen ? `Signed in ${escapeHtml(seen)}` : "Recent sign-in"}
+                  ${member.hasOverride ? "" : " · using app default"}
+                </div>
+                <div class="field" style="margin-top:10px;">
+                  <label>When they verify</label>
+                  <select class="member-policy-select">
+                    <option value="default" ${selected === "default" ? "selected" : ""}>Use app default (${escapeHtml(memberPolicyLabel(appDefaultPolicy))})</option>
+                    <option value="autofill" ${selected === "autofill" ? "selected" : ""}>Refill name</option>
+                    <option value="auto_admit" ${selected === "auto_admit" ? "selected" : ""}>Auto accept</option>
+                    <option value="auto_deny" ${selected === "auto_deny" ? "selected" : ""}>Auto deny</option>
+                    <option value="pending" ${selected === "pending" ? "selected" : ""}>Require approval</option>
+                  </select>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      async function loadRecentMembers() {
+        const status = document.getElementById("recent-members-status");
+        if (!currentAppSlug) {
+          renderRecentMembers([]);
+          if (status) status.textContent = "Link an API app to manage recent members.";
+          return;
+        }
+        if (status) status.textContent = "Loading…";
+        try {
+          const res = await fetch(
+            `/api/synk-app-members?appSlug=${encodeURIComponent(currentAppSlug)}`,
+            { headers: bizHeaders() }
+          );
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not load members");
+          appDefaultPolicy = data.appDefault || appDefaultPolicy || "pending";
+          renderRecentMembers(data.members || []);
+          if (status) {
+            status.textContent = (data.members || []).length
+              ? "Showing people who signed in to your app in the last 30 days."
+              : "No recent Synk sign-ins for your app yet.";
+          }
+        } catch (ex) {
+          if (status) status.textContent = ex.message || "Could not load members";
+        }
+      }
+
+      document.getElementById("recent-members").addEventListener("change", async (e) => {
+        const select = e.target.closest(".member-policy-select");
+        if (!select) return;
+        const card = select.closest("[data-member-id]");
+        if (!card) return;
+        const profileId = card.getAttribute("data-member-id");
+        const policy = select.value;
+        const status = document.getElementById("recent-members-status");
+        select.disabled = true;
+        if (status) status.textContent = "Saving…";
+        try {
+          const res = await fetch("/api/synk-app-members", {
+            method: "POST",
+            headers: bizHeaders(),
+            body: JSON.stringify({
+              appSlug: currentAppSlug,
+              profileId,
+              policy,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not update");
+          await loadRecentMembers();
+          if (status) {
+            status.textContent =
+              policy === "default"
+                ? "Using app default"
+                : `${memberPolicyLabel(data.policy || policy)} saved`;
+          }
+        } catch (ex) {
+          if (status) status.textContent = ex.message || "Could not update";
+          await loadRecentMembers();
+        } finally {
+          select.disabled = false;
+        }
+      });
 
       function cameraLabel(side) {
         if (side === "right") return "Landscape — camera on right";
@@ -433,6 +574,8 @@
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || "Could not save");
           portalStatus.textContent = "Settings saved";
+          appDefaultPolicy = verifyAction.value || appDefaultPolicy;
+          loadRecentMembers().catch(() => {});
         } catch (ex) {
           portalStatus.textContent = ex.message || "Could not save";
         }

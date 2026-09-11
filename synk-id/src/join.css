@@ -458,6 +458,15 @@ a:hover {
   gap: 10px;
 }
 
+.synk-members {
+  display: grid;
+  gap: 12px;
+}
+
+.synk-members .pass-box {
+  margin-top: 0;
+}
+
 .device-card {
   margin-top: 0;
 }

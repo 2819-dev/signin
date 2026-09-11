@@ -305,7 +305,167 @@ async function ensureSynkCoreTables(sql) {
   await sql`ALTER TABLE synk_join_requests ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`;
 
+  await ensureSynkAppMemberPolicies(sql);
   await seedVisitorSignInBusiness(sql);
+}
+
+async function ensureSynkAppMemberPolicies(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_app_member_policies (
+      app_slug TEXT NOT NULL,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      policy TEXT NOT NULL DEFAULT 'pending',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (app_slug, synk_profile_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_app_member_policies_profile_idx
+    ON synk_app_member_policies (synk_profile_id)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_events_app_verify_idx
+    ON synk_events (app_slug, event_type, created_at DESC)
+  `;
+}
+
+async function getMemberAppPolicy(sql, appSlug, profileId) {
+  const slug = String(appSlug || "")
+    .trim()
+    .slice(0, 80);
+  const id = String(profileId || "").trim();
+  if (!slug || !id) return null;
+  await ensureSynkAppMemberPolicies(sql);
+  const rows = await sql`
+    SELECT policy
+    FROM synk_app_member_policies
+    WHERE app_slug = ${slug}
+      AND synk_profile_id = ${id}
+    LIMIT 1
+  `;
+  if (!rows[0]) return null;
+  return normalizeVerifyAction(rows[0].policy);
+}
+
+async function resolveVisitorVerifyAction(sql, appSlug, profileId) {
+  const memberPolicy = await getMemberAppPolicy(sql, appSlug, profileId);
+  if (memberPolicy) return memberPolicy;
+  return getAppVerifyAction(sql, appSlug);
+}
+
+async function memberSignedIntoApp(sql, appSlug, profileId) {
+  const slug = String(appSlug || "")
+    .trim()
+    .slice(0, 80);
+  const id = String(profileId || "").trim();
+  if (!slug || !id) return false;
+  const rows = await sql`
+    SELECT id
+    FROM synk_events
+    WHERE event_type = 'verify_ok'
+      AND app_slug = ${slug}
+      AND synk_profile_id = ${id}
+    LIMIT 1
+  `;
+  return Boolean(rows[0]);
+}
+
+async function listRecentAppMembers(sql, appSlug, { days = 30, limit = 100 } = {}) {
+  const slug = String(appSlug || "")
+    .trim()
+    .slice(0, 80);
+  if (!slug) return { members: [], appDefault: "pending" };
+  await ensureSynkAppMemberPolicies(sql);
+
+  const windowDays = Math.min(90, Math.max(1, Number(days) || 30));
+  const maxRows = Math.min(200, Math.max(1, Number(limit) || 100));
+  const appDefault = await getAppVerifyAction(sql, slug);
+
+  // Name-only list of members who recently verified into THIS app.
+  // Never returns photo, DOB, email, Synk code, or other personal details.
+  const rows = await sql`
+    SELECT
+      p.id,
+      p.name,
+      recent.last_seen_at,
+      pol.policy AS override_policy
+    FROM (
+      SELECT synk_profile_id, MAX(created_at) AS last_seen_at
+      FROM synk_events
+      WHERE event_type = 'verify_ok'
+        AND app_slug = ${slug}
+        AND synk_profile_id IS NOT NULL
+        AND created_at > NOW() - INTERVAL '30 days'
+      GROUP BY synk_profile_id
+    ) recent
+    JOIN synk_profiles p ON p.id = recent.synk_profile_id
+    LEFT JOIN synk_app_member_policies pol
+      ON pol.synk_profile_id = p.id
+     AND pol.app_slug = ${slug}
+    ORDER BY recent.last_seen_at DESC
+    LIMIT ${maxRows}
+  `;
+
+  return {
+    appSlug: slug,
+    appDefault,
+    members: rows.map((row) => {
+      const hasOverride = row.override_policy != null && row.override_policy !== "";
+      const policy = hasOverride
+        ? normalizeVerifyAction(row.override_policy)
+        : appDefault;
+      return {
+        id: row.id,
+        name: row.name,
+        policy,
+        hasOverride,
+        lastSeenAt: row.last_seen_at,
+      };
+    }),
+  };
+}
+
+async function setMemberAppPolicy(sql, appSlug, profileId, policy) {
+  const slug = String(appSlug || "")
+    .trim()
+    .slice(0, 80);
+  const id = String(profileId || "").trim();
+  if (!slug || !id) {
+    return { ok: false, error: "Member and app are required" };
+  }
+
+  const signedIn = await memberSignedIntoApp(sql, slug, id);
+  if (!signedIn) {
+    return { ok: false, error: "Only members who signed into your app can be managed" };
+  }
+
+  await ensureSynkAppMemberPolicies(sql);
+  const action = String(policy || "")
+    .trim()
+    .toLowerCase();
+
+  if (action === "default" || action === "clear" || action === "reset") {
+    await sql`
+      DELETE FROM synk_app_member_policies
+      WHERE app_slug = ${slug}
+        AND synk_profile_id = ${id}
+    `;
+    return {
+      ok: true,
+      policy: await getAppVerifyAction(sql, slug),
+      hasOverride: false,
+    };
+  }
+
+  const next = normalizeVerifyAction(action);
+  await sql`
+    INSERT INTO synk_app_member_policies (app_slug, synk_profile_id, policy, updated_at)
+    VALUES (${slug}, ${id}, ${next}, NOW())
+    ON CONFLICT (app_slug, synk_profile_id)
+    DO UPDATE SET policy = EXCLUDED.policy, updated_at = NOW()
+  `;
+  return { ok: true, policy: next, hasOverride: true };
 }
 
 function normalizeVerifyAction(value) {
@@ -888,6 +1048,12 @@ module.exports = {
   getAppSynkStatus,
   isFirstPartySynkApp,
   seedVisitorSignInBusiness,
+  ensureSynkAppMemberPolicies,
+  getMemberAppPolicy,
+  resolveVisitorVerifyAction,
+  memberSignedIntoApp,
+  listRecentAppMembers,
+  setMemberAppPolicy,
   PASS_TTL_MS,
   HUB_SESSION_TTL_MS,
   RATE_MAX_ATTEMPTS,

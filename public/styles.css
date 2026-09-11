@@ -1098,6 +1098,36 @@ html[data-theme="dark"] .admin-shell input[type="file"] {
   margin-top: 4px;
 }
 
+.synk-members {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.synk-member-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface-solid);
+}
+
+.synk-member-meta strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.synk-member-card .field {
+  margin: 0;
+}
+
+.synk-member-card .field > span {
+  display: block;
+  margin-bottom: 4px;
+}
+
 .face-profile-card {
   display: grid;
   grid-template-columns: 64px 1fr;

@@ -201,4 +201,21 @@ CREATE INDEX IF NOT EXISTS synk_business_devices_business_idx
 CREATE UNIQUE INDEX IF NOT EXISTS synk_business_devices_code_idx
   ON synk_business_devices (pairing_code);
 
+-- Per-app member handling (auto-admit / deny / refill). Scoped to members
+-- who have signed into that app — never a global member directory.
+CREATE TABLE IF NOT EXISTS synk_app_member_policies (
+  app_slug TEXT NOT NULL,
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  policy TEXT NOT NULL DEFAULT 'pending',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_slug, synk_profile_id)
+);
+
+CREATE INDEX IF NOT EXISTS synk_app_member_policies_profile_idx
+  ON synk_app_member_policies (synk_profile_id);
+
+CREATE INDEX IF NOT EXISTS synk_events_app_verify_idx
+  ON synk_events (app_slug, event_type, created_at DESC);
+
 

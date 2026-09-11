@@ -218,6 +218,31 @@
         </section>
       </div>
 
+      <div id="pane-synk" class="admin-pane hidden">
+        <div class="admin-top">
+          <header class="admin-header">
+            <div>
+              <p class="eyebrow">Synk</p>
+              <h1>Recent members</h1>
+              <p class="muted">
+                Only people who recently signed in with Synk on this kiosk. Names only — no photos or personal details.
+              </p>
+            </div>
+          </header>
+        </div>
+
+        <section class="settings-card" id="synk-members-settings">
+          <h2>When they verify</h2>
+          <p class="muted" style="margin: 0 0 12px;">
+            Set auto deny, auto accept, or refill their name. App default:
+            <strong id="synk-app-default-label">Require approval</strong>
+          </p>
+          <div id="synk-members" class="synk-members"></div>
+          <p id="synk-members-empty" class="chat-empty-note">No recent Synk sign-ins yet.</p>
+          <p id="synk-members-status" class="muted" style="margin: 10px 0 0; font-size: 0.85rem;"></p>
+        </section>
+      </div>
+
       <div id="pane-control" class="admin-pane hidden">
         <div class="admin-top">
           <header class="admin-header">
@@ -393,6 +418,10 @@
         <button type="button" class="admin-tab active" data-pane="signin" id="tab-signin">
           <span class="admin-tab-label">Sign In</span>
         </button>
+        <button type="button" class="admin-tab admin-tab-synk" data-pane="synk" id="tab-synk">
+          <span class="synk-mark" aria-hidden="true"><img src="/synk-logo.svg?v=circles2" alt="" /></span>
+          <span class="admin-tab-label">Synk</span>
+        </button>
         <button type="button" class="admin-tab" data-pane="control" id="tab-control">
           <span class="admin-tab-label">Control</span>
         </button>
@@ -405,9 +434,17 @@
       const unlockView = document.getElementById("unlock-view");
       const panelView = document.getElementById("panel-view");
       const paneSignin = document.getElementById("pane-signin");
+      const paneSynk = document.getElementById("pane-synk");
       const paneControl = document.getElementById("pane-control");
       const tabSignin = document.getElementById("tab-signin");
+      const tabSynk = document.getElementById("tab-synk");
       const tabControl = document.getElementById("tab-control");
+      const synkMembersEl = document.getElementById("synk-members");
+      const synkMembersEmpty = document.getElementById("synk-members-empty");
+      const synkMembersStatus = document.getElementById("synk-members-status");
+      const synkAppDefaultLabel = document.getElementById("synk-app-default-label");
+      let synkMembersCache = [];
+      let synkAppDefault = "pending";
       const unlockForm = document.getElementById("unlock-form");
       const unlockError = document.getElementById("unlock-error");
       const listEl = document.getElementById("list");
@@ -602,13 +639,18 @@
       }
 
       function setAdminPane(pane) {
-        const next = pane === "control" ? "control" : "signin";
+        const next = pane === "control" || pane === "synk" ? pane : "signin";
         paneSignin.classList.toggle("hidden", next !== "signin");
+        paneSynk.classList.toggle("hidden", next !== "synk");
         paneControl.classList.toggle("hidden", next !== "control");
         tabSignin.classList.toggle("active", next === "signin");
+        tabSynk.classList.toggle("active", next === "synk");
         tabControl.classList.toggle("active", next === "control");
         localStorage.setItem(PANE_KEY, next);
         document.body.classList.toggle("admin-control", next === "control");
+        if (next === "synk") {
+          refreshSynkMembers().catch(() => {});
+        }
       }
 
       function syncImagePreview(url) {
@@ -1644,7 +1686,10 @@
           sessionStorage.removeItem(STORAGE_KEY);
           unlockView.classList.add("hidden");
           panelView.classList.remove("hidden");
-          setAdminPane((() => { const p = localStorage.getItem(PANE_KEY); return p === "control" ? "control" : "signin"; })());
+          setAdminPane((() => {
+            const p = localStorage.getItem(PANE_KEY);
+            return p === "control" || p === "synk" ? p : "signin";
+          })());
           firstLoad = true;
           knownIds = new Set();
           chatFirstLoad = true;
@@ -1656,6 +1701,9 @@
           applySettingsToForm(settings);
           await refresh();
           refreshFaces().catch(() => {});
+          if (localStorage.getItem(PANE_KEY) === "synk") {
+            refreshSynkMembers().catch(() => {});
+          }
           pollTimer = setInterval(refresh, 3000);
           if ("Notification" in window && Notification.permission === "granted") {
             ensurePushSubscription().catch(() => {});
@@ -1840,6 +1888,7 @@
       });
 
       tabSignin.addEventListener("click", () => setAdminPane("signin"));
+      tabSynk.addEventListener("click", () => setAdminPane("synk"));
       tabControl.addEventListener("click", () => setAdminPane("control"));
 
       chatInboxEl.addEventListener("click", async (e) => {
@@ -1883,6 +1932,122 @@
         if (policy === "auto_admit") return "Auto-admit";
         if (policy === "auto_deny") return "Auto-deny";
         return "Auto-fill name";
+      }
+
+      function synkPolicyLabel(policy) {
+        if (policy === "auto_admit") return "Auto accept";
+        if (policy === "auto_deny") return "Auto deny";
+        if (policy === "autofill") return "Refill name";
+        return "Require approval";
+      }
+
+      function formatRelativeTime(iso) {
+        try {
+          const then = new Date(iso).getTime();
+          if (!Number.isFinite(then)) return "";
+          const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+          if (mins < 1) return "Just now";
+          if (mins < 60) return `${mins}m ago`;
+          const hours = Math.round(mins / 60);
+          if (hours < 48) return `${hours}h ago`;
+          const days = Math.round(hours / 24);
+          return `${days}d ago`;
+        } catch {
+          return "";
+        }
+      }
+
+      function renderSynkMembers(members) {
+        synkMembersCache = members || [];
+        if (synkAppDefaultLabel) {
+          synkAppDefaultLabel.textContent = synkPolicyLabel(synkAppDefault);
+        }
+        if (!synkMembersCache.length) {
+          synkMembersEl.innerHTML = "";
+          synkMembersEmpty.classList.remove("hidden");
+          return;
+        }
+        synkMembersEmpty.classList.add("hidden");
+        synkMembersEl.innerHTML = synkMembersCache
+          .map((member) => {
+            const selected = member.hasOverride ? member.policy : "default";
+            const seen = formatRelativeTime(member.lastSeenAt);
+            return `
+              <article class="synk-member-card" data-synk-member-id="${escapeHtml(member.id)}">
+                <div class="synk-member-meta">
+                  <strong>${escapeHtml(member.name)}</strong>
+                  <div class="muted" style="font-size:0.82rem;">
+                    ${seen ? `Signed in ${escapeHtml(seen)}` : "Recent sign-in"}
+                    ${member.hasOverride ? "" : " · using app default"}
+                  </div>
+                </div>
+                <label class="field" style="margin:0;">
+                  <span class="muted" style="font-size:0.78rem;">When they verify</span>
+                  <select data-synk-action="policy">
+                    <option value="default" ${selected === "default" ? "selected" : ""}>Use app default (${escapeHtml(synkPolicyLabel(synkAppDefault))})</option>
+                    <option value="autofill" ${selected === "autofill" ? "selected" : ""}>Refill name</option>
+                    <option value="auto_admit" ${selected === "auto_admit" ? "selected" : ""}>Auto accept</option>
+                    <option value="auto_deny" ${selected === "auto_deny" ? "selected" : ""}>Auto deny</option>
+                    <option value="pending" ${selected === "pending" ? "selected" : ""}>Require approval</option>
+                  </select>
+                </label>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      async function refreshSynkMembers() {
+        if (!synkMembersEl) return;
+        if (synkMembersStatus) synkMembersStatus.textContent = "Loading…";
+        try {
+          const res = await fetch("/api/synk-app-members", { headers: adminHeaders() });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not load Synk members");
+          synkAppDefault = data.appDefault || "pending";
+          renderSynkMembers(data.members || []);
+          if (synkMembersStatus) {
+            synkMembersStatus.textContent = (data.members || []).length
+              ? "Showing people who signed in with Synk here in the last 30 days."
+              : "No Synk sign-ins on this kiosk yet.";
+          }
+        } catch (err) {
+          console.error(err);
+          if (synkMembersStatus) {
+            synkMembersStatus.textContent = err.message || "Could not load Synk members";
+          }
+        }
+      }
+
+      if (synkMembersEl) {
+        synkMembersEl.addEventListener("change", async (e) => {
+          const card = e.target.closest("[data-synk-member-id]");
+          if (!card) return;
+          if (e.target.getAttribute("data-synk-action") !== "policy") return;
+          const id = card.getAttribute("data-synk-member-id");
+          const policy = e.target.value;
+          e.target.disabled = true;
+          try {
+            const res = await fetch("/api/synk-app-members", {
+              method: "POST",
+              headers: adminHeaders(),
+              body: JSON.stringify({ profileId: id, policy }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not update");
+            showToast(
+              policy === "default"
+                ? "Using app default"
+                : `${synkPolicyLabel(data.policy || policy)} set`
+            );
+            await refreshSynkMembers();
+          } catch (err) {
+            showToast(err.message || "Could not update");
+            await refreshSynkMembers();
+          } finally {
+            e.target.disabled = false;
+          }
+        });
       }
 
       function renderFaceProfiles(profiles) {
@@ -2202,11 +2367,17 @@
       if (secret) {
         unlockView.classList.add("hidden");
         panelView.classList.remove("hidden");
-        setAdminPane((() => { const p = localStorage.getItem(PANE_KEY); return p === "control" ? "control" : "signin"; })());
+        setAdminPane((() => {
+          const p = localStorage.getItem(PANE_KEY);
+          return p === "control" || p === "synk" ? p : "signin";
+        })());
         Promise.all([fetchSettings(), refresh()])
           .then(([settings]) => {
             applySettingsToForm(settings);
             refreshFaces().catch(() => {});
+            if (localStorage.getItem(PANE_KEY) === "synk") {
+              refreshSynkMembers().catch(() => {});
+            }
               pollTimer = setInterval(refresh, 3000);
             if ("Notification" in window && Notification.permission === "granted") {
               ensurePushSubscription().catch(() => {});

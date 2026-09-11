@@ -9,9 +9,9 @@ const {
   assertNotRateLimited,
   issuePass,
   issueHubSession,
-  getAppVerifyAction,
   getAppSynkStatus,
   normalizeVerifyAction,
+  resolveVisitorVerifyAction,
 } = require("./lib/synk");
 const { signedPhotoUrl } = require("./lib/synk-admin-auth");
 
@@ -312,7 +312,7 @@ exports.handler = async (event) => {
     const profile = publicProfile(matched);
     let request = null;
     if (intent === "visitor" || appSlug === "visitor-signin") {
-      const verifyAction = await getAppVerifyAction(sql, appSlug);
+      const verifyAction = await resolveVisitorVerifyAction(sql, appSlug, matched.id);
       const bridge = await applyVisitorIntent(sql, matched, verifyAction);
       request = bridge.request;
       profile.policy = bridge.policy;
