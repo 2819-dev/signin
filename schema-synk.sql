@@ -526,7 +526,13 @@ CREATE TABLE IF NOT EXISTS synk_community_dm_messages (
   thread_id UUID NOT NULL REFERENCES synk_community_dm_threads(id) ON DELETE CASCADE,
   sender_username TEXT NOT NULL,
   body TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  edited_at TIMESTAMPTZ,
+  read_at TIMESTAMPTZ,
+  unsent_at TIMESTAMPTZ,
+  deleted_for_sender BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted_for_recipient BOOLEAN NOT NULL DEFAULT FALSE,
+  edit_history JSONB NOT NULL DEFAULT '[]'::jsonb
 );
 
 CREATE INDEX IF NOT EXISTS synk_community_dm_messages_thread_created_idx

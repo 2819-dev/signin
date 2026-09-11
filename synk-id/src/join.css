@@ -5503,7 +5503,7 @@ html[data-theme="dark"] .synk-support-panel,
 }
 .community-dm-bubble.is-mine {
   justify-self: end;
-  background: var(--r-accent, #0b5fff);
+  background: var(--r-brand, #041A55);
   color: #fff;
   border-bottom-right-radius: 5px;
 }
@@ -5513,11 +5513,104 @@ html[data-theme="dark"] .synk-support-panel,
   border: 1px solid var(--r-line, #ddd);
   border-bottom-left-radius: 5px;
 }
+.community-dm-msg {
+  display: grid;
+  gap: 4px;
+  max-width: 100%;
+}
+.community-dm-msg.is-mine {
+  justify-items: end;
+}
+.community-dm-msg.is-theirs {
+  justify-items: start;
+}
+.community-dm-msg .community-dm-bubble {
+  justify-self: stretch;
+  max-width: min(80%, 420px);
+}
+.community-dm-msg-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.community-dm-edited {
+  margin-top: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.72;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.community-dm-bubble.is-mine .community-dm-edited {
+  color: rgba(255,255,255,0.9);
+}
+.community-dm-history {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+.community-dm-history-item {
+  opacity: 0.55;
+  border-left: 2px solid currentColor;
+  padding-left: 8px;
+}
+.community-dm-history-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+}
+.community-dm-history-item p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.community-dm-tools {
+  display: inline-flex;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.community-dm-msg:hover .community-dm-tools,
+.community-dm-msg:focus-within .community-dm-tools {
+  opacity: 1;
+}
+.community-dm-tool {
+  border: 0;
+  background: transparent;
+  color: var(--r-muted, #6b7280);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+.community-dm-tool:hover {
+  color: var(--r-brand, #041A55);
+  text-decoration: underline;
+}
+.community-dm-tool.is-danger:hover {
+  color: #b42318;
+}
+.community-dm-cancel-edit {
+  flex: 0 0 auto;
+  height: 40px;
+}
 .community-dm-compose {
   display: flex;
   gap: 8px;
   padding: 12px;
   border-top: 1px solid var(--r-line, #ddd);
+  align-items: center;
+}
+@media (hover: none) {
+  .community-dm-tools { opacity: 1; }
 }
 .community-dm-compose input {
   flex: 1;

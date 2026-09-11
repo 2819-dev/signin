@@ -54,6 +54,8 @@ const {
   getDmThreadById,
   listDmMessages,
   sendDm,
+  editDmMessage,
+  deleteDmMessage,
   friendshipViewerStatus,
   getAvatarsByUsernames,
   setAvatarForUsername,
@@ -1543,6 +1545,37 @@ exports.handler = async (event) => {
         ok: true,
         message: result.message,
         thread: result.thread,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-edit") {
+      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const messageId = String(body.messageId || body.id || "").trim();
+      if (!isUuid(messageId)) return json(400, { error: "Invalid message id" });
+      const result = await editDmMessage(
+        sql,
+        messageId,
+        primaryUsername,
+        body.body != null ? body.body : body.message
+      );
+      if (!result.ok) return json(400, { error: result.error || "Could not edit message" });
+      return json(200, {
+        ok: true,
+        message: result.message,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-delete") {
+      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const messageId = String(body.messageId || body.id || "").trim();
+      if (!isUuid(messageId)) return json(400, { error: "Invalid message id" });
+      const result = await deleteDmMessage(sql, messageId, primaryUsername);
+      if (!result.ok) return json(400, { error: result.error || "Could not delete message" });
+      return json(200, {
+        ok: true,
+        mode: result.mode,
         me: mePayload(auth, role, alts, myTags, myPinnedTag),
       });
     }

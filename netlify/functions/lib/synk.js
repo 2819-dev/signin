@@ -598,6 +598,12 @@ async function ensureSynkCommunityExtras(sql) {
     CREATE INDEX IF NOT EXISTS synk_community_dm_messages_thread_created_idx
     ON synk_community_dm_messages (thread_id, created_at ASC)
   `;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS unsent_at TIMESTAMPTZ`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS deleted_for_sender BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS deleted_for_recipient BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS edit_history JSONB NOT NULL DEFAULT '[]'::jsonb`;
 
   await ensureCommunityOwner(sql);
   // Do not auto-create a default "General" group — Community starts empty
@@ -2734,14 +2740,48 @@ function mapDmThread(row, viewerUsername) {
   };
 }
 
-function mapDmMessage(row) {
+function parseDmEditHistory(value) {
+  if (!value) return [];
+  let raw = value;
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value);
+    } catch (_) {
+      return [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => ({
+      body: String((entry && entry.body) || "").slice(0, 2000),
+      at: (entry && (entry.at || entry.editedAt || entry.edited_at)) || null,
+    }))
+    .filter((entry) => entry.body);
+}
+
+function mapDmMessage(row, viewerUsername = "") {
   if (!row) return null;
+  const viewer = normalizePublicUsername(viewerUsername);
+  const sender = normalizePublicUsername(row.sender_username);
+  const mine = Boolean(viewer && sender && viewer === sender);
+  const readAt = row.read_at || null;
+  const editedAt = row.edited_at || null;
+  const editHistory = parseDmEditHistory(row.edit_history);
   return {
     id: row.id,
     threadId: row.thread_id,
     senderUsername: row.sender_username,
     body: row.body,
     createdAt: row.created_at,
+    editedAt,
+    readAt,
+    isEdited: Boolean(editedAt) || editHistory.length > 0,
+    isRead: Boolean(readAt),
+    canEdit: mine && !row.unsent_at,
+    canDelete: Boolean(viewer) && !row.unsent_at,
+    canUnsend: mine && !readAt && !row.unsent_at,
+    deleteMode: mine ? (readAt ? "for-me" : "unsend") : "for-me",
+    editHistory,
   };
 }
 
@@ -2794,6 +2834,13 @@ async function listDmThreads(sql, username) {
         SELECT m.body
         FROM synk_community_dm_messages m
         WHERE m.thread_id = t.id
+          AND m.unsent_at IS NULL
+          AND NOT (
+            CASE
+              WHEN m.sender_username = ${name} THEN COALESCE(m.deleted_for_sender, FALSE)
+              ELSE COALESCE(m.deleted_for_recipient, FALSE)
+            END
+          )
         ORDER BY m.created_at DESC
         LIMIT 1
       ) AS last_body
@@ -2819,6 +2866,13 @@ async function getDmThreadById(sql, threadId, username) {
         SELECT m.body
         FROM synk_community_dm_messages m
         WHERE m.thread_id = t.id
+          AND m.unsent_at IS NULL
+          AND NOT (
+            CASE
+              WHEN m.sender_username = ${name} THEN COALESCE(m.deleted_for_sender, FALSE)
+              ELSE COALESCE(m.deleted_for_recipient, FALSE)
+            END
+          )
         ORDER BY m.created_at DESC
         LIMIT 1
       ) AS last_body
@@ -2836,16 +2890,46 @@ async function listDmMessages(sql, threadId, username) {
   if (!id || !name) return { ok: false, error: "Thread required", messages: [] };
   const thread = await getDmThreadById(sql, id, name);
   if (!thread) return { ok: false, error: "Thread not found", messages: [] };
+
+  // Opening a thread marks the other person's messages as read.
+  await sql`
+    UPDATE synk_community_dm_messages
+    SET read_at = NOW()
+    WHERE thread_id = ${id}
+      AND sender_username <> ${name}
+      AND read_at IS NULL
+      AND unsent_at IS NULL
+      AND COALESCE(deleted_for_recipient, FALSE) = FALSE
+  `;
+
   const rows = await sql`
-    SELECT id, thread_id, sender_username, body, created_at
+    SELECT
+      id,
+      thread_id,
+      sender_username,
+      body,
+      created_at,
+      edited_at,
+      read_at,
+      unsent_at,
+      deleted_for_sender,
+      deleted_for_recipient,
+      edit_history
     FROM synk_community_dm_messages
     WHERE thread_id = ${id}
+      AND unsent_at IS NULL
+      AND NOT (
+        CASE
+          WHEN sender_username = ${name} THEN COALESCE(deleted_for_sender, FALSE)
+          ELSE COALESCE(deleted_for_recipient, FALSE)
+        END
+      )
     ORDER BY created_at ASC
   `;
   return {
     ok: true,
     thread,
-    messages: rows.map(mapDmMessage),
+    messages: rows.map((row) => mapDmMessage(row, name)),
   };
 }
 
@@ -2865,7 +2949,9 @@ async function sendDm(sql, fromUsername, toUsername, body) {
   const inserted = await sql`
     INSERT INTO synk_community_dm_messages (thread_id, sender_username, body)
     VALUES (${threadId}, ${from}, ${text})
-    RETURNING id, thread_id, sender_username, body, created_at
+    RETURNING
+      id, thread_id, sender_username, body, created_at,
+      edited_at, read_at, unsent_at, deleted_for_sender, deleted_for_recipient, edit_history
   `;
   const updated = await sql`
     UPDATE synk_community_dm_threads
@@ -2875,9 +2961,130 @@ async function sendDm(sql, fromUsername, toUsername, body) {
   `;
   return {
     ok: true,
-    message: mapDmMessage(inserted[0]),
+    message: mapDmMessage(inserted[0], from),
     thread: mapDmThread({ ...updated[0], last_body: text }, from),
   };
+}
+
+async function editDmMessage(sql, messageId, username, body) {
+  const id = String(messageId || "").trim();
+  const name = normalizePublicUsername(username);
+  const text = normalizeDmBody(body);
+  if (!id || !name) return { ok: false, error: "Message required" };
+  if (!text) return { ok: false, error: "Message required" };
+
+  const rows = await sql`
+    SELECT
+      m.id,
+      m.thread_id,
+      m.sender_username,
+      m.body,
+      m.created_at,
+      m.edited_at,
+      m.read_at,
+      m.unsent_at,
+      m.deleted_for_sender,
+      m.deleted_for_recipient,
+      m.edit_history,
+      t.user_a,
+      t.user_b
+    FROM synk_community_dm_messages m
+    JOIN synk_community_dm_threads t ON t.id = m.thread_id
+    WHERE m.id = ${id}
+      AND (t.user_a = ${name} OR t.user_b = ${name})
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return { ok: false, error: "Message not found" };
+  if (normalizePublicUsername(row.sender_username) !== name) {
+    return { ok: false, error: "You can only edit your own messages" };
+  }
+  if (row.unsent_at) return { ok: false, error: "Message was deleted" };
+  if (row.deleted_for_sender) return { ok: false, error: "Message was deleted" };
+  if (String(row.body || "") === text) {
+    return { ok: true, message: mapDmMessage(row, name) };
+  }
+
+  const nextHistory = [
+    ...parseDmEditHistory(row.edit_history),
+    { body: String(row.body || ""), at: new Date().toISOString() },
+  ].slice(-20);
+
+  const updated = await sql`
+    UPDATE synk_community_dm_messages
+    SET
+      body = ${text},
+      edited_at = NOW(),
+      edit_history = ${JSON.stringify(nextHistory)}::jsonb
+    WHERE id = ${id}
+    RETURNING
+      id, thread_id, sender_username, body, created_at,
+      edited_at, read_at, unsent_at, deleted_for_sender, deleted_for_recipient, edit_history
+  `;
+  return { ok: true, message: mapDmMessage(updated[0], name) };
+}
+
+async function deleteDmMessage(sql, messageId, username) {
+  const id = String(messageId || "").trim();
+  const name = normalizePublicUsername(username);
+  if (!id || !name) return { ok: false, error: "Message required" };
+
+  const rows = await sql`
+    SELECT
+      m.id,
+      m.thread_id,
+      m.sender_username,
+      m.body,
+      m.created_at,
+      m.edited_at,
+      m.read_at,
+      m.unsent_at,
+      m.deleted_for_sender,
+      m.deleted_for_recipient,
+      m.edit_history,
+      t.user_a,
+      t.user_b
+    FROM synk_community_dm_messages m
+    JOIN synk_community_dm_threads t ON t.id = m.thread_id
+    WHERE m.id = ${id}
+      AND (t.user_a = ${name} OR t.user_b = ${name})
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return { ok: false, error: "Message not found" };
+  if (row.unsent_at) return { ok: true, mode: "unsend", message: null };
+
+  const sender = normalizePublicUsername(row.sender_username);
+  const mine = sender === name;
+
+  if (!mine) {
+    // Recipient can only hide the message for themselves.
+    await sql`
+      UPDATE synk_community_dm_messages
+      SET deleted_for_recipient = TRUE
+      WHERE id = ${id}
+    `;
+    return { ok: true, mode: "for-me", message: null };
+  }
+
+  if (!row.read_at) {
+    await sql`
+      UPDATE synk_community_dm_messages
+      SET
+        unsent_at = NOW(),
+        body = '',
+        edit_history = '[]'::jsonb
+      WHERE id = ${id}
+    `;
+    return { ok: true, mode: "unsend", message: null };
+  }
+
+  await sql`
+    UPDATE synk_community_dm_messages
+    SET deleted_for_sender = TRUE
+    WHERE id = ${id}
+  `;
+  return { ok: true, mode: "for-me", message: null };
 }
 
 function friendshipViewerStatus(friendship) {
@@ -3226,6 +3433,8 @@ module.exports = {
   getDmThreadById,
   listDmMessages,
   sendDm,
+  editDmMessage,
+  deleteDmMessage,
   friendshipViewerStatus,
   getAvatarsByUsernames,
   setAvatarForUsername,

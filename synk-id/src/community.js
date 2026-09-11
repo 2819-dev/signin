@@ -81,6 +81,8 @@
   let dmThreads = [];
   let activeDmUser = "";
   let activeDmThreadId = "";
+  let activeDmMessages = [];
+  let editingDmMessageId = "";
   let activePersona = "";
   let me = null;
   let groups = [];
@@ -2834,6 +2836,37 @@
       .join("");
   }
 
+  function clearDmEditMode() {
+    editingDmMessageId = "";
+    const input = document.getElementById("dm-compose-input");
+    const cancel = document.getElementById("dm-compose-cancel");
+    const sendBtn = document.getElementById("dm-compose-send");
+    if (input) {
+      input.placeholder = "Message…";
+      input.removeAttribute("data-editing");
+    }
+    if (cancel) cancel.hidden = true;
+    if (sendBtn) sendBtn.setAttribute("aria-label", "Send");
+  }
+
+  function startDmEdit(messageId) {
+    const msg = (activeDmMessages || []).find((m) => String(m.id) === String(messageId));
+    if (!msg || !msg.canEdit) return;
+    editingDmMessageId = String(msg.id);
+    const input = document.getElementById("dm-compose-input");
+    const cancel = document.getElementById("dm-compose-cancel");
+    const sendBtn = document.getElementById("dm-compose-send");
+    if (input) {
+      input.value = msg.body || "";
+      input.placeholder = "Edit message…";
+      input.setAttribute("data-editing", "1");
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+    if (cancel) cancel.hidden = false;
+    if (sendBtn) sendBtn.setAttribute("aria-label", "Save edit");
+  }
+
   function renderDmMessages(messages, { otherUser = "" } = {}) {
     const list = document.getElementById("dm-message-list");
     const title = document.getElementById("dm-chat-title");
@@ -2844,10 +2877,62 @@
     if (hint) hint.hidden = !!otherUser;
     if (!list) return;
     const rows = Array.isArray(messages) ? messages : [];
+    activeDmMessages = rows;
     list.innerHTML = rows
       .map((m) => {
         const mine = String(m.senderUsername || m.sender || "") === publicUsername;
-        return `<div class="community-dm-bubble ${mine ? "is-mine" : "is-theirs"}">${escapeHtml(m.body || "")}</div>`;
+        const edited = Boolean(m.isEdited || (m.editHistory && m.editHistory.length));
+        const history = Array.isArray(m.editHistory) ? m.editHistory : [];
+        const historyHtml = history.length
+          ? `<div class="community-dm-history" hidden>
+              ${history
+                .slice()
+                .reverse()
+                .map(
+                  (h) =>
+                    `<div class="community-dm-history-item"><span class="community-dm-history-label">Before edit</span><p>${escapeHtml(
+                      h.body || ""
+                    )}</p></div>`
+                )
+                .join("")}
+            </div>`
+          : "";
+        const meta = edited
+          ? `<button type="button" class="community-dm-edited" data-dm-history-toggle="${escapeHtml(
+              String(m.id || "")
+            )}" aria-expanded="false">Edited</button>`
+          : "";
+        const tools =
+          mine || m.canDelete
+            ? `<div class="community-dm-tools">
+                ${
+                  m.canEdit
+                    ? `<button type="button" class="community-dm-tool" data-dm-edit="${escapeHtml(
+                        String(m.id || "")
+                      )}">Edit</button>`
+                    : ""
+                }
+                ${
+                  m.canDelete
+                    ? `<button type="button" class="community-dm-tool is-danger" data-dm-delete="${escapeHtml(
+                        String(m.id || "")
+                      )}" data-dm-delete-mode="${escapeHtml(
+                        m.deleteMode || (m.canUnsend ? "unsend" : "for-me")
+                      )}">${m.canUnsend ? "Delete" : "Delete for me"}</button>`
+                    : ""
+                }
+              </div>`
+            : "";
+        return `<div class="community-dm-msg ${mine ? "is-mine" : "is-theirs"}" data-dm-message-id="${escapeHtml(
+          String(m.id || "")
+        )}">
+          <div class="community-dm-bubble ${mine ? "is-mine" : "is-theirs"} ${edited ? "is-edited" : ""}">
+            <div class="community-dm-msg-body">${escapeHtml(m.body || "")}</div>
+            ${meta}
+            ${historyHtml}
+          </div>
+          ${tools}
+        </div>`;
       })
       .join("");
     list.scrollTop = list.scrollHeight;
@@ -2863,6 +2948,7 @@
     const target = String(username || "").trim().toLowerCase();
     if (!target) return;
     activeDmUser = target;
+    clearDmEditMode();
     const data = await communityAction({ action: "dm-open", username: target });
     activeDmThreadId = (data.thread && data.thread.id) || "";
     renderDmThreads(dmThreads);
@@ -2906,20 +2992,97 @@
       const sendBtn = document.getElementById("dm-compose-send");
       if (sendBtn) sendBtn.disabled = true;
       try {
-        await communityAction({
-          action: "dm-send",
-          username: activeDmUser,
-          threadId: activeDmThreadId || undefined,
-          body,
-        });
-        if (input) input.value = "";
+        if (editingDmMessageId) {
+          await communityAction({
+            action: "dm-edit",
+            messageId: editingDmMessageId,
+            body,
+          });
+          clearDmEditMode();
+          if (input) input.value = "";
+          showToast("Message updated");
+        } else {
+          await communityAction({
+            action: "dm-send",
+            username: activeDmUser,
+            threadId: activeDmThreadId || undefined,
+            body,
+          });
+          if (input) input.value = "";
+        }
         await openDmThread(activeDmUser);
         await loadDmThreads();
       } catch (err) {
-        showToast(err.message || "Message not sent. Try again.");
+        showToast(err.message || (editingDmMessageId ? "Could not edit message." : "Message not sent. Try again."));
       } finally {
         if (sendBtn) sendBtn.disabled = false;
         if (input) input.focus();
+      }
+    });
+  }
+
+  const dmComposeCancel = document.getElementById("dm-compose-cancel");
+  if (dmComposeCancel) {
+    dmComposeCancel.addEventListener("click", () => {
+      const input = document.getElementById("dm-compose-input");
+      clearDmEditMode();
+      if (input) {
+        input.value = "";
+        input.focus();
+      }
+    });
+  }
+
+  const dmMessageList = document.getElementById("dm-message-list");
+  if (dmMessageList) {
+    dmMessageList.addEventListener("click", async (e) => {
+      const historyBtn = e.target.closest("[data-dm-history-toggle]");
+      if (historyBtn) {
+        e.preventDefault();
+        const wrap = historyBtn.closest("[data-dm-message-id]");
+        const history = wrap && wrap.querySelector(".community-dm-history");
+        if (!history) return;
+        const open = history.hidden;
+        history.hidden = !open;
+        historyBtn.setAttribute("aria-expanded", open ? "true" : "false");
+        historyBtn.classList.toggle("is-open", open);
+        return;
+      }
+
+      const editBtn = e.target.closest("[data-dm-edit]");
+      if (editBtn) {
+        e.preventDefault();
+        startDmEdit(editBtn.getAttribute("data-dm-edit"));
+        return;
+      }
+
+      const deleteBtn = e.target.closest("[data-dm-delete]");
+      if (!deleteBtn) return;
+      e.preventDefault();
+      const messageId = deleteBtn.getAttribute("data-dm-delete");
+      const mode = deleteBtn.getAttribute("data-dm-delete-mode") || "for-me";
+      const confirmText =
+        mode === "unsend"
+          ? "Delete this message for everyone? They haven’t read it yet."
+          : "Delete this message for you only? The other person will still see it.";
+      if (!window.confirm(confirmText)) return;
+      try {
+        const result = await communityAction({
+          action: "dm-delete",
+          messageId,
+        });
+        if (editingDmMessageId && String(editingDmMessageId) === String(messageId)) {
+          clearDmEditMode();
+          const input = document.getElementById("dm-compose-input");
+          if (input) input.value = "";
+        }
+        showToast(result.mode === "unsend" ? "Message deleted" : "Deleted for you");
+        if (activeDmUser) {
+          await openDmThread(activeDmUser);
+          await loadDmThreads();
+        }
+      } catch (err) {
+        showToast(err.message || "Could not delete message.");
       }
     });
   }
