@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=hide-sidebar-groups1" />
+    <link rel="stylesheet" href="/join.css?v=real-push1" />
     <script src="/force-refresh.js?v=community-search-switch3" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -516,6 +516,18 @@
                     </form>
                     <p id="settings-dm-status" class="muted reddit-settings-status"></p>
                   </div>
+
+                  <div class="reddit-settings-row">
+                    <div class="reddit-settings-copy">
+                      <strong>Desktop &amp; phone alerts</strong>
+                      <p class="muted">Get real device notifications for messages and inbox updates, even when Synk is in the background.</p>
+                    </div>
+                    <div class="reddit-settings-form">
+                      <button class="btn btn-primary btn-compact" type="button" id="settings-push-btn">Enable alerts</button>
+                      <button class="btn btn-secondary btn-compact" type="button" id="settings-push-off-btn" hidden>Turn off</button>
+                    </div>
+                    <p id="settings-push-status" class="muted reddit-settings-status"></p>
+                  </div>
                 </div>
 
                 <div class="reddit-settings-section">
@@ -876,6 +888,7 @@
       </div>
     </div>
 
-    <script src="/community.js?v=hide-sidebar-groups1"></script>
+    <script src="/push-client.js?v=real-push1"></script>
+    <script src="/community.js?v=real-push1"></script>
   </body>
 </html>

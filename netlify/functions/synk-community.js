@@ -85,6 +85,13 @@ const {
   buildReleaseNotesPayload,
   getAppUpdateReleaseNotes,
 } = require("./lib/synk");
+const {
+  getVapidConfig,
+  saveSynkPushSubscription,
+  deleteSynkPushSubscription,
+  notifySynkProfile,
+  notificationPushPayload,
+} = require("./lib/synk-push");
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -496,6 +503,19 @@ async function loadNotifications(sql, profileId, { limit = 50, username = "" } =
   return notes.slice(0, capped);
 }
 
+async function resolveProfileIdForUsername(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return null;
+  const direct = await findCommunityProfileIdByUsername(sql, name);
+  if (direct) return direct;
+  try {
+    const alt = await findCommunityAltAccount(sql, { username: name });
+    return (alt && alt.ownerProfileId) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function createNotification(
   sql,
   { profileId, kind, actorUsername, postId = null, commentId = null, body = "" }
@@ -514,6 +534,20 @@ async function createNotification(
       ${String(body || "").slice(0, 500)}
     )
   `;
+  try {
+    const payload = notificationPushPayload({
+      kind,
+      actorUsername,
+      body,
+      postId,
+    });
+    await notifySynkProfile(sql, profileId, payload);
+  } catch (err) {
+    console.error(
+      "synk notification push failed",
+      err && err.message ? err.message : err
+    );
+  }
 }
 
 async function enrichPosts(sql, rows, profileId) {
@@ -1691,6 +1725,42 @@ exports.handler = async (event) => {
 
     const action = String(body.action || "post").trim().toLowerCase();
 
+    if (action === "push-public-key") {
+      const cfg = getVapidConfig();
+      if (!cfg) return json(503, { error: "Push is not configured" });
+      return json(200, { ok: true, publicKey: cfg.publicKey });
+    }
+
+    if (action === "push-subscribe") {
+      const endpoint = String(body.endpoint || "").trim();
+      const keys = body.keys || {};
+      const p256dh = String(keys.p256dh || body.p256dh || "").trim();
+      const authKey = String(keys.auth || body.auth || "").trim();
+      const userAgent = String(
+        (event.headers && (event.headers["user-agent"] || event.headers["User-Agent"])) ||
+          ""
+      ).slice(0, 300);
+      const saved = await saveSynkPushSubscription(sql, {
+        profileId: auth.profile.id,
+        endpoint,
+        p256dh,
+        auth: authKey,
+        userAgent,
+      });
+      if (!saved.ok) return json(400, { error: saved.error || "Invalid push subscription" });
+      return json(200, { ok: true });
+    }
+
+    if (action === "push-unsubscribe") {
+      const endpoint = String(body.endpoint || "").trim();
+      if (!endpoint) return json(400, { error: "endpoint required" });
+      await deleteSynkPushSubscription(sql, {
+        profileId: auth.profile.id,
+        endpoint,
+      });
+      return json(200, { ok: true });
+    }
+
     if (action === "set-username") {
       const username = normalizePublicUsername(body.username || body.publicUsername);
       if (!username || username.length < 3) {
@@ -1856,11 +1926,7 @@ exports.handler = async (event) => {
       if (!result.ok) return json(400, { error: result.error || "Could not send request" });
       // Notify the other person so it shows in their bell.
       try {
-        let targetProfileId = await findCommunityProfileIdByUsername(sql, target);
-        if (!targetProfileId) {
-          const alt = await findCommunityAltAccount(sql, target);
-          targetProfileId = alt && (alt.ownerProfileId || alt.owner_synk_profile_id) || null;
-        }
+        const targetProfileId = await resolveProfileIdForUsername(sql, target);
         if (targetProfileId) {
           await createNotification(sql, {
             profileId: targetProfileId,
@@ -1887,11 +1953,7 @@ exports.handler = async (event) => {
       const result = await respondFriendship(sql, primaryUsername, target, true);
       if (!result.ok) return json(400, { error: result.error || "Could not accept request" });
       try {
-        let targetProfileId = await findCommunityProfileIdByUsername(sql, target);
-        if (!targetProfileId) {
-          const alt = await findCommunityAltAccount(sql, target);
-          targetProfileId = alt && (alt.ownerProfileId || alt.owner_synk_profile_id) || null;
-        }
+        const targetProfileId = await resolveProfileIdForUsername(sql, target);
         if (targetProfileId) {
           await createNotification(sql, {
             profileId: targetProfileId,
@@ -2002,6 +2064,33 @@ exports.handler = async (event) => {
         body.body != null ? body.body : body.message
       );
       if (!result.ok) return json(400, { error: result.error || "Could not send message" });
+      try {
+        const targetProfileId = await resolveProfileIdForUsername(sql, target);
+        if (targetProfileId && targetProfileId !== auth.profile.id) {
+          const preview = String(
+            (result.message && result.message.body) ||
+              body.body ||
+              body.message ||
+              ""
+          )
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 140);
+          await createNotification(sql, {
+            profileId: targetProfileId,
+            kind: "dm",
+            actorUsername: primaryUsername,
+            body: preview
+              ? `${primaryUsername}: ${preview}`
+              : `${primaryUsername} sent you a message.`,
+          });
+        }
+      } catch (err) {
+        console.error(
+          "dm notification failed",
+          err && err.message ? err.message : err
+        );
+      }
       return json(200, {
         ok: true,
         message: result.message,

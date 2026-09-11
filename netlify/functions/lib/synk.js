@@ -4335,6 +4335,21 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
     console.error("ensureBetaAgendaForAppUpdate failed:", err);
   }
 
+  let push = { sent: 0, removed: 0 };
+  try {
+    const { broadcastSynkPush, notificationPushPayload } = require("./synk-push");
+    push = await broadcastSynkPush(
+      sql,
+      notificationPushPayload({
+        kind: "app_update",
+        actorUsername: "synk",
+        body: message,
+      })
+    );
+  } catch (err) {
+    console.error("broadcastAppUpdate push failed:", err);
+  }
+
   return {
     ok: true,
     alreadyBroadcast: false,
@@ -4344,6 +4359,7 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
     notes: releaseNotes,
     agendaCreated: Number(agenda && agenda.created) || 0,
     agendaItemId: (agenda && agenda.agendaItemId) || null,
+    pushSent: Number(push && push.sent) || 0,
   };
 }
 

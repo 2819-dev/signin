@@ -16,6 +16,7 @@
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="stylesheet" href="/join.css?v=release-notes-md1" />
     <script src="/force-refresh.js" defer></script>
+    <script src="/push-client.js?v=real-push1" defer></script>
   
     <style>
       .act-as-banner {
@@ -295,6 +296,11 @@
           avatar.textContent = (profile.name || "S").slice(0, 1).toUpperCase();
         }
         refreshHubNotifications().catch(() => {});
+        try {
+          if (window.SynkPush && session.hubSession && session.hubSession.token) {
+            window.SynkPush.bootstrapPush(hubHeaders(session), { offerBanner: true }).catch(() => {});
+          }
+        } catch (_) {}
       }
 
 
@@ -807,6 +813,18 @@
 
     </script>
       <script src="/support-chat.js?v=support4" defer></script>
+      <script>
+        document.addEventListener("DOMContentLoaded", () => {
+          if (!navigator.serviceWorker) return;
+          navigator.serviceWorker.addEventListener("message", (event) => {
+            const data = event && event.data;
+            if (!data || data.type !== "synk-notification-click" || !data.url) return;
+            try {
+              window.location.href = data.url;
+            } catch (_) {}
+          });
+        });
+      </script>
   
     <div class="release-notes-modal" id="release-notes-modal" hidden>
       <div class="release-notes-backdrop" data-release-notes-close="1"></div>

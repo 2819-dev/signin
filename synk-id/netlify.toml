@@ -206,11 +206,18 @@
     Content-Type = "application/manifest+json; charset=utf-8"
 
 [[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate, max-age=0"
+    Content-Type = "application/javascript; charset=utf-8"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options = "DENY"
     Referrer-Policy = "no-referrer"
     X-Content-Type-Options = "nosniff"
     Permissions-Policy = "camera=(self), microphone=(), geolocation=()"
-    Content-Security-Policy = "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob:; child-src 'self' blob:; connect-src 'self' https://visitor-signin-kiosk.netlify.app https://cdn.jsdelivr.net; font-src 'self' data:; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    Content-Security-Policy = "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob:; child-src 'self' blob:; connect-src 'self' https://visitor-signin-kiosk.netlify.app https://cdn.jsdelivr.net https://fcm.googleapis.com https://*.googleapis.com https://updates.push.services.mozilla.com https://*.push.services.mozilla.com https://web.push.apple.com https://*.push.apple.com; font-src 'self' data:; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     Cache-Control = "no-cache, must-revalidate, max-age=0"

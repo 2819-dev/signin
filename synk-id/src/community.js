@@ -3456,6 +3456,78 @@ function applyViewState(data) {
     });
   }
 
+  function syncPushSettingsUi() {
+    const status = document.getElementById("settings-push-status");
+    const onBtn = document.getElementById("settings-push-btn");
+    const offBtn = document.getElementById("settings-push-off-btn");
+    const push = window.SynkPush;
+    if (!push || !push.supportsPush()) {
+      if (status) status.textContent = "Browser notifications aren't supported here.";
+      if (onBtn) onBtn.hidden = true;
+      if (offBtn) offBtn.hidden = true;
+      return;
+    }
+    const pref = push.getPref();
+    const granted = Notification.permission === "granted";
+    const enabled = pref === "on" && granted;
+    if (onBtn) {
+      onBtn.hidden = enabled;
+      onBtn.textContent = granted ? "Turn alerts on" : "Enable alerts";
+    }
+    if (offBtn) offBtn.hidden = !enabled;
+    if (status) {
+      if (Notification.permission === "denied") {
+        status.textContent = "Blocked in browser settings. Allow notifications for this site, then try again.";
+      } else if (enabled) {
+        status.textContent = "Alerts are on for messages and inbox updates.";
+      } else if (pref === "off") {
+        status.textContent = "Alerts are off on this device.";
+      } else {
+        status.textContent = "Optional — enable to get device alerts when Synk is closed.";
+      }
+    }
+  }
+
+  const pushOnBtn = document.getElementById("settings-push-btn");
+  if (pushOnBtn) {
+    pushOnBtn.addEventListener("click", async () => {
+      const status = document.getElementById("settings-push-status");
+      const push = window.SynkPush;
+      if (!push) return;
+      if (status) status.textContent = "Enabling…";
+      pushOnBtn.disabled = true;
+      try {
+        push.setPref("");
+        const result = await push.ensureSubscription(hubHeaders(), { requestPermission: true });
+        if (!result.ok) throw new Error(result.reason === "denied" ? "Permission blocked" : "Couldn't enable alerts");
+        if (status) status.textContent = "Alerts enabled";
+        syncPushSettingsUi();
+      } catch (err) {
+        if (status) status.textContent = err.message || "Couldn't enable alerts";
+      } finally {
+        pushOnBtn.disabled = false;
+        syncPushSettingsUi();
+      }
+    });
+  }
+  const pushOffBtn = document.getElementById("settings-push-off-btn");
+  if (pushOffBtn) {
+    pushOffBtn.addEventListener("click", async () => {
+      const status = document.getElementById("settings-push-status");
+      const push = window.SynkPush;
+      if (!push) return;
+      if (status) status.textContent = "Turning off…";
+      try {
+        await push.disablePush(hubHeaders());
+        if (status) status.textContent = "Alerts turned off on this device";
+      } catch (err) {
+        if (status) status.textContent = err.message || "Couldn't turn off";
+      }
+      syncPushSettingsUi();
+    });
+  }
+  syncPushSettingsUi();
+
   async function openNotifications() {
     inboxTab = "notifications";
     await navigate({ type: "inbox", slug: "", username: "" });
@@ -4292,6 +4364,9 @@ function applyViewState(data) {
     btn.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
+  let seenNotifIds = new Set();
+  let notifWatchReady = false;
+
   async function refreshNotifications({ open = false } = {}) {
     try {
       const res = await fetch("/api/synk-community?inbox=1", { headers: hubHeaders() });
@@ -4302,8 +4377,23 @@ function applyViewState(data) {
         updateInboxBadge();
       }
       notifLoaded = true;
-      renderNotifPanel(data.notifications || []);
-      if (Array.isArray(data.notifications)) lastNotifications = data.notifications.slice();
+      const notes = Array.isArray(data.notifications) ? data.notifications : [];
+      if (notifWatchReady && window.SynkPush && window.SynkPush.maybeLocalNotify) {
+        notes.forEach((note) => {
+          const id = String((note && note.id) || "");
+          if (!id || seenNotifIds.has(id) || note.readAt) return;
+          seenNotifIds.add(id);
+          window.SynkPush.maybeLocalNotify(note);
+        });
+      } else {
+        notes.forEach((note) => {
+          const id = String((note && note.id) || "");
+          if (id) seenNotifIds.add(id);
+        });
+        notifWatchReady = true;
+      }
+      renderNotifPanel(notes);
+      lastNotifications = notes.slice();
       if (open) setNotifOpen(true);
     } catch (err) {
       const list = document.getElementById("notif-list");
@@ -4585,6 +4675,22 @@ document.addEventListener("click", async (e) => {
   setTimeout(() => {
     if (me && publicUsername) refreshNotifications().catch(() => {});
   }, 1200);
+
+  // Real device notifications (Web Push) once a hub session is present.
+  setTimeout(() => {
+    if (!hubToken || !window.SynkPush) return;
+    window.SynkPush.bootstrapPush(hubHeaders(), { offerBanner: true }).catch(() => {});
+  }, 1800);
+
+  if (window.SynkPush && navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      const data = event && event.data;
+      if (!data || data.type !== "synk-notification-click" || !data.url) return;
+      try {
+        window.location.href = data.url;
+      } catch (_) {}
+    });
+  }
 
 
   // Start closed — sidebar opens from the profile avatar.

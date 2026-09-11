@@ -10,7 +10,7 @@ const pages = ["act-as.html", "index.html", "join.html", "verify.html", "hub.htm
 const sourceCss = path.join(root, "src", "join.css");
 const sourceManifest = path.join(root, "src", "manifest.webmanifest");
 const touchIconSrc = path.join(root, "src", "apple-touch-icon.png");
-const localAssets = ["community.js", "force-refresh.js", "support-chat.js"];
+const localAssets = ["community.js", "force-refresh.js", "support-chat.js", "push-client.js", "sw.js"];
 
 fs.mkdirSync(publicDir, { recursive: true });
 
