@@ -1166,8 +1166,33 @@
         const pid = escapeHtml(String(post.id || ""));
         const media = renderPostMedia(post);
         const commentLabel = comments === 1 ? "1 comment" : `${comments} comments`;
+        const suggestionStatus = String(post.suggestionStatus || "").toLowerCase();
+        const isSuggestion =
+          suggestionStatus ||
+          (post.channel && String(post.channel.kind || "").toLowerCase() === "suggestions");
+        const canModerateSuggestion = !!(
+          isSuggestion &&
+          me &&
+          (me.isStaff || me.role === "owner" || me.role === "admin")
+        );
+        const statusBadge = isSuggestion
+          ? `<span class="suggestion-status is-${escapeHtml(suggestionStatus || "open")}">${escapeHtml(
+              suggestionStatus === "accepted"
+                ? "Accepted"
+                : suggestionStatus === "denied"
+                  ? "Denied"
+                  : "Open"
+            )}</span>`
+          : "";
+        const suggestionActions = canModerateSuggestion
+          ? `<div class="suggestion-actions">
+              <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="accepted" data-post-id="${pid}">Accept</button>
+              <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="denied" data-post-id="${pid}">Deny</button>
+              <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="open" data-post-id="${pid}">Reopen</button>
+            </div>`
+          : "";
         return `
-          <article class="reddit-post" data-post-id="${pid}">
+          <article class="reddit-post ${isSuggestion ? "is-suggestion" : ""}" data-post-id="${pid}">
             <div class="reddit-vote" aria-label="Vote">
               <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
               <span class="reddit-vote-count">${score}</span>
@@ -1182,9 +1207,12 @@
                 }
                 ${
                   post.channel && post.channel.label
-                    ? `<span class="reddit-channel-pill">${escapeHtml(post.channel.label)}</span><span class="reddit-meta-dot">•</span>`
+                    ? `<span class="reddit-channel-pill">${escapeHtml(
+                        formatChannelLabel(post.channel)
+                      )}</span><span class="reddit-meta-dot">•</span>`
                     : ""
                 }
+                ${statusBadge}
                 <span class="reddit-meta-by">Posted by</span>
                 ${renderAuthorLink(author, { withAvatar: true })}
                 <span class="reddit-meta-dot">•</span>
@@ -1195,6 +1223,7 @@
               </a>
               ${bodyText ? `<p class="reddit-post-body">${escapeHtml(truncateText(bodyText, 180))}</p>` : ""}
               ${media}
+              ${suggestionActions}
               <div class="reddit-post-actions">
                 <a class="reddit-action" href="/community/post/${pid}" data-open-post="${pid}">${ico("comment", 16)} <span>${escapeHtml(commentLabel)}</span></a>
                 <button class="reddit-action" type="button" data-share-post="${pid}">${ico("share", 16)} <span>Share</span></button>
@@ -1568,14 +1597,51 @@
 
   
   function isDiscordTheme(group) {
-    return !!(group && (group.theme === "discord" || group.isOfficial || group.slug === "synk"));
+    // Discord UI is only for the official Synk group.
+    return !!(group && (group.isOfficial || group.slug === "synk"));
+  }
+
+  function capitalizeChannelName(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (raw === raw.toUpperCase() && /[A-Z]/.test(raw)) return raw;
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+
+  function formatChannelPill(channel) {
+    if (!channel) return "";
+    if (channel.label) return formatChannelLabel({ label: channel.label, emoji: channel.emoji, name: channel.name, slug: channel.slug });
+    return formatChannelLabel(channel);
   }
 
   function formatChannelLabel(ch) {
     if (!ch) return "";
-    if (ch.label) return ch.label;
-    if (ch.emoji && ch.name) return `${ch.emoji} | ${ch.name}`;
-    return ch.name || ch.slug || "";
+    if (ch.label) {
+      // Ensure display capitalizes the name portion after "emoji | ".
+      const parts = String(ch.label).split("|");
+      if (parts.length >= 2) {
+        const emoji = parts[0].trim();
+        const name = capitalizeChannelName(parts.slice(1).join("|").trim());
+        return emoji && name ? `${emoji} | ${name}` : name || emoji;
+      }
+      return capitalizeChannelName(ch.label);
+    }
+    if (ch.emoji && ch.name) return `${ch.emoji} | ${capitalizeChannelName(ch.name)}`;
+    return capitalizeChannelName(ch.name || ch.slug || "");
+  }
+
+  function activeChannelMeta(group) {
+    const channels = Array.isArray(group && group.channels) ? group.channels : [];
+    return channels.find((c) => c.slug === activeChannelSlug) || channels[0] || null;
+  }
+
+  function canPostInChannel(channel) {
+    if (!channel) return true;
+    const kind = String(channel.kind || "").toLowerCase();
+    if (kind === "announcements" || kind === "readonly") {
+      return !!(me && (me.isStaff || me.role === "owner" || me.role === "admin"));
+    }
+    return true;
   }
 
   function channelButtonHtml(ch) {
@@ -1669,9 +1735,36 @@
     }
     const composerOpen = document.getElementById("composer-open-btn");
     if (composerOpen && route.slug) {
-      composerOpen.href = submitUrlForGroup(route.slug, activeChannelSlug);
-      const chName = active ? formatChannelLabel(active) : "this channel";
-      composerOpen.textContent = `Post in ${chName}`;
+      const allowed = canPostInChannel(active);
+      composerOpen.hidden = !allowed;
+      if (allowed) {
+        composerOpen.href = submitUrlForGroup(route.slug, activeChannelSlug);
+        const kind = String((active && active.kind) || "").toLowerCase();
+        const chName = active ? formatChannelLabel(active) : "this channel";
+        if (kind === "suggestions") composerOpen.textContent = `Suggest in ${chName}`;
+        else if (kind === "announcements") composerOpen.textContent = `Announce in ${chName}`;
+        else composerOpen.textContent = `Post in ${chName}`;
+      }
+    }
+    const feedHint = document.getElementById("discord-channel-hint");
+    if (feedHint) {
+      const kind = String((active && active.kind) || "").toLowerCase();
+      if (kind === "announcements") {
+        feedHint.hidden = false;
+        feedHint.textContent = canPostInChannel(active)
+          ? "Announcements — only Synk staff can post here. These stay out of the main feed."
+          : "Announcements — only Synk staff can post here. Browse updates below.";
+      } else if (kind === "readonly") {
+        feedHint.hidden = false;
+        feedHint.textContent = "Read-only channel. Synk staff maintain this board.";
+      } else if (kind === "suggestions") {
+        feedHint.hidden = false;
+        feedHint.textContent =
+          "Suggestions forum — upvote ideas. Synk staff can accept or deny them. Stays out of the main feed.";
+      } else {
+        feedHint.hidden = true;
+        feedHint.textContent = "";
+      }
     }
   }
 
@@ -4126,6 +4219,27 @@ function applyViewState(data) {
     }
   });
 
+
+  document.addEventListener("click", async (e) => {
+    const suggestionBtn = e.target.closest("[data-suggestion-status]");
+    if (suggestionBtn) {
+      e.preventDefault();
+      const postId = suggestionBtn.getAttribute("data-post-id");
+      const status = suggestionBtn.getAttribute("data-suggestion-status");
+      if (!postId || !status) return;
+      try {
+        await communityAction({ action: "set-suggestion-status", postId, status });
+        lastPosts = (lastPosts || []).map((p) =>
+          String(p.id) === String(postId) ? { ...p, suggestionStatus: status } : p
+        );
+        renderFeed(lastPosts);
+        showToast(status === "accepted" ? "Suggestion accepted" : status === "denied" ? "Suggestion denied" : "Suggestion reopened");
+      } catch (err) {
+        showToast(err.message || "Could not update suggestion");
+      }
+      return;
+    }
+  });
 
   document.addEventListener("click", (e) => {
     const chBtn = e.target.closest("[data-discord-channel]");

@@ -25,6 +25,10 @@ const {
   updateGroupRole,
   deleteGroupRole,
   ensureOfficialSynkGroup,
+  formatChannelLabel,
+  normalizeChannelKind,
+  normalizeSuggestionStatus,
+  capitalizeChannelName,
   isCommunityUsernameTaken,
   listOwnerAltAccounts,
   findCommunityAltAccount,
@@ -201,6 +205,8 @@ function mapPost(row) {
   const primaryUsername = row.public_username || "";
   const isPrimary = !primaryUsername || username === primaryUsername;
   const pollOptions = parsePollOptions(row.poll_options);
+  const channelKind = normalizeChannelKind(row.channel_kind, row.channel_slug);
+  const suggestionStatus = normalizeSuggestionStatus(row.suggestion_status);
   return {
     id: row.id,
     title: derivePostTitle(row),
@@ -223,13 +229,17 @@ function mapPost(row) {
     myVote: row.my_vote == null || row.my_vote === "" ? 0 : Number(row.my_vote) || 0,
     saved: Boolean(row.saved),
     hidden: Boolean(row.hidden),
+    suggestionStatus: suggestionStatus || (channelKind === "suggestions" ? "open" : ""),
     createdAt: row.created_at,
     group: row.group_slug
       ? {
           id: row.group_id,
           slug: row.group_slug,
           name: row.group_name || row.group_slug,
-          theme: row.group_theme || "standard",
+          theme:
+            row.group_is_official === true || row.group_slug === "synk"
+              ? "discord"
+              : "standard",
           isOfficial: row.group_is_official === true,
         }
       : null,
@@ -237,12 +247,13 @@ function mapPost(row) {
       ? {
           id: row.channel_id,
           slug: row.channel_slug || "",
-          name: row.channel_name || "",
+          name: capitalizeChannelName(row.channel_name || row.channel_slug || ""),
           emoji: row.channel_emoji || "",
+          kind: channelKind,
           label:
             row.channel_emoji && row.channel_name
-              ? `${row.channel_emoji} | ${row.channel_name}`
-              : row.channel_name || row.channel_slug || "",
+              ? `${row.channel_emoji} | ${capitalizeChannelName(row.channel_name)}`
+              : capitalizeChannelName(row.channel_name || row.channel_slug || ""),
         }
       : null,
     author: {
@@ -605,6 +616,7 @@ async function loadPosts(
     profileId = null,
     joinedOnly = false,
     savedOnly = false,
+    excludeOfficial = false,
     sort = "new",
     limit = 80,
   } = {}
@@ -616,6 +628,7 @@ async function loadPosts(
   const useJoined = Boolean(joinedOnly && profileId);
   const useSaved = Boolean(savedOnly && profileId);
   const hideForViewer = Boolean(profileId);
+  const hideOfficial = Boolean(excludeOfficial && !groupId);
 
   const rows = byScore
     ? await sql`
@@ -631,6 +644,7 @@ async function loadPosts(
           p.created_at,
           p.group_id,
           p.author_username,
+          p.suggestion_status,
           m.name,
           c.public_username,
           g.slug AS group_slug,
@@ -641,6 +655,7 @@ async function loadPosts(
           ch.slug AS channel_slug,
           ch.name AS channel_name,
           ch.emoji AS channel_emoji,
+          ch.kind AS channel_kind,
           (
             SELECT COUNT(*)::int
             FROM synk_community_comments cc
@@ -692,6 +707,10 @@ async function loadPosts(
               WHERE hd.synk_profile_id = ${profileId}
                 AND hd.post_id = p.id
             )
+          )
+          AND (
+            ${hideOfficial ? 1 : 0} = 0
+            OR COALESCE(g.is_official, FALSE) = FALSE
           )
         ORDER BY p.score DESC, p.created_at DESC
         LIMIT ${capped}
@@ -709,6 +728,7 @@ async function loadPosts(
           p.created_at,
           p.group_id,
           p.author_username,
+          p.suggestion_status,
           m.name,
           c.public_username,
           g.slug AS group_slug,
@@ -719,6 +739,7 @@ async function loadPosts(
           ch.slug AS channel_slug,
           ch.name AS channel_name,
           ch.emoji AS channel_emoji,
+          ch.kind AS channel_kind,
           (
             SELECT COUNT(*)::int
             FROM synk_community_comments cc
@@ -770,6 +791,10 @@ async function loadPosts(
               WHERE hd.synk_profile_id = ${profileId}
                 AND hd.post_id = p.id
             )
+          )
+          AND (
+            ${hideOfficial ? 1 : 0} = 0
+            OR COALESCE(g.is_official, FALSE) = FALSE
           )
         ORDER BY p.created_at DESC
         LIMIT ${capped}
@@ -1304,6 +1329,7 @@ exports.handler = async (event) => {
         posts = await loadPosts(sql, {
           profileId: auth.profile.id,
           sort: "hot",
+          excludeOfficial: true,
         });
       } else if (feed === "home") {
         const joined = await listJoinedGroupIdSet(sql, auth.profile.id);
@@ -1311,6 +1337,7 @@ exports.handler = async (event) => {
           profileId: auth.profile.id,
           joinedOnly: joined.size > 0,
           sort,
+          excludeOfficial: true,
         });
       } else {
         if (groupSlug) {
@@ -1334,11 +1361,11 @@ exports.handler = async (event) => {
             slug: channelSlug,
           });
         }
-        // Discord/official groups always scope the feed to a channel (default: general).
+        // Official Synk Discord group always scopes the feed to a channel (default: general).
         if (
           activeGroup &&
           !activeChannel &&
-          (activeGroup.theme === "discord" || activeGroup.isOfficial)
+          (activeGroup.isOfficial || activeGroup.slug === "synk")
         ) {
           activeChannel =
             (activeGroup.channels || []).find((c) => c.slug === "general") ||
@@ -2102,10 +2129,31 @@ if (action === "create-alt") {
           slug: body.channel || body.channelSlug,
         });
         if (!channel) return json(400, { error: "Channel not found in this group" });
-      } else if (group.theme === "discord" || group.isOfficial) {
+      } else if (group.isOfficial || group.slug === "synk") {
         const hydrated = await hydrateCommunityGroup(sql, group);
-        channel = (hydrated.channels || []).find((c) => c.slug === "general") || (hydrated.channels || [])[0] || null;
+        channel =
+          (hydrated.channels || []).find((c) => c.slug === "general") ||
+          (hydrated.channels || [])[0] ||
+          null;
       }
+      if (channel) {
+        const kind = normalizeChannelKind(channel.kind, channel.slug);
+        if (
+          (kind === "announcements" || kind === "readonly") &&
+          !isCommunityStaffRole(role)
+        ) {
+          return json(403, {
+            error:
+              kind === "announcements"
+                ? "Only Synk staff can post announcements"
+                : "Only Synk staff can post in this channel",
+          });
+        }
+      }
+      const suggestionStatus =
+        channel && normalizeChannelKind(channel.kind, channel.slug) === "suggestions"
+          ? "open"
+          : null;
       const rows = await sql`
         INSERT INTO synk_community_posts (
           synk_profile_id,
@@ -2118,7 +2166,8 @@ if (action === "create-alt") {
           image_url,
           poll_options,
           score,
-          author_username
+          author_username,
+          suggestion_status
         )
         VALUES (
           ${auth.profile.id},
@@ -2131,11 +2180,12 @@ if (action === "create-alt") {
           ${imageUrl},
           ${pollJson}::jsonb,
           1,
-          ${persona.username}
+          ${persona.username},
+          ${suggestionStatus}
         )
         RETURNING
           id, title, post_type, body, link_url, image_url, poll_options,
-          score, created_at, group_id, author_username
+          score, created_at, group_id, author_username, channel_id, suggestion_status
       `;
 
       await sql`
@@ -2179,6 +2229,44 @@ if (action === "create-alt") {
       return json(201, {
         ok: true,
         post,
+      });
+    }
+
+
+    if (action === "set-suggestion-status") {
+      if (!isCommunityStaffRole(role)) {
+        return json(403, { error: "Only Synk staff can accept or deny suggestions" });
+      }
+      const postId = String(body.postId || body.id || "").trim();
+      const status = normalizeSuggestionStatus(body.status || body.suggestionStatus);
+      if (!isUuid(postId)) return json(400, { error: "Invalid post id" });
+      if (!status) return json(400, { error: "status must be open, accepted, or denied" });
+      const rows = await sql`
+        SELECT
+          p.id,
+          p.suggestion_status,
+          ch.kind AS channel_kind,
+          ch.slug AS channel_slug
+        FROM synk_community_posts p
+        LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
+        WHERE p.id = ${postId}
+        LIMIT 1
+      `;
+      if (!rows[0]) return json(404, { error: "Post not found" });
+      const kind = normalizeChannelKind(rows[0].channel_kind, rows[0].channel_slug);
+      if (kind !== "suggestions" && rows[0].suggestion_status == null) {
+        return json(400, { error: "This post is not a suggestion" });
+      }
+      const updated = await sql`
+        UPDATE synk_community_posts
+        SET suggestion_status = ${status}
+        WHERE id = ${postId}
+        RETURNING id, suggestion_status
+      `;
+      return json(200, {
+        ok: true,
+        postId: updated[0].id,
+        suggestionStatus: updated[0].suggestion_status || status,
       });
     }
 

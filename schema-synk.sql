@@ -224,6 +224,7 @@ CREATE TABLE IF NOT EXISTS synk_community_group_channels (
   name TEXT NOT NULL,
   slug TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'text',
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -626,3 +627,6 @@ CREATE TABLE IF NOT EXISTS synk_admin_act_as_tokens (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS synk_admin_act_as_expires_idx ON synk_admin_act_as_tokens (expires_at);
+
+ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS suggestion_status TEXT;
+ALTER TABLE synk_community_group_channels ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'text';

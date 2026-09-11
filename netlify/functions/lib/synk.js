@@ -151,7 +151,9 @@ function normalizeCommunityRole(value) {
 
 function mapCommunityGroup(row) {
   if (!row) return null;
-  const theme = String(row.theme || "standard").toLowerCase() === "discord" ? "discord" : "standard";
+  const isOfficial = row.is_official === true || row.slug === "synk";
+  // Discord shell is reserved for the official Synk group only.
+  const theme = isOfficial ? "discord" : "standard";
   return {
     id: row.id,
     slug: row.slug,
@@ -172,25 +174,60 @@ function mapCommunityGroup(row) {
 
 function formatChannelLabel(emoji, name) {
   const e = String(emoji || "").trim();
-  const n = String(name || "").trim();
+  const n = capitalizeChannelName(name);
   if (e && n) return `${e} | ${n}`;
   return n || e || "channel";
+}
+
+function capitalizeChannelName(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  // Keep ALL-CAPS category-style names as-is; otherwise Title-case first letter.
+  if (raw === raw.toUpperCase() && /[A-Z]/.test(raw)) return raw;
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function normalizeChannelKind(value, slug = "") {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (["announcements", "announcement"].includes(raw)) return "announcements";
+  if (["suggestions", "suggestion", "ideas", "idea"].includes(raw)) return "suggestions";
+  if (["readonly", "read-only", "rules"].includes(raw)) return "readonly";
+  const s = normalizeChannelSlug(slug || raw);
+  if (s === "announcements") return "announcements";
+  if (s === "suggestions" || s === "ideas") return "suggestions";
+  if (s === "rules") return "readonly";
+  return "text";
+}
+
+function normalizeSuggestionStatus(value) {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (["open", "accepted", "denied"].includes(raw)) return raw;
+  return "";
 }
 
 function mapCommunityChannel(row) {
   if (!row) return null;
   const emoji = String(row.emoji || "").trim();
-  const name = String(row.name || "").trim();
+  const name = capitalizeChannelName(row.name || row.slug || "");
+  const slug = row.slug;
+  const kind = normalizeChannelKind(row.kind, slug);
   return {
     id: row.id,
     groupId: row.group_id,
     categoryId: row.category_id || null,
     emoji,
     name,
-    slug: row.slug,
+    slug,
     description: row.description || "",
     sortOrder: Number(row.sort_order) || 0,
+    kind,
     label: formatChannelLabel(emoji, name),
+    staffOnlyPost: kind === "announcements" || kind === "readonly",
+    isForum: kind === "suggestions",
   };
 }
 
@@ -713,6 +750,8 @@ async function ensureSynkCommunityExtras(sql) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE synk_community_group_channels ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'text'`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS suggestion_status TEXT`;
   await sql`
     CREATE UNIQUE INDEX IF NOT EXISTS synk_community_group_channels_group_slug_idx
     ON synk_community_group_channels (group_id, slug)
@@ -1458,25 +1497,79 @@ async function ensureOfficialSynkGroup(sql) {
       {
         name: "INFORMATION",
         channels: [
-          { emoji: "📢", name: "announcements", slug: "announcements", description: "Official Synk updates" },
-          { emoji: "📜", name: "rules", slug: "rules", description: "Community guidelines" },
-          { emoji: "🆕", name: "updates", slug: "updates", description: "Product and platform notes" },
+          {
+            emoji: "📢",
+            name: "Announcements",
+            slug: "announcements",
+            kind: "announcements",
+            description: "Official Synk updates — staff only",
+          },
+          {
+            emoji: "📜",
+            name: "Rules",
+            slug: "rules",
+            kind: "readonly",
+            description: "Community guidelines",
+          },
+          {
+            emoji: "🆕",
+            name: "Updates",
+            slug: "updates",
+            kind: "announcements",
+            description: "Product and platform notes — staff only",
+          },
         ],
       },
       {
         name: "COMMUNITY",
         channels: [
-          { emoji: "💬", name: "general", slug: "general", description: "Everyday conversation" },
-          { emoji: "👋", name: "introductions", slug: "introductions", description: "Say hello" },
-          { emoji: "💡", name: "ideas", slug: "ideas", description: "Share ideas and requests" },
+          {
+            emoji: "💬",
+            name: "General",
+            slug: "general",
+            kind: "text",
+            description: "Everyday conversation",
+          },
+          {
+            emoji: "👋",
+            name: "Introductions",
+            slug: "introductions",
+            kind: "text",
+            description: "Say hello",
+          },
+          {
+            emoji: "💡",
+            name: "Suggestions",
+            slug: "suggestions",
+            kind: "suggestions",
+            description: "Forum-style ideas — upvote and staff accept/deny",
+          },
         ],
       },
       {
         name: "SUPPORT",
         channels: [
-          { emoji: "🆘", name: "help", slug: "help", description: "Get help from the community" },
-          { emoji: "🐛", name: "bugs", slug: "bugs", description: "Report bugs" },
-          { emoji: "📣", name: "feedback", slug: "feedback", description: "Tell us what to improve" },
+          {
+            emoji: "🆘",
+            name: "Help",
+            slug: "help",
+            kind: "text",
+            description: "Get help from the community",
+          },
+          {
+            emoji: "🐛",
+            name: "Bugs",
+            slug: "bugs",
+            kind: "text",
+            description: "Report bugs",
+          },
+          {
+            emoji: "📣",
+            name: "Feedback",
+            slug: "feedback",
+            kind: "text",
+            description: "Tell us what to improve",
+          },
         ],
       },
     ];
@@ -1492,10 +1585,10 @@ async function ensureOfficialSynkGroup(sql) {
       for (const ch of cat.channels) {
         await sql`
           INSERT INTO synk_community_group_channels (
-            group_id, category_id, emoji, name, slug, description, sort_order
+            group_id, category_id, emoji, name, slug, description, kind, sort_order
           )
           VALUES (
-            ${group.id}, ${categoryId}, ${ch.emoji}, ${ch.name}, ${ch.slug}, ${ch.description}, ${chOrder}
+            ${group.id}, ${categoryId}, ${ch.emoji}, ${ch.name}, ${ch.slug}, ${ch.description}, ${ch.kind}, ${chOrder}
           )
           ON CONFLICT (group_id, slug) DO NOTHING
         `;
@@ -1504,6 +1597,35 @@ async function ensureOfficialSynkGroup(sql) {
       catOrder += 1;
     }
   }
+
+  // Keep official Synk channel names/kinds in sync for existing installs.
+  await sql`
+    UPDATE synk_community_group_channels
+    SET
+      name = CASE slug
+        WHEN 'announcements' THEN 'Announcements'
+        WHEN 'rules' THEN 'Rules'
+        WHEN 'updates' THEN 'Updates'
+        WHEN 'general' THEN 'General'
+        WHEN 'introductions' THEN 'Introductions'
+        WHEN 'suggestions' THEN 'Suggestions'
+        WHEN 'ideas' THEN 'Suggestions'
+        WHEN 'help' THEN 'Help'
+        WHEN 'bugs' THEN 'Bugs'
+        WHEN 'feedback' THEN 'Feedback'
+        ELSE INITCAP(name)
+      END,
+      kind = CASE slug
+        WHEN 'announcements' THEN 'announcements'
+        WHEN 'updates' THEN 'announcements'
+        WHEN 'rules' THEN 'readonly'
+        WHEN 'suggestions' THEN 'suggestions'
+        WHEN 'ideas' THEN 'suggestions'
+        ELSE COALESCE(NULLIF(kind, ''), 'text')
+      END,
+      slug = CASE WHEN slug = 'ideas' THEN 'suggestions' ELSE slug END
+    WHERE group_id = ${group.id}
+  `;
 
   // Default roles (no icons — badges stay separate).
   const roleCount = await sql`
@@ -1532,6 +1654,15 @@ async function ensureOfficialSynkGroup(sql) {
     SET group_id = ${group.id}
     WHERE group_id IS NULL
   `;
+
+  // Non-official groups never use the Discord shell.
+  await sql`
+    UPDATE synk_community_groups
+    SET theme = 'standard', updated_at = NOW()
+    WHERE COALESCE(is_official, FALSE) = FALSE
+      AND slug <> 'synk'
+      AND lower(theme) = 'discord'
+  `;
   return group.id;
 }
 
@@ -1549,7 +1680,7 @@ async function listGroupCategories(sql, groupId) {
 async function listGroupChannels(sql, groupId) {
   if (!groupId) return [];
   const rows = await sql`
-    SELECT id, group_id, category_id, emoji, name, slug, description, sort_order
+    SELECT id, group_id, category_id, emoji, name, slug, description, kind, sort_order
     FROM synk_community_group_channels
     WHERE group_id = ${groupId}
     ORDER BY sort_order ASC, name ASC
@@ -1563,7 +1694,7 @@ async function findGroupChannel(sql, { id, groupId, slug } = {}) {
   const channelSlug = normalizeChannelSlug(slug);
   if (channelId) {
     const rows = await sql`
-      SELECT id, group_id, category_id, emoji, name, slug, description, sort_order
+      SELECT id, group_id, category_id, emoji, name, slug, description, kind, sort_order
       FROM synk_community_group_channels
       WHERE id = ${channelId}
       LIMIT 1
@@ -1572,7 +1703,7 @@ async function findGroupChannel(sql, { id, groupId, slug } = {}) {
   }
   if (gId && channelSlug) {
     const rows = await sql`
-      SELECT id, group_id, category_id, emoji, name, slug, description, sort_order
+      SELECT id, group_id, category_id, emoji, name, slug, description, kind, sort_order
       FROM synk_community_group_channels
       WHERE group_id = ${gId} AND slug = ${channelSlug}
       LIMIT 1
@@ -4080,6 +4211,9 @@ module.exports = {
   updateGroupRole,
   deleteGroupRole,
   formatChannelLabel,
+  normalizeChannelKind,
+  normalizeSuggestionStatus,
+  capitalizeChannelName,
   normalizeRoleName,
   normalizeRoleColor,
   isCommunityUsernameTaken,

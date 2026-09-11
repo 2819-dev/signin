@@ -7887,6 +7887,40 @@ body.community-body #dm-compose-send.btn {
   display: block;
   font-size: 1rem;
 }
+
+.discord-channel-hint {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.suggestion-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, #64748b 16%, transparent);
+  color: #334155;
+}
+.suggestion-status.is-open { background: color-mix(in srgb, #3b82f6 16%, transparent); color: #1d4ed8; }
+.suggestion-status.is-accepted { background: color-mix(in srgb, #22c55e 18%, transparent); color: #15803d; }
+.suggestion-status.is-denied { background: color-mix(in srgb, #ef4444 16%, transparent); color: #b91c1c; }
+.suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+body.community-body.is-discord-group .suggestion-status {
+  color: #e2e8f0;
+}
+body.community-body.is-discord-group .suggestion-status.is-open { color: #93c5fd; }
+body.community-body.is-discord-group .suggestion-status.is-accepted { color: #86efac; }
+body.community-body.is-discord-group .suggestion-status.is-denied { color: #fca5a5; }
+
 .discord-channel-head .muted {
   margin: 2px 0 0;
   color: #b5bac1 !important;
