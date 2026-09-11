@@ -44,6 +44,26 @@
   status = 200
 
 [[redirects]]
+  from = "/community/popular"
+  to = "/community.html"
+  status = 200
+
+[[redirects]]
+  from = "/community/submit"
+  to = "/community.html"
+  status = 200
+
+[[redirects]]
+  from = "/community/mod"
+  to = "/community.html"
+  status = 200
+
+[[redirects]]
+  from = "/community/mod-tools"
+  to = "/community.html"
+  status = 200
+
+[[redirects]]
   from = "/community/g/*"
   to = "/community.html"
   status = 200
