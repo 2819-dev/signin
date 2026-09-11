@@ -2236,10 +2236,15 @@ function applyViewState(data) {
       if (pageHead) pageHead.hidden = false;
       const q = route.query || "";
       setText("page-head-title", q ? `Results for “${q}”` : "Search");
-      setText("page-head-sub", "All · Popular · Groups · Users");
+      // Real tab controls live in #search-tabs — keep this subtitle quiet.
+      setText("page-head-sub", "Posts, people, and groups");
       const jumpInput = document.getElementById("jump-input");
       if (jumpInput && q && document.activeElement !== jumpInput) jumpInput.value = q;
       if (composerCard) composerCard.hidden = true;
+      const discordShell = document.getElementById("discord-shell");
+      if (discordShell) discordShell.hidden = true;
+      document.body.classList.remove("is-discord-group");
+      mountFeedStack(false);
       syncSearchTabs();
       updateAboutRail(data);
       return;

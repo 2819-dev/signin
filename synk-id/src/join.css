@@ -8056,6 +8056,11 @@ body.community-body .community-dm-send:hover { filter: brightness(1.05); }
   background: #1e1f22;
   color: #f2f3f5;
 }
+/* Author `display: grid` otherwise wins over the hidden attribute. */
+.discord-shell[hidden],
+#discord-shell[hidden] {
+  display: none !important;
+}
 .feed-stack { display: grid; gap: 10px; }
 .discord-shell .feed-stack {
   gap: 0;
