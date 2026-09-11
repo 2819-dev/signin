@@ -1347,6 +1347,7 @@
     const modNav = document.getElementById("mod-nav-link");
     if (modNav) modNav.classList.toggle("is-active", onMod);
     if (popularLink) popularLink.classList.toggle("is-active", route.type === "popular");
+    try { refreshModToolsChrome(); } catch (_) {}
     const inboxBtn = document.getElementById("inbox-btn");
     if (inboxBtn) inboxBtn.classList.toggle("is-active", onInbox);
 
@@ -1455,6 +1456,7 @@
     renderAlts();
     renderTagCatalog();
     syncPersonaUi();
+    refreshModToolsChrome();
     if (!isStaff && route.type === "mod") {
       route = { type: "home", slug: "", username: "" };
       try {
@@ -4290,6 +4292,151 @@ function applyViewState(data) {
     { passive: false }
   );
 
+  const MOD_PANEL_STORAGE_KEY = "synk_mod_panels_v1";
+
+  function visibleModPanels() {
+    return Array.from(document.querySelectorAll("#mod-view details.mod-panel")).filter((panel) => {
+      if (panel.closest("[hidden]")) return false;
+      const style = window.getComputedStyle(panel);
+      return style.display !== "none" && style.visibility !== "hidden";
+    });
+  }
+
+  function readModPanelState() {
+    try {
+      const raw = localStorage.getItem(MOD_PANEL_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeModPanelState() {
+    const state = {};
+    document.querySelectorAll("#mod-view details.mod-panel[data-mod-panel]").forEach((panel) => {
+      const key = panel.getAttribute("data-mod-panel");
+      if (key) state[key] = !!panel.open;
+    });
+    try {
+      localStorage.setItem(MOD_PANEL_STORAGE_KEY, JSON.stringify(state));
+    } catch (_) {}
+  }
+
+  function restoreModPanelState() {
+    const saved = readModPanelState();
+    if (!saved) return;
+    document.querySelectorAll("#mod-view details.mod-panel[data-mod-panel]").forEach((panel) => {
+      const key = panel.getAttribute("data-mod-panel");
+      if (!key || !Object.prototype.hasOwnProperty.call(saved, key)) return;
+      panel.open = !!saved[key];
+    });
+  }
+
+  function syncModJumpActive() {
+    const jumps = document.getElementById("mod-tools-jumps");
+    if (!jumps) return;
+    jumps.querySelectorAll("[data-mod-jump]").forEach((btn) => {
+      const key = btn.getAttribute("data-mod-jump");
+      const panel = document.querySelector(`#mod-view details.mod-panel[data-mod-panel="${key}"]`);
+      btn.classList.toggle("is-open", !!(panel && panel.open));
+    });
+  }
+
+  function refreshModToolsChrome() {
+    const toolbar = document.getElementById("mod-tools-toolbar");
+    const jumps = document.getElementById("mod-tools-jumps");
+    if (!toolbar || !jumps) return;
+    const onMod = route.type === "mod";
+    const panels = onMod ? visibleModPanels() : [];
+    toolbar.hidden = !onMod || panels.length === 0;
+    if (!onMod) return;
+    jumps.innerHTML = panels
+      .map((panel) => {
+        const key = panel.getAttribute("data-mod-panel") || panel.id || "";
+        const titleEl = panel.querySelector(".mod-panel-title");
+        const label = (titleEl && titleEl.textContent) || key || "Section";
+        return `<button type="button" class="mod-tools-jump" data-mod-jump="${escapeHtml(key)}">${escapeHtml(label)}</button>`;
+      })
+      .join("");
+    syncModJumpActive();
+  }
+
+  function openModPanel(key, { scroll = true, exclusive = false } = {}) {
+    const panels = visibleModPanels();
+    panels.forEach((panel) => {
+      const panelKey = panel.getAttribute("data-mod-panel");
+      if (exclusive && panelKey !== key) panel.open = false;
+      if (panelKey === key) panel.open = true;
+    });
+    writeModPanelState();
+    syncModJumpActive();
+    if (scroll) {
+      const target = document.querySelector(`#mod-view details.mod-panel[data-mod-panel="${key}"]`);
+      if (target) {
+        try {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        } catch (_) {
+          target.scrollIntoView();
+        }
+      }
+    }
+  }
+
+  function setAllModPanels(open) {
+    visibleModPanels().forEach((panel) => {
+      panel.open = !!open;
+    });
+    writeModPanelState();
+    syncModJumpActive();
+  }
+
+  function initModToolsPanels() {
+    restoreModPanelState();
+    const root = document.getElementById("mod-view");
+    if (root && !root.dataset.modPanelsBound) {
+      root.dataset.modPanelsBound = "1";
+      root.addEventListener("toggle", (e) => {
+        const panel = e.target;
+        if (!(panel instanceof HTMLDetailsElement)) return;
+        if (!panel.classList.contains("mod-panel")) return;
+        writeModPanelState();
+        syncModJumpActive();
+      }, true);
+    }
+    const jumps = document.getElementById("mod-tools-jumps");
+    if (jumps && !jumps.dataset.bound) {
+      jumps.dataset.bound = "1";
+      jumps.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-mod-jump]");
+        if (!btn) return;
+        e.preventDefault();
+        openModPanel(btn.getAttribute("data-mod-jump"), { scroll: true, exclusive: true });
+      });
+    }
+    const expandBtn = document.getElementById("mod-expand-all");
+    if (expandBtn && !expandBtn.dataset.bound) {
+      expandBtn.dataset.bound = "1";
+      expandBtn.addEventListener("click", () => setAllModPanels(true));
+    }
+    const collapseBtn = document.getElementById("mod-collapse-all");
+    if (collapseBtn && !collapseBtn.dataset.bound) {
+      collapseBtn.dataset.bound = "1";
+      collapseBtn.addEventListener("click", () => setAllModPanels(false));
+    }
+    refreshModToolsChrome();
+  }
+
+  const _applyUsernameState = typeof applyUsernameState === "function" ? applyUsernameState : null;
+  if (_applyUsernameState) {
+    applyUsernameState = function patchedApplyUsernameState() {
+      _applyUsernameState();
+      if (route.type === "mod") refreshModToolsChrome();
+    };
+  }
+
+  initModToolsPanels();
+
   const _applyStaffState = typeof applyStaffState === "function" ? applyStaffState : null;
   if (_applyStaffState) {
     applyStaffState = function patchedApplyStaffState() {
@@ -4298,6 +4445,7 @@ function applyViewState(data) {
         loadInfoPagesForMods();
         loadBetaAgendaAdmin();
       }
+      refreshModToolsChrome();
     };
   }
 

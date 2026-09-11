@@ -7864,3 +7864,104 @@ body.community-body.is-discord-group .reddit-sortbar {
     border-bottom: 1px solid rgba(255,255,255,0.06);
   }
 }
+
+/* ===== Mod Tools collapsible categories ===== */
+.mod-tools-stack {
+  display: grid;
+  gap: 10px;
+}
+.mod-tools-head .mod-tools-toolbar {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--r-line, #e5e7eb);
+}
+.mod-tools-jumps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mod-tools-jump {
+  border: 1px solid var(--r-line, #d0d5dd);
+  background: var(--r-elev, #f6f7f8);
+  color: var(--r-ink, #0b1f3a);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mod-tools-jump:hover {
+  border-color: color-mix(in srgb, var(--r-brand, #041A55) 35%, var(--r-line, #d0d5dd));
+  background: color-mix(in srgb, var(--r-brand, #041A55) 8%, #fff);
+}
+.mod-tools-jump.is-open {
+  background: color-mix(in srgb, var(--r-brand, #041A55) 12%, #fff);
+  border-color: color-mix(in srgb, var(--r-brand, #041A55) 40%, var(--r-line, #d0d5dd));
+  color: var(--r-brand, #041A55);
+}
+.mod-tools-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#mod-view details.mod-panel.card {
+  padding: 0 !important;
+  overflow: hidden;
+}
+#mod-view .mod-panel-summary {
+  list-style: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+  background: color-mix(in srgb, var(--r-elev, #f6f7f8) 70%, #fff);
+}
+#mod-view .mod-panel-summary::-webkit-details-marker { display: none; }
+#mod-view .mod-panel-summary::marker { content: ""; }
+#mod-view .mod-panel[open] > .mod-panel-summary {
+  border-bottom: 1px solid var(--r-line, #eceff3);
+  background: color-mix(in srgb, var(--r-brand, #041A55) 5%, #fff);
+}
+#mod-view .mod-panel-title {
+  font-size: 1rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+#mod-view .mod-panel-hint {
+  color: var(--muted, #667085);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+#mod-view .mod-panel-chevron {
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+  opacity: 0.7;
+  justify-self: end;
+}
+#mod-view .mod-panel[open] > .mod-panel-summary .mod-panel-chevron {
+  transform: rotate(-135deg);
+  margin-top: 4px;
+}
+#mod-view .mod-panel-body {
+  padding: 14px 16px 16px;
+}
+#mod-view .mod-panel-body > .muted:first-child {
+  margin-top: 0;
+}
+@media (max-width: 640px) {
+  #mod-view .mod-panel-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  #mod-view .mod-panel-hint { display: none; }
+}
