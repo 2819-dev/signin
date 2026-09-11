@@ -2755,12 +2755,21 @@ textarea {
 }
 
 /* Kill glass / glow leftovers in community */
-.reddit-body .card {
+.reddit-body,
+.reddit-body *,
+.community-body.reddit-body,
+.community-body.reddit-body * {
   backdrop-filter: none !important;
-  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
 }
-.reddit-body .btn-primary {
-  background: var(--r-accent);
+.reddit-body .card,
+.reddit-body .reddit-topnav,
+.reddit-body .reddit-leftnav,
+.reddit-body .reddit-post,
+.reddit-body .reddit-widget {
+  box-shadow: none !important;
+  background-image: none !important;
+}
   border-color: var(--r-accent);
   color: #fff;
 }
