@@ -248,7 +248,7 @@
     el.innerHTML = recent.map((g) => {
       const active = route.type === "group" && route.slug === g.slug ? "is-active" : "";
       const initial = String(g.slug || "?").slice(0, 1).toUpperCase();
-      return `<a class="reddit-nav-item community-group-link ${active}" href="/community/g/${escapeHtml(g.slug)}" data-group="${escapeHtml(g.slug)}"><span class="reddit-nav-avatar" aria-hidden="true">${escapeHtml(initial)}</span><span>${escapeHtml(g.slug)}</span></a>`;
+      return `<a class="reddit-nav-item community-group-link ${active}" href="/community/group/${escapeHtml(g.slug)}" data-group="${escapeHtml(g.slug)}"><span class="reddit-nav-avatar" aria-hidden="true">${escapeHtml(initial)}</span><span>${escapeHtml(g.slug)}</span></a>`;
     }).join("");
   }
 
@@ -437,7 +437,7 @@
     if (modsList) {
       const mods = (staff || []).filter((p) => p.role === "owner" || p.role === "admin");
       modsList.innerHTML = mods.length
-        ? mods.map((p) => `<a class="reddit-mod-link" href="/u/${escapeHtml(p.username || "")}">${escapeHtml(p.username || "mod")}</a>`).join("")
+        ? mods.map((p) => `<a class="reddit-mod-link" href="/user/${escapeHtml(p.username || "")}">${escapeHtml(p.username || "mod")}</a>`).join("")
         : '<p class="muted">No moderators listed.</p>';
     }
     if (statGroups) statGroups.textContent = String(groups.length);
@@ -479,8 +479,10 @@
     if (path === "/community/inbox") return { type: "inbox", slug: "", username: "" };
     let m = path.match(/^\/community\/post\/([a-z0-9_-]+)$/i);
     if (m) return { type: "post", slug: "", username: "", postId: m[1] };
-    m = path.match(/^\/community\/g\/([a-z0-9-]+)$/i);
+    m = path.match(/^\/community\/(?:group|g)\/([a-z0-9-]+)$/i);
     if (m) return { type: "group", slug: m[1].toLowerCase(), username: "" };
+    m = path.match(/^\/user\/([a-z0-9_]+)$/i);
+    if (m) return { type: "user", slug: "", username: m[1].toLowerCase() };
     m = path.match(/^\/(?:community\/)?u\/([a-z0-9_]+)$/i);
     if (m) return { type: "user", slug: "", username: m[1].toLowerCase() };
     return { type: "home", slug: "", username: "" };
@@ -493,8 +495,8 @@
     if (next.type === "popular") return "/community/popular";
     if (next.type === "inbox") return "/community/inbox";
     if (next.type === "post" && next.postId) return `/community/post/${encodeURIComponent(next.postId)}`;
-    if (next.type === "group" && next.slug) return `/community/g/${encodeURIComponent(next.slug)}`;
-    if (next.type === "user" && next.username) return `/u/${encodeURIComponent(next.username)}`;
+    if (next.type === "group" && next.slug) return `/community/group/${encodeURIComponent(next.slug)}`;
+    if (next.type === "user" && next.username) return `/user/${encodeURIComponent(next.username)}`;
     return "/community";
   }
 
@@ -652,7 +654,7 @@
         const active = route.type === "group" && route.slug === group.slug ? "is-active" : "";
         const initial = String(group.slug || "?").slice(0, 1).toUpperCase();
         return `
-          <a class="reddit-nav-item community-group-link ${active}" href="/community/g/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
+          <a class="reddit-nav-item community-group-link ${active}" href="/community/group/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
             <span class="reddit-nav-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
             <span class="reddit-nav-copy">
               <strong>${escapeHtml(group.slug)}</strong>
@@ -686,7 +688,7 @@
         return `
           <div class="community-staff-row">
             <div>
-              <a class="community-user-link" href="/u/${escapeHtml(person.username || "")}">@${escapeHtml(person.username || "member")}</a>
+              <a class="community-user-link" href="/user/${escapeHtml(person.username || "")}">@${escapeHtml(person.username || "member")}</a>
               ${roleBadge(person.role, { staffOnly: true })}
             </div>
             ${
@@ -710,7 +712,7 @@
         (alt) => `
           <div class="community-staff-row">
             <div>
-              <a class="community-user-link" href="/u/${escapeHtml(alt.username)}">@${escapeHtml(alt.username)}</a>
+              <a class="community-user-link" href="/user/${escapeHtml(alt.username)}">${escapeHtml(alt.username)}</a>
               <span class="muted" style="font-size:0.78rem;">${escapeHtml(alt.label || "Alt")}</span>
             </div>
             <button class="btn btn-secondary btn-compact" type="button" data-delete-alt="${escapeHtml(alt.username)}">Delete</button>
@@ -755,11 +757,11 @@
               <div class="reddit-post-meta">
                 ${
                   showGroup
-                    ? `<a class="reddit-sub" href="/community/g/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>`
+                    ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>`
                     : ""
                 }
                 <span class="muted">Posted by</span>
-                <a class="community-user-link" href="/u/${escapeHtml(username)}">${escapeHtml(username)}</a>
+                <a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(username)}</a>
                 ${tagChip(author.pinnedTag, { compact: true })}
                 <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
               </div>
@@ -807,9 +809,9 @@
         </div>
         <div class="reddit-post-main">
           <div class="reddit-post-meta">
-            ${group.slug ? `<a class="reddit-sub" href="/community/g/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>` : ""}
+            ${group.slug ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>` : ""}
             <span class="muted">Posted by</span>
-            <a class="community-user-link" href="/u/${escapeHtml(username)}">${escapeHtml(username)}</a>
+            <a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(username)}</a>
             ${tagChip(author.pinnedTag, { compact: true })}
             <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
           </div>
@@ -852,7 +854,7 @@
             </div>
             <div class="reddit-comment-main">
               <div class="reddit-post-meta">
-                <a class="community-user-link" href="/u/${escapeHtml(username)}">${escapeHtml(username)}</a>
+                <a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(username)}</a>
                 ${tagChip(author.pinnedTag, { compact: true })}
                 <span class="muted">• ${escapeHtml(formatRelative(comment.createdAt))}</span>
               </div>
@@ -933,7 +935,7 @@
       if (settingsUsername) settingsUsername.value = publicUsername;
       if (myProfileLink) {
         myProfileLink.hidden = false;
-        myProfileLink.href = `/u/${encodeURIComponent(publicUsername)}`;
+        myProfileLink.href = `/user/${encodeURIComponent(publicUsername)}`;
       }
       if (myProfileLabel) myProfileLabel.textContent = publicUsername;
     } else if (myProfileLink) {
@@ -1027,9 +1029,12 @@
       const profile = data.profile || { username: route.username };
       const uname = profile.username || route.username || "";
       setBannerMode("user", true);
-      if (viewIcon) viewIcon.textContent = (uname || "u").slice(0, 1).toUpperCase();
+      if (viewIcon) viewIcon.textContent = (uname || "?").slice(0, 1).toUpperCase();
       setText("view-title", uname);
-      setText("view-sub", `u/${uname}`);
+      setText(
+        "view-sub",
+        profile.joinedAt ? `Joined ${formatWhen(profile.joinedAt)}` : uname
+      );
       if (viewBlurb) {
         viewBlurb.hidden = true;
         viewBlurb.textContent = "";
@@ -1096,9 +1101,9 @@
             ? Math.max(Number(group.postCount) * 3, 1)
             : Math.max(groups.length * 12, 1);
       setBannerMode("group", true);
-      if (viewIcon) viewIcon.textContent = (slug || "g").slice(0, 1).toUpperCase();
+      if (viewIcon) viewIcon.textContent = (slug || "?").slice(0, 1).toUpperCase();
       setText("view-title", name);
-      setText("view-sub", `g/${slug} · ${members.toLocaleString()} member${members === 1 ? "" : "s"}`);
+      setText("view-sub", `${slug} · ${members.toLocaleString()} member${members === 1 ? "" : "s"}`);
       if (viewBlurb) {
         const desc = (group && group.description) || "";
         viewBlurb.textContent = desc;
@@ -1241,8 +1246,8 @@
   });
 
   feedEl.addEventListener("click", (e) => {
-    const groupLink = e.target.closest('a[href^="/community/g/"]');
-    const userLink = e.target.closest('a[href^="/u/"]');
+    const groupLink = e.target.closest('a[href^="/community/group/"], a[href^="/community/g/"]');
+    const userLink = e.target.closest('a[href^="/user/"], a[href^="/u/"], a[href^="/community/u/"]');
     if (groupLink) {
       e.preventDefault();
       navigate({
@@ -1261,6 +1266,46 @@
       }).catch(() => {});
     }
   });
+
+  if (communityMain) {
+    communityMain.addEventListener("click", (e) => {
+      if (feedEl && feedEl.contains(e.target)) return;
+      const groupLink = e.target.closest('a[href^="/community/group/"], a[href^="/community/g/"]');
+      const userLink = e.target.closest('a[href^="/user/"], a[href^="/u/"], a[href^="/community/u/"]');
+      if (groupLink) {
+        e.preventDefault();
+        navigate({
+          type: "group",
+          slug: decodeURIComponent(groupLink.getAttribute("href").split("/").pop() || ""),
+          username: "",
+        }).catch(() => {});
+        return;
+      }
+      if (userLink) {
+        e.preventDefault();
+        navigate({
+          type: "user",
+          slug: "",
+          username: decodeURIComponent(userLink.getAttribute("href").split("/").pop() || ""),
+        }).catch(() => {});
+      }
+    });
+  }
+
+  const myProfileLinkEl = document.getElementById("my-profile-link");
+  if (myProfileLinkEl) {
+    myProfileLinkEl.addEventListener("click", (e) => {
+      const href = myProfileLinkEl.getAttribute("href") || "";
+      if (!href.startsWith("/user/") && !href.startsWith("/u/")) return;
+      e.preventDefault();
+      closeUserMenu();
+      navigate({
+        type: "user",
+        slug: "",
+        username: decodeURIComponent(href.split("/").pop() || ""),
+      }).catch(() => {});
+    });
+  }
 
   if (crumbsEl) {
     crumbsEl.addEventListener("click", (e) => {

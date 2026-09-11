@@ -74,12 +74,22 @@
   status = 200
 
 [[redirects]]
+  from = "/community/group/*"
+  to = "/community.html"
+  status = 200
+
+[[redirects]]
   from = "/community/g/*"
   to = "/community.html"
   status = 200
 
 [[redirects]]
   from = "/community/u/*"
+  to = "/community.html"
+  status = 200
+
+[[redirects]]
+  from = "/user/*"
   to = "/community.html"
   status = 200
 

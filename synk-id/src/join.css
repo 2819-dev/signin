@@ -3226,8 +3226,8 @@ textarea {
   display: none !important;
 }
 .reddit-community-banner {
-  height: 72px;
-  background: var(--r-brand, #1a3a5c);
+  height: 54px;
+  background: linear-gradient(90deg, var(--r-brand, #1a3a5c) 0%, #234a6e 100%);
   border-radius: 4px 4px 0 0;
 }
 .reddit-community-head {
@@ -3235,18 +3235,18 @@ textarea {
   align-items: flex-end;
   gap: 12px;
   padding: 0 16px 12px;
-  margin-top: -28px;
+  margin-top: -22px;
   position: relative;
 }
 .reddit-community-icon {
-  width: 72px;
-  height: 72px;
+  width: 64px;
+  height: 64px;
   border-radius: 999px;
   border: 4px solid var(--r-card);
   background: var(--r-accent);
   color: #fff;
   font-weight: 700;
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
