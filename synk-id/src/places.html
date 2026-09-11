@@ -14,8 +14,8 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=places1" />
-    <script src="/force-refresh.js" defer></script>
+    <link rel="stylesheet" href="/join.css?v=places-logo2" />
+    <script src="/force-refresh.js?v=places-logo2" defer></script>
   </head>
   <body>
     <header class="site-nav site-nav-light">
@@ -125,11 +125,12 @@
         emptyEl.hidden = true;
         listEl.innerHTML = places
           .map((place) => {
+            const mark = escapeHtml(initials(place.name));
             const logo = place.logoUrl
-              ? `<img class="place-logo" src="${escapeHtml(place.logoUrl)}" alt="" />`
-              : `<div class="place-logo place-logo-fallback" aria-hidden="true">${escapeHtml(
-                  initials(place.name)
-                )}</div>`;
+              ? `<img class="place-logo" src="${escapeHtml(
+                  place.logoUrl
+                )}" alt="" loading="lazy" decoding="async" data-fallback="${mark}" />`
+              : `<div class="place-logo place-logo-fallback" aria-hidden="true">${mark}</div>`;
             const website = place.websiteUrl
               ? `<a class="place-link" href="${escapeHtml(
                   place.websiteUrl
@@ -150,6 +151,15 @@
             `;
           })
           .join("");
+        listEl.querySelectorAll("img.place-logo[data-fallback]").forEach((img) => {
+          img.addEventListener("error", () => {
+            const fallback = document.createElement("div");
+            fallback.className = "place-logo place-logo-fallback";
+            fallback.setAttribute("aria-hidden", "true");
+            fallback.textContent = img.getAttribute("data-fallback") || "P";
+            img.replaceWith(fallback);
+          });
+        });
       }
 
       async function loadPlaces() {

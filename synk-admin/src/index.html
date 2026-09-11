@@ -920,7 +920,7 @@
         return { dataUrl, contentType: "image/jpeg", canvas, fileName: file.name || "synk.jpg" };
       }
 
-      async function uploadSynkPhoto(file) {
+      async function uploadSynkPhoto(file, options = {}) {
         const optimized = await optimizeSynkPhoto(file);
         const res = await fetch("/api/upload-synk-image", {
           method: "POST",
@@ -929,6 +929,8 @@
             data: optimized.dataUrl,
             contentType: optimized.contentType,
             fileName: optimized.fileName,
+            purpose: options.purpose || undefined,
+            public: options.public === true ? true : undefined,
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -1345,7 +1347,7 @@
         synkPlacesEl.innerHTML = synkPlacesCache
           .map((place) => {
             const logo = place.logoUrl
-              ? `<img src="${escapeHtml(place.logoUrl)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:10px;border:1px solid var(--line);" />`
+              ? `<img src="${escapeHtml(place.logoUrl)}" alt="" loading="lazy" decoding="async" style="width:48px;height:48px;object-fit:cover;border-radius:10px;border:1px solid var(--line);" />`
               : `<div style="width:48px;height:48px;border-radius:10px;border:1px solid var(--line);display:grid;place-items:center;font-weight:700;background:var(--fill);">${escapeHtml(String(place.name || "?").slice(0,1).toUpperCase())}</div>`;
             const site = place.websiteUrl
               ? `<div class="muted" style="font-size:0.82rem;word-break:break-all;">${escapeHtml(place.websiteUrl)}</div>`
@@ -2941,7 +2943,7 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
           const file = synkPlaceLogoFile && synkPlaceLogoFile.files && synkPlaceLogoFile.files[0];
           if (file) {
             synkPlaceStatus.textContent = "Uploading logo…";
-            const uploaded = await uploadSynkPhoto(file);
+            const uploaded = await uploadSynkPhoto(file, { purpose: "place-logo", public: true });
             logoUrl = uploaded.url || logoUrl;
             synkPlaceLogoUrl.value = logoUrl;
           }
