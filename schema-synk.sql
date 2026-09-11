@@ -174,15 +174,48 @@ CREATE TABLE IF NOT EXISTS synk_community_profiles (
 CREATE UNIQUE INDEX IF NOT EXISTS synk_community_profiles_username_idx
   ON synk_community_profiles (public_username);
 
+CREATE TABLE IF NOT EXISTS synk_community_staff (
+  synk_profile_id UUID PRIMARY KEY REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'admin',
+  created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT synk_community_staff_role_chk CHECK (role IN ('owner', 'admin'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS synk_community_staff_one_owner_idx
+  ON synk_community_staff (role)
+  WHERE role = 'owner';
+
+CREATE TABLE IF NOT EXISTS synk_community_groups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS synk_community_groups_slug_idx
+  ON synk_community_groups (slug);
+
+CREATE INDEX IF NOT EXISTS synk_community_groups_created_idx
+  ON synk_community_groups (created_at DESC);
+
 CREATE TABLE IF NOT EXISTS synk_community_posts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  group_id UUID REFERENCES synk_community_groups(id) ON DELETE CASCADE,
   body TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS synk_community_posts_created_idx
   ON synk_community_posts (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS synk_community_posts_group_created_idx
+  ON synk_community_posts (group_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS synk_business_devices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

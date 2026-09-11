@@ -1101,12 +1101,129 @@ body.marketing {
   gap: 10px;
   margin-bottom: 8px;
   font-size: 0.86rem;
+  align-items: flex-start;
 }
 
 .community-post p {
   margin: 0;
   white-space: pre-wrap;
   line-height: 1.45;
+}
+
+.community-layout {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (min-width: 900px) {
+  .community-layout {
+    grid-template-columns: 280px minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.community-sidebar {
+  position: sticky;
+  top: 12px;
+}
+
+.community-group-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.community-group-link {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.community-group-link strong {
+  font-size: 0.92rem;
+}
+
+.community-group-link span {
+  font-size: 0.78rem;
+  color: var(--muted, #5b6575);
+}
+
+.community-group-link:hover,
+.community-group-link.is-active {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.community-divider {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 16px 0;
+}
+
+.community-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 650;
+  vertical-align: middle;
+}
+
+.community-badge-owner {
+  background: rgba(180, 83, 9, 0.12);
+  color: #9a3412;
+}
+
+.community-badge-admin {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.community-group-chip {
+  margin-left: 8px;
+  border: 0;
+  background: rgba(15, 23, 42, 0.06);
+  color: #334155;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.community-staff-list {
+  display: grid;
+  gap: 8px;
+}
+
+.community-staff-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--fill);
+  font-size: 0.88rem;
+}
+
+.btn-compact {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+.shell-wide {
+  max-width: 1040px;
 }
 
 textarea {

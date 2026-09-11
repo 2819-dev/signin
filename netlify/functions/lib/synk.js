@@ -110,6 +110,283 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const COMMUNITY_OWNER_USERNAME = String(
+  process.env.SYNK_COMMUNITY_OWNER_USERNAME || "vision"
+)
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9_]+/g, "")
+  .slice(0, 24) || "vision";
+
+function normalizeGroupSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
+function normalizeGroupName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 80);
+}
+
+function normalizeGroupDescription(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 280);
+}
+
+function normalizeCommunityRole(value) {
+  const role = String(value || "")
+    .trim()
+    .toLowerCase();
+  return role === "owner" || role === "admin" ? role : null;
+}
+
+function mapCommunityGroup(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description || "",
+    createdBy: row.created_by || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    postCount: row.post_count != null ? Number(row.post_count) : undefined,
+  };
+}
+
+async function ensureSynkCommunityExtras(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_staff (
+      synk_profile_id UUID PRIMARY KEY REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'admin',
+      created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT synk_community_staff_role_chk CHECK (role IN ('owner', 'admin'))
+    )
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_community_staff_one_owner_idx
+    ON synk_community_staff (role)
+    WHERE role = 'owner'
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_groups (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      slug TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_community_groups_slug_idx
+    ON synk_community_groups (slug)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_groups_created_idx
+    ON synk_community_groups (created_at DESC)
+  `;
+
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS group_id UUID`;
+  try {
+    await sql`
+      ALTER TABLE synk_community_posts
+      ADD CONSTRAINT synk_community_posts_group_id_fkey
+      FOREIGN KEY (group_id) REFERENCES synk_community_groups(id) ON DELETE CASCADE
+    `;
+  } catch (_) {
+    // Constraint already exists.
+  }
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_posts_group_created_idx
+    ON synk_community_posts (group_id, created_at DESC)
+  `;
+
+  await ensureCommunityOwner(sql);
+  await ensureDefaultCommunityGroup(sql);
+}
+
+async function ensureCommunityOwner(sql) {
+  const username = COMMUNITY_OWNER_USERNAME;
+  const existingOwner = await sql`
+    SELECT synk_profile_id, role
+    FROM synk_community_staff
+    WHERE role = 'owner'
+    LIMIT 1
+  `;
+  const vision = await sql`
+    SELECT synk_profile_id
+    FROM synk_community_profiles
+    WHERE public_username = ${username}
+    LIMIT 1
+  `;
+  const visionId = vision[0] && vision[0].synk_profile_id;
+  if (!visionId) return null;
+
+  if (existingOwner[0] && existingOwner[0].synk_profile_id === visionId) {
+    return visionId;
+  }
+
+  if (existingOwner[0] && existingOwner[0].synk_profile_id !== visionId) {
+    // Keep a single owner: demote previous owner to admin, promote @vision.
+    await sql`
+      UPDATE synk_community_staff
+      SET role = 'admin', updated_at = NOW()
+      WHERE role = 'owner'
+    `;
+  }
+
+  await sql`
+    INSERT INTO synk_community_staff (synk_profile_id, role, created_by)
+    VALUES (${visionId}, 'owner', ${visionId})
+    ON CONFLICT (synk_profile_id) DO UPDATE
+    SET role = 'owner', updated_at = NOW()
+  `;
+  return visionId;
+}
+
+async function ensureDefaultCommunityGroup(sql) {
+  const existing = await sql`
+    SELECT id, slug FROM synk_community_groups WHERE slug = 'general' LIMIT 1
+  `;
+  let groupId = existing[0] && existing[0].id;
+  if (!groupId) {
+    const owner = await sql`
+      SELECT synk_profile_id FROM synk_community_staff WHERE role = 'owner' LIMIT 1
+    `;
+    const createdBy = owner[0] ? owner[0].synk_profile_id : null;
+    try {
+      const created = await sql`
+        INSERT INTO synk_community_groups (slug, name, description, created_by)
+        VALUES (
+          'general',
+          'General',
+          'The main Synk Community group. Admins can create more groups.',
+          ${createdBy}
+        )
+        RETURNING id
+      `;
+      groupId = created[0].id;
+    } catch (err) {
+      if (!(String(err.message || "").includes("unique") || err.code === "23505")) throw err;
+      const again = await sql`
+        SELECT id FROM synk_community_groups WHERE slug = 'general' LIMIT 1
+      `;
+      groupId = again[0] && again[0].id;
+    }
+  }
+
+  if (groupId) {
+    await sql`
+      UPDATE synk_community_posts
+      SET group_id = ${groupId}
+      WHERE group_id IS NULL
+    `;
+  }
+  return groupId;
+}
+
+async function getCommunityStaffRole(sql, profileId) {
+  if (!profileId) return null;
+  await ensureCommunityOwner(sql);
+  const rows = await sql`
+    SELECT role
+    FROM synk_community_staff
+    WHERE synk_profile_id = ${profileId}
+    LIMIT 1
+  `;
+  return normalizeCommunityRole(rows[0] && rows[0].role);
+}
+
+function isCommunityStaffRole(role) {
+  return role === "owner" || role === "admin";
+}
+
+async function listCommunityStaff(sql) {
+  await ensureCommunityOwner(sql);
+  const rows = await sql`
+    SELECT
+      s.synk_profile_id,
+      s.role,
+      s.created_at,
+      s.updated_at,
+      c.public_username,
+      p.name
+    FROM synk_community_staff s
+    JOIN synk_profiles p ON p.id = s.synk_profile_id
+    LEFT JOIN synk_community_profiles c ON c.synk_profile_id = s.synk_profile_id
+    ORDER BY
+      CASE s.role WHEN 'owner' THEN 0 ELSE 1 END,
+      c.public_username ASC NULLS LAST,
+      p.name ASC
+  `;
+  return rows.map((row) => ({
+    profileId: row.synk_profile_id,
+    role: row.role,
+    username: row.public_username || "",
+    name: row.name || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+async function listCommunityGroups(sql) {
+  const rows = await sql`
+    SELECT
+      g.id,
+      g.slug,
+      g.name,
+      g.description,
+      g.created_by,
+      g.created_at,
+      g.updated_at,
+      COUNT(p.id)::int AS post_count
+    FROM synk_community_groups g
+    LEFT JOIN synk_community_posts p ON p.group_id = g.id
+    GROUP BY g.id
+    ORDER BY
+      CASE g.slug WHEN 'general' THEN 0 ELSE 1 END,
+      g.name ASC
+  `;
+  return rows.map(mapCommunityGroup);
+}
+
+async function findCommunityGroup(sql, { id, slug } = {}) {
+  const groupId = String(id || "").trim();
+  const groupSlug = normalizeGroupSlug(slug);
+  if (groupId) {
+    const rows = await sql`
+      SELECT id, slug, name, description, created_by, created_at, updated_at
+      FROM synk_community_groups
+      WHERE id = ${groupId}
+      LIMIT 1
+    `;
+    return mapCommunityGroup(rows[0]);
+  }
+  if (groupSlug) {
+    const rows = await sql`
+      SELECT id, slug, name, description, created_by, created_at, updated_at
+      FROM synk_community_groups
+      WHERE slug = ${groupSlug}
+      LIMIT 1
+    `;
+    return mapCommunityGroup(rows[0]);
+  }
+  return null;
+}
+
 async function ensureSynkCoreTables(sql) {
   await sql`
     CREATE TABLE IF NOT EXISTS synk_profiles (
@@ -269,6 +546,8 @@ async function ensureSynkCoreTables(sql) {
     CREATE INDEX IF NOT EXISTS synk_community_posts_created_idx
     ON synk_community_posts (created_at DESC)
   `;
+
+  await ensureSynkCommunityExtras(sql);
 
   await sql`
     CREATE TABLE IF NOT EXISTS synk_events (
@@ -1165,6 +1444,18 @@ module.exports = {
   requireHubSession,
   extractHubSessionToken,
   normalizePublicUsername,
+  normalizeGroupSlug,
+  normalizeGroupName,
+  normalizeGroupDescription,
+  COMMUNITY_OWNER_USERNAME,
+  ensureSynkCommunityExtras,
+  ensureCommunityOwner,
+  getCommunityStaffRole,
+  isCommunityStaffRole,
+  listCommunityStaff,
+  listCommunityGroups,
+  findCommunityGroup,
+  mapCommunityGroup,
   normalizeCameraSide,
   generateDevicePairingCode,
   mapBusinessDevice,
