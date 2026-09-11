@@ -972,6 +972,15 @@ async function resolvePostingPersona(sql, auth, role, requestedUsername) {
   return { ok: true, username: alt.username, isAlt: true };
 }
 
+async function resolveActingUsername(sql, auth, role, body = {}, query = {}) {
+  const requested = normalizePublicUsername(
+    (body && (body.asUsername || body.as_username || body.actingAs || body.fromUsername)) ||
+      (query && (query.asUsername || query.as_username || query.actingAs)) ||
+      ""
+  );
+  return resolvePostingPersona(sql, auth, role, requested);
+}
+
 async function applyVote(sql, { profileId, targetType, targetId, value }) {
   const existing = await sql`
     SELECT value
@@ -1919,10 +1928,15 @@ exports.handler = async (event) => {
     }
 
     if (action === "friend-request") {
-      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Could not act as that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a username first" });
       const target = normalizePublicUsername(body.username || body.user || body.to);
       if (!target) return json(400, { error: "Username required" });
-      const result = await requestFriendship(sql, primaryUsername, target);
+      const result = await requestFriendship(sql, actorUsername, target);
       if (!result.ok) return json(400, { error: result.error || "Could not send request" });
       // Notify the other person so it shows in their bell.
       try {
@@ -1931,8 +1945,8 @@ exports.handler = async (event) => {
           await createNotification(sql, {
             profileId: targetProfileId,
             kind: "friend_request",
-            actorUsername: primaryUsername,
-            body: `${primaryUsername} sent you a friend request.`,
+            actorUsername: actorUsername,
+            body: `${actorUsername} sent you a friend request.`,
           });
         }
       } catch (_) {}
@@ -1947,10 +1961,15 @@ exports.handler = async (event) => {
     }
 
     if (action === "friend-accept") {
-      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Could not act as that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a username first" });
       const target = normalizePublicUsername(body.username || body.user || body.from);
       if (!target) return json(400, { error: "Username required" });
-      const result = await respondFriendship(sql, primaryUsername, target, true);
+      const result = await respondFriendship(sql, actorUsername, target, true);
       if (!result.ok) return json(400, { error: result.error || "Could not accept request" });
       try {
         const targetProfileId = await resolveProfileIdForUsername(sql, target);
@@ -1958,8 +1977,8 @@ exports.handler = async (event) => {
           await createNotification(sql, {
             profileId: targetProfileId,
             kind: "friend_accept",
-            actorUsername: primaryUsername,
-            body: `${primaryUsername} accepted your friend request.`,
+            actorUsername: actorUsername,
+            body: `${actorUsername} accepted your friend request.`,
           });
         }
       } catch (_) {}
@@ -1974,10 +1993,15 @@ exports.handler = async (event) => {
     }
 
     if (action === "friend-decline") {
-      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Could not act as that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a username first" });
       const target = normalizePublicUsername(body.username || body.user || body.from);
       if (!target) return json(400, { error: "Username required" });
-      const result = await respondFriendship(sql, primaryUsername, target, false);
+      const result = await respondFriendship(sql, actorUsername, target, false);
       if (!result.ok) return json(400, { error: result.error || "Could not decline request" });
       return json(200, {
         ok: true,
@@ -1988,10 +2012,15 @@ exports.handler = async (event) => {
     }
 
     if (action === "friend-remove") {
-      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Could not act as that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a username first" });
       const target = normalizePublicUsername(body.username || body.user);
       if (!target) return json(400, { error: "Username required" });
-      const result = await removeFriendship(sql, primaryUsername, target);
+      const result = await removeFriendship(sql, actorUsername, target);
       if (!result.ok) return json(400, { error: result.error || "Could not remove friend" });
       return json(200, {
         ok: true,
@@ -2002,8 +2031,13 @@ exports.handler = async (event) => {
     }
 
     if (action === "dm-friends") {
-      if (!primaryUsername) return json(400, { error: "Set a username first" });
-      const usernames = await listFriends(sql, primaryUsername);
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Could not act as that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a username first" });
+      const usernames = await listFriends(sql, actorUsername);
       const [names, avatars] = await Promise.all([
         getDisplayNamesByUsernames(sql, usernames),
         getAvatarsByUsernames(sql, usernames),
@@ -2020,8 +2054,13 @@ exports.handler = async (event) => {
     }
 
     if (action === "dm-list") {
-      if (!primaryUsername) return json(400, { error: "Set a username first" });
-      const threads = await listDmThreads(sql, primaryUsername);
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Could not act as that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a username first" });
+      const threads = await listDmThreads(sql, actorUsername);
       return json(200, {
         ok: true,
         threads,
@@ -2031,12 +2070,17 @@ exports.handler = async (event) => {
     }
 
     if (action === "dm-open") {
-      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Could not act as that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a username first" });
       const target = normalizePublicUsername(body.username || body.user || body.with);
       if (!target) return json(400, { error: "Username required" });
-      const opened = await getOrCreateDmThread(sql, primaryUsername, target);
+      const opened = await getOrCreateDmThread(sql, actorUsername, target);
       if (!opened.ok) return json(400, { error: opened.error || "Could not open thread" });
-      const result = await listDmMessages(sql, opened.thread.id, primaryUsername);
+      const result = await listDmMessages(sql, opened.thread.id, actorUsername);
       if (!result.ok) return json(404, { error: result.error || "Thread not found" });
       return json(200, {
         ok: true,
@@ -2047,19 +2091,24 @@ exports.handler = async (event) => {
     }
 
     if (action === "dm-send") {
-      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Could not act as that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a username first" });
       let target = normalizePublicUsername(body.username || body.user || body.to);
       const threadId = String(body.threadId || body.thread || "").trim();
       if (!target && threadId) {
         if (!isUuid(threadId)) return json(400, { error: "Invalid thread id" });
-        const existing = await getDmThreadById(sql, threadId, primaryUsername);
+        const existing = await getDmThreadById(sql, threadId, actorUsername);
         if (!existing) return json(404, { error: "Thread not found" });
         target = existing.otherUser;
       }
       if (!target) return json(400, { error: "Username or threadId required" });
       const result = await sendDm(
         sql,
-        primaryUsername,
+        actorUsername,
         target,
         body.body != null ? body.body : body.message
       );
@@ -2079,10 +2128,10 @@ exports.handler = async (event) => {
           await createNotification(sql, {
             profileId: targetProfileId,
             kind: "dm",
-            actorUsername: primaryUsername,
+            actorUsername: actorUsername,
             body: preview
-              ? `${primaryUsername}: ${preview}`
-              : `${primaryUsername} sent you a message.`,
+              ? `${actorUsername}: ${preview}`
+              : `${actorUsername} sent you a message.`,
           });
         }
       } catch (err) {
@@ -2100,13 +2149,18 @@ exports.handler = async (event) => {
     }
 
     if (action === "dm-edit") {
-      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Could not act as that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a username first" });
       const messageId = String(body.messageId || body.id || "").trim();
       if (!isUuid(messageId)) return json(400, { error: "Invalid message id" });
       const result = await editDmMessage(
         sql,
         messageId,
-        primaryUsername,
+        actorUsername,
         body.body != null ? body.body : body.message
       );
       if (!result.ok) return json(400, { error: result.error || "Could not edit message" });
@@ -2118,10 +2172,15 @@ exports.handler = async (event) => {
     }
 
     if (action === "dm-delete") {
-      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Could not act as that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a username first" });
       const messageId = String(body.messageId || body.id || "").trim();
       if (!isUuid(messageId)) return json(400, { error: "Invalid message id" });
-      const result = await deleteDmMessage(sql, messageId, primaryUsername);
+      const result = await deleteDmMessage(sql, messageId, actorUsername);
       if (!result.ok) return json(400, { error: result.error || "Could not delete message" });
       return json(200, {
         ok: true,
@@ -2131,11 +2190,16 @@ exports.handler = async (event) => {
     }
 
     if (action === "dm-react") {
-      if (!primaryUsername) return json(400, { error: "Set a username first" });
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Could not act as that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a username first" });
       const messageId = String(body.messageId || body.id || "").trim();
       if (!isUuid(messageId)) return json(400, { error: "Invalid message id" });
       const emoji = String(body.emoji || body.reaction || "").trim();
-      const result = await reactDmMessage(sql, messageId, primaryUsername, emoji);
+      const result = await reactDmMessage(sql, messageId, actorUsername, emoji);
       if (!result.ok) return json(400, { error: result.error || "Could not react" });
       return json(200, {
         ok: true,

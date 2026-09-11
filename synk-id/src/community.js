@@ -663,10 +663,29 @@
   }
 
   async function communityAction(payload) {
+    const body = { ...(payload || {}) };
+    const action = String(body.action || "").trim().toLowerCase();
+    const socialActions = new Set([
+      "dm-list",
+      "dm-open",
+      "dm-send",
+      "dm-edit",
+      "dm-delete",
+      "dm-react",
+      "dm-friends",
+      "friend-request",
+      "friend-accept",
+      "friend-decline",
+      "friend-remove",
+    ]);
+    if (socialActions.has(action) && !body.asUsername && !body.as_username) {
+      const acting = typeof actingUsername === "function" ? actingUsername() : "";
+      if (acting) body.asUsername = acting;
+    }
     const res = await fetch("/api/synk-community", {
       method: "POST",
       headers: hubHeaders(),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Request failed");
@@ -957,14 +976,72 @@
     }
   }
 
+  function actingUsername() {
+    return String(activePersona || publicUsername || "")
+      .trim()
+      .toLowerCase();
+  }
+
+  function isActingAsAlt() {
+    const acting = actingUsername();
+    return Boolean(acting && publicUsername && acting !== publicUsername);
+  }
+
+  function activeAccountProfile() {
+    const acting = actingUsername();
+    if (!acting || !publicUsername || acting === publicUsername) {
+      return {
+        username: publicUsername || "",
+        displayName: displayName || "",
+        bio: bio || "",
+        dmPolicy: dmPolicy || "friends",
+        avatarUrl: avatarUrl || "",
+        isAlt: false,
+      };
+    }
+    const alt = (alts || []).find((a) => a.username === acting);
+    return {
+      username: acting,
+      displayName: (alt && alt.displayName) || "",
+      bio: (alt && alt.bio) || "",
+      dmPolicy: (alt && alt.dmPolicy) || "friends",
+      avatarUrl: (alt && alt.avatarUrl) || "",
+      isAlt: true,
+    };
+  }
+
   function storePersona(username) {
-    activePersona = String(username || "").trim().toLowerCase();
+    const next = String(username || "").trim().toLowerCase();
+    const changed = next !== String(activePersona || "").trim().toLowerCase();
+    activePersona = next;
     try {
       localStorage.setItem(PERSONA_KEY, activePersona);
       sessionStorage.setItem(PERSONA_KEY, activePersona);
     } catch (_) {}
     syncPersonaUi();
     syncTabBar();
+    applyUsernameState();
+    if (changed) {
+      // DMs/friends are per-username — reset chat state for the newly selected account.
+      activeDmUser = "";
+      activeDmThreadId = "";
+      activeDmMessages = [];
+      try {
+        if (typeof setDmChatOpen === "function") setDmChatOpen(false);
+        if (typeof renderDmMessages === "function") renderDmMessages([]);
+        if (typeof renderDmThreads === "function") renderDmThreads([]);
+      } catch (_) {}
+    }
+    // Social graphs are per-username, so refresh inbox when the persona changes.
+    if (route && route.type === "inbox") {
+      refreshNotifications().catch(() => {});
+      if (typeof loadDmThreads === "function") {
+        loadDmThreads().catch(() => {});
+      }
+      if (typeof loadDmFriends === "function") {
+        loadDmFriends().catch(() => {});
+      }
+    }
   }
 
   function personaOptions() {
@@ -1711,27 +1788,36 @@
       try { setNotifOpen(false); } catch (_) {}
     }
     if (publicUsername) {
+      const account = activeAccountProfile();
       const gateInput = document.getElementById("public-username");
       if (gateInput) gateInput.value = publicUsername;
-      if (settingsUsername) settingsUsername.value = publicUsername;
-      const settingsDisplay = document.getElementById("settings-display-name");
-      if (settingsDisplay) {
-        let shown = displayName || "";
-        if (activePersona && activePersona !== publicUsername) {
-          const alt = (alts || []).find((a) => a.username === activePersona);
-          shown = (alt && alt.displayName) || "";
-        }
-        settingsDisplay.value = shown;
+      if (settingsUsername) {
+        settingsUsername.value = account.username || publicUsername;
+        // Primary username can be renamed here; alt usernames are fixed at creation.
+        settingsUsername.readOnly = Boolean(account.isAlt);
+        settingsUsername.title = account.isAlt
+          ? "Alt usernames are set when the alt is created"
+          : "";
       }
+      const usernameBtn = document.getElementById("settings-username-btn");
+      if (usernameBtn) usernameBtn.hidden = Boolean(account.isAlt);
+      const settingsLead = document.querySelector(".reddit-settings-lead");
+      if (settingsLead) {
+        settingsLead.textContent = account.isAlt
+          ? `Editing settings for @${account.username}. Posts, messages, and this profile use this alt while it’s selected.`
+          : "Customize how you appear in Community. Your legal name stays private.";
+      }
+      const settingsDisplay = document.getElementById("settings-display-name");
+      if (settingsDisplay) settingsDisplay.value = account.displayName || "";
       const settingsBio = document.getElementById("settings-bio");
       if (settingsBio && document.activeElement !== settingsBio) {
-        settingsBio.value = bio || "";
+        settingsBio.value = account.bio || "";
       }
       const settingsDm = document.getElementById("settings-dm-policy");
-      if (settingsDm) settingsDm.value = dmPolicy || "friends";
+      if (settingsDm) settingsDm.value = account.dmPolicy || "friends";
       if (myProfileLink) {
         myProfileLink.hidden = false;
-        myProfileLink.href = `/user/${encodeURIComponent(publicUsername)}`;
+        myProfileLink.href = `/user/${encodeURIComponent(account.username || publicUsername)}`;
       }
       {
         const menuLabel = activeDisplayLabel();
@@ -1750,7 +1836,7 @@
         if (sideMenuHandle) sideMenuHandle.textContent = activePersona || publicUsername ? `@${activePersona || publicUsername}` : "Account";
         const menuProfileLink = document.getElementById("menu-profile-link");
         if (menuProfileLink && publicUsername) {
-          menuProfileLink.href = `/user/${encodeURIComponent(publicUsername)}`;
+          menuProfileLink.href = `/user/${encodeURIComponent(actingUsername() || publicUsername)}`;
           menuProfileLink.hidden = false;
         }
       }
@@ -1778,7 +1864,7 @@
     bar.hidden = !show;
     const meTab = document.getElementById("tab-me");
     if (meTab && publicUsername) {
-      meTab.href = `/user/${encodeURIComponent(publicUsername)}`;
+      meTab.href = `/user/${encodeURIComponent(actingUsername() || publicUsername)}`;
     }
     let tab = "home";
     if (route.type === "popular") tab = "popular";
@@ -3423,11 +3509,23 @@ function applyViewState(data) {
         const data = await communityAction({
           action: "set-bio",
           bio: input ? input.value : "",
-          username: activePersona || publicUsername,
+          username: actingUsername() || publicUsername,
         });
-        bio = data.bio || "";
-        if (me) me.bio = bio;
+        const savedFor = String(data.username || actingUsername() || publicUsername)
+          .trim()
+          .toLowerCase();
+        const savedBio = data.bio || "";
+        if (savedFor === publicUsername) {
+          bio = savedBio;
+          if (me) me.bio = savedBio;
+        } else {
+          alts = (alts || []).map((alt) =>
+            alt.username === savedFor ? { ...alt, bio: savedBio } : alt
+          );
+          if (me) me.alts = alts;
+        }
         if (status) status.textContent = "Saved";
+        applyUsernameState();
       } catch (err) {
         if (status) status.textContent = err.message || "Couldn't save. Try again. bio";
       }
@@ -3445,11 +3543,23 @@ function applyViewState(data) {
         const data = await communityAction({
           action: "set-dm-policy",
           dmPolicy: select ? select.value : "friends",
-          username: activePersona || publicUsername,
+          username: actingUsername() || publicUsername,
         });
-        dmPolicy = data.dmPolicy || "friends";
-        if (me) me.dmPolicy = dmPolicy;
+        const savedFor = String(data.username || actingUsername() || publicUsername)
+          .trim()
+          .toLowerCase();
+        const savedPolicy = data.dmPolicy || "friends";
+        if (savedFor === publicUsername) {
+          dmPolicy = savedPolicy;
+          if (me) me.dmPolicy = savedPolicy;
+        } else {
+          alts = (alts || []).map((alt) =>
+            alt.username === savedFor ? { ...alt, dmPolicy: savedPolicy } : alt
+          );
+          if (me) me.alts = alts;
+        }
         if (status) status.textContent = "Saved";
+        applyUsernameState();
       } catch (err) {
         if (status) status.textContent = err.message || "Couldn't save. Try again.";
       }
