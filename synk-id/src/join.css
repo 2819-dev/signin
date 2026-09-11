@@ -2294,9 +2294,26 @@ textarea {
   .reddit-nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
   .reddit-brand-text,
   .reddit-user-copy,
+  .reddit-create-label,
+  .reddit-hub-label,
   .reddit-create-top span:last-child { display: none; }
-  .reddit-search { order: 3; flex-basis: 100%; max-width: none; }
-  .reddit-topnav { flex-wrap: wrap; height: auto; min-height: 48px; padding-top: 6px; padding-bottom: 6px; gap: 8px; }
+  /* Keep search on the same row as icons (Reddit mobile). */
+  .reddit-search {
+    order: 0;
+    flex: 1 1 auto;
+    flex-basis: auto;
+    min-width: 0;
+    max-width: none;
+  }
+  .reddit-topnav {
+    flex-wrap: nowrap;
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+    padding-top: 0;
+    padding-bottom: 0;
+    gap: 6px;
+  }
 }
 
 /* Left nav */
@@ -3079,6 +3096,59 @@ textarea {
   .reddit-banner-actions { width: 100%; margin-left: 0; }
 }
 
+/* —— Community v10: Reddit feed density + chrome polish —— */
+.reddit-feed-wrap.card,
+#feed-card.card {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.community-feed,
+#feed.community-feed {
+  display: grid !important;
+  gap: 10px !important;
+}
+.reddit-post {
+  background: var(--r-card) !important;
+  border: 1px solid var(--r-line) !important;
+  border-radius: 4px !important;
+  overflow: hidden;
+}
+.reddit-sortbar {
+  background: var(--r-card) !important;
+  border: 1px solid var(--r-line) !important;
+  border-radius: 4px !important;
+  margin-bottom: 0 !important;
+}
+.reddit-create.card,
+#composer-card.card {
+  border-radius: 4px !important;
+  border: 1px solid var(--r-line) !important;
+  box-shadow: none !important;
+}
+/* Ensure hamburger shows on small screens even if earlier rules conflict */
+@media (max-width: 860px) {
+  .reddit-nav-toggle,
+  #nav-toggle.reddit-nav-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+  .reddit-hub-label,
+  .reddit-create-label,
+  .reddit-brand-text,
+  .reddit-user-copy {
+    display: none !important;
+  }
+}
+/* Hide empty home banner firmly */
+#view-banner[hidden],
+#view-banner[data-mode="home"],
+#view-banner[data-mode="popular"] {
+  display: none !important;
+}
+
 /* —— Community v9: exact Reddit replica (Synk navy) —— */
 .reddit-topnav {
   flex-wrap: nowrap !important;
@@ -3349,4 +3419,54 @@ textarea {
   .reddit-sort-label {
     display: none;
   }
+}
+
+/* —— Community v10: Reddit feed density + chrome polish —— */
+.reddit-feed-wrap.card,
+#feed-card.card {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.community-feed,
+#feed.community-feed {
+  display: grid !important;
+  gap: 10px !important;
+}
+.reddit-post {
+  background: var(--r-card) !important;
+  border: 1px solid var(--r-line) !important;
+  border-radius: 4px !important;
+  overflow: hidden;
+}
+.reddit-sortbar {
+  background: var(--r-card) !important;
+  border: 1px solid var(--r-line) !important;
+  border-radius: 4px !important;
+}
+.reddit-create.card,
+#composer-card.card {
+  border-radius: 4px !important;
+  border: 1px solid var(--r-line) !important;
+  box-shadow: none !important;
+}
+@media (max-width: 860px) {
+  .reddit-nav-toggle,
+  #nav-toggle.reddit-nav-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+  .reddit-hub-label,
+  .reddit-create-label,
+  .reddit-brand-text,
+  .reddit-user-copy {
+    display: none !important;
+  }
+}
+#view-banner[hidden],
+#view-banner[data-mode="home"],
+#view-banner[data-mode="popular"] {
+  display: none !important;
 }
