@@ -700,10 +700,22 @@
       }
 
       function synkVerifyActionLabel(action) {
-        if (action === "auto_admit") return "Auto-admit visitors";
-        if (action === "auto_deny") return "Auto-deny visitors";
-        if (action === "autofill") return "Prefill name only";
-        return "Require staff approval";
+        if (action === "auto_admit") return "Allow automatically";
+        if (action === "auto_deny") return "Block automatically";
+        if (action === "autofill") return "Return name for forms";
+        if (action === "identity") return "Identity only (app decides)";
+        return "Wait for staff approval";
+      }
+
+      function synkProductTypeLabel(type) {
+        const map = {
+          visitor_checkin: "Visitor check-in",
+          access_control: "Access control",
+          account_login: "Account login",
+          event_checkin: "Event check-in",
+          custom: "Custom / API",
+        };
+        return map[type] || type || "Custom / API";
       }
 
       function fileToDataUrl(file) {
@@ -1216,9 +1228,13 @@
                 <div class="synk-session-meta">
                   ${escapeHtml(biz.contactName || "")}
                   · ${escapeHtml(biz.email || "")}
+                  ${biz.productLabel || biz.productType ? ` · ${escapeHtml(biz.productLabel || synkProductTypeLabel(biz.productType))}` : ""}
+                  ${biz.preferredVerifyAction ? ` · ${escapeHtml(synkVerifyActionLabel(biz.preferredVerifyAction))}` : ""}
+                  ${biz.website ? ` · ${escapeHtml(biz.website)}` : ""}
                   ${/visitor sign-?in/i.test(biz.name || "") ? " · system" : ""}
                   ${biz.hasPassword || /visitor sign-?in/i.test(biz.name || "") ? "" : " · needs portal password"}
                 </div>
+                ${biz.note ? `<p class="muted" style="margin:6px 0 0;font-size:0.82rem;">${escapeHtml(biz.note)}</p>` : ""}
                 <div class="btn-row" style="margin-top:8px;">
                   ${
                     pending

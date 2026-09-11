@@ -305,6 +305,11 @@ async function ensureSynkCoreTables(sql) {
   await sql`ALTER TABLE synk_join_requests ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE synk_profiles ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`;
 
+  await sql`ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS product_type TEXT NOT NULL DEFAULT 'custom'`;
+  await sql`ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS website TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS preferred_verify_action TEXT NOT NULL DEFAULT 'identity'`;
+  await sql`ALTER TABLE synk_apps ADD COLUMN IF NOT EXISTS product_type TEXT NOT NULL DEFAULT 'custom'`;
+
   await ensureSynkAppMemberPolicies(sql);
   await seedVisitorSignInBusiness(sql);
 }
@@ -472,9 +477,99 @@ function normalizeVerifyAction(value) {
   const action = String(value || "")
     .trim()
     .toLowerCase();
-  return ["pending", "autofill", "auto_admit", "auto_deny"].includes(action)
+  // identity = Synk confirmed who they are; the integrating app decides what happens next.
+  // pending/autofill/auto_admit/auto_deny are mainly for check-in / access flows.
+  return ["identity", "pending", "autofill", "auto_admit", "auto_deny"].includes(action)
     ? action
-    : "pending";
+    : "identity";
+}
+
+const PRODUCT_TYPES = {
+  visitor_checkin: {
+    id: "visitor_checkin",
+    label: "Visitor / front desk check-in",
+    blurb: "People check in on a tablet. Staff can approve, deny, or prefill details.",
+    defaultAction: "pending",
+    actions: ["pending", "autofill", "auto_admit", "auto_deny"],
+  },
+  access_control: {
+    id: "access_control",
+    label: "Door, room, or gate access",
+    blurb: "Synk verifies the person, then your system allows or blocks entry.",
+    defaultAction: "auto_admit",
+    actions: ["auto_admit", "auto_deny", "pending", "identity"],
+  },
+  account_login: {
+    id: "account_login",
+    label: "Account login / identity",
+    blurb: "Synk confirms who they are so your product can open their account.",
+    defaultAction: "identity",
+    actions: ["identity"],
+  },
+  event_checkin: {
+    id: "event_checkin",
+    label: "Event or attendance check-in",
+    blurb: "Log that a member arrived. Optional staff review for restricted events.",
+    defaultAction: "identity",
+    actions: ["identity", "auto_admit", "pending"],
+  },
+  custom: {
+    id: "custom",
+    label: "Custom product / API",
+    blurb: "You handle the rest in your app after Synk verifies the person.",
+    defaultAction: "identity",
+    actions: ["identity", "pending", "autofill", "auto_admit", "auto_deny"],
+  },
+};
+
+function normalizeProductType(value) {
+  const key = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  if (PRODUCT_TYPES[key]) return key;
+  // Friendly aliases from forms / older copy
+  if (key === "visitor" || key === "visitors" || key === "front_desk") return "visitor_checkin";
+  if (key === "access" || key === "door" || key === "gate") return "access_control";
+  if (key === "login" || key === "identity" || key === "auth") return "account_login";
+  if (key === "event" || key === "attendance") return "event_checkin";
+  return "custom";
+}
+
+function getProductTypeConfig(value) {
+  return PRODUCT_TYPES[normalizeProductType(value)] || PRODUCT_TYPES.custom;
+}
+
+function defaultVerifyActionForProduct(productType) {
+  return getProductTypeConfig(productType).defaultAction;
+}
+
+function verifyActionAllowedForProduct(productType, action) {
+  const cfg = getProductTypeConfig(productType);
+  const normalized = normalizeVerifyAction(action);
+  return cfg.actions.includes(normalized) ? normalized : cfg.defaultAction;
+}
+
+function verifyActionLabel(action) {
+  switch (normalizeVerifyAction(action)) {
+    case "auto_admit":
+      return "Allow automatically";
+    case "auto_deny":
+      return "Block automatically";
+    case "autofill":
+      return "Return name to fill a form";
+    case "pending":
+      return "Wait for staff / host approval";
+    case "identity":
+    default:
+      return "Confirm identity only (app decides next)";
+  }
+}
+
+function normalizeWebsite(value) {
+  return String(value || "")
+    .trim()
+    .slice(0, 200);
 }
 
 async function seedVisitorSignInBusiness(sql) {
@@ -505,7 +600,7 @@ async function seedVisitorSignInBusiness(sql) {
   if (!businessId) {
     const inserted = await sql`
       INSERT INTO synk_business_accounts (
-        name, contact_name, email, password_hash, status, note, reviewed_at
+        name, contact_name, email, password_hash, status, note, product_type, preferred_verify_action, reviewed_at
       )
       VALUES (
         'Visitor Sign-In',
@@ -514,6 +609,8 @@ async function seedVisitorSignInBusiness(sql) {
         ${password ? hashSecret(password) : null},
         'approved',
         'Built-in business account for the Visitor Sign-In product.',
+        'visitor_checkin',
+        'pending',
         NOW()
       )
       RETURNING id
@@ -527,6 +624,14 @@ async function seedVisitorSignInBusiness(sql) {
         WHERE id = ${businessId}
       `;
     }
+    await sql`
+      UPDATE synk_business_accounts
+      SET
+        product_type = COALESCE(NULLIF(product_type, ''), 'visitor_checkin'),
+        preferred_verify_action = COALESCE(NULLIF(preferred_verify_action, ''), 'pending'),
+        updated_at = NOW()
+      WHERE id = ${businessId}
+    `;
     if (password) {
       await sql`
         UPDATE synk_business_accounts
@@ -552,13 +657,14 @@ async function seedVisitorSignInBusiness(sql) {
   if (!apps[0]) {
     const bootstrapKey = generateApiKey();
     await sql`
-      INSERT INTO synk_apps (slug, name, api_key_hash, business_id, verify_action)
+      INSERT INTO synk_apps (slug, name, api_key_hash, business_id, verify_action, product_type)
       VALUES (
         'visitor-signin',
         'Visitor Sign-In',
         ${hashSecret(bootstrapKey)},
         ${businessId},
-        'pending'
+        'pending',
+        'visitor_checkin'
       )
     `;
   } else {
@@ -567,6 +673,7 @@ async function seedVisitorSignInBusiness(sql) {
       SET
         business_id = COALESCE(business_id, ${businessId}),
         verify_action = COALESCE(NULLIF(verify_action, ''), 'pending'),
+        product_type = COALESCE(NULLIF(product_type, ''), 'visitor_checkin'),
         updated_at = NOW()
       WHERE id = ${apps[0].id}
     `;
@@ -577,14 +684,18 @@ async function getAppVerifyAction(sql, appSlug) {
   const slug = String(appSlug || "")
     .trim()
     .slice(0, 80);
-  if (!slug) return "pending";
+  if (!slug) return "identity";
   const rows = await sql`
     SELECT verify_action
     FROM synk_apps
     WHERE slug = ${slug}
     LIMIT 1
   `;
-  return normalizeVerifyAction(rows[0] && rows[0].verify_action);
+  const raw = rows[0] && rows[0].verify_action;
+  if (!raw) {
+    return slug === "visitor-signin" ? "pending" : "identity";
+  }
+  return normalizeVerifyAction(raw);
 }
 
 function isFirstPartySynkApp(slug) {
@@ -1054,6 +1165,13 @@ module.exports = {
   memberSignedIntoApp,
   listRecentAppMembers,
   setMemberAppPolicy,
+  PRODUCT_TYPES,
+  normalizeProductType,
+  getProductTypeConfig,
+  defaultVerifyActionForProduct,
+  verifyActionAllowedForProduct,
+  verifyActionLabel,
+  normalizeWebsite,
   PASS_TTL_MS,
   HUB_SESSION_TTL_MS,
   RATE_MAX_ATTEMPTS,

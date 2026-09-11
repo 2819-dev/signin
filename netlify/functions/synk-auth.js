@@ -79,7 +79,8 @@ function publicProfile(row) {
 async function applyVisitorIntent(sql, matched, verifyAction) {
   const policy = normalizeVerifyAction(verifyAction);
 
-  if (policy === "autofill") {
+  // identity = confirmed person only; no visitor request queue entry.
+  if (policy === "identity" || policy === "autofill") {
     return { request: null, policy };
   }
 
@@ -311,13 +312,15 @@ exports.handler = async (event) => {
 
     const profile = publicProfile(matched);
     let request = null;
+    const verifyAction = await resolveVisitorVerifyAction(sql, appSlug, matched.id);
     if (intent === "visitor" || appSlug === "visitor-signin") {
-      const verifyAction = await resolveVisitorVerifyAction(sql, appSlug, matched.id);
+      // Visitor desk / check-in bridge into visitor_requests.
       const bridge = await applyVisitorIntent(sql, matched, verifyAction);
       request = bridge.request;
       profile.policy = bridge.policy;
     } else {
-      profile.policy = "pending";
+      // Other apps get a Synk pass + policy hint. They decide what "admit" means.
+      profile.policy = verifyAction || "identity";
     }
 
     return json(200, {

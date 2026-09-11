@@ -14,6 +14,13 @@ const {
   generateDevicePairingCode,
   mapBusinessDevice,
   getAppSynkStatus,
+  normalizeProductType,
+  getProductTypeConfig,
+  defaultVerifyActionForProduct,
+  verifyActionAllowedForProduct,
+  verifyActionLabel,
+  normalizeWebsite,
+  PRODUCT_TYPES,
 } = require("./lib/synk");
 const {
   createBusinessSession,
@@ -53,6 +60,7 @@ function normalizeSlug(value) {
 }
 
 function mapBusiness(row) {
+  const productType = normalizeProductType(row.product_type || "custom");
   return {
     id: row.id,
     name: row.name,
@@ -60,6 +68,13 @@ function mapBusiness(row) {
     email: row.email,
     status: row.status,
     note: row.note || "",
+    website: row.website || "",
+    productType,
+    productLabel: getProductTypeConfig(productType).label,
+    preferredVerifyAction: verifyActionAllowedForProduct(
+      productType,
+      row.preferred_verify_action || defaultVerifyActionForProduct(productType)
+    ),
     hasPassword: Boolean(row.password_hash),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -68,12 +83,17 @@ function mapBusiness(row) {
 }
 
 function mapApp(row) {
+  const productType = normalizeProductType(
+    row.product_type || (row.slug === "visitor-signin" ? "visitor_checkin" : "custom")
+  );
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
     enabled: row.enabled !== false,
-    verifyAction: normalizeVerifyAction(row.verify_action),
+    verifyAction: verifyActionAllowedForProduct(productType, row.verify_action),
+    productType,
+    productLabel: getProductTypeConfig(productType).label,
     businessId: row.business_id || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -153,7 +173,13 @@ exports.handler = async (event) => {
       const contactName = normalizeName(body.contactName || body.contact);
       const email = normalizeEmail(body.email);
       const password = String(body.password || "").trim();
-      const note = normalizeNote(body.note || body.useCase);
+      const note = normalizeNote(body.note || body.useCase || body.description);
+      const website = normalizeWebsite(body.website || body.url);
+      const productType = normalizeProductType(body.productType || body.useCaseType);
+      const preferredVerifyAction = verifyActionAllowedForProduct(
+        productType,
+        body.preferredVerifyAction || body.verifyAction || body.policy || defaultVerifyActionForProduct(productType)
+      );
       if (!name) return json(400, { error: "Business name is required" });
       if (!email || !email.includes("@")) return json(400, { error: "A valid email is required" });
       if (password.length < 8) {
@@ -163,7 +189,7 @@ exports.handler = async (event) => {
       try {
         const rows = await sql`
           INSERT INTO synk_business_accounts (
-            name, contact_name, email, password_hash, status, note
+            name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action
           )
           VALUES (
             ${name},
@@ -171,14 +197,17 @@ exports.handler = async (event) => {
             ${email},
             ${hashSecret(password)},
             'pending',
-            ${note}
+            ${note},
+            ${website},
+            ${productType},
+            ${preferredVerifyAction}
           )
-          RETURNING id, name, contact_name, email, password_hash, status, note, created_at, updated_at, reviewed_at
+          RETURNING id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, created_at, updated_at, reviewed_at
         `;
         await logSynkEvent(sql, {
           eventType: "business_request",
           ip: clientIp(event),
-          detail: name,
+          detail: `${name}:${productType}`,
         });
         return json(201, {
           ok: true,
@@ -330,7 +359,7 @@ exports.handler = async (event) => {
       }
 
       const apps = await sql`
-        SELECT id, slug, name, enabled, verify_action, business_id, created_at, updated_at
+        SELECT id, slug, name, enabled, verify_action, product_type, business_id, created_at, updated_at
         FROM synk_apps
         WHERE business_id = ${auth.business.id}
         ORDER BY created_at ASC
@@ -360,20 +389,69 @@ exports.handler = async (event) => {
         const appId = String(body.appId || body.id || "").trim();
         const app = apps.find((row) => String(row.id) === appId) || apps[0];
         if (!app) return json(404, { error: "No API app found for this business" });
-        const verifyAction = normalizeVerifyAction(body.verifyAction || body.policy);
+
+        const productType = normalizeProductType(
+          body.productType || app.product_type || "custom"
+        );
+        const verifyAction = verifyActionAllowedForProduct(
+          productType,
+          body.verifyAction || body.policy || app.verify_action
+        );
+
+        const nextWebsite =
+          body.website != null ? normalizeWebsite(body.website) : undefined;
+        const nextNote = body.note != null ? normalizeNote(body.note) : undefined;
+
+        if (nextWebsite !== undefined || nextNote !== undefined) {
+          await sql`
+            UPDATE synk_business_accounts
+            SET
+              product_type = ${productType},
+              preferred_verify_action = ${verifyAction},
+              website = COALESCE(${nextWebsite ?? null}, website),
+              note = COALESCE(${nextNote ?? null}, note),
+              updated_at = NOW()
+            WHERE id = ${auth.business.id}
+          `;
+        } else {
+          await sql`
+            UPDATE synk_business_accounts
+            SET
+              product_type = ${productType},
+              preferred_verify_action = ${verifyAction},
+              updated_at = NOW()
+            WHERE id = ${auth.business.id}
+          `;
+        }
+
         const rows = await sql`
           UPDATE synk_apps
-          SET verify_action = ${verifyAction}, updated_at = NOW()
+          SET
+            verify_action = ${verifyAction},
+            product_type = ${productType},
+            updated_at = NOW()
           WHERE id = ${app.id} AND business_id = ${auth.business.id}
-          RETURNING id, slug, name, enabled, verify_action, business_id, created_at, updated_at
+          RETURNING id, slug, name, enabled, verify_action, product_type, business_id, created_at, updated_at
         `;
         await logSynkEvent(sql, {
           eventType: "business_settings",
           appSlug: rows[0].slug,
           ip: clientIp(event),
-          detail: verifyAction,
+          detail: `${productType}:${verifyAction}`,
         });
-        return json(200, { ok: true, app: mapApp(rows[0]) });
+
+        const bizRows = await sql`
+          SELECT id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, created_at, updated_at, reviewed_at
+          FROM synk_business_accounts
+          WHERE id = ${auth.business.id}
+          LIMIT 1
+        `;
+        return json(200, {
+          ok: true,
+          app: mapApp(rows[0]),
+          business: mapBusiness(bizRows[0]),
+          productTypes: PRODUCT_TYPES,
+        });
       }
 
       if (event.httpMethod === "POST" && action === "create-device") {
@@ -530,11 +608,18 @@ exports.handler = async (event) => {
       }
 
       const devices = await listBusinessDevices(sql, auth.business.id);
+      const bizRows = await sql`
+        SELECT id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, created_at, updated_at, reviewed_at
+        FROM synk_business_accounts
+        WHERE id = ${auth.business.id}
+        LIMIT 1
+      `;
       return json(200, {
         ok: true,
-        business: auth.business,
+        business: mapBusiness(bizRows[0] || auth.business),
         apps: apps.map(mapApp),
         devices,
+        productTypes: PRODUCT_TYPES,
       });
     }
 
@@ -545,14 +630,14 @@ exports.handler = async (event) => {
     if (event.httpMethod === "GET") {
       await seedVisitorSignInBusiness(sql);
       const rows = await sql`
-        SELECT id, name, contact_name, email, password_hash, status, note, created_at, updated_at, reviewed_at
+        SELECT id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, created_at, updated_at, reviewed_at
         FROM synk_business_accounts
         ORDER BY
           CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,
           created_at DESC
         LIMIT 200
       `;
-      return json(200, { businesses: rows.map(mapBusiness) });
+      return json(200, { businesses: rows.map(mapBusiness), productTypes: PRODUCT_TYPES });
     }
 
     if (event.httpMethod === "POST" && action === "approve") {
@@ -579,13 +664,13 @@ exports.handler = async (event) => {
           updated_at = NOW(),
           password_hash = COALESCE(${password ? hashSecret(password) : null}, password_hash)
         WHERE id = ${id}
-        RETURNING id, name, contact_name, email, password_hash, status, note, created_at, updated_at, reviewed_at
+        RETURNING id, name, contact_name, email, password_hash, status, note, website, product_type, preferred_verify_action, created_at, updated_at, reviewed_at
       `;
 
       let apiKey = null;
       let app = null;
       const apps = await sql`
-        SELECT id, slug, name, enabled, verify_action, business_id, created_at, updated_at
+        SELECT id, slug, name, enabled, verify_action, product_type, business_id, created_at, updated_at
         FROM synk_apps
         WHERE business_id = ${id}
         ORDER BY created_at ASC
@@ -602,16 +687,22 @@ exports.handler = async (event) => {
           slug = `${slugBase}-${attempt + 1}`;
         }
         apiKey = generateApiKey();
+        const productType = normalizeProductType(biz.product_type || "custom");
+        const verifyAction = verifyActionAllowedForProduct(
+          productType,
+          biz.preferred_verify_action || defaultVerifyActionForProduct(productType)
+        );
         const created = await sql`
-          INSERT INTO synk_apps (slug, name, api_key_hash, business_id, verify_action)
+          INSERT INTO synk_apps (slug, name, api_key_hash, business_id, verify_action, product_type)
           VALUES (
             ${slug},
             ${biz.name},
             ${hashSecret(apiKey)},
             ${id},
-            'pending'
+            ${verifyAction},
+            ${productType}
           )
-          RETURNING id, slug, name, enabled, verify_action, business_id, created_at, updated_at
+          RETURNING id, slug, name, enabled, verify_action, product_type, business_id, created_at, updated_at
         `;
         app = mapApp(created[0]);
       } else {

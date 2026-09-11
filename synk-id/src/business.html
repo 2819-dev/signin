@@ -32,7 +32,7 @@
           <p class="eyebrow">Synk Business</p>
           <h1>API access for your product</h1>
           <p class="subtitle">
-            Create a Synk Business account to get an API key. Configure how verified members are handled in your app — for example Visitor Sign-In auto-admit vs staff approval.
+            Tell us what you’re building. Synk verifies people once; your product chooses what happens next — login, check-in, access, or something custom.
           </p>
         </div>
       </header>
@@ -68,7 +68,7 @@
         <form id="biz-request-form" class="form" autocomplete="on">
           <div class="field">
             <label for="req-name">Business / product name</label>
-            <input id="req-name" type="text" maxlength="120" required placeholder="Visitor Sign-In" />
+            <input id="req-name" type="text" maxlength="120" required placeholder="Acme Check-In" />
           </div>
           <div class="field">
             <label for="req-contact">Contact name</label>
@@ -83,8 +83,32 @@
             <input id="req-password" type="password" minlength="8" required autocomplete="new-password" />
           </div>
           <div class="field">
-            <label for="req-note">How you’ll use Synk</label>
-            <textarea id="req-note" maxlength="500" rows="3" placeholder="Door access, visitor desk, event check-in…"></textarea>
+            <label for="req-website">Website <span class="muted">(optional)</span></label>
+            <input id="req-website" type="url" maxlength="200" placeholder="https://" />
+          </div>
+          <div class="field">
+            <label for="req-product-type">What are you building?</label>
+            <select id="req-product-type" required>
+              <option value="account_login">Account login / identity</option>
+              <option value="visitor_checkin">Visitor / front desk check-in</option>
+              <option value="access_control">Door, room, or gate access</option>
+              <option value="event_checkin">Event or attendance check-in</option>
+              <option value="custom" selected>Custom product / API</option>
+            </select>
+            <p id="req-product-blurb" class="muted" style="margin:6px 0 0;font-size:0.82rem;">
+              You handle the rest in your app after Synk verifies the person.
+            </p>
+          </div>
+          <div class="field">
+            <label for="req-verify-action">After Synk verifies someone</label>
+            <select id="req-verify-action"></select>
+            <p class="muted" style="margin:6px 0 0;font-size:0.82rem;">
+              This is a default for your app. You can change it later, and set per-person rules for people who’ve used your app.
+            </p>
+          </div>
+          <div class="field">
+            <label for="req-note">Anything else we should know?</label>
+            <textarea id="req-note" maxlength="500" rows="3" placeholder="Who uses it, where it runs, special requirements…"></textarea>
           </div>
           <p id="req-error" class="error hidden" role="alert"></p>
           <p id="req-status" class="muted" style="font-size:0.85rem;"></p>
@@ -105,15 +129,21 @@
         <div id="portal-apps"></div>
 
         <div class="field" style="margin-top:16px;">
-          <label for="verify-action">After a member verifies in your product</label>
-          <select id="verify-action">
-            <option value="pending">Require staff approval</option>
-            <option value="autofill">Prefill name only</option>
-            <option value="auto_admit">Approve automatically</option>
-            <option value="auto_deny">Decline automatically</option>
+          <label for="product-type">What this app is</label>
+          <select id="product-type">
+            <option value="account_login">Account login / identity</option>
+            <option value="visitor_checkin">Visitor / front desk check-in</option>
+            <option value="access_control">Door, room, or gate access</option>
+            <option value="event_checkin">Event or attendance check-in</option>
+            <option value="custom">Custom product / API</option>
           </select>
-          <p class="muted" style="margin:6px 0 0;font-size:0.82rem;">
-            This is owned by your Synk Business app — not by individual Synk members.
+          <p id="product-type-blurb" class="muted" style="margin:6px 0 0;font-size:0.82rem;"></p>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label for="verify-action">After Synk verifies someone</label>
+          <select id="verify-action"></select>
+          <p class="muted" style="margin:6px 0 0;font-size:0.82rem;" id="verify-action-hint">
+            Defaults for your product. Not every app needs staff approval — pick what fits.
           </p>
         </div>
         <div class="btn-row" style="margin-top:12px;">
@@ -128,8 +158,8 @@
         <p class="section-label">Recent Synk sign-ins</p>
         <h2 style="margin:0 0 6px;">Members who used your app</h2>
         <p class="muted" style="margin:0 0 12px;font-size:0.88rem;">
-          Only people who recently signed in to <strong>your</strong> app appear here. Names only — no photos or personal details.
-          Set auto deny, auto accept, or refill name for each person.
+          Only people who recently verified in <strong>your</strong> app appear here. Names only — no photos or personal details.
+          Override the default for specific people when you need to.
         </p>
         <div id="recent-members" class="synk-members"></div>
         <p id="recent-members-empty" class="muted" style="font-size:0.88rem;">No recent Synk sign-ins for your app yet.</p>
@@ -165,6 +195,46 @@
 
     <script>
       const STORAGE_KEY = "synk_business_session";
+      const PRODUCT_CATALOG = {
+        account_login: {
+          label: "Account login / identity",
+          blurb: "Synk confirms who they are so your product can open their account.",
+          defaultAction: "identity",
+          actions: ["identity"],
+        },
+        visitor_checkin: {
+          label: "Visitor / front desk check-in",
+          blurb: "People check in on a tablet. Staff can approve, deny, or prefill details.",
+          defaultAction: "pending",
+          actions: ["pending", "autofill", "auto_admit", "auto_deny"],
+        },
+        access_control: {
+          label: "Door, room, or gate access",
+          blurb: "Synk verifies the person, then your system allows or blocks entry.",
+          defaultAction: "auto_admit",
+          actions: ["auto_admit", "auto_deny", "pending", "identity"],
+        },
+        event_checkin: {
+          label: "Event or attendance check-in",
+          blurb: "Log that a member arrived. Optional staff review for restricted events.",
+          defaultAction: "identity",
+          actions: ["identity", "auto_admit", "pending"],
+        },
+        custom: {
+          label: "Custom product / API",
+          blurb: "You handle the rest in your app after Synk verifies the person.",
+          defaultAction: "identity",
+          actions: ["identity", "pending", "autofill", "auto_admit", "auto_deny"],
+        },
+      };
+      const ACTION_LABELS = {
+        identity: "Confirm identity only (app decides next)",
+        pending: "Wait for staff / host approval",
+        autofill: "Return name to fill a form",
+        auto_admit: "Allow automatically",
+        auto_deny: "Block automatically",
+      };
+
       const gate = document.getElementById("biz-gate");
       const loginCard = document.getElementById("biz-login-card");
       const requestCard = document.getElementById("biz-request-card");
@@ -172,11 +242,44 @@
       const portalStatus = document.getElementById("portal-status");
       const portalKey = document.getElementById("portal-key");
       const verifyAction = document.getElementById("verify-action");
+      const productTypeEl = document.getElementById("product-type");
+      const reqProductType = document.getElementById("req-product-type");
+      const reqVerifyAction = document.getElementById("req-verify-action");
       let sessionToken = localStorage.getItem(STORAGE_KEY) || "";
       let currentAppId = "";
       let currentAppSlug = "";
-      let appDefaultPolicy = "pending";
+      let appDefaultPolicy = "identity";
+      let currentProductType = "custom";
       const pairAppSlug = (new URLSearchParams(location.search).get("pairApp") || "").trim().slice(0, 80);
+
+      function productConfig(type) {
+        return PRODUCT_CATALOG[type] || PRODUCT_CATALOG.custom;
+      }
+
+      function fillVerifySelect(selectEl, productType, selected) {
+        if (!selectEl) return;
+        const cfg = productConfig(productType);
+        const value = cfg.actions.includes(selected) ? selected : cfg.defaultAction;
+        selectEl.innerHTML = cfg.actions
+          .map(
+            (action) =>
+              `<option value="${action}" ${action === value ? "selected" : ""}>${ACTION_LABELS[action] || action}</option>`
+          )
+          .join("");
+      }
+
+      function syncProductUi(productType, { request = false } = {}) {
+        const cfg = productConfig(productType);
+        if (request) {
+          const blurb = document.getElementById("req-product-blurb");
+          if (blurb) blurb.textContent = cfg.blurb;
+          fillVerifySelect(reqVerifyAction, productType, cfg.defaultAction);
+        } else {
+          const blurb = document.getElementById("product-type-blurb");
+          if (blurb) blurb.textContent = cfg.blurb;
+          fillVerifySelect(verifyAction, productType, verifyAction.value || cfg.defaultAction);
+        }
+      }
 
       function show(view) {
         gate.classList.toggle("hidden", view !== "gate");
@@ -210,8 +313,22 @@
               )
               .join("")
           : `<p class="muted">No API app yet — ask Synk Admin to approve your account.</p>`;
-        if (app) verifyAction.value = app.verifyAction || "pending";
-        appDefaultPolicy = (app && app.verifyAction) || "pending";
+        if (app) {
+          currentProductType = (data.business && data.business.productType) || app.productType || "custom";
+          if (productTypeEl) productTypeEl.value = currentProductType;
+          syncProductUi(currentProductType);
+          fillVerifySelect(
+            verifyAction,
+            currentProductType,
+            app.verifyAction || (data.business && data.business.preferredVerifyAction) || productConfig(currentProductType).defaultAction
+          );
+          appDefaultPolicy = verifyAction.value || productConfig(currentProductType).defaultAction;
+        } else {
+          currentProductType = (data.business && data.business.productType) || "custom";
+          if (productTypeEl) productTypeEl.value = currentProductType;
+          syncProductUi(currentProductType);
+          appDefaultPolicy = productConfig(currentProductType).defaultAction;
+        }
         renderDevices(data.devices || []);
         show("portal");
         loadRecentMembers().catch(() => {});
@@ -257,10 +374,7 @@
       }
 
       function memberPolicyLabel(policy) {
-        if (policy === "auto_admit") return "Auto accept";
-        if (policy === "auto_deny") return "Auto deny";
-        if (policy === "autofill") return "Refill name";
-        return "Require approval";
+        return ACTION_LABELS[policy] || policy || "Confirm identity only";
       }
 
       function formatMemberSeen(iso) {
@@ -304,10 +418,11 @@
                   <label>When they verify</label>
                   <select class="member-policy-select">
                     <option value="default" ${selected === "default" ? "selected" : ""}>Use app default (${escapeHtml(memberPolicyLabel(appDefaultPolicy))})</option>
-                    <option value="autofill" ${selected === "autofill" ? "selected" : ""}>Refill name</option>
-                    <option value="auto_admit" ${selected === "auto_admit" ? "selected" : ""}>Auto accept</option>
-                    <option value="auto_deny" ${selected === "auto_deny" ? "selected" : ""}>Auto deny</option>
-                    <option value="pending" ${selected === "pending" ? "selected" : ""}>Require approval</option>
+                    <option value="identity" ${selected === "identity" ? "selected" : ""}>Confirm identity only</option>
+                    <option value="autofill" ${selected === "autofill" ? "selected" : ""}>Return name to fill a form</option>
+                    <option value="auto_admit" ${selected === "auto_admit" ? "selected" : ""}>Allow automatically</option>
+                    <option value="auto_deny" ${selected === "auto_deny" ? "selected" : ""}>Block automatically</option>
+                    <option value="pending" ${selected === "pending" ? "selected" : ""}>Wait for approval</option>
                   </select>
                 </div>
               </article>
@@ -544,6 +659,9 @@
               contactName: document.getElementById("req-contact").value,
               email: document.getElementById("req-email").value,
               password: document.getElementById("req-password").value,
+              website: (document.getElementById("req-website") || {}).value || "",
+              productType: (document.getElementById("req-product-type") || {}).value || "custom",
+              preferredVerifyAction: (document.getElementById("req-verify-action") || {}).value || "identity",
               note: document.getElementById("req-note").value,
             }),
           });
@@ -551,6 +669,7 @@
           if (!res.ok) throw new Error(data.error || "Could not submit");
           status.textContent = data.message || "Request submitted.";
           e.target.reset();
+          syncProductUi((document.getElementById("req-product-type") || {}).value || "custom", { request: true });
         } catch (ex) {
           status.textContent = "";
           err.textContent = ex.message || "Could not submit";
@@ -568,13 +687,16 @@
             body: JSON.stringify({
               action: "save-settings",
               appId: currentAppId,
+              productType: productTypeEl ? productTypeEl.value : currentProductType,
               verifyAction: verifyAction.value,
             }),
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || "Could not save");
           portalStatus.textContent = "Settings saved";
-          appDefaultPolicy = verifyAction.value || appDefaultPolicy;
+          if (data.business && data.business.productType) currentProductType = data.business.productType;
+          else if (productTypeEl) currentProductType = productTypeEl.value;
+          appDefaultPolicy = (data.app && data.app.verifyAction) || verifyAction.value || appDefaultPolicy;
           loadRecentMembers().catch(() => {});
         } catch (ex) {
           portalStatus.textContent = ex.message || "Could not save";
@@ -621,6 +743,17 @@
         });
       } else {
         show("gate");
+      }
+
+      if (reqProductType) {
+        syncProductUi(reqProductType.value || "custom", { request: true });
+        reqProductType.addEventListener("change", () => syncProductUi(reqProductType.value, { request: true }));
+      }
+      if (productTypeEl) {
+        productTypeEl.addEventListener("change", () => {
+          currentProductType = productTypeEl.value;
+          syncProductUi(currentProductType);
+        });
       }
     </script>
   </body>
