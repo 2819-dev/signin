@@ -14,7 +14,7 @@
     <title>Synk Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synk-admin12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin12" />
-    <link rel="stylesheet" href="/admin.css?v=theme-auto1" />
+    <link rel="stylesheet" href="/admin.css?v=synk-chat2" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js?v=facefix4" defer></script>
   </head>
@@ -312,6 +312,45 @@
         </section>
       </div>
 
+
+      <div id="pane-chat" class="admin-pane hidden">
+        <header class="admin-header">
+          <div>
+            <h1>Support chat</h1>
+            <p class="muted">Live chats from Synk (hub, join, verify). Separate from visitor sign-in.</p>
+          </div>
+          <div class="admin-header-actions">
+            <button class="btn btn-secondary btn-compact" type="button" id="synk-chat-refresh-btn">Refresh</button>
+          </div>
+        </header>
+
+        <section class="panel synk-chat-layout">
+          <div class="synk-chat-inbox-col">
+            <h2 class="synk-chat-col-title">Inbox <span id="synk-chat-count" class="badge hidden">0</span></h2>
+            <div id="synk-chat-inbox" class="synk-chat-inbox"></div>
+            <p id="synk-chat-empty" class="chat-empty-note">No Synk support chats yet.</p>
+          </div>
+          <div class="synk-chat-thread-col">
+            <div id="synk-chat-thread" class="synk-chat-thread hidden">
+              <div class="synk-chat-thread-head">
+                <div>
+                  <strong id="synk-chat-thread-title">Chat</strong>
+                  <p class="muted" id="synk-chat-thread-status" style="margin:4px 0 0;font-size:0.85rem;"></p>
+                </div>
+                <button class="btn btn-secondary btn-compact" type="button" id="synk-chat-close-session-btn">Close chat</button>
+              </div>
+              <div id="synk-chat-messages" class="synk-chat-messages" aria-live="polite"></div>
+              <form id="synk-chat-form" class="synk-chat-composer" autocomplete="off">
+                <input id="synk-chat-input" type="text" maxlength="1000" required placeholder="Reply…" enterkeyhint="send" />
+                <button class="btn btn-compact" type="submit" id="synk-chat-send">Send</button>
+              </form>
+              <p id="synk-chat-closed" class="chat-empty-note hidden" role="status">Chat closed</p>
+            </div>
+            <p id="synk-chat-pick" class="chat-empty-note">Select a chat to reply.</p>
+          </div>
+        </section>
+      </div>
+
       <div id="pane-more" class="admin-pane hidden">
         <header class="admin-header">
           <div>
@@ -473,6 +512,10 @@
         <button type="button" class="admin-tab" data-pane="requests" id="tab-requests" aria-label="Requests" title="Requests">
           <svg class="admin-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4h14c.6 0 1 .4 1 1v11.2c0 .6-.4 1-1 1h-4.2L12 20.8 9.2 17.2H5c-.6 0-1-.4-1-1V5c0-.6.4-1 1-1Zm2 3.2v1.6h10V7.2H7Zm0 3.5v1.6h7V10.7H7Z"/></svg>
         </button>
+        <button type="button" class="admin-tab" data-pane="chat" id="tab-chat" aria-label="Chat" title="Chat">
+          <svg class="admin-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4h14c.6 0 1 .4 1 1v10.5c0 .6-.4 1-1 1h-5.2L12 20.2l-1.8-3.7H5c-.6 0-1-.4-1-1V5c0-.6.4-1 1-1Zm2 3.25v1.5h10v-1.5H7Zm0 3.4v1.5h7v-1.5H7Z"/></svg>
+          <span class="admin-tab-badge hidden" id="tab-chat-badge">0</span>
+        </button>
         <button type="button" class="admin-tab" data-pane="business" id="tab-business" aria-label="Business" title="Business">
           <svg class="admin-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.8 20.2V9.4c0-.6.4-1 1-1h5.2V5.8c0-.6.4-1 1-1h6.2c.6 0 1 .4 1 1v14.4H3.8Zm7.2-11.8h5.2V6.8h-5.2v1.6Zm-5.2 3.1v1.5h2.1v-1.5H5.8Zm3.6 0v1.5h2.1v-1.5H9.4Zm3.6 0v1.5h2.1v-1.5H13Zm3.6 0v1.5h2.1v-1.5H16.6Zm-10.8 3.4v1.5h2.1v-1.5H5.8Zm3.6 0v1.5h2.1v-1.5H9.4Zm3.6 0v1.5h2.1v-1.5H13Zm3.6 0v1.5h2.1v-1.5H16.6Z"/></svg>
         </button>
@@ -495,6 +538,7 @@
         members: document.getElementById("pane-members"),
         requests: document.getElementById("pane-requests"),
         business: document.getElementById("pane-business"),
+        chat: document.getElementById("pane-chat"),
         more: document.getElementById("pane-more"),
         apps: document.getElementById("pane-apps"),
         activity: document.getElementById("pane-activity"),
@@ -505,10 +549,11 @@
         members: document.getElementById("tab-members"),
         requests: document.getElementById("tab-requests"),
         business: document.getElementById("tab-business"),
+        chat: document.getElementById("tab-chat"),
         more: document.getElementById("tab-more"),
       };
       const MORE_PANES = new Set(["apps", "activity", "settings", "more"]);
-      const TAB_PANES = new Set(["overview", "members", "requests", "business", "more"]);
+      const TAB_PANES = new Set(["overview", "members", "requests", "chat", "business", "more"]);
 
       const synkEnrollForm = document.getElementById("synk-enroll-form");
       const synkEnrollName = document.getElementById("synk-enroll-name");
@@ -674,6 +719,9 @@
         if (next === "requests") {
           refreshSynkRequests().catch(() => {});
         }
+        if (next === "chat") {
+          refreshSynkChat().catch(() => {});
+        }
         if (next === "business") {
           refreshSynkBusinesses().catch(() => {});
         }
@@ -690,6 +738,7 @@
         const token = sessionToken;
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = null;
+        stopSynkChatPoll();
         sessionToken = "";
         sessionUsername = "";
         sessionId = "";
@@ -1646,6 +1695,192 @@
         return data;
       }
 
+      
+      let synkChatSessions = [];
+      let synkChatActiveId = "";
+      let synkChatPollTimer = null;
+      let synkChatLastKey = "";
+
+      const synkChatInbox = document.getElementById("synk-chat-inbox");
+      const synkChatEmpty = document.getElementById("synk-chat-empty");
+      const synkChatCount = document.getElementById("synk-chat-count");
+      const synkChatThread = document.getElementById("synk-chat-thread");
+      const synkChatPick = document.getElementById("synk-chat-pick");
+      const synkChatMessages = document.getElementById("synk-chat-messages");
+      const synkChatForm = document.getElementById("synk-chat-form");
+      const synkChatInput = document.getElementById("synk-chat-input");
+      const synkChatSend = document.getElementById("synk-chat-send");
+      const synkChatClosed = document.getElementById("synk-chat-closed");
+      const synkChatThreadTitle = document.getElementById("synk-chat-thread-title");
+      const synkChatThreadStatus = document.getElementById("synk-chat-thread-status");
+      const synkChatCloseSessionBtn = document.getElementById("synk-chat-close-session-btn");
+      const synkChatRefreshBtn = document.getElementById("synk-chat-refresh-btn");
+      const tabChatBadge = document.getElementById("tab-chat-badge");
+
+      function stopSynkChatPoll() {
+        if (synkChatPollTimer) {
+          clearInterval(synkChatPollTimer);
+          synkChatPollTimer = null;
+        }
+      }
+
+      function startSynkChatPoll() {
+        stopSynkChatPoll();
+        synkChatPollTimer = setInterval(() => {
+          if (!sessionToken) return;
+          refreshSynkChatInbox().catch(() => {});
+          if (synkChatActiveId) loadSynkChatThread(synkChatActiveId, { quiet: true }).catch(() => {});
+        }, 4000);
+      }
+
+      function renderSynkChatInbox(sessions) {
+        synkChatSessions = Array.isArray(sessions) ? sessions : [];
+        const openCount = synkChatSessions.filter((s) => s.status === "open").length;
+        if (synkChatCount) {
+          synkChatCount.textContent = String(openCount);
+          synkChatCount.classList.toggle("hidden", openCount === 0);
+        }
+        if (tabChatBadge) {
+          tabChatBadge.textContent = String(openCount);
+          tabChatBadge.classList.toggle("hidden", openCount === 0);
+        }
+        if (!synkChatInbox) return;
+        if (!synkChatSessions.length) {
+          synkChatInbox.innerHTML = "";
+          if (synkChatEmpty) synkChatEmpty.hidden = false;
+          return;
+        }
+        if (synkChatEmpty) synkChatEmpty.hidden = true;
+        synkChatInbox.innerHTML = synkChatSessions
+          .map((s) => {
+            const active = s.id === synkChatActiveId ? "is-active" : "";
+            const closed = s.status === "closed" ? "is-closed" : "";
+            const name = escapeHtml(s.visitorName || "Visitor");
+            const preview = escapeHtml(s.lastBody || "No messages yet");
+            const when = escapeHtml(formatTime(s.lastMessageAt || s.updatedAt));
+            return `<button type="button" class="synk-chat-item ${active} ${closed}" data-synk-chat-id="${escapeHtml(s.id)}">
+              <div class="synk-chat-item-top"><strong>${name}</strong><span>${when}</span></div>
+              <p>${preview}</p>
+            </button>`;
+          })
+          .join("");
+      }
+
+      function renderSynkChatMessages(messages, { closed = false } = {}) {
+        const list = Array.isArray(messages) ? messages : [];
+        const key = list.map((m) => `${m.id}:${m.body}`).join("|") + (closed ? ":c" : "");
+        if (key === synkChatLastKey) return;
+        synkChatLastKey = key;
+        if (!synkChatMessages) return;
+        synkChatMessages.innerHTML = list
+          .map((m) => {
+            const sender = String(m.sender || "");
+            const cls =
+              sender === "admin" ? "is-mine" :
+              sender === "visitor" ? "is-theirs" : "is-system";
+            return `<div class="synk-chat-bubble ${cls}">${escapeHtml(m.body)}</div>`;
+          })
+          .join("");
+        synkChatMessages.scrollTop = synkChatMessages.scrollHeight;
+        if (synkChatForm) synkChatForm.hidden = closed;
+        if (synkChatClosed) synkChatClosed.hidden = !closed;
+      }
+
+      async function refreshSynkChatInbox() {
+        if (!sessionToken) return;
+        const res = await fetch("/api/synk-chat-session", { headers: adminHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load chats");
+        renderSynkChatInbox(data.sessions || []);
+      }
+
+      async function loadSynkChatThread(id, { quiet = false } = {}) {
+        if (!id || !sessionToken) return;
+        const res = await fetch(`/api/synk-chat-session?id=${encodeURIComponent(id)}`, {
+          headers: adminHeaders(),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load chat");
+        synkChatActiveId = id;
+        const session = data.session || {};
+        const closed = session.status === "closed";
+        if (synkChatThread) synkChatThread.classList.remove("hidden");
+        if (synkChatPick) synkChatPick.classList.add("hidden");
+        if (synkChatThreadTitle) synkChatThreadTitle.textContent = session.visitorName || "Chat";
+        if (synkChatThreadStatus) {
+          synkChatThreadStatus.textContent = closed ? "Closed" : "Open";
+        }
+        if (synkChatCloseSessionBtn) synkChatCloseSessionBtn.hidden = closed;
+        renderSynkChatMessages(data.messages || [], { closed });
+        renderSynkChatInbox(synkChatSessions);
+        if (!quiet) startSynkChatPoll();
+      }
+
+      async function refreshSynkChat() {
+        await refreshSynkChatInbox();
+        if (synkChatActiveId) await loadSynkChatThread(synkChatActiveId, { quiet: true });
+        startSynkChatPoll();
+      }
+
+      if (synkChatInbox) {
+        synkChatInbox.addEventListener("click", (e) => {
+          const btn = e.target.closest("[data-synk-chat-id]");
+          if (!btn) return;
+          loadSynkChatThread(btn.getAttribute("data-synk-chat-id")).catch((err) => {
+            showToast(err.message || "Could not open chat");
+          });
+        });
+      }
+      if (synkChatRefreshBtn) {
+        synkChatRefreshBtn.addEventListener("click", () => {
+          refreshSynkChat().catch((err) => showToast(err.message || "Could not refresh"));
+        });
+      }
+      if (synkChatForm) {
+        synkChatForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const body = String(synkChatInput.value || "").trim();
+          if (!body || !synkChatActiveId) return;
+          synkChatSend.disabled = true;
+          try {
+            const res = await fetch("/api/synk-chat-message", {
+              method: "POST",
+              headers: adminHeaders(),
+              body: JSON.stringify({ sessionId: synkChatActiveId, sender: "admin", body }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not send");
+            synkChatInput.value = "";
+            await loadSynkChatThread(synkChatActiveId);
+            await refreshSynkChatInbox();
+          } catch (err) {
+            showToast(err.message || "Could not send");
+          } finally {
+            synkChatSend.disabled = false;
+            synkChatInput.focus();
+          }
+        });
+      }
+      if (synkChatCloseSessionBtn) {
+        synkChatCloseSessionBtn.addEventListener("click", async () => {
+          if (!synkChatActiveId) return;
+          try {
+            const res = await fetch("/api/synk-chat-session", {
+              method: "PATCH",
+              headers: adminHeaders(),
+              body: JSON.stringify({ id: synkChatActiveId, status: "closed" }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not close chat");
+            showToast("Chat closed");
+            await refreshSynkChat();
+          } catch (err) {
+            showToast(err.message || "Could not close chat");
+          }
+        });
+      }
+
+
       async function refreshAll() {
         await Promise.all([
           refreshSynkProfiles(),
@@ -1654,6 +1889,7 @@
           refreshSynkPasses().catch(() => {}),
           refreshSynkRequests().catch(() => {}),
           refreshSynkBusinesses().catch(() => {}),
+          refreshSynkChat().catch(() => {}),
           refreshSettings(),
         ]);
       }
@@ -1704,10 +1940,12 @@
         refreshSynkRequests().catch(() => {});
         refreshSynkBusinesses().catch(() => {});
         refreshSynkPasses().catch(() => {});
+        refreshSynkChat().catch(() => {});
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(() => {
           refreshSynkApps().catch(() => {});
           refreshSynkActivity().catch(() => {});
+          refreshSynkChatInbox().catch(() => {});
           refreshSettings().catch(() => {});
         }, 15000);
       }
