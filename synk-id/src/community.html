@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community-reddit2" />
+    <link rel="stylesheet" href="/join.css?v=community-noprefix1" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -26,7 +26,7 @@
         <input
           id="jump-input"
           type="search"
-          placeholder="Search g/general or u/username"
+          placeholder="Search groups or usernames"
           spellcheck="false"
           autocapitalize="none"
         />
@@ -58,8 +58,7 @@
           <form id="username-form" class="form" autocomplete="off">
             <div class="field">
               <label for="public-username">Username</label>
-              <div class="community-prefixed-input">
-                <span class="community-prefix" aria-hidden="true">u/</span>
+              <div class="community-prefixed-input is-plain">
                 <input
                   id="public-username"
                   type="text"
@@ -107,7 +106,7 @@
                 <span>Username & pinned tag</span>
               </a>
               <a class="community-side-link" href="/community" id="my-profile-link" hidden>
-                <strong id="my-profile-label">u/you</strong>
+                <strong id="my-profile-label">you</strong>
                 <span>Your profile</span>
               </a>
             </div>
@@ -134,9 +133,8 @@
                   </div>
                   <div class="field">
                     <label for="group-slug">Group url</label>
-                    <div class="community-prefixed-input">
-                      <span class="community-prefix" aria-hidden="true">g/</span>
-                      <input
+                    <div class="community-prefixed-input is-plain">
+                <input
                         id="group-slug"
                         type="text"
                         maxlength="40"
@@ -151,7 +149,7 @@
                     <input id="group-description" type="text" maxlength="280" placeholder="What this group is for" />
                   </div>
                   <p id="group-status" class="muted" style="font-size: 0.85rem"></p>
-                  <button class="btn btn-primary btn-compact" type="submit">Create g/ group</button>
+                  <button class="btn btn-primary btn-compact" type="submit">Create group</button>
                 </form>
               </details>
 
@@ -165,9 +163,8 @@
                   <form id="add-admin-form" class="form" style="margin-top: 10px">
                     <div class="field">
                       <label for="admin-username">Add admin</label>
-                      <div class="community-prefixed-input">
-                        <span class="community-prefix" aria-hidden="true">u/</span>
-                        <input
+                      <div class="community-prefixed-input is-plain">
+                <input
                           id="admin-username"
                           type="text"
                           maxlength="24"
@@ -191,9 +188,8 @@
                   <form id="create-alt-form" class="form" style="margin-top: 10px">
                     <div class="field">
                       <label for="alt-username">New alt</label>
-                      <div class="community-prefixed-input">
-                        <span class="community-prefix" aria-hidden="true">u/</span>
-                        <input
+                      <div class="community-prefixed-input is-plain">
+                <input
                           id="alt-username"
                           type="text"
                           maxlength="24"
@@ -242,9 +238,8 @@
                   <form id="assign-tag-form" class="form" style="margin-top: 12px">
                     <div class="field">
                       <label for="assign-tag-username">Assign to</label>
-                      <div class="community-prefixed-input">
-                        <span class="community-prefix" aria-hidden="true">u/</span>
-                        <input
+                      <div class="community-prefixed-input is-plain">
+                <input
                           id="assign-tag-username"
                           type="text"
                           maxlength="24"
@@ -338,9 +333,8 @@
                 <form id="settings-username-form" class="form" style="margin-top: 16px" autocomplete="off">
                   <div class="field">
                     <label for="settings-username">Public username</label>
-                    <div class="community-prefixed-input">
-                      <span class="community-prefix" aria-hidden="true">u/</span>
-                      <input
+                    <div class="community-prefixed-input is-plain">
+                <input
                         id="settings-username"
                         type="text"
                         maxlength="24"
@@ -389,6 +383,6 @@
       </div>
     </main>
 
-    <script src="/community.js?v=reddit2"></script>
+    <script src="/community.js?v=noprefix1"></script>
   </body>
 </html>

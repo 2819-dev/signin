@@ -1796,6 +1796,14 @@ textarea {
   background: transparent !important;
 }
 
+.community-prefixed-input.is-plain {
+  padding-left: 0;
+}
+
+.community-prefixed-input.is-plain input {
+  padding-left: 12px !important;
+}
+
 .community-persona-panel {
   width: 100%;
 }

@@ -199,7 +199,7 @@
     if (statGroups) statGroups.textContent = String(groups.length);
     if (route.type === "user") {
       const profile = (data && data.profile) || {};
-      if (aboutTitle) aboutTitle.textContent = `u/${profile.username || route.username || ""}`;
+      if (aboutTitle) aboutTitle.textContent = `${profile.username || route.username || ""}`;
       if (aboutBlurb) aboutBlurb.textContent = "Member profile";
       if (statPostsLabel) statPostsLabel.textContent = "Posts";
       if (statPosts) statPosts.textContent = String(profile.postCount != null ? profile.postCount : posts.length);
@@ -207,7 +207,7 @@
     }
     if (route.type === "group") {
       const group = (data && data.group) || groups.find((g) => g.slug === route.slug) || null;
-      if (aboutTitle) aboutTitle.textContent = group ? `About g/${group.slug}` : "About community";
+      if (aboutTitle) aboutTitle.textContent = group ? `About ${group.slug}` : "About community";
       if (aboutBlurb) aboutBlurb.textContent = (group && group.description) || "A Synk Community group.";
       if (statPostsLabel) statPostsLabel.textContent = "Posts";
       if (statPosts) statPosts.textContent = String(group && group.postCount != null ? group.postCount : posts.length);
@@ -334,9 +334,9 @@
     if (route.type === "settings") {
       parts.push(`<span>/</span><span>settings</span>`);
     } else if (route.type === "group" && route.slug) {
-      parts.push(`<span>/</span><span>g/${escapeHtml(route.slug)}</span>`);
+      parts.push(`<span>/</span><span>${escapeHtml(route.slug)}</span>`);
     } else if (route.type === "user" && route.username) {
-      parts.push(`<span>/</span><span>u/${escapeHtml(route.username)}</span>`);
+      parts.push(`<span>/</span><span>${escapeHtml(route.username)}</span>`);
     }
     crumbsEl.innerHTML = parts.join(" ");
   }
@@ -348,7 +348,7 @@
         const active = route.type === "group" && route.slug === group.slug ? "is-active" : "";
         return `
           <a class="community-group-link ${active}" href="/community/g/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
-            <strong>g/${escapeHtml(group.slug)}</strong>
+            <strong>${escapeHtml(group.slug)}</strong>
             <span>${escapeHtml(group.name)}${count ? ` · ${escapeHtml(count)}` : ""}</span>
           </a>
         `;
@@ -356,7 +356,7 @@
       .join("");
     homeLink.classList.toggle("is-active", route.type === "home");
     postGroup.innerHTML = groups
-      .map((group) => `<option value="${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)} — ${escapeHtml(group.name)}</option>`)
+      .map((group) => `<option value="${escapeHtml(group.slug)}">${escapeHtml(group.slug)} — ${escapeHtml(group.name)}</option>`)
       .join("");
     if (route.type === "group" && route.slug) postGroup.value = route.slug;
     else if (!postGroup.value && groups[0]) postGroup.value = groups[0].slug;
@@ -431,11 +431,11 @@
               <div class="reddit-post-meta">
                 ${
                   showGroup
-                    ? `<a class="reddit-sub" href="/community/g/${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)}</a><span class="muted">•</span>`
+                    ? `<a class="reddit-sub" href="/community/g/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>`
                     : ""
                 }
                 <span class="muted">Posted by</span>
-                <a class="community-user-link" href="/u/${escapeHtml(username)}">u/${escapeHtml(username)}</a>
+                <a class="community-user-link" href="/u/${escapeHtml(username)}">${escapeHtml(username)}</a>
                 ${tagChip(author.pinnedTag, { compact: true })}
                 <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
               </div>
@@ -476,7 +476,7 @@
         myProfileLink.hidden = false;
         myProfileLink.href = `/u/${encodeURIComponent(publicUsername)}`;
       }
-      if (myProfileLabel) myProfileLabel.textContent = `u/${publicUsername}`;
+      if (myProfileLabel) myProfileLabel.textContent = publicUsername;
     } else if (myProfileLink) {
       myProfileLink.hidden = true;
     }
@@ -508,16 +508,16 @@
     if (route.type === "user") {
       const profile = data.profile || { username: route.username };
       document.getElementById("view-eyebrow").textContent = "Profile";
-      document.getElementById("view-title").textContent = `u/${profile.username || route.username}`;
+      document.getElementById("view-title").textContent = `${profile.username || route.username}`;
       document.getElementById("view-blurb").textContent = "Member profile";
       document.getElementById("feed-label").textContent = "Posts";
-      document.getElementById("feed-title").textContent = `Posts by u/${profile.username || route.username}`;
+      document.getElementById("feed-title").textContent = `Posts by ${profile.username || route.username}`;
       profileMeta.hidden = false;
       profileMeta.innerHTML = `
         <div class="community-profile-card">
           <div class="community-avatar" aria-hidden="true">${escapeHtml((profile.username || "?").slice(0, 1).toUpperCase())}</div>
           <div>
-            <strong>u/${escapeHtml(profile.username || "")}</strong>
+            <strong>${escapeHtml(profile.username || "")}</strong>
             ${tagChip(profile.pinnedTag, { compact: true })}
             
             
@@ -562,13 +562,13 @@
     }
     if (route.type === "group") {
       const group = data.group || groups.find((g) => g.slug === route.slug) || null;
-      document.getElementById("view-eyebrow").textContent = group ? `g/${group.slug}` : "Group";
-      document.getElementById("view-title").textContent = group ? `g/${group.slug}` : `g/${route.slug}`;
+      document.getElementById("view-eyebrow").textContent = group ? group.slug : "Group";
+      document.getElementById("view-title").textContent = group ? group.slug : route.slug;
       document.getElementById("view-blurb").textContent =
         (group && group.description) || "Posts in this community.";
       document.getElementById("feed-label").textContent = "Feed";
       document.getElementById("feed-title").textContent = group
-        ? `Posts in g/${group.slug}`
+        ? `Posts in ${group.slug}`
         : "Group posts";
       return;
     }
@@ -793,7 +793,7 @@
       document.getElementById("group-name").value = "";
       document.getElementById("group-slug").value = "";
       document.getElementById("group-description").value = "";
-      status.textContent = `Created g/${data.group.slug}`;
+      status.textContent = `Created ${data.group.slug}`;
       await navigate({ type: "group", slug: data.group.slug, username: "" });
     } catch (err) {
       status.textContent = err.message || "Could not create group";
