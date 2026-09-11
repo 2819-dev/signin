@@ -132,13 +132,120 @@
   }
 
 
-  function tagChip(tag, { compact = false } = {}) {
+  function tagInitial(tag) {
+    const name = String((tag && tag.name) || "?").trim();
+    return name.slice(0, 1).toUpperCase() || "?";
+  }
+
+  function canManageTagsFor(username) {
+    if (!me || !username) return false;
+    const u = String(username || "")
+      .trim()
+      .toLowerCase();
+    if (!u) return false;
+    const acting = String(activePersona || me.publicUsername || "")
+      .trim()
+      .toLowerCase();
+    const primary = String(me.publicUsername || "")
+      .trim()
+      .toLowerCase();
+    return acting === u || primary === u;
+  }
+
+  function tagChip(tag, { compact = false, canPin = false } = {}) {
     if (!tag) return "";
     const color = escapeHtml(tag.color || "#6366f1");
-    const title = escapeHtml(tag.description || tag.name || "");
-    const name = escapeHtml(tag.name || "");
-    const cls = compact ? "community-tag-chip is-compact" : "community-tag-chip";
-    return `<span class="${cls}" style="--tag-color:${color}" title="${title}">${name}</span>`;
+    const name = escapeHtml(tag.name || "Tag");
+    const desc = escapeHtml(tag.description || "");
+    const id = escapeHtml(String(tag.id || ""));
+    const pinned = tag.pinned ? "1" : "0";
+    const initial = escapeHtml(tagInitial(tag));
+    const cls = [
+      "synk-tag-badge",
+      compact ? "is-compact" : "",
+      tag.pinned ? "is-pinned" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return `<button type="button" class="${cls}" style="--tag-color:${color}" data-tag-badge="1" data-tag-id="${id}" data-tag-name="${name}" data-tag-desc="${desc}" data-tag-pinned="${pinned}" data-can-pin="${canPin ? "1" : "0"}" aria-label="${name}" aria-expanded="false" title="${name}"><span class="synk-tag-badge-icon" aria-hidden="true">${initial}</span></button>`;
+  }
+
+  function ensureTagPopover() {
+    let pop = document.getElementById("tag-badge-popover");
+    if (pop) return pop;
+    pop = document.createElement("div");
+    pop.id = "tag-badge-popover";
+    pop.className = "synk-tag-popover";
+    pop.hidden = true;
+    pop.innerHTML = `
+      <div class="synk-tag-popover-head">
+        <span class="synk-tag-popover-icon" id="tag-pop-icon" aria-hidden="true"></span>
+        <strong class="synk-tag-popover-name" id="tag-pop-name"></strong>
+      </div>
+      <p class="synk-tag-popover-desc" id="tag-pop-desc"></p>
+      <button type="button" class="btn btn-secondary btn-compact synk-tag-popover-pin" id="tag-pop-pin" hidden>Pin next to name</button>
+    `;
+    document.body.appendChild(pop);
+    return pop;
+  }
+
+  function closeTagPopover() {
+    const pop = document.getElementById("tag-badge-popover");
+    if (pop) pop.hidden = true;
+    document.querySelectorAll(".synk-tag-badge[aria-expanded='true']").forEach((el) => {
+      el.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function openTagPopover(btn) {
+    if (!btn) return;
+    const pop = ensureTagPopover();
+    const name = btn.getAttribute("data-tag-name") || "Tag";
+    const desc = btn.getAttribute("data-tag-desc") || "No description.";
+    const color = btn.style.getPropertyValue("--tag-color") || "#6366f1";
+    const canPin = btn.getAttribute("data-can-pin") === "1";
+    const pinned = btn.getAttribute("data-tag-pinned") === "1";
+    const tagId = btn.getAttribute("data-tag-id") || "";
+    const icon = pop.querySelector("#tag-pop-icon");
+    const nameEl = pop.querySelector("#tag-pop-name");
+    const descEl = pop.querySelector("#tag-pop-desc");
+    const pinBtn = pop.querySelector("#tag-pop-pin");
+    if (icon) {
+      icon.textContent = (name || "?").slice(0, 1).toUpperCase();
+      icon.style.setProperty("--tag-color", color);
+    }
+    if (nameEl) nameEl.textContent = name;
+    if (descEl) descEl.textContent = desc || "No description.";
+    if (pinBtn) {
+      pinBtn.hidden = !canPin;
+      pinBtn.textContent = pinned ? "Unpin from name" : "Pin next to name";
+      pinBtn.classList.toggle("btn-primary", pinned);
+      pinBtn.classList.toggle("btn-secondary", !pinned);
+      pinBtn.setAttribute("data-pin-tag", tagId);
+    }
+    document.querySelectorAll(".synk-tag-badge[aria-expanded='true']").forEach((el) => {
+      if (el !== btn) el.setAttribute("aria-expanded", "false");
+    });
+    btn.setAttribute("aria-expanded", "true");
+    pop.hidden = false;
+    const rect = btn.getBoundingClientRect();
+    const pad = 8;
+    let left = rect.left + window.scrollX;
+    let top = rect.bottom + window.scrollY + 6;
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+    // Keep on screen after paint
+    requestAnimationFrame(() => {
+      const pr = pop.getBoundingClientRect();
+      if (pr.right > window.innerWidth - pad) {
+        left = Math.max(pad, window.scrollX + window.innerWidth - pr.width - pad);
+        pop.style.left = `${left}px`;
+      }
+      if (pr.bottom > window.innerHeight - pad) {
+        top = rect.top + window.scrollY - pr.height - 6;
+        pop.style.top = `${Math.max(pad, top)}px`;
+      }
+    });
   }
 
   function renderTagCatalog() {
@@ -150,9 +257,12 @@
         .map((tag) => {
           return `
             <div class="community-staff-row">
-              <div>
+              <div class="synk-tag-mod-row">
                 ${tagChip(tag)}
-                <div class="muted" style="font-size:0.78rem;margin-top:4px;">${escapeHtml(tag.description || "")}</div>
+                <div>
+                  <strong>${escapeHtml(tag.name || "")}</strong>
+                  <div class="muted" style="font-size:0.78rem;margin-top:2px;">${escapeHtml(tag.description || "No description")}</div>
+                </div>
               </div>
               <button class="btn btn-secondary btn-compact" type="button" data-delete-tag="${escapeHtml(tag.id)}">Delete</button>
             </div>
@@ -176,22 +286,12 @@
       return;
     }
     myTagsCard.hidden = route.type !== "settings";
-    myTagsList.innerHTML = myTags
-      .map((tag) => {
-        const pinned = !!tag.pinned;
-        return `
-          <div class="community-tag-row">
-            <div>
-              ${tagChip(tag)}
-              <div class="muted" style="font-size:0.78rem;margin-top:4px;">${escapeHtml(tag.description || "")}</div>
-            </div>
-            <button class="btn ${pinned ? "btn-primary" : "btn-secondary"} btn-compact" type="button" data-pin-tag="${escapeHtml(tag.id)}">
-              ${pinned ? "Pinned" : "Pin"}
-            </button>
-          </div>
-        `;
-      })
-      .join("");
+    myTagsList.innerHTML = `
+      <div class="synk-tag-badge-row">
+        ${myTags.map((tag) => tagChip(tag, { canPin: true })).join("")}
+      </div>
+      <p class="muted" style="margin:8px 0 0;font-size:0.82rem;">Tap a badge for details. Only you can pin one next to your name.</p>
+    `;
   }
 
   // Public flair is tags only — no automatic Owner badge on posts/profiles.
@@ -813,7 +913,7 @@
             <span class="muted">Posted by</span>
             <a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(username)}</a>
             ${tagChip(author.pinnedTag, { compact: true })}
-            <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
+            <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
           </div>
           <h1 class="reddit-post-title reddit-post-title-lg">${escapeHtml(title)}</h1>
           ${bodyText ? `<div class="reddit-post-body reddit-post-body-lg">${escapeHtml(bodyText)}</div>` : ""}
@@ -1052,31 +1152,15 @@
               ${Number(profile.postCount || 0)} posts
               ${profile.joinedAt ? ` · joined ${escapeHtml(formatWhen(profile.joinedAt))}` : ""}
             </p>
-            <div class="community-tag-list" style="margin-top:10px;">
+            <div class="community-tag-list synk-tag-badge-row" style="margin-top:10px;">
               ${
                 (profile.tags || []).length
                   ? (profile.tags || [])
-                      .map((tag) => {
-                        const canPin =
-                          me &&
-                          (me.publicUsername === profile.username ||
-                            activePersona === profile.username ||
-                            ((me.alts || []).some((alt) => alt.username === profile.username) &&
-                              me.isOwner));
-                        return `
-                          <div class="community-tag-row">
-                            <div>
-                              ${tagChip(tag)}
-                              <div class="muted" style="font-size:0.78rem;margin-top:4px;">${escapeHtml(tag.description || "")}</div>
-                            </div>
-                            ${
-                              canPin
-                                ? `<button class="btn ${tag.pinned ? "btn-primary" : "btn-secondary"} btn-compact" type="button" data-pin-tag="${escapeHtml(tag.id)}">${tag.pinned ? "Pinned" : "Pin"}</button>`
-                                : ""
-                            }
-                          </div>
-                        `;
-                      })
+                      .map((tag) =>
+                        tagChip(tag, {
+                          canPin: canManageTagsFor(profile.username),
+                        })
+                      )
                       .join("")
                   : '<p class="muted" style="margin:0;font-size:0.85rem;">No tags yet.</p>'
               }
@@ -1711,14 +1795,12 @@
     });
   }
 
-  async function handlePinClick(e) {
-    const btn = e.target.closest("[data-pin-tag]");
-    if (!btn) return;
-    const tagId = btn.getAttribute("data-pin-tag");
+  async function pinTagById(tagId) {
+    if (!tagId) return;
     const status = document.getElementById("my-tags-status");
     if (status) status.textContent = "Updating…";
     try {
-      const currentlyPinned = myTags.find((tag) => tag.id === tagId && tag.pinned);
+      const currentlyPinned = myTags.find((tag) => String(tag.id) === String(tagId) && tag.pinned);
       const res = await fetch("/api/synk-community", {
         method: "POST",
         headers: hubHeaders(),
@@ -1757,6 +1839,7 @@
           alts = me.alts;
         }
       }
+      closeTagPopover();
       renderMyTags();
       await loadCommunity();
       if (status) status.textContent = data.pinnedTag ? `Pinned ${data.pinnedTag.name}` : "Pin cleared";
@@ -1764,6 +1847,42 @@
       if (status) status.textContent = err.message || "Could not update pin";
     }
   }
+
+  async function handlePinClick(e) {
+    const btn = e.target.closest("[data-pin-tag]");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    await pinTagById(btn.getAttribute("data-pin-tag"));
+  }
+
+  document.addEventListener("click", (e) => {
+    const pinFromPop = e.target.closest("#tag-pop-pin");
+    if (pinFromPop) {
+      e.preventDefault();
+      e.stopPropagation();
+      pinTagById(pinFromPop.getAttribute("data-pin-tag")).catch(() => {});
+      return;
+    }
+    const badge = e.target.closest("[data-tag-badge]");
+    if (badge) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (badge.getAttribute("aria-expanded") === "true") {
+        closeTagPopover();
+      } else {
+        openTagPopover(badge);
+      }
+      return;
+    }
+    if (!e.target.closest("#tag-badge-popover")) {
+      closeTagPopover();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeTagPopover();
+  });
 
   if (myTagsList) myTagsList.addEventListener("click", handlePinClick);
   if (profileMeta) profileMeta.addEventListener("click", handlePinClick);
