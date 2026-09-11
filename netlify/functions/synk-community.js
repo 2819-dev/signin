@@ -32,6 +32,9 @@ const {
   getPinnedTagForProfile,
   getPinnedTagForUsername,
   getPinnedTagsByUsernames,
+  getDisplayNamesByUsernames,
+  setDisplayNameForUsername,
+  normalizeDisplayName,
   assignUsernameTag,
   unassignUsernameTag,
   setPinnedTagForUsername,
@@ -194,7 +197,7 @@ function mapPost(row) {
       : null,
     author: {
       username,
-      name: isPrimary ? row.name || "" : "",
+      displayName: "",
       role: isPrimary ? row.author_role || null : null,
       isAlt: Boolean(row.is_alt) || (!isPrimary && Boolean(username)),
     },
@@ -216,7 +219,7 @@ function mapComment(row) {
     createdAt: row.created_at,
     author: {
       username,
-      name: isPrimary ? row.name || "" : "",
+      displayName: "",
       role: isPrimary ? row.author_role || null : null,
       isAlt: Boolean(row.is_alt) || (!isPrimary && Boolean(username)),
       pinnedTag: null,
@@ -243,6 +246,7 @@ function mePayload(auth, role, alts = [], tags = [], pinnedTag = null) {
     name: auth.profile.name,
     synkCode: auth.profile.synkCode,
     publicUsername: auth.profile.publicUsername || "",
+    displayName: auth.profile.displayName || "",
     role: role || null,
     isStaff: isCommunityStaffRole(role),
     isOwner: role === "owner",
@@ -417,10 +421,14 @@ async function attachPinnedTagsToAuthors(sql, items) {
   const usernames = items
     .map((item) => item.author && item.author.username)
     .filter(Boolean);
-  const pinnedByUser = await getPinnedTagsByUsernames(sql, usernames);
+  const [pinnedByUser, displayByUser] = await Promise.all([
+    getPinnedTagsByUsernames(sql, usernames),
+    getDisplayNamesByUsernames(sql, usernames),
+  ]);
   for (const item of items) {
     if (!item.author) continue;
     item.author.pinnedTag = pinnedByUser[item.author.username] || null;
+    item.author.displayName = displayByUser[item.author.username] || item.author.displayName || "";
   }
   return items;
 }
@@ -1044,6 +1052,36 @@ exports.handler = async (event) => {
           nextRole,
           nextAlts
         ),
+      });
+    }
+
+    if (action === "set-display-name") {
+      const primary = normalizePublicUsername(auth.profile.publicUsername);
+      if (!primary) return json(400, { error: "Set a username first" });
+      const requested = normalizePublicUsername(body.username || body.asUsername || primary) || primary;
+      const result = await setDisplayNameForUsername(
+        sql,
+        requested,
+        body.displayName != null ? body.displayName : body.name,
+        auth.profile.id
+      );
+      if (!result.ok) return json(400, { error: result.error || "Could not save display name" });
+      if (requested === primary) {
+        auth.profile.displayName = result.displayName;
+      }
+      const nextAlts =
+        role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
+      if (nextAlts.length) {
+        for (const alt of nextAlts) {
+          alt.tags = await listUsernameTags(sql, alt.username);
+          alt.pinnedTag = alt.tags.find((tag) => tag.pinned) || null;
+        }
+      }
+      return json(200, {
+        ok: true,
+        username: result.username,
+        displayName: result.displayName,
+        me: mePayload(auth, role, nextAlts, myTags, myPinnedTag),
       });
     }
 

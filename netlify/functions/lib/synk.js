@@ -291,6 +291,7 @@ async function ensureSynkCommunityExtras(sql) {
   `;
 
   await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS pinned_tag_id UUID`;
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS display_name TEXT`;
   try {
     await sql`
       ALTER TABLE synk_community_profiles
@@ -302,6 +303,7 @@ async function ensureSynkCommunityExtras(sql) {
   }
 
   await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS pinned_tag_id UUID`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS display_name TEXT`;
   try {
     await sql`
       ALTER TABLE synk_community_alt_accounts
@@ -491,7 +493,7 @@ async function isCommunityUsernameTaken(sql, username, { exceptProfileId = null,
 async function listOwnerAltAccounts(sql, ownerProfileId) {
   if (!ownerProfileId) return [];
   const rows = await sql`
-    SELECT id, owner_synk_profile_id, public_username, label, created_at, updated_at
+    SELECT id, owner_synk_profile_id, public_username, label, display_name, created_at, updated_at
     FROM synk_community_alt_accounts
     WHERE owner_synk_profile_id = ${ownerProfileId}
     ORDER BY created_at ASC
@@ -500,6 +502,7 @@ async function listOwnerAltAccounts(sql, ownerProfileId) {
     id: row.id,
     username: row.public_username,
     label: row.label || "",
+    displayName: String(row.display_name || "").trim(),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     isAlt: true,
@@ -558,11 +561,10 @@ async function findCommunityPublicProfile(sql, username) {
     SELECT
       c.synk_profile_id,
       c.public_username,
+      c.display_name,
       c.created_at,
-      p.name,
       s.role
     FROM synk_community_profiles c
-    JOIN synk_profiles p ON p.id = c.synk_profile_id
     LEFT JOIN synk_community_staff s ON s.synk_profile_id = c.synk_profile_id
     WHERE c.public_username = ${name}
     LIMIT 1
@@ -578,7 +580,7 @@ async function findCommunityPublicProfile(sql, username) {
     const pinnedTag = tags.find((tag) => tag.pinned) || null;
     return {
       username: primary[0].public_username,
-      name: primary[0].name || "",
+      displayName: String(primary[0].display_name || "").trim(),
       role: normalizeCommunityRole(primary[0].role),
       isAlt: false,
       joinedAt: primary[0].created_at,
@@ -589,7 +591,7 @@ async function findCommunityPublicProfile(sql, username) {
   }
 
   const alt = await sql`
-    SELECT id, public_username, label, created_at
+    SELECT id, public_username, label, display_name, created_at
     FROM synk_community_alt_accounts
     WHERE public_username = ${name}
     LIMIT 1
@@ -604,7 +606,7 @@ async function findCommunityPublicProfile(sql, username) {
   const pinnedTag = tags.find((tag) => tag.pinned) || null;
   return {
     username: alt[0].public_username,
-    name: alt[0].label || "",
+    displayName: String(alt[0].display_name || "").trim() || String(alt[0].label || "").trim(),
     role: null,
     isAlt: true,
     joinedAt: alt[0].created_at,
@@ -2045,7 +2047,7 @@ async function requireHubSession(sql, event, body = {}) {
   const rows = await sql`
     SELECT s.id, s.synk_profile_id, s.expires_at, s.revoked_at,
            p.synk_code, p.name, p.photo_url, p.enabled,
-           c.public_username
+           c.public_username, c.display_name
     FROM synk_hub_sessions s
     JOIN synk_profiles p ON p.id = s.synk_profile_id
     LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.id
@@ -2072,8 +2074,81 @@ async function requireHubSession(sql, event, body = {}) {
       name: row.name,
       photoUrl: row.photo_url || "",
       publicUsername: row.public_username || "",
+      displayName: String(row.display_name || "").trim(),
     },
   };
+}
+
+function normalizeDisplayName(value) {
+  const cleaned = String(value || "")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 40);
+  if (!cleaned) return "";
+  if (!/^[\p{L}\p{N} .'_\-]+$/u.test(cleaned)) {
+    const err = new Error("Display name can use letters, numbers, spaces, and . ' _ -");
+    err.code = "INVALID_DISPLAY_NAME";
+    throw err;
+  }
+  return cleaned;
+}
+
+async function getDisplayNamesByUsernames(sql, usernames) {
+  const names = Array.from(
+    new Set((usernames || []).map((u) => normalizePublicUsername(u)).filter(Boolean))
+  );
+  if (!names.length) return {};
+  const rows = await sql`
+    SELECT public_username, display_name
+    FROM (
+      SELECT public_username, display_name
+      FROM synk_community_profiles
+      WHERE public_username = ANY(${names})
+      UNION ALL
+      SELECT public_username, display_name
+      FROM synk_community_alt_accounts
+      WHERE public_username = ANY(${names})
+    ) x
+  `;
+  const out = {};
+  for (const row of rows) {
+    const dn = String(row.display_name || "").trim();
+    if (dn) out[row.public_username] = dn;
+  }
+  return out;
+}
+
+async function setDisplayNameForUsername(sql, username, displayName, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  let next = "";
+  try {
+    next = normalizeDisplayName(displayName);
+  } catch (err) {
+    return { ok: false, error: err.message || "Invalid display name" };
+  }
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET display_name = ${next || null}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, display_name
+  `;
+  if (primary[0]) {
+    return { ok: true, username: primary[0].public_username, displayName: String(primary[0].display_name || "").trim() };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET display_name = ${next || null}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, display_name
+  `;
+  if (alt[0]) {
+    return { ok: true, username: alt[0].public_username, displayName: String(alt[0].display_name || "").trim() };
+  }
+  return { ok: false, error: "Profile not found" };
 }
 
 function normalizePublicUsername(value) {
@@ -2137,6 +2212,9 @@ module.exports = {
   requireHubSession,
   extractHubSessionToken,
   normalizePublicUsername,
+  normalizeDisplayName,
+  getDisplayNamesByUsernames,
+  setDisplayNameForUsername,
   normalizeGroupSlug,
   normalizeGroupName,
   normalizeGroupDescription,

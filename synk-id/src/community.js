@@ -71,6 +71,7 @@
 
   let hubToken = "";
   let publicUsername = "";
+  let displayName = "";
   let activePersona = "";
   let me = null;
   let groups = [];
@@ -190,6 +191,19 @@
     if (!activePersona || activePersona === publicUsername) return me.tags || [];
     const alt = (alts || []).find((item) => item.username === activePersona);
     return (alt && alt.tags) || [];
+  }
+
+
+  function authorLabel(author) {
+    const username = String((author && author.username) || "member").trim() || "member";
+    const label = String((author && author.displayName) || "").trim() || username;
+    return { username, label };
+  }
+
+  function renderAuthorLink(author, { compactTag = true } = {}) {
+    const { username, label } = authorLabel(author);
+    const tag = author && author.pinnedTag ? tagChip(author.pinnedTag, { compact: compactTag }) : "";
+    return `<span class="author-with-tag"><a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(label)}</a>${tag}</span>`;
   }
 
   function tagChip(tag, { compact = false, canPin = false } = {}) {
@@ -921,8 +935,7 @@
                     : ""
                 }
                 <span class="muted">by</span>
-                <a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(username)}</a>
-                ${tagChip(author.pinnedTag, { compact: true })}
+                ${renderAuthorLink(author)}
                 <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
               </div>
               <a class="reddit-post-title-link" href="/community/post/${pid}" data-open-post="${pid}">
@@ -970,8 +983,7 @@
           <div class="reddit-post-meta">
             ${group.slug ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>` : ""}
             <span class="muted">by</span>
-            <a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(username)}</a>
-            ${tagChip(author.pinnedTag, { compact: true })}
+            ${renderAuthorLink(author)}
             <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
           </div>
           <h1 class="reddit-post-title reddit-post-title-lg">${escapeHtml(title)}</h1>
@@ -1013,8 +1025,7 @@
             </div>
             <div class="reddit-comment-main">
               <div class="reddit-post-meta">
-                <a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(username)}</a>
-                ${tagChip(author.pinnedTag, { compact: true })}
+                ${renderAuthorLink(author)}
                 <span class="muted">• ${escapeHtml(formatRelative(comment.createdAt))}</span>
               </div>
               <div class="reddit-comment-body">${escapeHtml(comment.body || "")}</div>
@@ -1092,11 +1103,27 @@
       const gateInput = document.getElementById("public-username");
       if (gateInput) gateInput.value = publicUsername;
       if (settingsUsername) settingsUsername.value = publicUsername;
+      const settingsDisplay = document.getElementById("settings-display-name");
+      if (settingsDisplay) {
+        let shown = displayName || "";
+        if (activePersona && activePersona !== publicUsername) {
+          const alt = (alts || []).find((a) => a.username === activePersona);
+          shown = (alt && alt.displayName) || "";
+        }
+        settingsDisplay.value = shown;
+      }
       if (myProfileLink) {
         myProfileLink.hidden = false;
         myProfileLink.href = `/user/${encodeURIComponent(publicUsername)}`;
       }
-      if (myProfileLabel) myProfileLabel.textContent = publicUsername;
+      {
+        let menuLabel = displayName || publicUsername;
+        if (activePersona && activePersona !== publicUsername) {
+          const alt = (alts || []).find((a) => a.username === activePersona);
+          menuLabel = (alt && alt.displayName) || activePersona;
+        }
+        if (myProfileLabel) myProfileLabel.textContent = menuLabel;
+      }
     } else if (myProfileLink) {
       myProfileLink.hidden = true;
     }
@@ -1189,12 +1216,13 @@
     if (route.type === "user") {
       const profile = data.profile || { username: route.username };
       const uname = profile.username || route.username || "";
+      const dname = String(profile.displayName || "").trim() || uname;
       setBannerMode("user", true);
-      if (viewIcon) viewIcon.textContent = (uname || "?").slice(0, 1).toUpperCase();
-      setText("view-title", uname);
+      if (viewIcon) viewIcon.textContent = (dname || "?").slice(0, 1).toUpperCase();
+      setText("view-title", dname);
       setText(
         "view-sub",
-        profile.joinedAt ? `Joined ${formatWhen(profile.joinedAt)}` : uname
+        `u/${uname}${profile.joinedAt ? ` · Joined ${formatWhen(profile.joinedAt)}` : ""}`
       );
       if (viewBlurb) {
         viewBlurb.hidden = true;
@@ -1205,10 +1233,13 @@
         profileMeta.hidden = false;
         profileMeta.innerHTML = `
         <div class="community-profile-card">
-          <div class="community-avatar" aria-hidden="true">${escapeHtml((uname || "?").slice(0, 1).toUpperCase())}</div>
+          <div class="community-avatar" aria-hidden="true">${escapeHtml((dname || "?").slice(0, 1).toUpperCase())}</div>
           <div>
-            <strong>${escapeHtml(uname)}</strong>
-            ${tagChip(profile.pinnedTag, { compact: true })}
+            <div class="community-profile-name-row author-with-tag">
+              <strong>${escapeHtml(dname)}</strong>
+              ${tagChip(profile.pinnedTag, { compact: true })}
+            </div>
+            <p class="muted" style="margin:2px 0 0;font-size:0.85rem;">u/${escapeHtml(uname)}</p>
             <p class="muted" style="margin:4px 0 0;font-size:0.85rem;">
               ${Number(profile.postCount || 0)} posts
               ${profile.joinedAt ? ` · joined ${escapeHtml(formatWhen(profile.joinedAt))}` : ""}
@@ -1304,6 +1335,7 @@
     if (!res.ok) throw new Error(data.error || "Could not load community");
     me = data.me || null;
     publicUsername = (me && me.publicUsername) || "";
+    displayName = (me && me.displayName) || "";
     alts = (me && me.alts) || [];
     myTags = (me && me.tags) || [];
     tags = data.tags || [];
@@ -1525,6 +1557,55 @@
       status.textContent = err.message || "Could not save";
     }
   });
+
+  const displayForm = document.getElementById("settings-display-form");
+  if (displayForm) {
+    displayForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("settings-display-status");
+      const input = document.getElementById("settings-display-name");
+      if (status) status.textContent = "Saving…";
+      try {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({
+            action: "set-display-name",
+            displayName: input ? input.value : "",
+            username: activePersona || publicUsername,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not save display name");
+        if (data.me) {
+          me = data.me;
+          publicUsername = (me && me.publicUsername) || publicUsername;
+          displayName = (me && me.displayName) || "";
+          alts = (me && me.alts) || [];
+          myTags = (me && me.tags) || myTags;
+        } else {
+          const savedFor = String(data.username || activePersona || publicUsername)
+            .trim()
+            .toLowerCase();
+          const savedName = data.displayName || "";
+          if (savedFor === publicUsername) {
+            displayName = savedName;
+            if (me) me.displayName = savedName;
+          } else {
+            alts = (alts || []).map((alt) =>
+              alt.username === savedFor ? { ...alt, displayName: savedName } : alt
+            );
+            if (me) me.alts = alts;
+          }
+        }
+        if (status) status.textContent = "Saved";
+        applyUsernameState();
+        await loadCommunity();
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not save";
+      }
+    });
+  }
 
   document.getElementById("username-form").addEventListener("submit", async (e) => {
     e.preventDefault();

@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=community22" />
+    <link rel="stylesheet" href="/join.css?v=community24" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -297,32 +297,70 @@
             </div>
 
             <div id="settings-view" hidden>
-              <section class="card">
+              <section class="card reddit-settings-card">
                 <nav class="community-crumbs" aria-label="Breadcrumb">
                   <a href="/community">community</a>
                   <span>/</span>
                   <span>settings</span>
                 </nav>
-                <p class="section-label">Profile settings</p>
-                <h2>Username &amp; tags</h2>
-                <p class="muted">Change how you appear. Your legal name stays private.</p>
-                <form id="settings-username-form" class="form" style="margin-top: 16px" autocomplete="off">
-                  <div class="field">
-                    <label for="settings-username">Public username</label>
-                    <div class="community-prefixed-input is-plain">
-                      <input id="settings-username" type="text" maxlength="24" minlength="3" required spellcheck="false" autocapitalize="none" autocomplete="username" />
+                <h1 class="reddit-settings-title">Settings</h1>
+                <p class="muted reddit-settings-lead">Customize how you appear in Community. Your legal name stays private.</p>
+
+                <div class="reddit-settings-section">
+                  <h2 class="reddit-settings-heading">Account</h2>
+
+                  <div class="reddit-settings-row">
+                    <div class="reddit-settings-copy">
+                      <strong>Display name</strong>
+                      <p class="muted">Shown next to your posts. Capitals and spaces are fine.</p>
                     </div>
+                    <form id="settings-display-form" class="reddit-settings-form" autocomplete="off">
+                      <input
+                        id="settings-display-name"
+                        type="text"
+                        maxlength="40"
+                        spellcheck="false"
+                        autocomplete="nickname"
+                        placeholder="Your display name"
+                      />
+                      <button class="btn btn-primary btn-compact" type="submit" id="settings-display-btn">Save</button>
+                    </form>
+                    <p id="settings-display-status" class="muted reddit-settings-status"></p>
                   </div>
-                  <p id="settings-username-status" class="muted" style="font-size: 0.85rem"></p>
-                  <button class="btn btn-primary" type="submit" id="settings-username-btn">Save username</button>
-                </form>
+
+                  <div class="reddit-settings-row">
+                    <div class="reddit-settings-copy">
+                      <strong>Username</strong>
+                      <p class="muted">Your unique handle (lowercase). Used in your profile URL.</p>
+                    </div>
+                    <form id="settings-username-form" class="reddit-settings-form" autocomplete="off">
+                      <div class="reddit-settings-username">
+                        <span class="reddit-settings-prefix" aria-hidden="true">u/</span>
+                        <input
+                          id="settings-username"
+                          type="text"
+                          maxlength="24"
+                          minlength="3"
+                          required
+                          spellcheck="false"
+                          autocapitalize="none"
+                          autocomplete="username"
+                        />
+                      </div>
+                      <button class="btn btn-secondary btn-compact" type="submit" id="settings-username-btn">Save</button>
+                    </form>
+                    <p id="settings-username-status" class="muted reddit-settings-status"></p>
+                  </div>
+                </div>
               </section>
-              <section class="card" id="my-tags-card" hidden>
-                <p class="section-label">Your tags</p>
-                <h2>Your badges</h2>
-                <p class="muted">Tap a badge for its description. Only you can pin one next to your name.</p>
-                <div id="my-tags-list" class="community-tag-list"></div>
-                <p id="my-tags-status" class="muted" style="font-size: 0.85rem"></p>
+
+              <section class="card reddit-settings-card" id="my-tags-card" hidden>
+                <div class="reddit-settings-section">
+                  <h2 class="reddit-settings-heading">Tags</h2>
+                  <p class="muted" style="margin:0 0 12px;">Tap a badge for its description. Only you can pin one next to your name.</p>
+                  <div id="my-tags-list" class="community-tag-list"></div>
+                  <p id="my-tags-status" class="muted" style="font-size: 0.85rem"></p>
+                </div>
               </section>
             </div>
 
@@ -473,6 +511,6 @@
       </div>
     </main>
 
-    <script src="/community.js?v=reddit22"></script>
+    <script src="/community.js?v=reddit24"></script>
   </body>
 </html>
