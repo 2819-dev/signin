@@ -776,6 +776,7 @@
 
   async function navigate(next, { replace = false } = {}) {
     try { setNavOpen(false); } catch (_) {}
+    try { setNotifOpen(false); } catch (_) {}
     route = next;
     const url = routeUrl(next);
     if (replace) history.replaceState(next, "", url);
@@ -1038,9 +1039,10 @@
         const comments = Number(post.commentCount) || 0;
         const pid = escapeHtml(String(post.id || ""));
         const media = renderPostMedia(post);
+        const commentLabel = comments === 1 ? "1 comment" : `${comments} comments`;
         return `
           <article class="reddit-post" data-post-id="${pid}">
-            <div class="reddit-vote">
+            <div class="reddit-vote" aria-label="Vote">
               <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
               <span class="reddit-vote-count">${score}</span>
               <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
@@ -1049,20 +1051,21 @@
               <div class="reddit-post-meta">
                 ${
                   showGroup
-                    ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>`
+                    ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="reddit-meta-dot">•</span>`
                     : ""
                 }
-                <span class="muted">by</span>
+                <span class="reddit-meta-by">Posted by</span>
                 ${renderAuthorLink(author, { withAvatar: true })}
-                <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
+                <span class="reddit-meta-dot">•</span>
+                <time class="reddit-meta-time">${escapeHtml(formatRelative(post.createdAt))}</time>
               </div>
               <a class="reddit-post-title-link" href="/community/post/${pid}" data-open-post="${pid}">
                 <h3 class="reddit-post-title">${escapeHtml(title)}</h3>
               </a>
-              ${bodyText ? `<div class="reddit-post-body">${escapeHtml(truncateText(bodyText, 160))}</div>` : ""}
+              ${bodyText ? `<p class="reddit-post-body">${escapeHtml(truncateText(bodyText, 180))}</p>` : ""}
               ${media}
               <div class="reddit-post-actions">
-                <a class="reddit-action" href="/community/post/${pid}" data-open-post="${pid}">${ico("comment", 16)} <span>${comments}</span></a>
+                <a class="reddit-action" href="/community/post/${pid}" data-open-post="${pid}">${ico("comment", 16)} <span>${escapeHtml(commentLabel)}</span></a>
                 <button class="reddit-action" type="button" data-share-post="${pid}">${ico("share", 16)} <span>Share</span></button>
                 <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${ico("bookmark", 16)} <span>${saved ? "Saved" : "Save"}</span></button>
               </div>
@@ -1217,6 +1220,9 @@
     if (popularLink) popularLink.classList.toggle("is-active", route.type === "popular");
     const inboxBtn = document.getElementById("inbox-btn");
     if (inboxBtn) inboxBtn.classList.toggle("is-active", onInbox);
+    if (onInbox) {
+      try { setNotifOpen(false); } catch (_) {}
+    }
     if (publicUsername) {
       const gateInput = document.getElementById("public-username");
       if (gateInput) gateInput.value = publicUsername;
@@ -1513,7 +1519,7 @@
 
     const res = await fetch(url, { headers: hubHeaders() });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Could not load community");
+    if (!res.ok) throw new Error(data.error || "Couldn't load Community. Try again.");
     me = data.me || null;
     publicUsername = (me && me.publicUsername) || "";
     displayName = (me && me.displayName) || "";
@@ -1564,6 +1570,8 @@
       renderGroups();
       applyViewState(data);
       renderInbox(data.notifications || []);
+      renderNotifPanel(data.notifications || []);
+      notifLoaded = true;
       return;
     }
 
@@ -1725,7 +1733,7 @@
       body: JSON.stringify({ action: "set-username", username }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Could not save username");
+    if (!res.ok) throw new Error(data.error || "Couldn't save. Try again. username");
     publicUsername = data.publicUsername;
     storePersona(publicUsername);
     statusEl.textContent = "Saved";
@@ -1743,7 +1751,7 @@
     try {
       await saveUsername(document.getElementById("settings-username").value, status);
     } catch (err) {
-      status.textContent = err.message || "Could not save";
+      status.textContent = err.message || "Couldn't save. Try again.";
     }
   });
 
@@ -1851,7 +1859,7 @@
           }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "Could not save display name");
+        if (!res.ok) throw new Error(data.error || "Couldn't save. Try again. display name");
         if (data.me) {
           me = data.me;
           publicUsername = (me && me.publicUsername) || publicUsername;
@@ -1877,7 +1885,7 @@
         applyUsernameState();
         await loadCommunity();
       } catch (err) {
-        if (status) status.textContent = err.message || "Could not save";
+        if (status) status.textContent = err.message || "Couldn't save. Try again.";
       }
     });
   }
@@ -1888,7 +1896,7 @@
     try {
       await saveUsername(document.getElementById("public-username").value, status);
     } catch (err) {
-      status.textContent = err.message || "Could not save";
+      status.textContent = err.message || "Couldn't save. Try again.";
     }
   });
 
@@ -2392,7 +2400,7 @@
         ),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Could not update pin");
+      if (!res.ok) throw new Error(data.error || "Something went wrong. Try again. pin");
       if (data.me) me = data.me;
       myTags = (data.tags || (me && me.tags) || []).map((tag) => ({
         ...tag,
@@ -2417,7 +2425,7 @@
       await loadCommunity();
       if (status) status.textContent = data.pinnedTag ? `Pinned ${data.pinnedTag.name}` : "Pin cleared";
     } catch (err) {
-      if (status) status.textContent = err.message || "Could not update pin";
+      if (status) status.textContent = err.message || "Something went wrong. Try again. pin";
     }
   }
 
@@ -2530,7 +2538,7 @@
         if (me) me.bio = bio;
         if (status) status.textContent = "Saved";
       } catch (err) {
-        if (status) status.textContent = err.message || "Could not save bio";
+        if (status) status.textContent = err.message || "Couldn't save. Try again. bio";
       }
     });
   }
@@ -2552,7 +2560,7 @@
         if (me) me.dmPolicy = dmPolicy;
         if (status) status.textContent = "Saved";
       } catch (err) {
-        if (status) status.textContent = err.message || "Could not save";
+        if (status) status.textContent = err.message || "Couldn't save. Try again.";
       }
     });
   }
@@ -2689,7 +2697,7 @@
         await openDmThread(activeDmUser);
         await loadDmThreads();
       } catch (err) {
-        showToast(err.message || "Could not send");
+        showToast(err.message || "Message not sent. Try again.");
       } finally {
         if (sendBtn) sendBtn.disabled = false;
         if (input) input.focus();
@@ -2711,27 +2719,26 @@
       }
       if (action === "add-friend") {
         await communityAction({ action: "friend-request", username });
-        showToast("Friend request sent");
+        showToast("Request sent");
       } else if (action === "accept-friend") {
         await communityAction({ action: "friend-accept", username });
-        showToast("Friend added");
+        showToast("You're friends now");
       } else if (action === "decline-friend" || action === "cancel-friend" || action === "unfriend") {
         if (action === "decline-friend") {
           await communityAction({ action: "friend-decline", username });
         } else {
           await communityAction({ action: "friend-remove", username });
         }
-        showToast(action === "unfriend" ? "Friend removed" : "Request cleared");
+        showToast(action === "unfriend" ? "Removed" : "Request cleared");
       }
       await loadCommunity();
     } catch (err) {
-      showToast(err.message || "Could not update");
+      showToast(err.message || "Something went wrong. Try again.");
     }
   });
 
 
-  bindNav(document.getElementById("inbox-btn"), { type: "inbox", slug: "", username: "" });
-
+  
   const userMenuBtn = document.getElementById("user-menu-btn");
   const userMenuDropdown = document.getElementById("user-menu-dropdown");
   if (userMenuBtn && userMenuDropdown) {
@@ -2791,6 +2798,165 @@
       navToggle.setAttribute("aria-label", next ? "Close menu" : "Open menu");
     }
   }
+
+  // —— Notifications popover (bell) ——
+  let notifCache = [];
+  let notifLoaded = false;
+
+  function friendlyNotifText(note) {
+    const actor = note.actorUsername || "Someone";
+    const kind = String(note.kind || "");
+    if (kind === "friend_request") return `${actor} sent you a friend request`;
+    if (kind === "friend_accept") return `${actor} accepted your friend request`;
+    if (kind === "comment" || kind === "comment_reply_on_post") return note.body || `${actor} commented on your post`;
+    if (kind === "reply") return note.body || `${actor} replied to you`;
+    return note.body || `${actor} sent a notification`;
+  }
+
+  function renderNotifPanel(notes) {
+    const list = document.getElementById("notif-list");
+    const empty = document.getElementById("notif-empty");
+    if (!list) return;
+    notifCache = Array.isArray(notes) ? notes.slice() : [];
+    if (!notifCache.length) {
+      list.innerHTML = `<p class="muted reddit-notif-empty" id="notif-empty">You're all caught up</p>`;
+      return;
+    }
+    list.innerHTML = notifCache
+      .map((note) => {
+        const nid = escapeHtml(String(note.id || ""));
+        const unread = !note.readAt;
+        const actor = escapeHtml(note.actorUsername || "Someone");
+        const text = escapeHtml(friendlyNotifText(note));
+        const when = escapeHtml(formatRelative(note.createdAt));
+        const isFriendReq = String(note.kind || "") === "friend_request";
+        const postId = note.postId ? escapeHtml(String(note.postId)) : "";
+        const actions = isFriendReq
+          ? `<div class="reddit-notif-actions">
+              <button class="btn btn-primary btn-compact" type="button" data-notif-friend="accept" data-username="${actor}">Accept</button>
+              <button class="btn btn-secondary btn-compact" type="button" data-notif-friend="decline" data-username="${actor}">Decline</button>
+            </div>`
+          : "";
+        const openAttr = postId && !isFriendReq ? `data-open-post="${postId}"` : "";
+        return `<div class="reddit-notif-row ${unread ? "is-unread" : ""}" data-notif-id="${nid}" ${openAttr}>
+          <div class="reddit-notif-copy">
+            <p>${text}</p>
+            <span class="muted">${when}</span>
+            ${actions}
+          </div>
+        </div>`;
+      })
+      .join("");
+  }
+
+  function setNotifOpen(open) {
+    const panel = document.getElementById("notif-panel");
+    const btn = document.getElementById("notif-btn");
+    if (!panel || !btn) return;
+    panel.hidden = !open;
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  async function refreshNotifications({ open = false } = {}) {
+    try {
+      const res = await fetch("/api/synk-community?inbox=1", { headers: hubHeaders() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Couldn't load notifications");
+      if (typeof data.unreadCount === "number") {
+        unreadCount = data.unreadCount;
+        updateInboxBadge();
+      }
+      notifLoaded = true;
+      renderNotifPanel(data.notifications || []);
+      if (Array.isArray(data.notifications)) lastNotifications = data.notifications.slice();
+      if (open) setNotifOpen(true);
+    } catch (err) {
+      const list = document.getElementById("notif-list");
+      if (list) list.innerHTML = `<p class="muted reddit-notif-empty">Couldn't load notifications</p>`;
+      if (open) setNotifOpen(true);
+    }
+  }
+
+  const notifBtn = document.getElementById("notif-btn");
+  if (notifBtn) {
+    notifBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const panel = document.getElementById("notif-panel");
+      const willOpen = !!(panel && panel.hidden);
+      if (!willOpen) {
+        setNotifOpen(false);
+        return;
+      }
+      // Open instantly; fill as soon as data arrives.
+      if (notifLoaded) {
+        renderNotifPanel(notifCache.length ? notifCache : lastNotifications);
+        setNotifOpen(true);
+      } else {
+        const list = document.getElementById("notif-list");
+        if (list) list.innerHTML = `<p class="muted reddit-notif-empty">Loading…</p>`;
+        setNotifOpen(true);
+      }
+      refreshNotifications().catch(() => {});
+    });
+  }
+  const notifMark = document.getElementById("notif-mark-read");
+  if (notifMark) {
+    notifMark.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        const data = await communityAction({ action: "mark-read" });
+        if (Array.isArray(data.notifications)) {
+          renderNotifPanel(data.notifications);
+          lastNotifications = data.notifications.slice();
+        }
+        if (typeof data.unreadCount === "number") {
+          unreadCount = data.unreadCount;
+          updateInboxBadge();
+        } else {
+          unreadCount = 0;
+          updateInboxBadge();
+        }
+      } catch (err) {
+        showToast(err.message || "Couldn't update");
+      }
+    });
+  }
+  document.addEventListener("click", (e) => {
+    const wrap = document.getElementById("notif-wrap");
+    if (wrap && !wrap.contains(e.target)) setNotifOpen(false);
+  });
+  document.addEventListener("click", async (e) => {
+    const friendBtn = e.target.closest("[data-notif-friend]");
+    if (!friendBtn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const username = friendBtn.getAttribute("data-username") || "";
+    const act = friendBtn.getAttribute("data-notif-friend");
+    if (!username || !act) return;
+    friendBtn.disabled = true;
+    try {
+      if (act === "accept") {
+        await communityAction({ action: "friend-accept", username });
+        showToast("You're friends now");
+      } else {
+        await communityAction({ action: "friend-decline", username });
+        showToast("Request declined");
+      }
+      await refreshNotifications();
+      if (route.type === "user") await loadCommunity();
+    } catch (err) {
+      showToast(err.message || "Something went wrong. Try again.");
+      friendBtn.disabled = false;
+    }
+  });
+  // Prefetch notifications after first paint so the bell feels instant.
+  setTimeout(() => {
+    if (me && publicUsername) refreshNotifications().catch(() => {});
+  }, 1200);
+
+
   // Start closed — sidebar only via hamburger.
   setNavOpen(false);
 
@@ -3106,7 +3272,7 @@
           communityApp.hidden = true;
           lockedCard.hidden = false;
           document.getElementById("locked-help").textContent =
-            (err2 && err2.message) || msg || "Could not load community. Try again.";
+            (err2 && err2.message) || msg || "Couldn't load Community. Try again.. Try again.";
         });
       }, 1200);
     });

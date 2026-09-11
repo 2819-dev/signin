@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=reddit-mobile1" />
+    <link rel="stylesheet" href="/join.css?v=reddit-mobile2" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -34,11 +34,23 @@
           <svg class="r-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           <span class="reddit-create-label">Create</span>
         </a>
-        <a class="reddit-icon-btn" href="/community/inbox" id="inbox-btn" title="Inbox">
-          <svg class="r-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 9a5.5 5.5 0 0 1 11 0c0 7 2.5 7 2.5 7H4s2.5 0 2.5-7"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
-          <span class="sr-only">Notifications</span>
-          <span class="reddit-inbox-badge" id="inbox-badge" hidden>0</span>
-        </a>
+        <div class="reddit-notif-wrap" id="notif-wrap">
+          <button class="reddit-icon-btn" type="button" id="notif-btn" title="Notifications" aria-haspopup="true" aria-expanded="false">
+            <svg class="r-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 9a5.5 5.5 0 0 1 11 0c0 7 2.5 7 2.5 7H4s2.5 0 2.5-7"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+            <span class="sr-only">Notifications</span>
+            <span class="reddit-inbox-badge" id="inbox-badge" hidden>0</span>
+          </button>
+          <div class="reddit-notif-panel" id="notif-panel" hidden role="dialog" aria-label="Notifications">
+            <div class="reddit-notif-head">
+              <strong>Notifications</strong>
+              <button class="reddit-notif-mark" type="button" id="notif-mark-read">Mark all read</button>
+            </div>
+            <div class="reddit-notif-list" id="notif-list">
+              <p class="muted reddit-notif-empty" id="notif-empty">You're all caught up</p>
+            </div>
+            <a class="reddit-notif-footer" href="/community/inbox" id="notif-open-inbox">Open messages</a>
+          </div>
+        </div>
         <div class="reddit-user-menu" id="user-menu">
           <button class="reddit-user-chip" type="button" id="user-menu-btn" aria-haspopup="menu" aria-expanded="false">
             <span class="reddit-user-avatar" id="user-menu-avatar" aria-hidden="true">S</span>
@@ -79,36 +91,7 @@
     </header>
 
     <div class="reddit-backdrop" id="nav-backdrop" hidden></div>
-
-    <main class="shell shell-app shell-wide community-shell reddit-shell">
-      <section class="card" id="locked-card" hidden>
-        <h2>Log in to browse Community</h2>
-        <p class="muted" id="locked-help">Verify with your face or member code, then come back here.</p>
-        <div class="btn-row" style="margin-top: 14px">
-          <a class="btn btn-primary" href="/verify?autostart=1">Log in</a>
-        </div>
-      </section>
-
-      <div id="community-app" hidden>
-        <section class="card community-username-gate" id="username-card" hidden>
-          <p class="section-label">Almost there</p>
-          <h2 id="username-title">Pick a public username</h2>
-          <p class="muted" id="username-help">This is how you appear in Community. Separate from your legal name.</p>
-          <form id="username-form" class="form" autocomplete="off">
-            <div class="field">
-              <label for="public-username">Username</label>
-              <div class="community-prefixed-input is-plain">
-                <input id="public-username" type="text" maxlength="24" minlength="3" required placeholder="alex_secure" spellcheck="false" autocapitalize="none" autocomplete="username" />
-              </div>
-            </div>
-            <p id="username-status" class="muted" style="font-size: 0.85rem"></p>
-            <button class="btn btn-primary" type="submit" id="username-btn">Continue</button>
-          </form>
-        </section>
-
-        <div id="community-main" hidden>
-          <!-- Drawer nav is outside the content grid so it never sticky-scrolls or steals a column -->
-          <aside class="reddit-leftnav" id="left-nav" aria-label="Community navigation" hidden>
+    <aside class="reddit-leftnav" id="left-nav" aria-label="Community navigation" hidden>
             <div class="reddit-leftnav-scroll">
               <nav class="reddit-nav-block" aria-label="Feeds">
                 <p class="reddit-nav-heading">Feeds</p>
@@ -155,6 +138,37 @@
               </a>
             </div>
           </aside>
+
+
+    <main class="shell shell-app shell-wide community-shell reddit-shell">
+      <section class="card" id="locked-card" hidden>
+        <h2>Log in to browse Community</h2>
+        <p class="muted" id="locked-help">Verify with your face or member code, then come back here.</p>
+        <div class="btn-row" style="margin-top: 14px">
+          <a class="btn btn-primary" href="/verify?autostart=1">Log in</a>
+        </div>
+      </section>
+
+      <div id="community-app" hidden>
+        <section class="card community-username-gate" id="username-card" hidden>
+          <p class="section-label">Almost there</p>
+          <h2 id="username-title">Pick a public username</h2>
+          <p class="muted" id="username-help">This is how you appear in Community. Separate from your legal name.</p>
+          <form id="username-form" class="form" autocomplete="off">
+            <div class="field">
+              <label for="public-username">Username</label>
+              <div class="community-prefixed-input is-plain">
+                <input id="public-username" type="text" maxlength="24" minlength="3" required placeholder="alex_secure" spellcheck="false" autocapitalize="none" autocomplete="username" />
+              </div>
+            </div>
+            <p id="username-status" class="muted" style="font-size: 0.85rem"></p>
+            <button class="btn btn-primary" type="submit" id="username-btn">Continue</button>
+          </form>
+        </section>
+
+        <div id="community-main" hidden>
+          <!-- Drawer nav is outside the content grid so it never sticky-scrolls or steals a column -->
+          
 
           <div class="community-layout reddit-layout">
           <div class="community-main-col reddit-main">
@@ -300,11 +314,11 @@
                     <textarea id="post-body" rows="8" maxlength="1000" required placeholder="Share tips, questions, or notes…"></textarea>
                   </div>
                   <div class="field" id="submit-link-fields" hidden>
-                    <label for="post-link-url">Link URL</label>
+                    <label for="post-link-url">Website link</label>
                     <input id="post-link-url" type="url" maxlength="2000" placeholder="https://example.com" spellcheck="false" />
                   </div>
                   <div class="field" id="submit-image-fields" hidden>
-                    <label for="post-image-url">Image URL</label>
+                    <label for="post-image-url">Image link</label>
                     <input id="post-image-url" type="url" maxlength="2000" placeholder="https://… or upload below" spellcheck="false" />
                     <label for="post-image-file" style="margin-top: 10px">Or upload image</label>
                     <input id="post-image-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" />
@@ -358,7 +372,7 @@
                   <div class="reddit-settings-row">
                     <div class="reddit-settings-copy">
                       <strong>Username</strong>
-                      <p class="muted">Your unique handle (lowercase). Used in your profile URL.</p>
+                      <p class="muted">Pick a unique name. This is how people find you.</p>
                     </div>
                     <form id="settings-username-form" class="reddit-settings-form" autocomplete="off">
                       <div class="reddit-settings-username is-plain">
@@ -473,7 +487,7 @@
                       <input id="group-name" type="text" maxlength="80" required placeholder="Security tips" />
                     </div>
                     <div class="field">
-                      <label for="group-slug">URL slug</label>
+                      <label for="group-slug">Community link name</label>
                       <div class="community-prefixed-input is-plain">
                         <input id="group-slug" type="text" maxlength="40" placeholder="security-tips" spellcheck="false" autocapitalize="none" />
                       </div>
@@ -623,6 +637,6 @@
     </nav>
 
     <div id="toast" class="community-toast" role="status" aria-live="polite"></div>
-    <script src="/community.js?v=reddit-mobile1"></script>
+    <script src="/community.js?v=reddit-mobile2"></script>
   </body>
 </html>

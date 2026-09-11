@@ -311,7 +311,7 @@ async function markGroupsJoined(sql, groups, profileId) {
   }));
 }
 
-async function loadNotifications(sql, profileId, { limit = 50 } = {}) {
+async function loadNotifications(sql, profileId, { limit = 50, username = "" } = {}) {
   const capped = Math.min(Math.max(Number(limit) || 50, 1), 100);
   const rows = await sql`
     SELECT
@@ -328,7 +328,45 @@ async function loadNotifications(sql, profileId, { limit = 50 } = {}) {
     ORDER BY created_at DESC
     LIMIT ${capped}
   `;
-  return rows.map(mapNotification);
+  const notes = rows.map(mapNotification);
+
+  // Surface pending friend requests even if a row was missed.
+  const meName = normalizePublicUsername(username);
+  if (meName) {
+    try {
+      const pending = await sql`
+        SELECT id, requester_username, created_at
+        FROM synk_community_friendships
+        WHERE addressee_username = ${meName}
+          AND status = 'pending'
+        ORDER BY created_at DESC
+        LIMIT 20
+      `;
+      const seen = new Set(
+        notes
+          .filter((n) => n.kind === "friend_request" && n.actorUsername)
+          .map((n) => String(n.actorUsername).toLowerCase())
+      );
+      for (const row of pending) {
+        const actor = String(row.requester_username || "").toLowerCase();
+        if (!actor || seen.has(actor)) continue;
+        notes.unshift({
+          id: `friend-req-${row.id}`,
+          kind: "friend_request",
+          actorUsername: row.requester_username,
+          postId: null,
+          commentId: null,
+          body: `${row.requester_username} sent you a friend request`,
+          readAt: null,
+          createdAt: row.created_at,
+        });
+        seen.add(actor);
+      }
+    } catch (_) {}
+  }
+
+  notes.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return notes.slice(0, capped);
 }
 
 async function createNotification(
@@ -1003,7 +1041,9 @@ exports.handler = async (event) => {
       const groups = await markGroupsJoined(sql, groupsRaw, auth.profile.id);
 
       if (qs.inbox === "1" || qs.notifications === "1") {
-        const notifications = await loadNotifications(sql, auth.profile.id);
+        const notifications = await loadNotifications(sql, auth.profile.id, {
+          username: primaryUsername,
+        });
         return json(200, {
           ok: true,
           me: mePayload(auth, role, alts, myTags, myPinnedTag),
@@ -1342,6 +1382,22 @@ exports.handler = async (event) => {
       if (!target) return json(400, { error: "Username required" });
       const result = await requestFriendship(sql, primaryUsername, target);
       if (!result.ok) return json(400, { error: result.error || "Could not send request" });
+      // Notify the other person so it shows in their bell.
+      try {
+        let targetProfileId = await findCommunityProfileIdByUsername(sql, target);
+        if (!targetProfileId) {
+          const alt = await findCommunityAltAccount(sql, target);
+          targetProfileId = alt && (alt.ownerProfileId || alt.owner_synk_profile_id) || null;
+        }
+        if (targetProfileId) {
+          await createNotification(sql, {
+            profileId: targetProfileId,
+            kind: "friend_request",
+            actorUsername: primaryUsername,
+            body: `${primaryUsername} sent you a friend request`,
+          });
+        }
+      } catch (_) {}
       return json(200, {
         ok: true,
         username: target,
@@ -1358,6 +1414,21 @@ exports.handler = async (event) => {
       if (!target) return json(400, { error: "Username required" });
       const result = await respondFriendship(sql, primaryUsername, target, true);
       if (!result.ok) return json(400, { error: result.error || "Could not accept request" });
+      try {
+        let targetProfileId = await findCommunityProfileIdByUsername(sql, target);
+        if (!targetProfileId) {
+          const alt = await findCommunityAltAccount(sql, target);
+          targetProfileId = alt && (alt.ownerProfileId || alt.owner_synk_profile_id) || null;
+        }
+        if (targetProfileId) {
+          await createNotification(sql, {
+            profileId: targetProfileId,
+            kind: "friend_accept",
+            actorUsername: primaryUsername,
+            body: `${primaryUsername} accepted your friend request`,
+          });
+        }
+      } catch (_) {}
       return json(200, {
         ok: true,
         username: target,
@@ -2256,7 +2327,9 @@ if (action === "create-alt") {
             AND read_at IS NULL
         `;
       }
-      const notifications = await loadNotifications(sql, auth.profile.id);
+      const notifications = await loadNotifications(sql, auth.profile.id, {
+        username: primaryUsername,
+      });
       const nextUnread = await getUnreadCount(sql, auth.profile.id);
       return json(200, {
         ok: true,
