@@ -2750,13 +2750,13 @@
       return { label: "Announcements", icon: "megaphone", tone: "announce" };
     }
     if (kind === "suggestions" || slug === "ideas" || slug === "suggestions") {
-      return { label: "Suggestions", icon: "lightbulb", tone: "suggest" };
+      return { label: "Ideas", icon: "lightbulb", tone: "suggest" };
     }
     if (slug === "rules" || kind === "rules") {
       return { label: "Rules", icon: "scroll", tone: "rules" };
     }
     if (slug === "welcome" || slug === "info" || kind === "info") {
-      return { label: "Info", icon: "info", tone: "info" };
+      return { label: "Welcome", icon: "info", tone: "info" };
     }
     if (kind === "readonly") {
       return { label: "Info", icon: "info", tone: "info" };
@@ -2767,7 +2767,7 @@
     if (slug === "bugs") {
       return { label: "", icon: "bug", tone: "bugs" };
     }
-    if (slug === "lounge" || kind === "text" || kind === "chat") {
+    if (slug === "general" || slug === "lounge" || kind === "text" || kind === "chat") {
       return { label: "", icon: "hash", tone: "chat" };
     }
     return { label: "", icon: "hash", tone: "chat" };
@@ -2785,11 +2785,7 @@
     )}" data-kind="${escapeHtml(kind)}" data-tone="${escapeHtml(tone)}" title="${escapeHtml(title)}"><span class="synk-hub-channel-ico" aria-hidden="true">${ico(
       meta.icon || "hash",
       15
-    )}</span><span class="discord-channel-label is-full">${escapeHtml(
-      name
-    )}</span><span class="discord-channel-label is-compact">${escapeHtml(
-      name
-    )}</span></button>`;
+    )}</span><span class="discord-channel-label">${escapeHtml(name)}</span></button>`;
   }
 
   function mountFeedStack(intoDiscord) {
@@ -2847,10 +2843,14 @@
     shell.hidden = false;
     mountFeedStack(true);
     const categories = Array.isArray(group.categories) ? group.categories.slice() : [];
+    categories.sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0));
     const channels = Array.isArray(group.channels) ? group.channels.slice() : [];
     if (!activeChannelSlug) {
-      const lounge = channels.find((c) => c.slug === "lounge") || channels.find((c) => c.slug === "general");
-      activeChannelSlug = (lounge && lounge.slug) || (channels[0] && channels[0].slug) || "";
+      const general =
+        channels.find((c) => c.slug === "general") ||
+        channels.find((c) => c.slug === "lounge") ||
+        channels.find((c) => c.slug === "welcome");
+      activeChannelSlug = (general && general.slug) || (channels[0] && channels[0].slug) || "";
       if (activeChannelSlug && route.type === "group") {
         route = { ...route, channel: activeChannelSlug };
         try {
@@ -2868,14 +2868,17 @@
     });
     const html = [];
     for (const { cat, list } of byCat.values()) {
+      if (!list.length) continue;
       html.push(`<div class="discord-cat synk-hub-cat">${escapeHtml(cat.name)}</div>`);
       list
         .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))
         .forEach((ch) => html.push(channelButtonHtml(ch)));
     }
     if (loose.length) {
-      html.push(`<div class="discord-cat synk-hub-cat">Channels</div>`);
-      loose.forEach((ch) => html.push(channelButtonHtml(ch)));
+      html.push(`<div class="discord-cat synk-hub-cat">More</div>`);
+      loose
+        .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))
+        .forEach((ch) => html.push(channelButtonHtml(ch)));
     }
     host.innerHTML = html.join("") || `<p class="muted synk-hub-empty-channels">No channels yet.</p>`;
     const railTitle = document.getElementById("synk-hub-rail-title") || document.querySelector(".synk-hub-rail-title");

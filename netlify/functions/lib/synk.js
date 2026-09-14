@@ -1504,7 +1504,7 @@ async function ensureOfficialSynkGroup(sql) {
       SET
         slug = 'synk',
         name = 'Synk',
-        description = COALESCE(NULLIF(btrim(description), ''), 'The official Synk community — announcements, help, and conversation.'),
+        description = 'Official Synk — product updates, community chat, and feedback.',
         theme = 'discord',
         is_official = TRUE,
         updated_at = NOW()
@@ -1517,7 +1517,7 @@ async function ensureOfficialSynkGroup(sql) {
         VALUES (
           'synk',
           'Synk',
-          'The official Synk community — announcements, help, and conversation.',
+          'Official Synk — product updates, community chat, and feedback.',
           'discord',
           TRUE,
           ${createdBy}
@@ -1588,16 +1588,17 @@ async function ensureOfficialSynkGroup(sql) {
 }
 
 function officialSynkBlueprint() {
+  // Clearer Discord-style sections for the official Synk server.
   return [
     {
-      name: "Start here",
+      name: "Information",
       channels: [
         {
           emoji: "",
-          name: "Info",
+          name: "Welcome",
           slug: "welcome",
           kind: "readonly",
-          description: "What Synk Community is and how to get started",
+          description: "Start here — what Synk Community is and how it works",
         },
         {
           emoji: "",
@@ -1611,19 +1612,19 @@ function officialSynkBlueprint() {
           name: "Rules",
           slug: "rules",
           kind: "readonly",
-          description: "Community guidelines and expectations",
+          description: "Community guidelines everyone follows",
         },
       ],
     },
     {
-      name: "Conversation",
+      name: "Community",
       channels: [
         {
           emoji: "",
-          name: "Lounge",
-          slug: "lounge",
+          name: "General",
+          slug: "general",
           kind: "text",
-          description: "Everyday conversation with the community",
+          description: "Everyday conversation with the Synk community",
         },
         {
           emoji: "",
@@ -1639,10 +1640,10 @@ function officialSynkBlueprint() {
       channels: [
         {
           emoji: "",
-          name: "Suggestions",
+          name: "Ideas",
           slug: "ideas",
           kind: "suggestions",
-          description: "Propose improvements for the Synk team to review",
+          description: "Suggest improvements for the Synk team",
         },
         {
           emoji: "",
@@ -1656,17 +1657,28 @@ function officialSynkBlueprint() {
   ];
 }
 
-async function ensureChannelStub(sql, groupId, channel) {
-  // Seed only — never overwrite staff customizations.
+async function upsertOfficialChannel(sql, groupId, channel, categoryId) {
   await sql`
     INSERT INTO synk_community_group_channels (
       group_id, category_id, emoji, name, slug, description, kind, sort_order
     )
     VALUES (
-      ${groupId}, NULL, ${channel.emoji || ""}, ${channel.name}, ${channel.slug},
-      ${channel.description || ""}, ${channel.kind || "text"}, ${Number(channel.sortOrder) || 0}
+      ${groupId},
+      ${categoryId},
+      ${channel.emoji || ""},
+      ${channel.name},
+      ${channel.slug},
+      ${channel.description || ""},
+      ${channel.kind || "text"},
+      ${Number(channel.sortOrder) || 0}
     )
-    ON CONFLICT (group_id, slug) DO NOTHING
+    ON CONFLICT (group_id, slug) DO UPDATE SET
+      category_id = EXCLUDED.category_id,
+      emoji = EXCLUDED.emoji,
+      name = EXCLUDED.name,
+      description = EXCLUDED.description,
+      kind = EXCLUDED.kind,
+      sort_order = EXCLUDED.sort_order
   `;
 }
 
@@ -1674,54 +1686,80 @@ async function syncOfficialSynkLayout(sql, groupId) {
   if (!groupId) return;
   const blueprint = officialSynkBlueprint();
 
-  // Ensure default categories exist (by name), without wiping custom ones.
+  // Rename legacy category labels onto the new Information / Community / Feedback map.
+  const categoryAliases = {
+    "start here": "Information",
+    information: "Information",
+    conversation: "Community",
+    community: "Community",
+    feedback: "Feedback",
+  };
   const existingCats = await sql`
+    SELECT id, name, sort_order FROM synk_community_group_categories WHERE group_id = ${groupId}
+  `;
+  for (const row of existingCats) {
+    const key = String(row.name || "").trim().toLowerCase();
+    const nextName = categoryAliases[key];
+    if (nextName && nextName !== row.name) {
+      await sql`
+        UPDATE synk_community_group_categories
+        SET name = ${nextName}
+        WHERE id = ${row.id}
+      `;
+      row.name = nextName;
+    }
+  }
+
+  const refreshedCats = await sql`
     SELECT id, name FROM synk_community_group_categories WHERE group_id = ${groupId}
   `;
   const catByName = new Map(
-    existingCats.map((row) => [String(row.name || "").trim().toLowerCase(), row.id])
+    refreshedCats.map((row) => [String(row.name || "").trim().toLowerCase(), row.id])
   );
-  let catOrder = existingCats.length;
-  for (const cat of blueprint) {
+
+  // Ensure blueprint categories exist with stable sort order.
+  for (let i = 0; i < blueprint.length; i += 1) {
+    const cat = blueprint[i];
     const key = String(cat.name || "").trim().toLowerCase();
-    if (!key || catByName.has(key)) continue;
+    if (!key) continue;
+    if (catByName.has(key)) {
+      await sql`
+        UPDATE synk_community_group_categories
+        SET sort_order = ${i}, name = ${cat.name}
+        WHERE id = ${catByName.get(key)}
+      `;
+      continue;
+    }
     const created = await sql`
       INSERT INTO synk_community_group_categories (group_id, name, sort_order)
-      VALUES (${groupId}, ${cat.name}, ${catOrder})
+      VALUES (${groupId}, ${cat.name}, ${i})
       RETURNING id, name
     `;
     catByName.set(key, created[0].id);
-    catOrder += 1;
   }
 
-  // Seed missing default channels only; keep any staff-created extras.
+  // Force-apply blueprint channels (names, kinds, order, categories).
   let sort = 0;
+  const blueprintSlugs = new Set();
   for (const cat of blueprint) {
     const categoryId = catByName.get(String(cat.name || "").trim().toLowerCase()) || null;
     for (const ch of cat.channels) {
-      await ensureChannelStub(sql, groupId, { ...ch, sortOrder: sort });
-      if (categoryId) {
-        await sql`
-          UPDATE synk_community_group_channels
-          SET category_id = COALESCE(category_id, ${categoryId})
-          WHERE group_id = ${groupId}
-            AND slug = ${ch.slug}
-            AND category_id IS NULL
-        `;
-      }
+      blueprintSlugs.add(ch.slug);
+      await upsertOfficialChannel(sql, groupId, { ...ch, sortOrder: sort }, categoryId);
       sort += 1;
     }
   }
 
-  // One-time merges for legacy slug renames (safe if already applied).
+  // Merge legacy slugs into the new defaults.
   const rows = await sql`
     SELECT id, slug FROM synk_community_group_channels WHERE group_id = ${groupId}
   `;
   const bySlug = {};
   for (const row of rows) bySlug[row.slug] = row.id;
   const merges = {
-    general: "lounge",
-    introductions: "lounge",
+    lounge: "general",
+    introductions: "general",
+    info: "welcome",
     updates: "announcements",
     feedback: "ideas",
     suggestions: "ideas",
@@ -1737,6 +1775,27 @@ async function syncOfficialSynkLayout(sql, groupId) {
         AND channel_id = ${fromId}
     `;
     await sql`DELETE FROM synk_community_group_channels WHERE id = ${fromId}`;
+    delete bySlug[fromSlug];
+  }
+
+  // Drop obsolete blueprint leftovers that were renamed away (keep staff-added extras).
+  const obsolete = ["lounge", "info"];
+  for (const slug of obsolete) {
+    if (blueprintSlugs.has(slug)) continue;
+    const id = bySlug[slug];
+    if (!id) continue;
+    // Prefer moving any remaining posts into general/welcome before delete.
+    const fallbackSlug = slug === "lounge" ? "general" : "welcome";
+    const fallbackId = bySlug[fallbackSlug];
+    if (fallbackId) {
+      await sql`
+        UPDATE synk_community_posts
+        SET channel_id = ${fallbackId}
+        WHERE group_id = ${groupId}
+          AND channel_id = ${id}
+      `;
+    }
+    await sql`DELETE FROM synk_community_group_channels WHERE id = ${id}`;
   }
 }
 
@@ -1745,7 +1804,8 @@ async function purgeLegacyCommunityGroups(sql, synkGroupId) {
   const lounge = await sql`
     SELECT id FROM synk_community_group_channels
     WHERE group_id = ${synkGroupId}
-      AND slug = 'lounge'
+      AND slug IN ('general', 'lounge')
+    ORDER BY CASE WHEN slug = 'general' THEN 0 ELSE 1 END
     LIMIT 1
   `;
   const loungeId = lounge[0] ? lounge[0].id : null;
