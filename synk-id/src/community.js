@@ -5460,9 +5460,7 @@ function applyViewState(data) {
     modal.hidden = false;
     body.innerHTML = plainLoadingHtml("Loading release notes");
     if (sub) {
-      sub.textContent = version
-        ? `A clear summary of what changed in this Synk update`
-        : "A clear summary of what changed in this Synk update";
+      sub.textContent = "A plain-language look at what’s new in this Synk update";
     }
     try {
       const ver = String(version || "").trim();
