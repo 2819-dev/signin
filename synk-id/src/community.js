@@ -2542,8 +2542,10 @@
     function syncTabBar() {
     const bar = document.getElementById("community-tabbar");
     if (!bar) return;
-    const show = !!(me && publicUsername);
+    const mobile = !(window.matchMedia && window.matchMedia("(min-width: 1101px)").matches);
+    const show = !!(me && publicUsername && mobile);
     bar.hidden = !show;
+    document.body.classList.toggle("has-community-tabbar", show);
     const meTab = document.getElementById("tab-me");
     if (meTab && publicUsername) {
       meTab.href = `/user/${encodeURIComponent(actingUsername() || publicUsername)}`;
@@ -5029,6 +5031,7 @@ function applyViewState(data) {
   function setDmChatOpen(open) {
     const shell = document.getElementById("dm-shell");
     if (shell) shell.classList.toggle("is-chat-open", !!open);
+    document.body.classList.toggle("is-dm-chat-open", !!open);
   }
 
   function setDmNewOpen(open) {
@@ -6379,6 +6382,7 @@ document.addEventListener("click", async (e) => {
   window.addEventListener("resize", () => {
     try {
       syncDesktopNav();
+      syncTabBar();
     } catch (_) {}
   });
 
