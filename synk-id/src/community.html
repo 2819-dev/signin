@@ -13,9 +13,9 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v15" />
+    <link rel="stylesheet" href="/join.css?v=community-v16" />
     <script src="/session.js?v=stay-v1"></script>
-    <script src="/force-refresh.js?v=community-v15" defer></script>
+    <script src="/force-refresh.js?v=community-v16" defer></script>
   </head>
   <body class="community-body reddit-body">
     <header class="reddit-topnav">
@@ -266,10 +266,13 @@
                 <section class="reddit-feed-wrap" id="feed-card">
                   <div id="feed" class="community-feed"></div>
                   <div id="feed-empty" class="muted reddit-feed-empty" hidden>
+                    <div class="reddit-empty-ico" aria-hidden="true">
+                      <svg class="r-ico" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>
+                    </div>
                     <strong>Your feed is ready</strong>
-                    Follow groups or share an update to see activity here.
+                    <p>Follow groups or share an update to see activity here.</p>
                     <div class="community-empty-actions">
-                      <a class="btn btn-primary btn-compact" href="/community/groups">Browse groups</a>
+                      <a class="btn btn-primary btn-compact reddit-join-orange" href="/community/groups">Browse groups</a>
                       <a class="btn btn-secondary btn-compact" href="/community/submit">New post</a>
                     </div>
                   </div>
@@ -286,12 +289,15 @@
               <section class="reddit-comments-card">
                 <h2 class="reddit-comments-title">Comments</h2>
                 <form id="comment-form" class="form reddit-comment-form">
-                  <div class="field">
-                    <label class="sr-only" for="comment-body">Add a comment</label>
-                    <textarea id="comment-body" rows="3" maxlength="1000" required placeholder="What are your thoughts?"></textarea>
-                  </div>
-                  <div class="reddit-create-actions">
-                    <button class="btn btn-primary btn-compact reddit-join-orange" type="submit" id="comment-submit-btn">Comment</button>
+                  <div class="reddit-comment-compose">
+                    <div class="reddit-create-avatar" id="comment-avatar" aria-hidden="true">S</div>
+                    <div class="reddit-comment-compose-main">
+                      <label class="sr-only" for="comment-body">Add a comment</label>
+                      <textarea id="comment-body" rows="3" maxlength="1000" required placeholder="What are your thoughts?"></textarea>
+                      <div class="reddit-create-actions">
+                        <button class="btn btn-primary btn-compact reddit-join-orange" type="submit" id="comment-submit-btn">Comment</button>
+                      </div>
+                    </div>
                   </div>
                   <p id="comment-status" class="muted" style="font-size: 0.85rem"></p>
                 </form>
@@ -392,11 +398,13 @@
                   <span>submit</span>
                 </nav>
                 <div class="reddit-submit-head">
-                  <h2>Create a post</h2>
-                  <p class="muted" id="submit-as">Posting as —</p>
+                  <div>
+                    <h2>Create a post</h2>
+                    <p class="muted" id="submit-as">Posting as —</p>
+                  </div>
                 </div>
                 <div class="reddit-submit-tabs" role="tablist" aria-label="Post type">
-                  <button class="reddit-submit-tab is-active" type="button" data-submit-tab="text" role="tab" aria-selected="true">Text</button>
+                  <button class="reddit-submit-tab is-active" type="button" data-submit-tab="text" role="tab" aria-selected="true">Post</button>
                   <button class="reddit-submit-tab" type="button" data-submit-tab="image" role="tab" aria-selected="false">Images &amp; Video</button>
                   <button class="reddit-submit-tab" type="button" data-submit-tab="link" role="tab" aria-selected="false">Link</button>
                   <button class="reddit-submit-tab" type="button" data-submit-tab="poll" role="tab" aria-selected="false">Poll</button>
@@ -408,7 +416,8 @@
                   </div>
                   <div class="field">
                     <label for="post-title">Title</label>
-                    <input id="post-title" type="text" maxlength="180" placeholder="Title" />
+                    <input id="post-title" type="text" maxlength="300" placeholder="Title" />
+                    <div class="reddit-title-count"><span id="post-title-count">0</span>/300</div>
                   </div>
                   <div class="field" id="submit-text-fields">
                     <label for="post-body">Text</label>
@@ -432,7 +441,7 @@
                   <p id="post-status" class="muted" style="font-size: 0.85rem"></p>
                   <div class="reddit-create-actions">
                     <a class="btn btn-secondary btn-compact" href="/community" id="composer-cancel-btn">Cancel</a>
-                    <button class="btn btn-primary btn-compact" type="submit" id="post-submit-btn">Post</button>
+                    <button class="btn btn-primary btn-compact reddit-join-orange" type="submit" id="post-submit-btn">Post</button>
                   </div>
                 </form>
               </section>
@@ -932,6 +941,6 @@
     </div>
 
     <script src="/push-client.js?v=dark-fix2"></script>
-    <script src="/community.js?v=community-v15"></script>
+    <script src="/community.js?v=community-v16"></script>
   </body>
 </html>

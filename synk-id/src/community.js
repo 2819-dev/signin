@@ -694,6 +694,32 @@
     showToast._t = setTimeout(() => el.classList.remove("show"), 2400);
   }
 
+  function renderFeedSkeleton(count = 4) {
+    if (!feedEl) return;
+    if (feedEmpty) feedEmpty.hidden = true;
+    const cards = Array.from({ length: count }, () => {
+      return `<article class="reddit-post reddit-skel" aria-hidden="true">
+        <div class="reddit-vote">
+          <span class="reddit-skel-block is-sq"></span>
+          <span class="reddit-skel-block is-score"></span>
+          <span class="reddit-skel-block is-sq"></span>
+        </div>
+        <div class="reddit-post-main">
+          <div class="reddit-skel-line is-meta"></div>
+          <div class="reddit-skel-line is-title"></div>
+          <div class="reddit-skel-line is-body"></div>
+          <div class="reddit-skel-line is-body is-short"></div>
+          <div class="reddit-skel-actions">
+            <span class="reddit-skel-block is-pill"></span>
+            <span class="reddit-skel-block is-pill"></span>
+            <span class="reddit-skel-block is-pill"></span>
+          </div>
+        </div>
+      </article>`;
+    }).join("");
+    feedEl.innerHTML = `<div class="reddit-skel-feed" aria-busy="true" aria-live="polite">${cards}</div>`;
+  }
+
   async function communityAction(payload) {
     const body = { ...(payload || {}) };
     const action = String(body.action || "").trim().toLowerCase();
@@ -1147,6 +1173,7 @@
     if (personaLabel) personaLabel.textContent = activePersona || publicUsername || "—";
     paintAvatar(document.getElementById("persona-avatar"), faceUrl, label);
     paintAvatar(document.getElementById("composer-avatar"), faceUrl, label);
+    paintAvatar(document.getElementById("comment-avatar"), faceUrl, label);
     const composerAs = document.getElementById("composer-as");
     if (composerAs) {
       composerAs.textContent = activePersona
@@ -1513,13 +1540,13 @@
       if (feedEmpty) {
         feedEmpty.hidden = false;
         if (route.type === "group" && activeChannelSlug) {
-          feedEmpty.innerHTML = `<strong>This channel is quiet</strong>Be the first to share something here.`;
+          feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("comment", 28)}</div><strong>This channel is quiet</strong><p>Be the first to share something here.</p>`;
         } else if (route.type === "group") {
-          feedEmpty.innerHTML = `<strong>No posts in this group yet</strong>Share an update to get the conversation started.`;
+          feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("create", 28)}</div><strong>No posts in this group yet</strong><p>Share an update to get the conversation started.</p><div class="community-empty-actions"><a class="btn btn-primary btn-compact reddit-join-orange" href="/community/submit?group=${encodeURIComponent(route.slug || "")}">Create Post</a></div>`;
         } else if (route.type === "popular") {
-          feedEmpty.innerHTML = `<strong>Nothing trending right now</strong>Check back soon, or browse groups to find something interesting.`;
+          feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("popular", 28)}</div><strong>Nothing trending right now</strong><p>Check back soon, or browse groups to find something interesting.</p>`;
         } else {
-          feedEmpty.innerHTML = `<strong>Your feed is ready</strong>Follow groups or share an update to see activity here.<div class="community-empty-actions"><a class="btn btn-primary btn-compact" href="/community/groups">Browse groups</a><a class="btn btn-secondary btn-compact" href="/community/submit">New post</a></div>`;
+          feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("feed", 28)}</div><strong>Your feed is ready</strong><p>Follow groups or share an update to see activity here.</p><div class="community-empty-actions"><a class="btn btn-primary btn-compact reddit-join-orange" href="/community/groups">Browse groups</a><a class="btn btn-secondary btn-compact" href="/community/submit">New post</a></div>`;
         }
       }
       syncFeedChrome();
@@ -2471,6 +2498,11 @@ function applyViewState(data) {
     const __touchStay = () => {
       try { if (window.SynkSession) window.SynkSession.touchSession(); } catch (_) {}
     };
+    const showFeedSkeleton =
+      !soft &&
+      ["home", "popular", "group", "user", "search"].includes(route.type);
+    if (showFeedSkeleton) renderFeedSkeleton(route.type === "search" ? 3 : 5);
+
     let url = "/api/synk-community";
     const sort = apiSort();
     if (route.type === "post" && route.postId) {
@@ -2928,6 +2960,7 @@ function applyViewState(data) {
       const body = String((document.getElementById("post-body") || {}).value || "").trim();
       const type = activeSubmitType || "text";
       if (!title || title.length < 2) throw new Error("Title needs at least 2 characters");
+      if (title.length > 300) throw new Error("Title must be 300 characters or fewer");
 
       const payload = {
         action: "post",
@@ -2997,6 +3030,20 @@ function applyViewState(data) {
       status.textContent = err.message || "Could not post";
     }
   });
+
+  const postTitleInput = document.getElementById("post-title");
+  const postTitleCount = document.getElementById("post-title-count");
+  const syncPostTitleCount = () => {
+    if (!postTitleCount || !postTitleInput) return;
+    const n = String(postTitleInput.value || "").length;
+    postTitleCount.textContent = String(n);
+    postTitleCount.classList.toggle("is-warn", n >= 280);
+    postTitleCount.classList.toggle("is-max", n >= 300);
+  };
+  if (postTitleInput) {
+    postTitleInput.addEventListener("input", syncPostTitleCount);
+    syncPostTitleCount();
+  }
 
   const commentForm = document.getElementById("comment-form");
   if (commentForm) {
