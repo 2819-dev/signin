@@ -49,6 +49,9 @@ const {
   isBetaTesterTag,
   listProfileTags,
   listUsernameTags,
+  listGroupTags,
+  assignGroupTag,
+  unassignGroupTag,
   getPinnedTagForProfile,
   getPinnedTagForUsername,
   getPinnedTagsByUsernames,
@@ -3514,11 +3517,40 @@ if (action === "create-alt") {
     }
 
     if (action === "assign-tag") {
-      if (role !== "owner") {
-        return json(403, { error: "Only the owner can assign tags" });
+      if (!isCommunityStaffRole(role)) {
+        return json(403, { error: "Only staff can assign tags" });
       }
+      const tag = await findCommunityTag(sql, {
+        id: body.tagId || body.id,
+        slug: body.tag || body.slug,
+      });
+      if (!tag) return json(404, { error: "Tag not found" });
+
+      const groupSlug = normalizeGroupSlug(body.group || body.groupSlug || body.slugTarget || "");
+      const wantsGroup = !!(groupSlug || body.groupId);
+      if (wantsGroup) {
+        const group = await findCommunityGroup(sql, {
+          id: body.groupId,
+          slug: groupSlug || undefined,
+        });
+        if (!group) return json(404, { error: "Group not found" });
+        await assignGroupTag(sql, group.id, tag.id, auth.profile.id);
+        await logSynkEvent(sql, {
+          eventType: "community_group_tag_assign",
+          profileId: auth.profile.id,
+          ip,
+          detail: `${group.slug}:${tag.slug}`,
+        });
+        return json(200, {
+          ok: true,
+          groupId: group.id,
+          groupSlug: group.slug,
+          tags: await listGroupTags(sql, group.id),
+        });
+      }
+
       const username = normalizePublicUsername(body.username || body.publicUsername);
-      if (!username) return json(400, { error: "Username is required" });
+      if (!username) return json(400, { error: "Username or group is required" });
       const profileId = await findCommunityProfileIdByUsername(sql, username);
       const alt = profileId
         ? null
@@ -3526,11 +3558,6 @@ if (action === "create-alt") {
       if (!profileId && !alt) {
         return json(404, { error: "No community member with that username" });
       }
-      const tag = await findCommunityTag(sql, {
-        id: body.tagId || body.id,
-        slug: body.tag || body.slug,
-      });
-      if (!tag) return json(404, { error: "Tag not found" });
       await assignUsernameTag(sql, username, tag.id, auth.profile.id);
       await logSynkEvent(sql, {
         eventType: "community_tag_assign",
@@ -3546,21 +3573,45 @@ if (action === "create-alt") {
     }
 
     if (action === "unassign-tag") {
-      if (role !== "owner") {
-        return json(403, { error: "Only the owner can remove tags" });
-      }
-      const username = normalizePublicUsername(body.username || body.publicUsername);
-      if (!username) return json(400, { error: "Username is required" });
-      const profileId = await findCommunityProfileIdByUsername(sql, username);
-      const alt = profileId ? null : await findCommunityAltAccount(sql, { username });
-      if (!profileId && !alt) {
-        return json(404, { error: "No community member with that username" });
+      if (!isCommunityStaffRole(role)) {
+        return json(403, { error: "Only staff can remove tags" });
       }
       const tag = await findCommunityTag(sql, {
         id: body.tagId || body.id,
         slug: body.tag || body.slug,
       });
       if (!tag) return json(404, { error: "Tag not found" });
+
+      const groupSlug = normalizeGroupSlug(body.group || body.groupSlug || "");
+      const wantsGroup = !!(groupSlug || body.groupId);
+      if (wantsGroup) {
+        const group = await findCommunityGroup(sql, {
+          id: body.groupId,
+          slug: groupSlug || undefined,
+        });
+        if (!group) return json(404, { error: "Group not found" });
+        await unassignGroupTag(sql, group.id, tag.id);
+        await logSynkEvent(sql, {
+          eventType: "community_group_tag_unassign",
+          profileId: auth.profile.id,
+          ip,
+          detail: `${group.slug}:${tag.slug}`,
+        });
+        return json(200, {
+          ok: true,
+          groupId: group.id,
+          groupSlug: group.slug,
+          tags: await listGroupTags(sql, group.id),
+        });
+      }
+
+      const username = normalizePublicUsername(body.username || body.publicUsername);
+      if (!username) return json(400, { error: "Username or group is required" });
+      const profileId = await findCommunityProfileIdByUsername(sql, username);
+      const alt = profileId ? null : await findCommunityAltAccount(sql, { username });
+      if (!profileId && !alt) {
+        return json(404, { error: "No community member with that username" });
+      }
       await unassignUsernameTag(sql, username, tag.id);
       await logSynkEvent(sql, {
         eventType: "community_tag_unassign",
@@ -3574,6 +3625,7 @@ if (action === "create-alt") {
         tags: await listUsernameTags(sql, username),
       });
     }
+
 
     if (action === "pin-tag") {
       if (!auth.profile.publicUsername) {

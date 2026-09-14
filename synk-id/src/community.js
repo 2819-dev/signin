@@ -345,8 +345,8 @@
     const { username, label } = authorLabel(author);
     const tag = author && author.pinnedTag ? tagChip(author.pinnedTag, { compact: compactTag }) : "";
     const avatar = withAvatar ? avatarMarkup(author && author.avatarUrl, label, "community-face is-inline") : "";
-    // Reddit-style public handle is always u/{username}.
-    return `<span class="author-with-tag">${avatar}<a class="community-user-link" href="/user/${escapeHtml(username)}">u/${escapeHtml(username)}</a>${tag}</span>`;
+    // Public handle — no u/ prefix.
+    return `<span class="author-with-tag">${avatar}<a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(username)}</a>${tag}</span>`;
   }
 
   function tagChip(tag, { compact = false, canPin = false } = {}) {
@@ -374,6 +374,77 @@
     const learnId = escapeHtml(String(tag.learnMorePageId || ""));
     return `<button type="button" class="${cls}" style="--tag-color:${color}" data-tag-badge="1" data-tag-id="${id}" data-tag-name="${name}" data-tag-desc="${desc}" data-tag-pinned="${pinned}" data-tag-icon="${iconUrl}" data-tag-learn="${learn}" data-tag-learn-slug="${learnSlug}" data-tag-learn-id="${learnId}" data-can-pin="${canPin ? "1" : "0"}" aria-label="${name}" aria-expanded="false" title="${name}">${inner}</button>`;
   }
+
+  function canManageTags() {
+    return !!(me && (me.isStaff || me.isOwner || me.role === "owner" || me.role === "admin"));
+  }
+
+  function tagManagerHtml({ targetType, targetKey, assigned = [] }) {
+    if (!canManageTags()) return "";
+    const assignedIds = new Set((assigned || []).map((tag) => String(tag.id)));
+    const available = (tags || []).filter((tag) => !assignedIds.has(String(tag.id)));
+    const chips = (assigned || [])
+      .map((tag) => {
+        const chip = tagChip(tag, { compact: true });
+        return `<span class="community-tag-manage-item">${chip}<button type="button" class="community-tag-remove" data-tag-unassign="${escapeHtml(
+          String(tag.id || "")
+        )}" data-tag-target="${escapeHtml(targetType)}" data-tag-key="${escapeHtml(
+          targetKey
+        )}" aria-label="Remove ${escapeHtml(tag.name || "tag")}">×</button></span>`;
+      })
+      .join("");
+    const options = available.length
+      ? available
+          .map(
+            (tag) =>
+              `<option value="${escapeHtml(String(tag.id))}">${escapeHtml(tag.name || tag.slug)}</option>`
+          )
+          .join("")
+      : `<option value="" disabled>No more tags</option>`;
+    return `<div class="community-tag-manager" data-tag-target="${escapeHtml(
+      targetType
+    )}" data-tag-key="${escapeHtml(targetKey)}">
+      <div class="community-tag-manage-list">${chips || '<span class="muted community-tag-manage-empty">No tags yet</span>'}</div>
+      <div class="community-tag-manage-add">
+        <label class="sr-only" for="tag-manage-select-${escapeHtml(targetType)}-${escapeHtml(targetKey)}">Add tag</label>
+        <select id="tag-manage-select-${escapeHtml(targetType)}-${escapeHtml(targetKey)}" data-tag-select>${options}</select>
+        <button type="button" class="btn btn-secondary btn-compact" data-tag-assign data-tag-target="${escapeHtml(
+          targetType
+        )}" data-tag-key="${escapeHtml(targetKey)}">Add tag</button>
+      </div>
+    </div>`;
+  }
+
+  async function assignTagFromUi({ targetType, targetKey, tagId }) {
+    if (!canManageTags() || !tagId || !targetKey) return;
+    const payload = { action: "assign-tag", tagId };
+    if (targetType === "group") payload.group = targetKey;
+    else payload.username = targetKey;
+    const res = await fetch("/api/synk-community", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...hubHeaders() },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data && data.error) || "Could not assign tag");
+    return data;
+  }
+
+  async function unassignTagFromUi({ targetType, targetKey, tagId }) {
+    if (!canManageTags() || !tagId || !targetKey) return;
+    const payload = { action: "unassign-tag", tagId };
+    if (targetType === "group") payload.group = targetKey;
+    else payload.username = targetKey;
+    const res = await fetch("/api/synk-community", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...hubHeaders() },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data && data.error) || "Could not remove tag");
+    return data;
+  }
+
   function ensureTagPopover() {
     let pop = document.getElementById("tag-badge-popover");
     if (pop) return pop;
@@ -973,7 +1044,7 @@
     }
     if (route.type === "group") {
       const group = (data && data.group) || groups.find((g) => g.slug === route.slug) || null;
-      if (aboutTitle) aboutTitle.textContent = group ? `About ${group.slug}` : "About community";
+      if (aboutTitle) aboutTitle.textContent = group ? `About ${group.name || group.slug}` : "About community";
       if (aboutBlurb) aboutBlurb.textContent = (group && group.description) || "A community group.";
       if (statPostsLabel) statPostsLabel.textContent = "Posts";
       if (statPosts) statPosts.textContent = String(group && group.postCount != null ? group.postCount : posts.length);
@@ -1354,7 +1425,7 @@
       group.postCount != null
         ? `${Number(group.postCount).toLocaleString()} post${Number(group.postCount) === 1 ? "" : "s"}`
         : "";
-    const meta = [group.slug ? `g/${group.slug}` : "", members || posts].filter(Boolean).join(" · ");
+    const meta = [group.name || group.slug || "", members || posts].filter(Boolean).join(" · ");
     const initial = String(group.slug || group.name || "?").slice(0, 1).toUpperCase();
     const joined = isGroupJoined(group);
     const desc = String(group.description || "").trim();
@@ -1469,7 +1540,7 @@
     renderRecent();
     if (!postGroup) return;
     postGroup.innerHTML = groups
-      .map((group) => `<option value="${escapeHtml(group.slug)}">${escapeHtml(group.slug)} — ${escapeHtml(group.name)}</option>`)
+      .map((group) => `<option value="${escapeHtml(group.slug)}">${escapeHtml(group.name || group.slug)}</option>`)
       .join("");
     const params = new URLSearchParams(location.search);
     const pref = params.get("group") || (route.type === "group" ? route.slug : "");
@@ -1783,7 +1854,7 @@
               <div class="reddit-post-meta">
                 ${
                   showGroup
-                    ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)}</a>`
+                    ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.name || group.slug)}</a>`
                     : `<span class="reddit-sub is-static">Home</span>`
                 }
                 <span class="reddit-meta-dot">•</span>
@@ -1847,7 +1918,7 @@
           <div class="reddit-post-meta">
             ${
               group.slug
-                ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)}</a>`
+                ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.name || group.slug)}</a>`
                 : `<span class="reddit-sub is-static">Home</span>`
             }
             <span class="reddit-meta-dot">•</span>
@@ -2331,8 +2402,8 @@
     const categories = Array.isArray(group.categories) ? group.categories.slice() : [];
     const channels = Array.isArray(group.channels) ? group.channels.slice() : [];
     if (!activeChannelSlug) {
-      const general = channels.find((c) => c.slug === "general");
-      activeChannelSlug = (general && general.slug) || (channels[0] && channels[0].slug) || "";
+      const lounge = channels.find((c) => c.slug === "lounge") || channels.find((c) => c.slug === "general");
+      activeChannelSlug = (lounge && lounge.slug) || (channels[0] && channels[0].slug) || "";
       if (activeChannelSlug && route.type === "group") {
         route = { ...route, channel: activeChannelSlug };
         try {
@@ -2592,8 +2663,9 @@ function applyViewState(data) {
         actionsHost.innerHTML = actions;
       }
       if (profileMeta) {
-        const tagsHtml = (profile.tags || []).length
-          ? (profile.tags || [])
+        const assigned = profile.tags || [];
+        const tagsHtml = assigned.length
+          ? assigned
               .map((tag) =>
                 tagChip(tag, {
                   canPin: canPinTagsFor(profile.username),
@@ -2601,9 +2673,15 @@ function applyViewState(data) {
               )
               .join("")
           : "";
-        profileMeta.hidden = !tagsHtml;
-        profileMeta.innerHTML = tagsHtml
-          ? `<div class="community-profile-card community-profile-card-clean"><div class="community-tag-list synk-tag-badge-row">${tagsHtml}</div></div>`
+        const manager = tagManagerHtml({
+          targetType: "user",
+          targetKey: uname,
+          assigned,
+        });
+        const body = `${tagsHtml ? `<div class="community-tag-list synk-tag-badge-row">${tagsHtml}</div>` : ""}${manager}`;
+        profileMeta.hidden = !body;
+        profileMeta.innerHTML = body
+          ? `<div class="community-profile-card community-profile-card-clean">${body}</div>`
           : "";
       }
       composerCard.hidden = true;
@@ -2629,14 +2707,28 @@ function applyViewState(data) {
       const titleEl = document.getElementById("view-title");
       if (titleEl) titleEl.innerHTML = `${escapeHtml(name)}${official}`;
       else setText("view-title", name);
-      const subBits = [slug];
+      const subBits = [];
       if (memberCount != null) subBits.push(`${memberCount.toLocaleString()} member${memberCount === 1 ? "" : "s"}`);
       else if (postCount != null) subBits.push(`${postCount.toLocaleString()} post${postCount === 1 ? "" : "s"}`);
-      setText("view-sub", subBits.filter(Boolean).join(" · "));
+      setText("view-sub", subBits.filter(Boolean).join(" · ") || "Group");
       if (viewBlurb) {
         const desc = (group && group.description) || "";
         viewBlurb.textContent = desc;
         viewBlurb.hidden = !desc;
+      }
+      if (profileMeta) {
+        const assigned = (group && group.tags) || [];
+        const tagsHtml = assigned.map((tag) => tagChip(tag, { compact: true })).join("");
+        const manager = tagManagerHtml({
+          targetType: "group",
+          targetKey: slug,
+          assigned,
+        });
+        const body = `${tagsHtml ? `<div class="community-tag-list synk-tag-badge-row">${tagsHtml}</div>` : ""}${manager}`;
+        profileMeta.hidden = !body;
+        profileMeta.innerHTML = body
+          ? `<div class="community-profile-card community-profile-card-clean">${body}</div>`
+          : "";
       }
       renderDiscordChannels(group);
       renderGroupRoles(group);
@@ -4843,7 +4935,7 @@ function applyViewState(data) {
             <span class="reddit-follow-avatar" aria-hidden="true">${avatar}</span>
             <span class="reddit-follow-copy">
               <strong>${escapeHtml(name)}</strong>
-              <span class="muted">u/${escapeHtml(u)}</span>
+              <span class="muted">${escapeHtml(u)}</span>
             </span>
           </a>`;
         })
@@ -6406,5 +6498,37 @@ document.addEventListener("click", async (e) => {
 
 
   
+
+
+  document.addEventListener("click", async (e) => {
+    const assignBtn = e.target.closest("[data-tag-assign]");
+    const removeBtn = e.target.closest("[data-tag-unassign]");
+    if (!assignBtn && !removeBtn) return;
+    if (!canManageTags()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      if (assignBtn) {
+        const targetType = assignBtn.getAttribute("data-tag-target") || "";
+        const targetKey = assignBtn.getAttribute("data-tag-key") || "";
+        const root = assignBtn.closest(".community-tag-manager");
+        const select = root && root.querySelector("[data-tag-select]");
+        const tagId = select && select.value;
+        if (!tagId) return;
+        await assignTagFromUi({ targetType, targetKey, tagId });
+        await loadCommunity();
+        return;
+      }
+      if (removeBtn) {
+        const targetType = removeBtn.getAttribute("data-tag-target") || "";
+        const targetKey = removeBtn.getAttribute("data-tag-key") || "";
+        const tagId = removeBtn.getAttribute("data-tag-unassign") || "";
+        await unassignTagFromUi({ targetType, targetKey, tagId });
+        await loadCommunity();
+      }
+    } catch (err) {
+      alert(err.message || "Tag update failed");
+    }
+  });
 
 })();

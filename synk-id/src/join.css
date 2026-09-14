@@ -13081,3 +13081,68 @@ body.community-body .community-group-card-avatar {
     border-right: 0;
   }
 }
+
+/* —— Community Synk classic v30 —— */
+body.community-body .community-tag-manager {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed color-mix(in srgb, var(--signal) 28%, var(--r-line, #e5e7eb));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--signal-soft, #e4f6f8) 55%, var(--r-card, #fff));
+}
+body.community-body .community-tag-manage-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+body.community-body .community-tag-manage-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+body.community-body .community-tag-remove {
+  border: 0;
+  background: transparent;
+  color: var(--r-muted, #6b7280);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+body.community-body .community-tag-remove:hover {
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+  color: #b91c1c;
+}
+body.community-body .community-tag-manage-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+body.community-body .community-tag-manage-add select {
+  min-width: min(220px, 100%);
+  border: 1px solid var(--r-line, #e5e7eb);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: var(--r-card, #fff);
+  color: inherit;
+  font: inherit;
+}
+body.community-body .community-tag-manage-empty {
+  font-size: 0.85rem;
+}
+body.community-body .discord-channel-btn.is-active,
+body.community-body .discord-channel-btn:hover {
+  background: color-mix(in srgb, var(--signal-soft, #e4f6f8) 70%, transparent);
+}
+body.community-body .discord-cat {
+  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+  font-weight: 750;
+  color: var(--r-muted, #6b7280);
+  margin: 12px 8px 6px;
+}

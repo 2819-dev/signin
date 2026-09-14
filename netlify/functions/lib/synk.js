@@ -169,6 +169,7 @@ function mapCommunityGroup(row) {
     categories: Array.isArray(row.categories) ? row.categories : undefined,
     channels: Array.isArray(row.channels) ? row.channels : undefined,
     roles: Array.isArray(row.roles) ? row.roles : undefined,
+    tags: Array.isArray(row.tags) ? row.tags : undefined,
   };
 }
 
@@ -193,11 +194,11 @@ function normalizeChannelKind(value, slug = "") {
     .toLowerCase();
   if (["announcements", "announcement"].includes(raw)) return "announcements";
   if (["suggestions", "suggestion", "ideas", "idea"].includes(raw)) return "suggestions";
-  if (["readonly", "read-only", "rules"].includes(raw)) return "readonly";
+  if (["readonly", "read-only", "rules", "welcome"].includes(raw)) return "readonly";
   const s = normalizeChannelSlug(slug || raw);
   if (s === "announcements") return "announcements";
   if (s === "suggestions" || s === "ideas") return "suggestions";
-  if (s === "rules") return "readonly";
+  if (s === "rules" || s === "welcome") return "readonly";
   return "text";
 }
 
@@ -470,6 +471,20 @@ async function ensureSynkCommunityExtras(sql) {
   await sql`
     CREATE INDEX IF NOT EXISTS synk_community_username_tags_tag_idx
     ON synk_community_username_tags (tag_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_group_tags (
+      group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+      tag_id UUID NOT NULL REFERENCES synk_community_tags(id) ON DELETE CASCADE,
+      assigned_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (group_id, tag_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_group_tags_tag_idx
+    ON synk_community_group_tags (tag_id)
   `;
 
   // Migrate legacy profile-scoped tags into username-scoped tags.
@@ -1511,144 +1526,8 @@ async function ensureOfficialSynkGroup(sql) {
   }
   if (!group) return null;
 
-  // Seed Discord-style categories + channels once.
-  const catCount = await sql`
-    SELECT COUNT(*)::int AS count FROM synk_community_group_categories WHERE group_id = ${group.id}
-  `;
-  if (!(Number(catCount[0] && catCount[0].count) > 0)) {
-    const blueprint = [
-      {
-        name: "INFORMATION",
-        channels: [
-          {
-            emoji: "📢",
-            name: "Announcements",
-            slug: "announcements",
-            kind: "announcements",
-            description: "Official Synk updates — staff only",
-          },
-          {
-            emoji: "📜",
-            name: "Rules",
-            slug: "rules",
-            kind: "readonly",
-            description: "Community guidelines",
-          },
-          {
-            emoji: "🆕",
-            name: "Updates",
-            slug: "updates",
-            kind: "announcements",
-            description: "Product and platform notes — staff only",
-          },
-        ],
-      },
-      {
-        name: "COMMUNITY",
-        channels: [
-          {
-            emoji: "💬",
-            name: "General",
-            slug: "general",
-            kind: "text",
-            description: "Everyday conversation",
-          },
-          {
-            emoji: "👋",
-            name: "Introductions",
-            slug: "introductions",
-            kind: "text",
-            description: "Say hello",
-          },
-          {
-            emoji: "💡",
-            name: "Suggestions",
-            slug: "suggestions",
-            kind: "suggestions",
-            description: "Forum-style ideas — upvote and staff accept/deny",
-          },
-        ],
-      },
-      {
-        name: "SUPPORT",
-        channels: [
-          {
-            emoji: "🆘",
-            name: "Help",
-            slug: "help",
-            kind: "text",
-            description: "Get help from the community",
-          },
-          {
-            emoji: "🐛",
-            name: "Bugs",
-            slug: "bugs",
-            kind: "text",
-            description: "Report bugs",
-          },
-          {
-            emoji: "📣",
-            name: "Feedback",
-            slug: "feedback",
-            kind: "text",
-            description: "Tell us what to improve",
-          },
-        ],
-      },
-    ];
-    let catOrder = 0;
-    for (const cat of blueprint) {
-      const createdCat = await sql`
-        INSERT INTO synk_community_group_categories (group_id, name, sort_order)
-        VALUES (${group.id}, ${cat.name}, ${catOrder})
-        RETURNING id
-      `;
-      const categoryId = createdCat[0].id;
-      let chOrder = 0;
-      for (const ch of cat.channels) {
-        await sql`
-          INSERT INTO synk_community_group_channels (
-            group_id, category_id, emoji, name, slug, description, kind, sort_order
-          )
-          VALUES (
-            ${group.id}, ${categoryId}, ${ch.emoji}, ${ch.name}, ${ch.slug}, ${ch.description}, ${ch.kind}, ${chOrder}
-          )
-          ON CONFLICT (group_id, slug) DO NOTHING
-        `;
-        chOrder += 1;
-      }
-      catOrder += 1;
-    }
-  }
-
-  // Keep official Synk channel names/kinds in sync for existing installs.
-  await sql`
-    UPDATE synk_community_group_channels
-    SET
-      name = CASE slug
-        WHEN 'announcements' THEN 'Announcements'
-        WHEN 'rules' THEN 'Rules'
-        WHEN 'updates' THEN 'Updates'
-        WHEN 'general' THEN 'General'
-        WHEN 'introductions' THEN 'Introductions'
-        WHEN 'suggestions' THEN 'Suggestions'
-        WHEN 'ideas' THEN 'Suggestions'
-        WHEN 'help' THEN 'Help'
-        WHEN 'bugs' THEN 'Bugs'
-        WHEN 'feedback' THEN 'Feedback'
-        ELSE INITCAP(name)
-      END,
-      kind = CASE slug
-        WHEN 'announcements' THEN 'announcements'
-        WHEN 'updates' THEN 'announcements'
-        WHEN 'rules' THEN 'readonly'
-        WHEN 'suggestions' THEN 'suggestions'
-        WHEN 'ideas' THEN 'suggestions'
-        ELSE COALESCE(NULLIF(kind, ''), 'text')
-      END,
-      slug = CASE WHEN slug = 'ideas' THEN 'suggestions' ELSE slug END
-    WHERE group_id = ${group.id}
-  `;
+  await syncOfficialSynkLayout(sql, group.id);
+  await purgeLegacyCommunityGroups(sql, group.id);
 
   // Default roles (no icons — badges stay separate).
   const roleCount = await sql`
@@ -1687,6 +1566,283 @@ async function ensureOfficialSynkGroup(sql) {
       AND lower(theme) = 'discord'
   `;
   return group.id;
+}
+
+function officialSynkBlueprint() {
+  return [
+    {
+      name: "START HERE",
+      channels: [
+        {
+          emoji: "👋",
+          name: "Welcome",
+          slug: "welcome",
+          kind: "readonly",
+          description: "How Synk Community works",
+        },
+        {
+          emoji: "📢",
+          name: "Announcements",
+          slug: "announcements",
+          kind: "announcements",
+          description: "Official Synk news — staff only",
+        },
+        {
+          emoji: "📜",
+          name: "Rules",
+          slug: "rules",
+          kind: "readonly",
+          description: "Community guidelines",
+        },
+      ],
+    },
+    {
+      name: "CHAT",
+      channels: [
+        {
+          emoji: "💬",
+          name: "Lounge",
+          slug: "lounge",
+          kind: "text",
+          description: "Everyday conversation",
+        },
+        {
+          emoji: "🆘",
+          name: "Help",
+          slug: "help",
+          kind: "text",
+          description: "Ask questions and get answers",
+        },
+      ],
+    },
+    {
+      name: "FEEDBACK",
+      channels: [
+        {
+          emoji: "💡",
+          name: "Ideas",
+          slug: "ideas",
+          kind: "suggestions",
+          description: "Suggest improvements — staff accept or decline",
+        },
+        {
+          emoji: "🐛",
+          name: "Bugs",
+          slug: "bugs",
+          kind: "text",
+          description: "Report problems",
+        },
+      ],
+    },
+  ];
+}
+
+async function ensureChannelStub(sql, groupId, channel) {
+  await sql`
+    INSERT INTO synk_community_group_channels (
+      group_id, category_id, emoji, name, slug, description, kind, sort_order
+    )
+    VALUES (
+      ${groupId}, NULL, ${channel.emoji || ""}, ${channel.name}, ${channel.slug},
+      ${channel.description || ""}, ${channel.kind || "text"}, ${Number(channel.sortOrder) || 0}
+    )
+    ON CONFLICT (group_id, slug) DO UPDATE
+    SET
+      emoji = EXCLUDED.emoji,
+      name = EXCLUDED.name,
+      description = EXCLUDED.description,
+      kind = EXCLUDED.kind,
+      sort_order = EXCLUDED.sort_order
+  `;
+}
+
+async function syncOfficialSynkLayout(sql, groupId) {
+  if (!groupId) return;
+  const blueprint = officialSynkBlueprint();
+  const desiredSlugs = new Set();
+  for (const cat of blueprint) {
+    for (const ch of cat.channels) desiredSlugs.add(ch.slug);
+  }
+
+  let sort = 0;
+  for (const cat of blueprint) {
+    for (const ch of cat.channels) {
+      await ensureChannelStub(sql, groupId, { ...ch, sortOrder: sort });
+      sort += 1;
+    }
+  }
+
+  const rows = await sql`
+    SELECT id, slug FROM synk_community_group_channels WHERE group_id = ${groupId}
+  `;
+  const bySlug = {};
+  for (const row of rows) bySlug[row.slug] = row.id;
+
+  const merges = {
+    general: "lounge",
+    introductions: "lounge",
+    updates: "announcements",
+    feedback: "ideas",
+    suggestions: "ideas",
+  };
+  for (const [fromSlug, toSlug] of Object.entries(merges)) {
+    const fromId = bySlug[fromSlug];
+    const toId = bySlug[toSlug];
+    if (!fromId || !toId || fromId === toId) continue;
+    await sql`
+      UPDATE synk_community_posts
+      SET channel_id = ${toId}
+      WHERE group_id = ${groupId}
+        AND channel_id = ${fromId}
+    `;
+  }
+
+  await sql`DELETE FROM synk_community_group_categories WHERE group_id = ${groupId}`;
+  let catOrder = 0;
+  for (const cat of blueprint) {
+    const createdCat = await sql`
+      INSERT INTO synk_community_group_categories (group_id, name, sort_order)
+      VALUES (${groupId}, ${cat.name}, ${catOrder})
+      RETURNING id
+    `;
+    const categoryId = createdCat[0].id;
+    let chOrder = 0;
+    for (const ch of cat.channels) {
+      await sql`
+        UPDATE synk_community_group_channels
+        SET
+          category_id = ${categoryId},
+          emoji = ${ch.emoji || ""},
+          name = ${ch.name},
+          description = ${ch.description || ""},
+          kind = ${ch.kind || "text"},
+          sort_order = ${chOrder}
+        WHERE group_id = ${groupId}
+          AND slug = ${ch.slug}
+      `;
+      chOrder += 1;
+    }
+    catOrder += 1;
+  }
+
+  const leftover = await sql`
+    SELECT id, slug FROM synk_community_group_channels WHERE group_id = ${groupId}
+  `;
+  for (const row of leftover) {
+    if (desiredSlugs.has(row.slug)) continue;
+    const loungeId = bySlug.lounge || bySlug.announcements || null;
+    if (loungeId) {
+      await sql`
+        UPDATE synk_community_posts
+        SET channel_id = ${loungeId}
+        WHERE group_id = ${groupId}
+          AND channel_id = ${row.id}
+      `;
+    } else {
+      await sql`
+        UPDATE synk_community_posts
+        SET channel_id = NULL
+        WHERE group_id = ${groupId}
+          AND channel_id = ${row.id}
+      `;
+    }
+    await sql`DELETE FROM synk_community_group_channels WHERE id = ${row.id}`;
+  }
+}
+
+async function purgeLegacyCommunityGroups(sql, synkGroupId) {
+  if (!synkGroupId) return;
+  const lounge = await sql`
+    SELECT id FROM synk_community_group_channels
+    WHERE group_id = ${synkGroupId}
+      AND slug = 'lounge'
+    LIMIT 1
+  `;
+  const loungeId = lounge[0] ? lounge[0].id : null;
+  const legacy = await sql`
+    SELECT id, slug
+    FROM synk_community_groups
+    WHERE id <> ${synkGroupId}
+      AND COALESCE(is_official, FALSE) = FALSE
+  `;
+  for (const row of legacy) {
+    if (loungeId) {
+      await sql`
+        UPDATE synk_community_posts
+        SET group_id = ${synkGroupId}, channel_id = ${loungeId}
+        WHERE group_id = ${row.id}
+      `;
+    } else {
+      await sql`
+        UPDATE synk_community_posts
+        SET group_id = ${synkGroupId}, channel_id = NULL
+        WHERE group_id = ${row.id}
+      `;
+    }
+    await sql`DELETE FROM synk_community_groups WHERE id = ${row.id}`;
+  }
+}
+
+async function listGroupTags(sql, groupId) {
+  if (!groupId) return [];
+  const rows = await sql`
+    SELECT
+      t.id, t.name, t.slug, t.description, t.color, t.icon_url,
+      t.learn_more_enabled, t.learn_more_page_id, t.created_at, t.updated_at,
+      p.slug AS learn_more_page_slug,
+      p.title AS learn_more_page_title
+    FROM synk_community_group_tags gt
+    JOIN synk_community_tags t ON t.id = gt.tag_id
+    LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
+    WHERE gt.group_id = ${groupId}
+    ORDER BY t.name ASC
+  `;
+  return rows.map((row) => mapCommunityTag(row));
+}
+
+async function listTagsByGroupIds(sql, groupIds) {
+  const ids = Array.from(new Set((groupIds || []).filter(Boolean)));
+  if (!ids.length) return {};
+  const rows = await sql`
+    SELECT
+      gt.group_id,
+      t.id, t.name, t.slug, t.description, t.color, t.icon_url,
+      t.learn_more_enabled, t.learn_more_page_id, t.created_at, t.updated_at,
+      p.slug AS learn_more_page_slug,
+      p.title AS learn_more_page_title
+    FROM synk_community_group_tags gt
+    JOIN synk_community_tags t ON t.id = gt.tag_id
+    LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
+    WHERE gt.group_id = ANY(${ids})
+    ORDER BY t.name ASC
+  `;
+  const out = {};
+  for (const row of rows) {
+    const key = row.group_id;
+    if (!out[key]) out[key] = [];
+    out[key].push(mapCommunityTag(row));
+  }
+  return out;
+}
+
+async function assignGroupTag(sql, groupId, tagId, assignedBy = null) {
+  if (!groupId || !tagId) return false;
+  await sql`
+    INSERT INTO synk_community_group_tags (group_id, tag_id, assigned_by)
+    VALUES (${groupId}, ${tagId}, ${assignedBy})
+    ON CONFLICT (group_id, tag_id) DO NOTHING
+  `;
+  return true;
+}
+
+async function unassignGroupTag(sql, groupId, tagId) {
+  if (!groupId || !tagId) return false;
+  await sql`
+    DELETE FROM synk_community_group_tags
+    WHERE group_id = ${groupId}
+      AND tag_id = ${tagId}
+  `;
+  return true;
 }
 
 async function listGroupCategories(sql, groupId) {
@@ -1757,10 +1913,11 @@ async function listGroupRoles(sql, groupId) {
 
 async function hydrateCommunityGroup(sql, group) {
   if (!group) return null;
-  const [categories, channels, roles, members] = await Promise.all([
+  const [categories, channels, roles, tags, members] = await Promise.all([
     listGroupCategories(sql, group.id),
     listGroupChannels(sql, group.id),
     listGroupRoles(sql, group.id),
+    listGroupTags(sql, group.id),
     sql`SELECT COUNT(*)::int AS count FROM synk_community_memberships WHERE group_id = ${group.id}`,
   ]);
   return {
@@ -1768,6 +1925,7 @@ async function hydrateCommunityGroup(sql, group) {
     categories,
     channels,
     roles,
+    tags,
     memberCount: Number(members[0] && members[0].count) || 0,
   };
 }
@@ -1898,7 +2056,15 @@ async function listCommunityGroups(sql) {
       CASE WHEN g.is_official THEN 0 WHEN g.slug = 'synk' THEN 0 ELSE 1 END,
       g.name ASC
   `;
-  return rows.map(mapCommunityGroup);
+  const groups = rows.map(mapCommunityGroup);
+  const tagsByGroup = await listTagsByGroupIds(
+    sql,
+    groups.map((g) => g && g.id).filter(Boolean)
+  );
+  return groups.map((group) => ({
+    ...group,
+    tags: tagsByGroup[group.id] || [],
+  }));
 }
 
 async function findCommunityGroup(sql, { id, slug } = {}) {
@@ -5057,6 +5223,12 @@ module.exports = {
   mapCommunityGroup,
   ensureOfficialSynkGroup,
   hydrateCommunityGroup,
+  listGroupTags,
+  listTagsByGroupIds,
+  assignGroupTag,
+  unassignGroupTag,
+  syncOfficialSynkLayout,
+  purgeLegacyCommunityGroups,
   listGroupCategories,
   listGroupChannels,
   findGroupChannel,
