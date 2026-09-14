@@ -13560,3 +13560,34 @@ body.community-body .discord-channel-label.is-full { display: inline; }
 @media (min-width: 861px) {
   body.community-body .community-tag-manager-summary { margin-bottom: 4px; }
 }
+
+
+/* —— Community feed polish (all views) v36 —— */
+body.community-body .reddit-post {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+body.community-body:not(.is-discord-group) .reddit-post:hover {
+  border-color: color-mix(in srgb, var(--signal, #1a9aa8) 28%, var(--r-line, #e5e7eb));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--shadow, rgba(15,23,42,0.08)) 80%, transparent);
+}
+body.community-body .reddit-create-fakeinput,
+body.community-body .reddit-create-fakeinput {
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+body.community-body .reddit-feed-empty {
+  border-radius: 14px;
+}
+@media (max-width: 860px) {
+  body.community-body:not(.is-discord-group) .reddit-post {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  body.community-body:not(.is-discord-group) .reddit-create,
+  body.community-body:not(.is-discord-group) .reddit-sortbar {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+}
+
