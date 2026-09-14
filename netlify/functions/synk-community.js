@@ -435,6 +435,7 @@ function mePayload(auth, role, alts = [], tags = [], pinnedTag = null) {
 
 async function getUnreadCount(sql, profileId) {
   if (!profileId) return 0;
+  await coalesceAppUpdateNotifications(sql, profileId);
   const rows = await sql`
     SELECT COUNT(*)::int AS count
     FROM synk_community_notifications
@@ -462,8 +463,80 @@ async function markGroupsJoined(sql, groups, profileId) {
   }));
 }
 
+async function coalesceAppUpdateNotifications(sql, profileId) {
+  if (!profileId) return;
+  try {
+    await sql`
+      DELETE FROM synk_community_notifications
+      WHERE synk_profile_id = ${profileId}
+        AND kind IN ('app_update', 'app_updated', 'update')
+        AND id NOT IN (
+          SELECT id
+          FROM (
+            SELECT id
+            FROM synk_community_notifications
+            WHERE synk_profile_id = ${profileId}
+              AND kind IN ('app_update', 'app_updated', 'update')
+            ORDER BY
+              CASE WHEN read_at IS NULL THEN 0 ELSE 1 END,
+              created_at DESC,
+              id DESC
+            LIMIT 1
+          ) keep_one
+        )
+    `;
+  } catch (_) {}
+}
+
+function collapseAppUpdateNotes(notes) {
+  const list = Array.isArray(notes) ? notes.slice() : [];
+  const kept = [];
+  let appUpdate = null;
+  for (const note of list) {
+    const kind = String((note && note.kind) || "").toLowerCase().replace(/-/g, "_");
+    if (kind === "app_update" || kind === "app_updated" || kind === "update") {
+      if (!appUpdate) {
+        appUpdate = {
+          ...note,
+          title: note.title || "App updated",
+          description:
+            note.description ||
+            note.body ||
+            "Synk was updated. Open release notes for what’s new.",
+          body:
+            note.body ||
+            note.description ||
+            "Synk was updated. Open release notes for what’s new.",
+        };
+        kept.push(appUpdate);
+      } else {
+        // Prefer unread + newest version metadata when collapsing older rows.
+        if (!appUpdate.readAt && note.readAt) {
+          /* keep unread */
+        } else if (appUpdate.readAt && !note.readAt) {
+          appUpdate.readAt = null;
+        }
+        if (!appUpdate.version && note.version) appUpdate.version = note.version;
+        if (new Date(note.createdAt || 0) > new Date(appUpdate.createdAt || 0)) {
+          appUpdate.createdAt = note.createdAt;
+          if (note.version) appUpdate.version = note.version;
+          if (note.description || note.body) {
+            appUpdate.description = note.description || note.body;
+            appUpdate.body = note.body || note.description;
+          }
+        }
+      }
+      continue;
+    }
+    kept.push(note);
+  }
+  kept.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return kept;
+}
+
 async function loadNotifications(sql, profileId, { limit = 50, username = "" } = {}) {
   const capped = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  await coalesceAppUpdateNotifications(sql, profileId);
   const rows = await sql`
     SELECT
       id,
@@ -479,7 +552,7 @@ async function loadNotifications(sql, profileId, { limit = 50, username = "" } =
     ORDER BY created_at DESC
     LIMIT ${capped}
   `;
-  const notes = rows.map(mapNotification);
+  const notes = collapseAppUpdateNotes(rows.map(mapNotification));
 
   // Surface pending friend requests even if a row was missed.
   const meName = normalizePublicUsername(username);

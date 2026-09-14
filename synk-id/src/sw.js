@@ -9,17 +9,20 @@ self.addEventListener("activate", (event) => {
 
 function buildOptions(data) {
   const type = String(data.type || "notification");
+  const tag = String(data.tag || (type === "dm" || type === "message" ? "synk-dm" : "synk-notification"));
   const isDm = type === "dm" || type === "message";
+  const isAppUpdate = tag === "app-update" || type === "app_update" || type === "update";
   return {
     body: data.body || (isDm ? "New message" : "New notification"),
-    tag: data.tag || (isDm ? "synk-dm" : "synk-notification"),
-    renotify: true,
+    tag,
+    // Same-tag app updates should replace quietly instead of stacking alerts.
+    renotify: isAppUpdate ? false : true,
     requireInteraction: false,
     silent: false,
     lang: "en",
     icon: "/apple-touch-icon.png",
     badge: "/apple-touch-icon.png",
-    vibrate: isDm ? [70, 40, 70] : [120, 60, 120],
+    vibrate: isAppUpdate ? [] : isDm ? [70, 40, 70] : [120, 60, 120],
     timestamp: Date.now(),
     data: {
       url: data.url || "/hub",

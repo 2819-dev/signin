@@ -15,15 +15,15 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v33" />
+    <link rel="stylesheet" href="/join.css?v=community-v37" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v33" defer></script>
-    <script src="/push-client.js?v=dark-fix2" defer></script>
+    <script src="/force-refresh.js?v=community-v37" defer></script>
+    <script src="/push-client.js?v=community-v37" defer></script>
     <script src="/image-crop.js?v=crop-v2"></script>
   
     <style>
@@ -524,6 +524,51 @@
           .replace(/"/g, "&quot;");
       }
 
+      function isHubAppUpdateKind(kind) {
+        const k = String(kind || "").trim().toLowerCase().replace(/-/g, "_");
+        return k === "app_update" || k === "app_updated" || k === "update";
+      }
+
+      function collapseHubAppUpdateNotes(notes) {
+        const list = Array.isArray(notes) ? notes.slice() : [];
+        const kept = [];
+        let appUpdate = null;
+        for (const note of list) {
+          if (isHubAppUpdateKind(note && note.kind)) {
+            if (!appUpdate) {
+              appUpdate = {
+                ...note,
+                title: note.title || "App updated",
+                description:
+                  note.description ||
+                  note.body ||
+                  "Synk was updated. Open release notes for what’s new.",
+                body:
+                  note.body ||
+                  note.description ||
+                  "Synk was updated. Open release notes for what’s new.",
+              };
+              kept.push(appUpdate);
+            } else {
+              if (appUpdate.readAt && !note.readAt) appUpdate.readAt = null;
+              if (!appUpdate.version && note.version) appUpdate.version = note.version;
+              if (new Date(note.createdAt || 0) > new Date(appUpdate.createdAt || 0)) {
+                appUpdate.createdAt = note.createdAt;
+                if (note.version) appUpdate.version = note.version;
+                if (note.description || note.body) {
+                  appUpdate.description = note.description || note.body;
+                  appUpdate.body = note.body || note.description;
+                }
+              }
+            }
+            continue;
+          }
+          kept.push(note);
+        }
+        kept.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        return kept;
+      }
+
       function hubHeaders(session) {
         return {
           "Content-Type": "application/json",
@@ -639,7 +684,7 @@
       function renderHubNotifications(notes) {
         const list = document.getElementById("hub-notif-list");
         if (!list) return;
-        hubNotifCache = Array.isArray(notes) ? notes.slice() : [];
+        hubNotifCache = collapseHubAppUpdateNotes(notes);
         if (!hubNotifCache.length) {
           list.innerHTML = `<p class="muted reddit-notif-empty">No new notifications</p>`;
           return;

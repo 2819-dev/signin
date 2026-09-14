@@ -1995,6 +1995,52 @@
       .replace(/-/g, "_");
   }
 
+  function isAppUpdateKind(kind) {
+    const k = normalizeNotifKind(kind);
+    return k === "app_update" || k === "app_updated" || k === "update";
+  }
+
+  // Belt-and-suspenders: keep a single release-note row in the inbox UI.
+  function collapseAppUpdateNotes(notes) {
+    const list = Array.isArray(notes) ? notes.slice() : [];
+    const kept = [];
+    let appUpdate = null;
+    for (const note of list) {
+      if (isAppUpdateKind(note && note.kind)) {
+        if (!appUpdate) {
+          appUpdate = {
+            ...note,
+            title: note.title || "App updated",
+            description:
+              note.description ||
+              note.body ||
+              "Synk was updated. Open release notes for what’s new.",
+            body:
+              note.body ||
+              note.description ||
+              "Synk was updated. Open release notes for what’s new.",
+          };
+          kept.push(appUpdate);
+        } else {
+          if (appUpdate.readAt && !note.readAt) appUpdate.readAt = null;
+          if (!appUpdate.version && note.version) appUpdate.version = note.version;
+          if (new Date(note.createdAt || 0) > new Date(appUpdate.createdAt || 0)) {
+            appUpdate.createdAt = note.createdAt;
+            if (note.version) appUpdate.version = note.version;
+            if (note.description || note.body) {
+              appUpdate.description = note.description || note.body;
+              appUpdate.body = note.body || note.description;
+            }
+          }
+        }
+        continue;
+      }
+      kept.push(note);
+    }
+    kept.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return kept;
+  }
+
   function describeNotification(note) {
     const kind = normalizeNotifKind(note && note.kind);
     const actor = String((note && (note.actorUsername || note.actor)) || "").trim() || "Someone";
@@ -2103,7 +2149,7 @@
     const list = document.getElementById("inbox-list");
     const empty = document.getElementById("inbox-empty");
     if (!list) return;
-    lastNotifications = Array.isArray(notifications) ? notifications.slice() : [];
+    lastNotifications = collapseAppUpdateNotes(notifications);
     if (!lastNotifications.length) {
       list.innerHTML = "";
       if (empty) empty.hidden = false;
@@ -3509,6 +3555,13 @@ function applyViewState(data) {
       renderNotifPanel([]);
       unreadCount = 0;
       updateInboxBadge();
+      // Allow a future unread release note to alert once after this was seen.
+      localAppUpdateNotified = false;
+      prev.forEach((note) => {
+        if (isAppUpdateKind(note && note.kind) && note.id) {
+          seenNotifIds.delete(String(note.id));
+        }
+      });
       try {
         const data = await communityAction({ action: "mark-read" });
         if (seq !== notifSeq) return;
@@ -5197,7 +5250,7 @@ function applyViewState(data) {
   function renderNotifPanel(notes) {
     const list = document.getElementById("notif-list");
     if (!list) return;
-    notifCache = Array.isArray(notes) ? notes.slice() : [];
+    notifCache = collapseAppUpdateNotes(notes);
     if (!notifCache.length) {
       list.innerHTML = `<p class="muted reddit-notif-empty" id="notif-empty">No new notifications</p>`;
       return;
@@ -5236,6 +5289,7 @@ function applyViewState(data) {
 
   let seenNotifIds = new Set();
   let notifWatchReady = false;
+  let localAppUpdateNotified = false;
 
   async function refreshNotifications({ open = false } = {}) {
     const seq = ++notifSeq;
@@ -5249,18 +5303,28 @@ function applyViewState(data) {
       }
       if (seq !== notifSeq) return;
       notifLoaded = true;
-      const notes = Array.isArray(data.notifications) ? data.notifications : [];
+      const notes = collapseAppUpdateNotes(
+        Array.isArray(data.notifications) ? data.notifications : []
+      );
       if (notifWatchReady && window.SynkPush && window.SynkPush.maybeLocalNotify) {
         notes.forEach((note) => {
           const id = String((note && note.id) || "");
           if (!id || seenNotifIds.has(id) || note.readAt) return;
           seenNotifIds.add(id);
+          // Don't stack local alerts for the same unread release note.
+          if (isAppUpdateKind(note.kind)) {
+            if (localAppUpdateNotified) return;
+            localAppUpdateNotified = true;
+          }
           window.SynkPush.maybeLocalNotify(note);
         });
       } else {
         notes.forEach((note) => {
           const id = String((note && note.id) || "");
           if (id) seenNotifIds.add(id);
+          if (isAppUpdateKind(note && note.kind) && !note.readAt) {
+            localAppUpdateNotified = true;
+          }
         });
         notifWatchReady = true;
       }
@@ -5310,6 +5374,12 @@ function applyViewState(data) {
       lastNotifications = [];
       unreadCount = 0;
       updateInboxBadge();
+      localAppUpdateNotified = false;
+      prev.forEach((note) => {
+        if (isAppUpdateKind(note && note.kind) && note.id) {
+          seenNotifIds.delete(String(note.id));
+        }
+      });
       try {
         const data = await communityAction({ action: "mark-read" });
         if (seq !== notifSeq) return;

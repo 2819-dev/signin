@@ -490,6 +490,14 @@ async function main() {
     console.log(
       `Notified ${result.notified} users about app update ${result.version}.`
     );
+    if (result.pushSent != null) {
+      console.log(`Sent ${result.pushSent} app-update push notification(s).`);
+    }
+    if (result.pushSkippedUnread) {
+      console.log(
+        `Skipped ${result.pushSkippedUnread} push(es) because a prior app update was still unread.`
+      );
+    }
     if (result.agendaCreated) {
       console.log(`Added ${result.agendaCreated} beta testing agenda item(s).`);
     }

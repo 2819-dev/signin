@@ -5057,11 +5057,62 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
       notesRefreshed: !!releaseNotes,
       version: ver,
       notified: Number(existing[0].notified_count) || 0,
+      pushSent: 0,
+      pushSkippedUnread: 0,
     };
   }
 
   const notifBody = `${message}\n\n<!--synk-version:${ver}-->`;
 
+  // Who already has an unread app-update? Those users should NOT get another push.
+  const unreadBefore = await sql`
+    SELECT DISTINCT synk_profile_id AS profile_id
+    FROM synk_community_notifications
+    WHERE kind IN ('app_update', 'app_updated', 'update')
+      AND read_at IS NULL
+  `;
+  const unreadSet = new Set(
+    unreadBefore.map((row) => String(row.profile_id || "")).filter(Boolean)
+  );
+
+  // Refresh any existing unread app-update rows in place (keeps one live release note).
+  await sql`
+    UPDATE synk_community_notifications
+    SET
+      body = ${notifBody},
+      actor_username = 'synk',
+      created_at = NOW(),
+      read_at = NULL
+    WHERE kind IN ('app_update', 'app_updated', 'update')
+      AND read_at IS NULL
+  `;
+
+  // Profiles that only have read app-updates: revive the newest row as unread.
+  await sql`
+    UPDATE synk_community_notifications n
+    SET
+      body = ${notifBody},
+      actor_username = 'synk',
+      created_at = NOW(),
+      read_at = NULL
+    WHERE n.kind IN ('app_update', 'app_updated', 'update')
+      AND n.read_at IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM synk_community_notifications u
+        WHERE u.synk_profile_id = n.synk_profile_id
+          AND u.kind IN ('app_update', 'app_updated', 'update')
+          AND u.read_at IS NULL
+      )
+      AND n.created_at = (
+        SELECT MAX(n2.created_at)
+        FROM synk_community_notifications n2
+        WHERE n2.synk_profile_id = n.synk_profile_id
+          AND n2.kind IN ('app_update', 'app_updated', 'update')
+      )
+  `;
+
+  // Profiles with no app-update row yet: insert one.
   const inserted = await sql`
     INSERT INTO synk_community_notifications (
       synk_profile_id, kind, actor_username, body
@@ -5074,9 +5125,47 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
     FROM synk_community_profiles c
     WHERE c.public_username IS NOT NULL
       AND btrim(c.public_username) <> ''
-    RETURNING id
+      AND NOT EXISTS (
+        SELECT 1
+        FROM synk_community_notifications n
+        WHERE n.synk_profile_id = c.synk_profile_id
+          AND n.kind IN ('app_update', 'app_updated', 'update')
+      )
+    RETURNING synk_profile_id
   `;
-  const notified = inserted.length;
+
+  // Collapse any leftover duplicates so the inbox shows a single release note.
+  await sql`
+    DELETE FROM synk_community_notifications
+    WHERE id IN (
+      SELECT id
+      FROM (
+        SELECT
+          id,
+          ROW_NUMBER() OVER (
+            PARTITION BY synk_profile_id
+            ORDER BY
+              CASE WHEN read_at IS NULL THEN 0 ELSE 1 END,
+              created_at DESC,
+              id DESC
+          ) AS rn
+        FROM synk_community_notifications
+        WHERE kind IN ('app_update', 'app_updated', 'update')
+      ) ranked
+      WHERE rn > 1
+    )
+  `;
+
+  const touched = await sql`
+    SELECT COUNT(*)::int AS count
+    FROM synk_community_notifications
+    WHERE kind IN ('app_update', 'app_updated', 'update')
+      AND body = ${notifBody}
+  `;
+  const notified =
+    Number(touched[0] && touched[0].count) ||
+    inserted.length ||
+    unreadBefore.length;
 
   await sql`
     INSERT INTO synk_app_update_broadcasts (version, body, notes, notified_count)
@@ -5111,18 +5200,36 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
     console.error("notifyBetaTestersOfShift failed:", err);
   }
 
-  let push = { sent: 0, removed: 0 };
+  // Push only to members who already saw (or never had) the previous update.
+  let push = { sent: 0, removed: 0, skippedUnread: unreadSet.size };
   try {
-    const { broadcastSynkPush, notificationPushPayload } = require("./synk-push");
-    push = await broadcastSynkPush(
-      sql,
-      notificationPushPayload({
-        kind: "app_update",
-        actorUsername: "synk",
-        body: message,
-        url: "/hub",
-      })
-    );
+    const { notifySynkProfiles, notificationPushPayload } = require("./synk-push");
+    const pushTargets = await sql`
+      SELECT c.synk_profile_id AS profile_id
+      FROM synk_community_profiles c
+      WHERE c.public_username IS NOT NULL
+        AND btrim(c.public_username) <> ''
+    `;
+    const pushIds = pushTargets
+      .map((row) => String(row.profile_id || ""))
+      .filter((id) => id && !unreadSet.has(id));
+    if (pushIds.length) {
+      push = {
+        ...(await notifySynkProfiles(
+          sql,
+          pushIds,
+          notificationPushPayload({
+            kind: "app_update",
+            actorUsername: "synk",
+            body: message,
+            url: "/hub",
+          })
+        )),
+        skippedUnread: unreadSet.size,
+      };
+    } else {
+      push = { sent: 0, removed: 0, skippedUnread: unreadSet.size, skipped: true };
+    }
   } catch (err) {
     console.error("broadcastAppUpdate push failed:", err);
   }
@@ -5139,6 +5246,7 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
     betaNotified: Number(betaShift && betaShift.notified) || 0,
     betaPushSent: Number(betaShift && betaShift.pushSent) || 0,
     pushSent: Number(push && push.sent) || 0,
+    pushSkippedUnread: Number(push && push.skippedUnread) || unreadSet.size || 0,
   };
 }
 

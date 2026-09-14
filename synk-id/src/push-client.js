@@ -200,26 +200,31 @@
   function maybeLocalNotify(note) {
     if (!supportsPush() || Notification.permission !== "granted") return;
     if (document.visibilityState === "visible") return;
-    const kind = String((note && note.kind) || "").toLowerCase();
+    const kind = String((note && note.kind) || "").toLowerCase().replace(/-/g, "_");
     const actor = String((note && (note.actorUsername || note.actor)) || "Someone");
-    const title =
-      kind === "dm" || kind === "message"
+    const isAppUpdate = kind === "app_update" || kind === "app_updated" || kind === "update";
+    const title = isAppUpdate
+      ? "App updated"
+      : kind === "dm" || kind === "message"
         ? "New message"
         : kind === "friend_request"
           ? "Friend request"
           : "Notification";
-    const body = String((note && (note.body || note.description)) || `${actor} sent you a notification.`).slice(
-      0,
-      180
-    );
-    const url =
-      kind === "dm" || kind === "message"
+    const body = String(
+      (note && (note.body || note.description)) ||
+        (isAppUpdate ? "Synk was updated. Open release notes for what’s new." : `${actor} sent you a notification.`)
+    ).slice(0, 180);
+    const url = isAppUpdate
+      ? "/community/inbox"
+      : kind === "dm" || kind === "message"
         ? `/community/inbox?tab=messages&dm=${encodeURIComponent(actor)}`
         : "/community/inbox";
     try {
       const n = new Notification(title, {
         body,
-        tag: `local-${kind || "note"}-${actor}`,
+        // Stable tag so repeated app updates replace instead of stacking.
+        tag: isAppUpdate ? "app-update" : `local-${kind || "note"}-${actor}`,
+        renotify: !isAppUpdate,
         icon: "/apple-touch-icon.png",
         badge: "/apple-touch-icon.png",
         data: { url },
