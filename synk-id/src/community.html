@@ -13,9 +13,9 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v12" />
+    <link rel="stylesheet" href="/join.css?v=community-v14" />
     <script src="/session.js?v=stay-v1"></script>
-    <script src="/force-refresh.js?v=community-v12" defer></script>
+    <script src="/force-refresh.js?v=community-v14" defer></script>
   </head>
   <body class="community-body reddit-body">
     <header class="reddit-topnav">
@@ -26,10 +26,10 @@
       <form class="reddit-search" id="jump-form" autocomplete="off" role="search">
         <label class="sr-only" for="jump-input">Search Community</label>
         <svg class="reddit-search-icon r-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="jump-input" type="search" placeholder="Search people, groups, and posts" spellcheck="false" autocapitalize="none" />
+        <input id="jump-input" type="search" placeholder="Search Community" spellcheck="false" autocapitalize="none" />
       </form>
       <nav class="reddit-top-actions" aria-label="Quick actions">
-        <a class="reddit-create-top" href="/community/submit" id="create-top-link" title="Create post">
+        <a class="reddit-create-top is-filled" href="/community/submit" id="create-top-link" title="Create post">
           <svg class="r-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           <span class="reddit-create-label">Create</span>
         </a>
@@ -211,7 +211,7 @@
                     <p class="reddit-community-sub" id="view-sub">general</p>
                   </div>
                   <div class="reddit-community-actions" id="view-actions">
-                    <button class="btn btn-primary btn-compact reddit-join-btn" type="button" id="join-community-btn" hidden>Join</button>
+                    <button class="btn btn-primary btn-compact reddit-join-btn reddit-join-orange" type="button" id="join-community-btn" hidden>Join</button>
                   </div>
                 </div>
                 <p class="reddit-community-desc muted" id="view-blurb" hidden></p>
@@ -236,7 +236,7 @@
                 <section class="card community-composer reddit-create" id="composer-card" hidden>
                   <div class="reddit-create-bar" id="composer-collapsed">
                     <div class="reddit-create-avatar" id="composer-avatar" aria-hidden="true">S</div>
-                    <a class="reddit-create-fakeinput" href="/community/submit" id="composer-open-btn">Create a post</a>
+                    <a class="reddit-create-fakeinput" href="/community/submit" id="composer-open-btn">Create Post</a>
                   </div>
                   <p class="muted" id="composer-as" hidden>Posting as —</p>
                 </section>
@@ -248,7 +248,7 @@
                   <button class="reddit-sort-tab" type="button" data-search-tab="users" id="search-tab-users">Users</button>
                 </section>
 
-                <section class="reddit-sortbar" id="sort-tabs" aria-label="Sort">
+                <section class="reddit-sortbar reddit-sortbar-pills" id="sort-tabs" aria-label="Sort">
                   <button class="reddit-sort-tab" type="button" data-sort="hot" id="sort-hot">
                     <svg class="r-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s4 4.2 4 7.5a4 4 0 1 1-8 0C8 7.2 12 3 12 3z"/><path d="M10 17.5c.5 1.5 1.5 2.5 2 3.5.5-1 1.5-2 2-3.5"/></svg>
                     <span>Hot</span>
@@ -263,7 +263,7 @@
                   </button>
                 </section>
 
-                <section class="card reddit-feed-wrap" id="feed-card">
+                <section class="reddit-feed-wrap" id="feed-card">
                   <div id="feed" class="community-feed"></div>
                   <div id="feed-empty" class="muted reddit-feed-empty" hidden>
                     <strong>Your feed is ready</strong>
@@ -279,24 +279,24 @@
 
 
             <div id="post-view" hidden>
-              <section class="card reddit-post-detail-card">
-                <button class="reddit-back-btn" type="button" id="post-back-btn">Back to feed</button>
+              <section class="reddit-post-detail-card">
+                <button class="reddit-back-btn" type="button" id="post-back-btn">Back</button>
                 <div id="post-detail" class="reddit-post-detail"></div>
               </section>
-              <section class="card reddit-comments-card">
+              <section class="reddit-comments-card">
                 <h2 class="reddit-comments-title">Comments</h2>
                 <form id="comment-form" class="form reddit-comment-form">
                   <div class="field">
                     <label class="sr-only" for="comment-body">Add a comment</label>
-                    <textarea id="comment-body" rows="3" maxlength="1000" required placeholder="Add a comment…"></textarea>
+                    <textarea id="comment-body" rows="3" maxlength="1000" required placeholder="What are your thoughts?"></textarea>
                   </div>
                   <div class="reddit-create-actions">
-                    <button class="btn btn-primary btn-compact" type="submit" id="comment-submit-btn">Comment</button>
+                    <button class="btn btn-primary btn-compact reddit-join-orange" type="submit" id="comment-submit-btn">Comment</button>
                   </div>
                   <p id="comment-status" class="muted" style="font-size: 0.85rem"></p>
                 </form>
                 <div id="comments-list" class="reddit-comments-list"></div>
-                <p class="muted reddit-comments-empty" id="comments-empty" hidden>No comments yet — share the first thought.</p>
+                <p class="muted reddit-comments-empty" id="comments-empty" hidden>No Comments yet. Be the first to share what you think!</p>
               </section>
             </div>
 
@@ -854,7 +854,7 @@
                 <div><dt>Communities</dt><dd id="stat-groups">—</dd></div>
               </dl>
               <div class="reddit-about-meta" id="about-meta" hidden></div>
-              <button class="btn btn-primary btn-compact reddit-about-join" type="button" id="about-join-btn" hidden>Join</button>
+              <button class="btn btn-primary btn-compact reddit-about-join reddit-join-orange" type="button" id="about-join-btn" hidden>Join</button>
             </section>
             <section class="reddit-widget" id="group-roles-widget" hidden>
               <h2 class="reddit-widget-title">Roles</h2>
@@ -932,6 +932,6 @@
     </div>
 
     <script src="/push-client.js?v=dark-fix2"></script>
-    <script src="/community.js?v=community-v12"></script>
+    <script src="/community.js?v=community-v14"></script>
   </body>
 </html>

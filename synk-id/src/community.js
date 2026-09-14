@@ -18,8 +18,8 @@
     shield: '<path d="M12 3l8 3v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z"/>',
     exit: '<path d="M10 7V5a2 2 0 0 1 2-2h7v18h-7a2 2 0 0 1-2-2v-2"/><path d="M15 12H3m0 0 3-3m-3 3 3 3"/>',
     chevron: '<path d="m6 9 6 6 6-6"/>',
-    up: '<path d="m6 14 6-6 6 6"/>',
-    down: '<path d="m6 10 6 6 6-6"/>',
+    up: '<path d="M12 5 4 16h16L12 5z"/>',
+    down: '<path d="M12 19 4 8h16l-8 11z"/>',
     comment: '<path d="M7 18.5 4 21V7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H7z"/>',
     share: '<path d="M14 7h6v6"/><path d="M20 7 10.5 16.5"/><path d="M11 7H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-5"/>',
     bookmark: '<path d="M7 4h10a1 1 0 0 1 1 1v16l-6-3.5L6 21V5a1 1 0 0 1 1-1z"/>',
@@ -28,6 +28,9 @@
 
   function ico(name, size = 18) {
     const body = ICO_PATHS[name] || "";
+    if (name === "up" || name === "down") {
+      return `<svg class="r-ico r-ico-vote" width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${body}</svg>`;
+    }
     return `<svg class="r-ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
   }
 
@@ -1195,7 +1198,7 @@
     const actionsHost = document.querySelector("#view-banner .reddit-community-actions");
     if (!actionsHost) return;
     if (actionsHost.querySelector("#join-community-btn")) return;
-    actionsHost.innerHTML = `<button class="btn btn-primary btn-compact reddit-join-btn" type="button" id="join-community-btn" hidden>Join</button>`;
+    actionsHost.innerHTML = `<button class="btn btn-primary btn-compact reddit-join-btn reddit-join-orange" type="button" id="join-community-btn" hidden>Join</button>`;
   }
 
   function setBannerMode(mode, visible) {
@@ -1527,7 +1530,7 @@
         const comments = Number(post.commentCount) || 0;
         const pid = escapeHtml(String(post.id || ""));
         const media = renderPostMedia(post);
-        const commentLabel = comments === 1 ? "1 comment" : `${comments} comments`;
+        const commentLabel = comments === 1 ? "1 Comment" : `${comments} Comments`;
         const suggestionStatus = String(post.suggestionStatus || "").toLowerCase();
         const isSuggestion =
           suggestionStatus ||
@@ -1556,29 +1559,30 @@
         return `
           <article class="reddit-post ${isSuggestion ? "is-suggestion" : ""}" data-post-id="${pid}">
             <div class="reddit-vote" aria-label="Vote">
-              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
+              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 20)}</button>
               <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${score}</span>
-              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
+              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 20)}</button>
             </div>
             <div class="reddit-post-main">
               <div class="reddit-post-meta">
                 ${
                   showGroup
-                    ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)}</a><span class="reddit-meta-dot">•</span>`
-                    : ""
+                    ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)}</a>`
+                    : `<span class="reddit-sub is-static">Home</span>`
                 }
+                <span class="reddit-meta-dot">•</span>
+                <span class="reddit-meta-by">Posted by</span>
+                ${renderAuthorLink(author, { withAvatar: false })}
+                <span class="reddit-meta-dot">•</span>
+                <time class="reddit-meta-time">${escapeHtml(formatRelative(post.createdAt))}</time>
                 ${
                   post.channel && post.channel.label
-                    ? `<span class="reddit-channel-pill">${escapeHtml(
+                    ? `<span class="reddit-meta-dot">•</span><span class="reddit-channel-pill">${escapeHtml(
                         formatChannelLabel(post.channel)
-                      )}</span><span class="reddit-meta-dot">•</span>`
+                      )}</span>`
                     : ""
                 }
                 ${statusBadge}
-                <span class="reddit-meta-by">Posted by</span>
-                ${renderAuthorLink(author, { withAvatar: true })}
-                <span class="reddit-meta-dot">•</span>
-                <time class="reddit-meta-time">${escapeHtml(formatRelative(post.createdAt))}</time>
               </div>
               <a class="reddit-post-title-link" href="/community/post/${pid}" data-open-post="${pid}">
                 <h3 class="reddit-post-title">${escapeHtml(title)}</h3>
@@ -1613,27 +1617,34 @@
     const vote = Number(post.myVote) || 0;
     const saved = !!post.saved;
     const comments = Number(post.commentCount) || 0;
+    const commentLabel = comments === 1 ? "1 Comment" : `${comments} Comments`;
     const pid = escapeHtml(String(post.id || ""));
     const media = renderPostMedia(post, { large: true });
     el.innerHTML = `
       <article class="reddit-post reddit-post-detail-inner" data-post-id="${pid}">
         <div class="reddit-vote">
-          <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
+          <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 20)}</button>
           <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${displayScore(post)}</span>
-          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
+          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 20)}</button>
         </div>
         <div class="reddit-post-main">
           <div class="reddit-post-meta">
-            ${group.slug ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)}</a><span class="muted">•</span>` : ""}
-            <span class="muted">by</span>
-            ${renderAuthorLink(author, { withAvatar: true })}
-            <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
+            ${
+              group.slug
+                ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)}</a>`
+                : `<span class="reddit-sub is-static">Home</span>`
+            }
+            <span class="reddit-meta-dot">•</span>
+            <span class="reddit-meta-by">Posted by</span>
+            ${renderAuthorLink(author, { withAvatar: false })}
+            <span class="reddit-meta-dot">•</span>
+            <time class="reddit-meta-time">${escapeHtml(formatRelative(post.createdAt))}</time>
           </div>
           <h1 class="reddit-post-title reddit-post-title-lg">${escapeHtml(title)}</h1>
           ${bodyText ? `<div class="reddit-post-body reddit-post-body-lg">${escapeHtml(bodyText)}</div>` : ""}
           ${media}
           <div class="reddit-post-actions">
-            <span class="reddit-action">${ico("comment", 16)} <span>${comments}</span></span>
+            <span class="reddit-action">${ico("comment", 16)} <span>${escapeHtml(commentLabel)}</span></span>
             <button class="reddit-action" type="button" data-share-post="${pid}">${ico("share", 16)} <span>Share</span></button>
             <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${ico("bookmark", 16)} <span>${saved ? "Saved" : "Save"}</span></button>
           </div>
@@ -1651,7 +1662,7 @@
       list.innerHTML = "";
       if (empty) {
         empty.hidden = false;
-        empty.textContent = "No comments yet — share the first thought.";
+        empty.textContent = "No Comments yet. Be the first to share what you think!";
       }
       return;
     }
@@ -1666,15 +1677,20 @@
           <article class="reddit-comment" data-comment-id="${cid}">
             <div class="reddit-vote reddit-vote-sm">
               <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="comment" data-comment-id="${cid}" aria-label="Upvote">${ico("up", 16)}</button>
-              <span class="reddit-vote-count">${Number(comment.score) || 0}</span>
+              <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${Number(comment.score) || 0}</span>
               <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="comment" data-comment-id="${cid}" aria-label="Downvote">${ico("down", 16)}</button>
             </div>
             <div class="reddit-comment-main">
               <div class="reddit-post-meta">
-                ${renderAuthorLink(author, { withAvatar: true })}
-                <span class="muted">• ${escapeHtml(formatRelative(comment.createdAt))}</span>
+                ${renderAuthorLink(author, { withAvatar: false })}
+                <span class="reddit-meta-dot">•</span>
+                <time class="reddit-meta-time">${escapeHtml(formatRelative(comment.createdAt))}</time>
               </div>
               <div class="reddit-comment-body">${escapeHtml(comment.body || "")}</div>
+              <div class="reddit-post-actions reddit-comment-actions">
+                <button class="reddit-action" type="button" disabled title="Coming soon">${ico("comment", 14)} <span>Reply</span></button>
+                <button class="reddit-action" type="button" data-share-comment="${cid}">${ico("share", 14)} <span>Share</span></button>
+              </div>
             </div>
           </article>
         `;
@@ -5209,16 +5225,22 @@ document.addEventListener("click", async (e) => {
       navigate({ type: "post", slug: "", username: "", postId: id }).catch(() => {});
       return;
     }
-    const shareBtn = e.target.closest("[data-share-post]");
+    const shareBtn = e.target.closest("[data-share-post], [data-share-comment]");
     if (shareBtn) {
       e.preventDefault();
-      const id = shareBtn.getAttribute("data-share-post");
-      const url = `${location.origin}/community/post/${id}`;
+      const postId = shareBtn.getAttribute("data-share-post");
+      const commentId = shareBtn.getAttribute("data-share-comment");
+      const url = postId
+        ? `${location.origin}/community/post/${postId}`
+        : `${location.origin}${location.pathname}${location.search}#comment-${commentId}`;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(url).catch(() => {});
       }
-      shareBtn.textContent = "✓ Copied";
-      setTimeout(() => { shareBtn.innerHTML = `${ico("share", 16)} <span>Share</span>`; }, 1200);
+      const size = commentId ? 14 : 16;
+      shareBtn.textContent = "Copied";
+      setTimeout(() => {
+        shareBtn.innerHTML = `${ico("share", size)} <span>Share</span>`;
+      }, 1200);
       return;
     }
     const saveBtn = e.target.closest("[data-save-post]");
