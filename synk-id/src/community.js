@@ -1719,11 +1719,11 @@
         if (route.type === "group" && activeChannelSlug) {
           feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("comment", 28)}</div><strong>This channel is quiet</strong><p>Be the first to share something here.</p>`;
         } else if (route.type === "group") {
-          feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("create", 28)}</div><strong>No posts in this group yet</strong><p>Share an update to get the conversation started.</p><div class="community-empty-actions"><a class="btn btn-primary btn-compact reddit-join-orange" href="/community/submit?group=${encodeURIComponent(route.slug || "")}">Create Post</a></div>`;
+          feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("create", 28)}</div><strong>No posts in this group yet</strong><p>Share something to get the conversation started.</p><div class="community-empty-actions"><a class="btn btn-primary btn-compact reddit-join-orange" href="/community/submit?group=${encodeURIComponent(route.slug || "")}">Create post</a></div>`;
         } else if (route.type === "popular") {
-          feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("popular", 28)}</div><strong>Nothing trending right now</strong><p>Check back soon, or browse groups to find something interesting.</p>`;
+          feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("popular", 28)}</div><strong>Nothing trending right now</strong><p>Check back soon, or explore groups for something new.</p><div class="community-empty-actions"><a class="btn btn-secondary btn-compact" href="/community/groups">Browse groups</a></div>`;
         } else {
-          feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("feed", 28)}</div><strong>Your feed is ready</strong><p>Follow groups or share an update to see activity here.</p><div class="community-empty-actions"><a class="btn btn-primary btn-compact reddit-join-orange" href="/community/groups">Browse groups</a><a class="btn btn-secondary btn-compact" href="/community/submit">New post</a></div>`;
+          feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("feed", 28)}</div><strong>Your feed is ready</strong><p>Join groups or post an update to see activity here.</p><div class="community-empty-actions"><a class="btn btn-primary btn-compact reddit-join-orange" href="/community/groups">Browse groups</a><a class="btn btn-secondary btn-compact" href="/community/submit">New post</a></div>`;
         }
       }
       syncFeedChrome();
@@ -1788,7 +1788,7 @@
                 }
                 <span class="reddit-meta-dot">•</span>
                 <span class="reddit-meta-by">Posted by</span>
-                ${renderAuthorLink(author, { withAvatar: false })}
+                ${renderAuthorLink(author, { withAvatar: true })}
                 <span class="reddit-meta-dot">•</span>
                 <time class="reddit-meta-time">${escapeHtml(formatRelative(post.createdAt))}</time>
                 ${
@@ -1852,7 +1852,7 @@
             }
             <span class="reddit-meta-dot">•</span>
             <span class="reddit-meta-by">Posted by</span>
-            ${renderAuthorLink(author, { withAvatar: false })}
+            ${renderAuthorLink(author, { withAvatar: true })}
             <span class="reddit-meta-dot">•</span>
             <time class="reddit-meta-time">${escapeHtml(formatRelative(post.createdAt))}</time>
           </div>
@@ -1878,7 +1878,7 @@
       list.innerHTML = "";
       if (empty) {
         empty.hidden = false;
-        empty.textContent = "No Comments yet. Be the first to share what you think!";
+        empty.innerHTML = `<strong>No comments yet</strong><p class="muted">Be the first to share what you think.</p>`;
       }
       return;
     }
@@ -1891,14 +1891,14 @@
         const cid = escapeHtml(String(comment.id || ""));
         return `
           <article class="reddit-comment" data-comment-id="${cid}">
-            <div class="reddit-vote reddit-vote-sm">
+            <div class="reddit-vote reddit-vote-sm" aria-label="Vote">
               <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="comment" data-comment-id="${cid}" aria-label="Upvote">${ico("up", 16)}</button>
               <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${Number(comment.score) || 0}</span>
               <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="comment" data-comment-id="${cid}" aria-label="Downvote">${ico("down", 16)}</button>
             </div>
             <div class="reddit-comment-main">
               <div class="reddit-post-meta">
-                ${renderAuthorLink(author, { withAvatar: false })}
+                ${renderAuthorLink(author, { withAvatar: true })}
                 <span class="reddit-meta-dot">•</span>
                 <time class="reddit-meta-time">${escapeHtml(formatRelative(comment.createdAt))}</time>
               </div>
@@ -2040,15 +2040,18 @@
       .map((note) => {
         const meta = describeNotification(note);
         const nid = escapeHtml(String(note.id || ""));
-        const unread = !note.readAt;
+        const unread = !(note.readAt || note.read_at);
         const postId = note.postId ? escapeHtml(String(note.postId)) : "";
         const actions = renderNotifActions(note, meta);
+        const actor = String(note.actorUsername || "").trim() || "Someone";
+        const avatar = avatarMarkup(note.actorAvatarUrl || "", actor, "community-face reddit-inbox-avatar");
         const openAttr =
           postId && meta.kind !== "friend_request"
             ? `data-open-post="${postId}" data-inbox-id="${nid}"`
             : "";
         return `
           <article class="reddit-inbox-row ${unread ? "is-unread" : ""}" data-inbox-id="${nid}" ${openAttr}>
+            ${avatar}
             <div class="reddit-inbox-row-copy">
               <div class="reddit-inbox-row-head">
                 <strong class="reddit-inbox-title">${escapeHtml(meta.title)}</strong>
@@ -2452,7 +2455,7 @@ function applyViewState(data) {
       const composerOpen = document.getElementById("composer-open-btn");
       if (composerOpen) {
         composerOpen.href = "/community/submit";
-        composerOpen.textContent = "Create a post";
+        composerOpen.textContent = "What’s on your mind?";
       }
     }
     renderCrumbs();

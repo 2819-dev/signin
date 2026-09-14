@@ -13,14 +13,14 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v28" />
+    <link rel="stylesheet" href="/join.css?v=community-v29" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v28" defer></script>
+    <script src="/force-refresh.js?v=community-v29" defer></script>
   </head>
   <body class="community-body reddit-body">
     <div id="synk-boot-loader" class="synk-loader-overlay" hidden aria-busy="false" aria-live="polite" aria-label="Loading Synk">
@@ -260,7 +260,7 @@
                 <section class="card community-composer reddit-create" id="composer-card" hidden>
                   <div class="reddit-create-bar" id="composer-collapsed">
                     <div class="reddit-create-avatar" id="composer-avatar" aria-hidden="true">S</div>
-                    <a class="reddit-create-fakeinput" href="/community/submit" id="composer-open-btn">Create Post</a>
+                    <a class="reddit-create-fakeinput" href="/community/submit" id="composer-open-btn">What’s on your mind?</a>
                   </div>
                   <p class="muted" id="composer-as" hidden>Posting as —</p>
                 </section>
@@ -326,7 +326,10 @@
                   <p id="comment-status" class="muted" style="font-size: 0.85rem"></p>
                 </form>
                 <div id="comments-list" class="reddit-comments-list"></div>
-                <p class="muted reddit-comments-empty" id="comments-empty" hidden>No Comments yet. Be the first to share what you think!</p>
+                <div class="muted reddit-comments-empty" id="comments-empty" hidden>
+                  <strong>No comments yet</strong>
+                  <p class="muted">Be the first to share what you think.</p>
+                </div>
               </section>
             </div>
 
@@ -350,7 +353,10 @@
                 </div>
                 <div id="inbox-notifications-pane">
                   <div id="inbox-list" class="reddit-inbox-list"></div>
-                  <p class="muted" id="inbox-empty" hidden>No new notifications.</p>
+                  <div class="reddit-inbox-empty" id="inbox-empty" hidden>
+                    <strong>You’re all caught up</strong>
+                    <p class="muted">New replies, mentions, and friend requests will show up here.</p>
+                  </div>
                 </div>
                 <div id="inbox-messages-pane" hidden>
                   <div class="community-dm-shell" id="dm-shell">
@@ -978,7 +984,7 @@
     </div>
 
     <script src="/push-client.js?v=dark-fix2"></script>
-    <script src="/image-crop.js?v=crop-v1"></script>
-    <script src="/community.js?v=community-v28"></script>
+    <script src="/image-crop.js?v=crop-v2"></script>
+    <script src="/community.js?v=community-v29"></script>
   </body>
 </html>

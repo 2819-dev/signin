@@ -521,7 +521,24 @@ async function loadNotifications(sql, profileId, { limit = 50, username = "" } =
   }
 
   notes.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-  return notes.slice(0, capped);
+  const cappedNotes = notes.slice(0, capped);
+  try {
+    const actors = cappedNotes
+      .map((n) => String(n.actorUsername || "").trim())
+      .filter(Boolean);
+    if (actors.length) {
+      const avatars = await getAvatarsByUsernames(sql, actors);
+      for (const note of cappedNotes) {
+        const key = normalizePublicUsername(note.actorUsername || "");
+        note.actorAvatarUrl = (key && avatars[key]) || "";
+      }
+    } else {
+      for (const note of cappedNotes) note.actorAvatarUrl = "";
+    }
+  } catch (_) {
+    for (const note of cappedNotes) note.actorAvatarUrl = note.actorAvatarUrl || "";
+  }
+  return cappedNotes;
 }
 
 async function resolveProfileIdForUsername(sql, username) {
