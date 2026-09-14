@@ -24,6 +24,11 @@
     share: '<path d="M14 7h6v6"/><path d="M20 7 10.5 16.5"/><path d="M11 7H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-5"/>',
     bookmark: '<path d="M7 4h10a1 1 0 0 1 1 1v16l-6-3.5L6 21V5a1 1 0 0 1 1-1z"/>',
     back: '<path d="M15 18 9 12l6-6"/>',
+    chat: '<path d="M21 12a8 8 0 0 1-8 8H7l-4 3V12a8 8 0 1 1 18 0Z"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.5"/><path d="M22 21v-2a3.5 3.5 0 0 0-2.5-3.35"/><path d="M16.5 3.7a3.5 3.5 0 0 1 0 6.6"/>',
+    userPlus: '<path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="3.5"/><path d="M19 8v6M16 11h6"/>',
+    userCheck: '<path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="3.5"/><path d="m16 11 2 2 4-4"/>',
+    userMinus: '<path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="3.5"/><path d="M16 11h6"/>',
   };
 
   function ico(name, size = 18) {
@@ -735,6 +740,10 @@
       "friend-accept",
       "friend-decline",
       "friend-remove",
+      "follow",
+      "unfollow",
+      "list-followers",
+      "list-following",
     ]);
     if (socialActions.has(action) && !body.asUsername && !body.as_username) {
       const acting = typeof actingUsername === "function" ? actingUsername() : "";
@@ -2345,13 +2354,22 @@ function applyViewState(data) {
       const friendship = (profile.friendship && profile.friendship.status) || "none";
       const canMessage = !!profile.canMessage;
       const profileBio = String(profile.bio || "").trim();
+      const followerCount = Number(profile.followerCount || 0);
+      const followingCount = Number(profile.followingCount || 0);
+      const isFollowing = !!profile.isFollowing;
       setBannerMode("user", true);
       paintAvatar(viewIcon, profile.avatarUrl || "", dname);
       setText("view-title", dname);
-      const bits = [];
-      bits.push(`${Number(profile.postCount || 0)} post${Number(profile.postCount || 0) === 1 ? "" : "s"}`);
-      if (profile.joinedAt) bits.push(`Joined ${formatJoinedMonthYear(profile.joinedAt)}`);
-      setText("view-sub", bits.join(" · "));
+      const viewSub = document.getElementById("view-sub");
+      if (viewSub) {
+        const postsLabel = `${Number(profile.postCount || 0)} post${Number(profile.postCount || 0) === 1 ? "" : "s"}`;
+        const joinedLabel = profile.joinedAt ? ` · Joined ${escapeHtml(formatJoinedMonthYear(profile.joinedAt))}` : "";
+        viewSub.innerHTML = `${escapeHtml(postsLabel)}${joinedLabel}
+          <span class="reddit-meta-dot">·</span>
+          <button class="reddit-follow-stat" type="button" data-follow-list="followers" data-username="${escapeHtml(uname)}"><strong>${followerCount.toLocaleString()}</strong> Followers</button>
+          <span class="reddit-meta-dot">·</span>
+          <button class="reddit-follow-stat" type="button" data-follow-list="following" data-username="${escapeHtml(uname)}"><strong>${followingCount.toLocaleString()}</strong> Following</button>`;
+      }
       if (viewBlurb) {
         viewBlurb.hidden = !profileBio;
         viewBlurb.textContent = profileBio || "";
@@ -2370,24 +2388,27 @@ function applyViewState(data) {
         aboutJoinBtn.hidden = true;
         aboutJoinBtn.setAttribute("hidden", "");
       }
-      const actionsHost = document.querySelector("#view-banner .reddit-community-actions");
+      const actionsHost = document.querySelector("#view-banner .reddit-community-actions") || document.getElementById("view-actions");
       let actions = "";
       if (!isSelf && publicUsername) {
+        const followLabel = isFollowing ? "Unfollow" : "Follow";
+        const followIcon = isFollowing ? ico("userCheck", 18) : ico("userPlus", 18);
+        actions += `<button class="reddit-icon-action ${isFollowing ? "is-active" : ""}" type="button" data-profile-action="${isFollowing ? "unfollow" : "follow"}" data-username="${escapeHtml(uname)}" title="${followLabel}" aria-label="${followLabel}">${followIcon}</button>`;
         if (friendship === "friends") {
-          actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="unfriend" data-username="${escapeHtml(uname)}">Friends</button>`;
+          actions += `<button class="reddit-icon-action is-active" type="button" data-profile-action="unfriend" data-username="${escapeHtml(uname)}" title="Friends" aria-label="Friends">${ico("userCheck", 18)}</button>`;
         } else if (friendship === "pending_out") {
-          actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="cancel-friend" data-username="${escapeHtml(uname)}">Requested</button>`;
+          actions += `<button class="reddit-icon-action is-pending" type="button" data-profile-action="cancel-friend" data-username="${escapeHtml(uname)}" title="Request sent" aria-label="Request sent">${ico("userMinus", 18)}</button>`;
         } else if (friendship === "pending_in") {
-          actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="accept-friend" data-username="${escapeHtml(uname)}">Accept</button>`;
-          actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="decline-friend" data-username="${escapeHtml(uname)}">Decline</button>`;
+          actions += `<button class="reddit-icon-action is-accent" type="button" data-profile-action="accept-friend" data-username="${escapeHtml(uname)}" title="Accept friend request" aria-label="Accept friend request">${ico("userPlus", 18)}</button>`;
+          actions += `<button class="reddit-icon-action" type="button" data-profile-action="decline-friend" data-username="${escapeHtml(uname)}" title="Decline" aria-label="Decline friend request">${ico("userMinus", 18)}</button>`;
         } else {
-          actions += `<button class="btn btn-secondary btn-compact" type="button" data-profile-action="add-friend" data-username="${escapeHtml(uname)}">Add friend</button>`;
+          actions += `<button class="reddit-icon-action" type="button" data-profile-action="add-friend" data-username="${escapeHtml(uname)}" title="Add friend" aria-label="Add friend">${ico("users", 18)}</button>`;
         }
-        // Reddit-style Chat/DM — never Join on profiles.
+        // Chat icon — never Join on profiles.
         if (canMessage || friendship === "friends") {
-          actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" ${canMessage ? "" : "disabled"}>Chat</button>`;
+          actions += `<button class="reddit-icon-action is-accent" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" ${canMessage ? "" : "disabled"} title="Chat" aria-label="Chat">${ico("chat", 18)}</button>`;
         } else {
-          actions += `<button class="btn btn-primary btn-compact" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" disabled title="Messaging not available">Chat</button>`;
+          actions += `<button class="reddit-icon-action" type="button" data-profile-action="message" data-username="${escapeHtml(uname)}" disabled title="Messaging not available" aria-label="Chat unavailable">${ico("chat", 18)}</button>`;
         }
       } else if (isSelf) {
         actions += `<a class="btn btn-secondary btn-compact" href="/community/settings">Edit profile</a>`;
@@ -4498,8 +4519,72 @@ function applyViewState(data) {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeDmMessageSheet();
+      closeFollowListModal();
       if (dmNewOpen) setDmNewOpen(false);
     }
+  });
+
+  function closeFollowListModal() {
+    const modal = document.getElementById("follow-list-modal");
+    if (!modal) return;
+    modal.hidden = true;
+    document.documentElement.classList.remove("follow-list-lock");
+  }
+
+  async function openFollowListModal({ username, kind }) {
+    const modal = document.getElementById("follow-list-modal");
+    const title = document.getElementById("follow-list-title");
+    const body = document.getElementById("follow-list-body");
+    if (!modal || !body || !username) return;
+    const label = kind === "following" ? "Following" : "Followers";
+    if (title) title.textContent = label;
+    body.innerHTML = `<p class="muted reddit-follow-empty">Loading…</p>`;
+    modal.hidden = false;
+    document.documentElement.classList.add("follow-list-lock");
+    try {
+      const data = await communityAction({
+        action: kind === "following" ? "list-following" : "list-followers",
+        username,
+      });
+      const users = Array.isArray(data.users) ? data.users : [];
+      if (!users.length) {
+        body.innerHTML = `<p class="muted reddit-follow-empty">No ${label.toLowerCase()} yet.</p>`;
+        return;
+      }
+      body.innerHTML = users
+        .map((user) => {
+          const u = String(user.username || "").trim();
+          const name = String(user.displayName || "").trim() || u;
+          const initial = (name || "?").slice(0, 1).toUpperCase();
+          const avatar = user.avatarUrl
+            ? `<img src="${escapeHtml(user.avatarUrl)}" alt="" loading="lazy" />`
+            : escapeHtml(initial);
+          return `<a class="reddit-follow-row" href="/user/${encodeURIComponent(u)}" data-close-follow-list="1">
+            <span class="reddit-follow-avatar" aria-hidden="true">${avatar}</span>
+            <span class="reddit-follow-copy">
+              <strong>${escapeHtml(name)}</strong>
+              <span class="muted">u/${escapeHtml(u)}</span>
+            </span>
+          </a>`;
+        })
+        .join("");
+    } catch (err) {
+      body.innerHTML = `<p class="muted reddit-follow-empty">${escapeHtml(err.message || "Unable to load list")}</p>`;
+    }
+  }
+
+  document.addEventListener("click", (e) => {
+    const closer = e.target.closest("[data-close-follow-list]");
+    if (closer) {
+      closeFollowListModal();
+      return;
+    }
+    const btn = e.target.closest("[data-follow-list]");
+    if (!btn) return;
+    e.preventDefault();
+    const kind = btn.getAttribute("data-follow-list") || "followers";
+    const username = btn.getAttribute("data-username") || "";
+    openFollowListModal({ username, kind }).catch(() => {});
   });
 
   document.addEventListener("click", async (e) => {
@@ -4514,7 +4599,10 @@ function applyViewState(data) {
         await openDmWith(username);
         return;
       }
-      if (action === "add-friend") {
+      if (action === "follow" || action === "unfollow") {
+        await communityAction({ action, username });
+        showToast(action === "follow" ? "Following" : "Unfollowed");
+      } else if (action === "add-friend") {
         await communityAction({ action: "friend-request", username });
         showToast("Request sent");
       } else if (action === "accept-friend") {

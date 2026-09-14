@@ -647,6 +647,25 @@ async function ensureSynkCommunityExtras(sql) {
   `;
 
   await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_follows (
+      follower_username TEXT NOT NULL,
+      following_username TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (follower_username, following_username),
+      CONSTRAINT synk_community_follows_self_chk
+        CHECK (follower_username <> following_username)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_follows_following_idx
+    ON synk_community_follows (following_username)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_follows_follower_idx
+    ON synk_community_follows (follower_username)
+  `;
+
+  await sql`
     CREATE TABLE IF NOT EXISTS synk_community_dm_threads (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_a TEXT NOT NULL,
@@ -3253,6 +3272,98 @@ async function removeFriendship(sql, a, b) {
   return { ok: true, removed: deleted.length > 0 };
 }
 
+async function isFollowing(sql, followerUsername, followingUsername) {
+  const follower = normalizePublicUsername(followerUsername);
+  const following = normalizePublicUsername(followingUsername);
+  if (!follower || !following || follower === following) return false;
+  const rows = await sql`
+    SELECT 1
+    FROM synk_community_follows
+    WHERE follower_username = ${follower}
+      AND following_username = ${following}
+    LIMIT 1
+  `;
+  return Boolean(rows[0]);
+}
+
+async function getFollowCounts(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { followers: 0, following: 0 };
+  const rows = await sql`
+    SELECT
+      (SELECT COUNT(*)::int FROM synk_community_follows WHERE following_username = ${name}) AS followers,
+      (SELECT COUNT(*)::int FROM synk_community_follows WHERE follower_username = ${name}) AS following
+  `;
+  return {
+    followers: Number((rows[0] && rows[0].followers) || 0),
+    following: Number((rows[0] && rows[0].following) || 0),
+  };
+}
+
+async function listFollowers(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return [];
+  const rows = await sql`
+    SELECT follower_username AS username
+    FROM synk_community_follows
+    WHERE following_username = ${name}
+    ORDER BY created_at DESC, follower_username ASC
+  `;
+  return rows.map((row) => row.username);
+}
+
+async function listFollowing(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return [];
+  const rows = await sql`
+    SELECT following_username AS username
+    FROM synk_community_follows
+    WHERE follower_username = ${name}
+    ORDER BY created_at DESC, following_username ASC
+  `;
+  return rows.map((row) => row.username);
+}
+
+async function followUser(sql, followerUsername, followingUsername) {
+  const follower = normalizePublicUsername(followerUsername);
+  const following = normalizePublicUsername(followingUsername);
+  if (!follower || !following) return { ok: false, error: "Username required" };
+  if (follower === following) return { ok: false, error: "You cannot follow yourself" };
+  if (!(await communityUsernameExists(sql, following))) {
+    return { ok: false, error: "User not found" };
+  }
+  await sql`
+    INSERT INTO synk_community_follows (follower_username, following_username)
+    VALUES (${follower}, ${following})
+    ON CONFLICT DO NOTHING
+  `;
+  const counts = await getFollowCounts(sql, following);
+  return {
+    ok: true,
+    following: true,
+    followerCount: counts.followers,
+    followingCount: counts.following,
+  };
+}
+
+async function unfollowUser(sql, followerUsername, followingUsername) {
+  const follower = normalizePublicUsername(followerUsername);
+  const following = normalizePublicUsername(followingUsername);
+  if (!follower || !following) return { ok: false, error: "Username required" };
+  await sql`
+    DELETE FROM synk_community_follows
+    WHERE follower_username = ${follower}
+      AND following_username = ${following}
+  `;
+  const counts = await getFollowCounts(sql, following);
+  return {
+    ok: true,
+    following: false,
+    followerCount: counts.followers,
+    followingCount: counts.following,
+  };
+}
+
 async function canDm(sql, fromUsername, toUsername) {
   const from = normalizePublicUsername(fromUsername);
   const to = normalizePublicUsername(toUsername);
@@ -4877,6 +4988,12 @@ module.exports = {
   requestFriendship,
   respondFriendship,
   removeFriendship,
+  isFollowing,
+  getFollowCounts,
+  listFollowers,
+  listFollowing,
+  followUser,
+  unfollowUser,
   canDm,
   getOrCreateDmThread,
   listDmThreads,

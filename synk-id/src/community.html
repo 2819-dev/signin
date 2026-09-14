@@ -13,9 +13,9 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v16" />
+    <link rel="stylesheet" href="/join.css?v=community-v17" />
     <script src="/session.js?v=stay-v1"></script>
-    <script src="/force-refresh.js?v=community-v16" defer></script>
+    <script src="/force-refresh.js?v=community-v17" defer></script>
   </head>
   <body class="community-body reddit-body">
     <header class="reddit-topnav">
@@ -923,6 +923,19 @@
     </nav>
 
     <div id="toast" class="community-toast" role="status" aria-live="polite"></div>
+
+    <div class="reddit-follow-modal" id="follow-list-modal" hidden>
+      <button class="reddit-follow-backdrop" type="button" data-close-follow-list="1" aria-label="Close"></button>
+      <div class="reddit-follow-card" role="dialog" aria-modal="true" aria-labelledby="follow-list-title">
+        <div class="reddit-follow-head">
+          <h2 id="follow-list-title">Followers</h2>
+          <button class="reddit-follow-close" type="button" data-close-follow-list="1" aria-label="Close">×</button>
+        </div>
+        <div class="reddit-follow-body" id="follow-list-body">
+          <p class="muted reddit-follow-empty">Loading…</p>
+        </div>
+      </div>
+    </div>
     
     <div class="release-notes-modal" id="release-notes-modal" hidden>
       <div class="release-notes-backdrop" data-release-notes-close="1"></div>
@@ -941,6 +954,6 @@
     </div>
 
     <script src="/push-client.js?v=dark-fix2"></script>
-    <script src="/community.js?v=community-v16"></script>
+    <script src="/community.js?v=community-v17"></script>
   </body>
 </html>

@@ -63,6 +63,12 @@ const {
   getOrCreateDmThread,
   listDmThreads,
   listFriends,
+  isFollowing,
+  getFollowCounts,
+  listFollowers,
+  listFollowing,
+  followUser,
+  unfollowUser,
   getDmThreadById,
   listDmMessages,
   sendDm,
@@ -1643,12 +1649,17 @@ exports.handler = async (event) => {
         if (!profile) return json(404, { error: "Profile not found" });
         const isSelf = Boolean(primaryUsername && primaryUsername === profileUsername);
         profile.isSelf = isSelf;
+        const followCounts = await getFollowCounts(sql, profileUsername);
+        profile.followerCount = followCounts.followers;
+        profile.followingCount = followCounts.following;
+        profile.isFollowing = false;
         if (primaryUsername && !isSelf) {
           const friendship = await getFriendship(sql, primaryUsername, profileUsername);
           profile.friendship = {
             status: friendshipViewerStatus(friendship),
           };
           profile.canMessage = await canDm(sql, primaryUsername, profileUsername);
+          profile.isFollowing = await isFollowing(sql, primaryUsername, profileUsername);
         } else {
           profile.friendship = { status: "none" };
           profile.canMessage = false;
@@ -2043,6 +2054,61 @@ exports.handler = async (event) => {
         ok: true,
         username: target,
         friendship: { status: "none" },
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "follow" || action === "unfollow") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const target = normalizePublicUsername(body.username || body.user);
+      if (!target) return json(400, { error: "Username required" });
+      const result =
+        action === "follow"
+          ? await followUser(sql, actorUsername, target)
+          : await unfollowUser(sql, actorUsername, target);
+      if (!result.ok) return json(400, { error: result.error || "Unable to update follow" });
+      return json(200, {
+        ok: true,
+        username: target,
+        isFollowing: !!result.following,
+        followerCount: result.followerCount,
+        followingCount: result.followingCount,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "list-followers" || action === "list-following") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const target = normalizePublicUsername(body.username || body.user || acting.username);
+      if (!target) return json(400, { error: "Username required" });
+      if (!(await findCommunityPublicProfile(sql, target))) {
+        return json(404, { error: "Profile not found" });
+      }
+      const usernames =
+        action === "list-followers"
+          ? await listFollowers(sql, target)
+          : await listFollowing(sql, target);
+      const [names, avatars] = await Promise.all([
+        getDisplayNamesByUsernames(sql, usernames),
+        getAvatarsByUsernames(sql, usernames),
+      ]);
+      return json(200, {
+        ok: true,
+        username: target,
+        kind: action === "list-followers" ? "followers" : "following",
+        users: usernames.map((username) => ({
+          username,
+          displayName: names[username] || "",
+          avatarUrl: avatars[username] || "",
+        })),
         me: mePayload(auth, role, alts, myTags, myPinnedTag),
       });
     }
