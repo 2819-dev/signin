@@ -2544,8 +2544,33 @@
       loose.forEach((ch) => html.push(channelButtonHtml(ch)));
     }
     host.innerHTML = html.join("") || `<p class="muted synk-hub-empty-channels">No channels yet.</p>`;
-    const railTitle = document.querySelector(".synk-hub-rail-title");
+    const railTitle = document.getElementById("synk-hub-rail-title") || document.querySelector(".synk-hub-rail-title");
     if (railTitle && group && group.name) railTitle.textContent = group.name;
+    const railSub = document.getElementById("synk-hub-rail-sub") || document.querySelector(".synk-hub-rail-sub");
+    if (railSub) {
+      const members = group && group.memberCount != null ? Number(group.memberCount) : null;
+      if (members != null && Number.isFinite(members)) {
+        railSub.textContent = `${members.toLocaleString()} member${members === 1 ? "" : "s"} · Official`;
+      } else {
+        railSub.textContent = "Official server";
+      }
+    }
+    const railMark = document.getElementById("synk-hub-rail-mark") || document.querySelector(".synk-hub-rail-mark");
+    if (railMark) {
+      const initial = String((group && (group.name || group.slug)) || "S").trim().slice(0, 1).toUpperCase() || "S";
+      railMark.textContent = initial;
+    }
+    const bannerArt = document.getElementById("synk-hub-server-banner-art");
+    if (bannerArt) {
+      const custom = String((group && (group.bannerUrl || group.coverUrl || group.banner)) || "").trim();
+      if (custom) {
+        bannerArt.style.backgroundImage = `url("${custom.replace(/"/g, "%22")}")`;
+        bannerArt.classList.add("has-image");
+      } else {
+        bannerArt.style.backgroundImage = "";
+        bannerArt.classList.remove("has-image");
+      }
+    }
     const active = channels.find((c) => c.slug === activeChannelSlug) || channels[0] || null;
     const title = document.getElementById("discord-channel-title");
     const desc = document.getElementById("discord-channel-desc");
@@ -2833,7 +2858,9 @@ function applyViewState(data) {
       const name = (group && group.name) || slug;
       const postCount = group && group.postCount != null ? Number(group.postCount) : null;
       const memberCount = group && group.memberCount != null ? Number(group.memberCount) : null;
-      setBannerMode("group", true);
+      // Reddit-style community card is for other groups only.
+      // Official Synk uses the Discord-style server banner inside the hub rail.
+      setBannerMode("group", !isDiscordTheme(group));
       if (viewIcon) viewIcon.textContent = (slug || "?").slice(0, 1).toUpperCase();
       const official =
         group && (group.isOfficial || group.slug === "synk")
