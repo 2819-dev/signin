@@ -9,17 +9,54 @@
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6f8" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="Your Synk hub — ID, community, and tools." />
+    <meta name="description" content="Your Synk member hub." />
     <title>Synk — Hub</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=testing-shifts2" />
+    <link rel="stylesheet" href="/join.css?v=hub-pro3" />
     <script src="/force-refresh.js" defer></script>
-    <script src="/push-client.js?v=pro-copy1" defer></script>
+    <script src="/push-client.js?v=hub-pro3" defer></script>
   
     <style>
+      .hub-grid {
+        gap: 12px;
+      }
+      .hub-tile {
+        position: relative;
+        padding: 16px 16px 16px 18px;
+        border-radius: 14px;
+        border: 1px solid var(--line, rgba(0,0,0,.1));
+        background: var(--surface, #fff);
+        box-shadow: 0 1px 0 rgba(0,0,0,.03);
+        transition: border-color .12s ease, box-shadow .12s ease, transform .08s ease;
+      }
+      .hub-tile:hover {
+        border-color: rgba(4, 26, 85, .28);
+        box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
+      }
+      .hub-tile:active {
+        transform: scale(.985);
+      }
+      .hub-tile strong {
+        font-size: 1rem;
+        letter-spacing: -0.01em;
+      }
+      .hub-tile span {
+        font-size: 0.86rem;
+        line-height: 1.45;
+      }
+      .reddit-notif-mark {
+        transition: background .1s ease, opacity .1s ease;
+      }
+      .reddit-notif-mark:active {
+        transform: scale(.97);
+      }
+      .reddit-notif-mark.is-busy {
+        opacity: .55;
+        pointer-events: none;
+      }
       .act-as-banner {
         position: sticky;
         top: 0;
@@ -126,9 +163,9 @@
 
     <main class="shell shell-app shell-wide">
       <header class="page-head">
-        <p class="eyebrow">Member hub</p>
+        <p class="eyebrow">Member area</p>
         <h1 id="hub-greeting">Welcome</h1>
-        <p class="subtitle" id="hub-subtitle">Access your Synk identity and tools.</p>
+        <p class="subtitle" id="hub-subtitle">Your identity, places, and member tools in one place.</p>
       </header>
 
       <section class="card hub-identity" id="hub-identity-card">
@@ -147,54 +184,54 @@
         </div>
         <div class="hub-photo-actions">
           <input id="hub-photo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
-          <button class="btn btn-secondary btn-compact" type="button" id="hub-photo-btn">Update login photo</button>
+          <button class="btn btn-secondary btn-compact" type="button" id="hub-photo-btn">Update photo</button>
           <p class="muted hub-photo-status" id="hub-photo-status" role="status"></p>
         </div>
       </section>
 
       <section class="card" id="hub-features-card">
-        <p class="section-label">Features</p>
-        <h2>Available tools</h2>
+        <p class="section-label">Tools</p>
+        <h2>Explore</h2>
         <div class="hub-grid">
           <a class="hub-tile" href="/community">
-            <strong>Synk Community</strong>
-            <span>Choose a public username and discuss security with other members.</span>
+            <strong>Community</strong>
+            <span>Stay connected with members, follow groups, and share updates.</span>
           </a>
           <a class="hub-tile" href="/verify?autostart=1">
-            <strong>Face check-in</strong>
-            <span>Verify again to issue a fresh pass when a location requires Synk.</span>
+            <strong>Verify</strong>
+            <span>Confirm your identity when a place asks you to check in.</span>
           </a>
           <a class="hub-tile" href="#hub-identity-card">
-            <strong>Show Synk code</strong>
-            <span>Use your Synk code and recovery passphrase when camera verification is unavailable.</span>
+            <strong>Member code</strong>
+            <span>Keep your Synk code available for support and check-in.</span>
           </a>
           <a class="hub-tile" href="/business">
-            <strong>Synk Business</strong>
-            <span>Request an API key for your product or desk.</span>
+            <strong>Business</strong>
+            <span>Bring Synk to a workplace, venue, or product.</span>
           </a>
           <a class="hub-tile" href="/docs">
-            <strong>Documentation</strong>
-            <span>Learn how Synk works and how to configure your API key.</span>
+            <strong>Guides</strong>
+            <span>Practical instructions for members and organizations.</span>
           </a>
           <a class="hub-tile" href="/join">
-            <strong>Invite someone</strong>
-            <span>Invite others to request Synk membership.</span>
+            <strong>Invite</strong>
+            <span>Share an invitation with someone new to Synk.</span>
           </a>
           <a class="hub-tile" href="/places">
-            <strong>Connected places</strong>
-            <span>View locations that use Synk.</span>
+            <strong>Places</strong>
+            <span>Browse locations that welcome Synk members.</span>
           </a>
           <a class="hub-tile" href="/testing" id="hub-testing-tile" hidden>
-            <strong>Testing</strong>
-            <span>Clock in for a testing shift, work the agenda, and send notes.</span>
+            <strong>Early access</strong>
+            <span>Preview upcoming changes and share thoughtful feedback.</span>
           </a>
         </div>
       </section>
 
       <section class="card" id="hub-locked" hidden>
         <p class="section-label">Session</p>
-        <h2>Sign in to access your hub</h2>
-        <p class="muted">Verify with face recognition or your Synk code to unlock these tools.</p>
+        <h2>Sign in to open your hub</h2>
+        <p class="muted">Verify once to unlock your Synk ID and member tools on this device.</p>
         <div class="btn-row" style="margin-top:14px;">
           <a class="btn btn-primary" href="/verify?autostart=1">Sign in</a>
           <a class="btn btn-secondary" href="/join">Get Synk</a>
@@ -381,6 +418,7 @@
 
       let hubNotifCache = [];
       let hubNotifLoaded = false;
+      let hubNotifSeq = 0;
       let hubBetaTester = false;
 
       function escapeHubHtml(str) {
@@ -690,14 +728,17 @@
           return;
         }
         if (wrap) wrap.hidden = false;
+        const seq = ++hubNotifSeq;
         try {
           const res = await fetch("/api/synk-community?inbox=1", { headers: hubHeaders(session) });
           const data = await res.json().catch(() => ({}));
+          if (seq !== hubNotifSeq) return;
           if (!res.ok) throw new Error(data.error || "Unable to load notifications");
           hubNotifLoaded = true;
           renderHubNotifications(data.notifications || []);
           setHubNotifDot(typeof data.unreadCount === "number" ? data.unreadCount : (data.notifications || []).filter((n) => !n.readAt).length);
         } catch (_) {
+          if (seq !== hubNotifSeq) return;
           const list = document.getElementById("hub-notif-list");
           if (list && !hubNotifLoaded) {
             list.innerHTML = `<p class="muted reddit-notif-empty">Unable to load notifications</p>`;
@@ -733,6 +774,12 @@
           e.stopPropagation();
           const session = readSession();
           if (!session) return;
+          const prev = hubNotifCache.slice();
+          hubNotifSeq += 1;
+          const seq = hubNotifSeq;
+          hubNotifClear.classList.add("is-busy");
+          renderHubNotifications([]);
+          setHubNotifDot(0);
           try {
             const res = await fetch("/api/synk-community", {
               method: "POST",
@@ -741,11 +788,20 @@
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || "Unable to clear notifications");
-            renderHubNotifications(data.notifications || []);
+            if (seq !== hubNotifSeq) return;
+            renderHubNotifications(Array.isArray(data.notifications) ? data.notifications : []);
             setHubNotifDot(typeof data.unreadCount === "number" ? data.unreadCount : 0);
           } catch (err) {
-            const list = document.getElementById("hub-notif-list");
-            if (list) list.innerHTML = `<p class="muted reddit-notif-empty">${escapeHubHtml(err.message || "Unable to clear")}</p>`;
+            if (seq === hubNotifSeq) {
+              renderHubNotifications(prev);
+              setHubNotifDot(prev.filter((n) => !n.readAt).length);
+              const list = document.getElementById("hub-notif-list");
+              if (list && !prev.length) {
+                list.innerHTML = `<p class="muted reddit-notif-empty">${escapeHubHtml(err.message || "Unable to clear")}</p>`;
+              }
+            }
+          } finally {
+            hubNotifClear.classList.remove("is-busy");
           }
         });
       }

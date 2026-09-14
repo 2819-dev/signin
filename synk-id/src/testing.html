@@ -7,13 +7,13 @@
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6f8" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="Synk beta testing — clock in for your testing shift and work the agenda." />
+    <meta name="description" content="Synk early access — review updates and share feedback." />
     <title>Synk — Testing</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=testing-shifts2" />
+    <link rel="stylesheet" href="/join.css?v=hub-pro3" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body class="testing-page">
@@ -32,9 +32,9 @@
     <main class="shell shell-app shell-wide testing-shell">
       <header class="testing-hero">
         <div>
-          <p class="eyebrow">Beta shifts</p>
+          <p class="eyebrow">Early access</p>
           <h1>Testing</h1>
-          <p class="subtitle">Clock in for a testing shift, work the current update agenda, then clock out when you’re done.</p>
+          <p class="subtitle">Review the current update, complete the checklist, and share clear feedback with the team.</p>
         </div>
         <div class="testing-live-clock" aria-live="polite">
           <span class="testing-live-clock-label">Local time</span>
@@ -67,14 +67,14 @@
         <div class="testing-shift-board">
           <article class="testing-shift-card testing-shift-card-status" id="testing-clock">
             <div class="testing-shift-card-top">
-              <span class="testing-pill" id="testing-shift-pill">Off shift</span>
-              <span class="muted" id="testing-shift-meta">Not clocked in</span>
+              <span class="testing-pill" id="testing-shift-pill">Not started</span>
+              <span class="muted" id="testing-shift-meta">Session inactive</span>
             </div>
-            <h2>Your testing shift</h2>
-            <p class="muted" id="testing-clock-copy">Clock in when you start a testing session. Agenda actions stay locked until you do.</p>
+            <h2>Your session</h2>
+            <p class="muted" id="testing-clock-copy">Start a session when you begin reviewing this update. Checklist items unlock after you start.</p>
             <div class="btn-row testing-clock-actions">
-              <button class="btn btn-primary" type="button" id="testing-clock-in-btn">Clock in</button>
-              <button class="btn btn-secondary" type="button" id="testing-clock-out-btn" hidden>Clock out</button>
+              <button class="btn btn-primary" type="button" id="testing-clock-in-btn">Start session</button>
+              <button class="btn btn-secondary" type="button" id="testing-clock-out-btn" hidden>End session</button>
             </div>
           </article>
 
@@ -82,10 +82,10 @@
             <div class="testing-shift-card-top">
               <span class="testing-pill testing-pill-soft">Current update</span>
             </div>
-            <h2>Agenda queue</h2>
+            <h2>Update progress</h2>
             <p class="muted" id="testing-progress-label">Loading update status…</p>
             <button class="btn btn-primary btn-compact" type="button" id="testing-complete-btn" hidden>
-              Complete Agenda
+              Mark update complete
             </button>
           </article>
         </div>
@@ -94,23 +94,23 @@
           <section class="testing-shift-card testing-agenda-panel">
             <div class="testing-agenda-head">
               <div>
-                <h2>Shift agenda</h2>
-                <p class="muted" id="testing-agenda-copy">Checklist items for the update you’re testing now.</p>
+                <h2>Review checklist</h2>
+                <p class="muted" id="testing-agenda-copy">Items to verify for the update currently in early access.</p>
               </div>
             </div>
             <div id="testing-agenda" class="testing-agenda-list" aria-live="polite"></div>
           </section>
 
           <section class="testing-shift-card testing-notes-panel">
-            <h2>Shift notes</h2>
-            <p class="muted">Send feedback from this shift — bugs, wins, or anything that feels off.</p>
+            <h2>Feedback</h2>
+            <p class="muted">Share bugs, improvements, or anything that felt unclear while reviewing.</p>
             <form id="testing-feedback-form" class="form">
               <div class="field">
-                <label for="testing-feedback-body">Your note</label>
-                <textarea id="testing-feedback-body" rows="4" maxlength="2000" required placeholder="During this shift the new sidebar felt clearer, but the top bar still jumps on iPhone…"></textarea>
+                <label for="testing-feedback-body">Your feedback</label>
+                <textarea id="testing-feedback-body" rows="4" maxlength="2000" required placeholder="The new sidebar was clearer, but the top bar still jumps on iPhone…"></textarea>
               </div>
               <p id="testing-feedback-status" class="muted" style="font-size:0.85rem;"></p>
-              <button class="btn btn-primary btn-compact" type="submit">Send note</button>
+              <button class="btn btn-primary btn-compact" type="submit">Submit feedback</button>
             </form>
             <div id="testing-feedback-list" class="testing-feedback-list" aria-live="polite"></div>
           </section>
@@ -202,17 +202,17 @@
         clockCard.classList.toggle("is-on-shift", clockedIn);
         if (clockedIn) {
           const when = clock.clockedInAt ? new Date(clock.clockedInAt).toLocaleString() : "now";
-          shiftPill.textContent = "On shift";
+          shiftPill.textContent = "In session";
           shiftPill.classList.add("is-on");
           shiftMeta.textContent = `Started ${when}`;
           clockCopy.textContent =
-            "You’re on a testing shift. Check off agenda items, send notes, then complete the agenda when finished.";
+            "You’re reviewing this update. Complete checklist items, share feedback, then mark the update complete when finished.";
         } else {
-          shiftPill.textContent = "Off shift";
+          shiftPill.textContent = "Not started";
           shiftPill.classList.remove("is-on");
-          shiftMeta.textContent = "Not clocked in";
+          shiftMeta.textContent = "Session inactive";
           clockCopy.textContent =
-            "Clock in when you start a testing session. Agenda actions stay locked until you do.";
+            "Start a session when you begin reviewing. Checklist items stay locked until you do.";
         }
       }
 
@@ -225,9 +225,9 @@
 
         if (caughtUp && !current) {
           progressLabel.textContent =
-            "No active update agenda right now. When the next update ships, it will show up here as your next shift queue.";
+            "No active update checklist right now. When the next update is ready, it will appear here.";
           agendaCopy.textContent =
-            "The agenda is clear for now. Standing items will appear here when staff add them.";
+            "Nothing is queued right now. Checklist items will appear here when staff publish them.";
           completeBtn.hidden = true;
           return;
         }
@@ -235,9 +235,9 @@
         const verLabel = shortVersion(current) || "current update";
         progressLabel.textContent = total
           ? `Update ${verLabel} — ${done} of ${total} items done${next ? `. Up next: ${shortVersion(next)}` : ""}.`
-          : `Update ${verLabel} is ready for testing.`;
+          : `Update ${verLabel} is ready for review.`;
         agendaCopy.textContent =
-          "Work these items during your shift. Complete the agenda to move to the next update.";
+          "Work through these items, then mark the update complete to continue.";
         completeBtn.hidden = !(progress && progress.canCompleteAgenda);
       }
 
@@ -246,7 +246,7 @@
           agendaEl.innerHTML = `
             <div class="testing-empty">
               <strong>Agenda is clear</strong>
-              <p class="muted">Nothing is queued for this shift yet. Check back after the next update, or wait for staff to add items.</p>
+              <p class="muted">Nothing is queued yet. Check back after the next update, or wait for staff to add items.</p>
             </div>`;
           return;
         }
@@ -268,7 +268,7 @@
 
       function renderFeedback(items) {
         if (!items.length) {
-          feedbackList.innerHTML = '<p class="muted">No shift notes yet.</p>';
+          feedbackList.innerHTML = '<p class="muted">No feedback yet.</p>';
           return;
         }
         feedbackList.innerHTML = items
@@ -286,7 +286,7 @@
         panelEl.hidden = !session;
         if (!session) return;
 
-        statusEl.textContent = "Loading shift board…";
+        statusEl.textContent = "Loading early access…";
         try {
           const res = await fetch("/api/synk-community", {
             method: "POST",
@@ -305,7 +305,7 @@
             progress: data.progress || {},
             agenda: data.agenda || [],
           };
-          statusEl.textContent = "Testing shift board";
+          statusEl.textContent = "Early access workspace";
           renderClock(state.clock);
           renderProgress(state.progress);
           renderAgenda(state.agenda, !!(state.clock && state.clock.clockedIn));
@@ -332,7 +332,7 @@
           await postAction("beta-clock-in");
           await loadDashboard();
         } catch (err) {
-          statusEl.textContent = err.message || "Could not clock in";
+          statusEl.textContent = err.message || "Could not start session";
         } finally {
           clockInBtn.disabled = false;
         }
@@ -344,21 +344,21 @@
           await postAction("beta-clock-out");
           await loadDashboard();
         } catch (err) {
-          statusEl.textContent = err.message || "Could not clock out";
+          statusEl.textContent = err.message || "Could not end session";
         } finally {
           clockOutBtn.disabled = false;
         }
       });
 
       completeBtn.addEventListener("click", async () => {
-        if (!confirm("Mark this update’s agenda complete and move to the next update?")) return;
+        if (!confirm("Mark this update complete and move to the next one?")) return;
         completeBtn.disabled = true;
         try {
           const data = await postAction("beta-complete-agenda");
           if (data.caughtUp) {
             statusEl.textContent = "Agenda complete — you’re caught up for now.";
           } else if (data.nextVersion) {
-            statusEl.textContent = `Agenda complete — now testing update ${shortVersion(data.nextVersion)}.`;
+            statusEl.textContent = `Update complete — now reviewing ${shortVersion(data.nextVersion)}.`;
           } else {
             statusEl.textContent = "Agenda complete.";
           }

@@ -764,8 +764,25 @@
     host.querySelectorAll("[data-search-tab]").forEach((btn) => {
       btn.classList.toggle("is-active", btn.getAttribute("data-search-tab") === tab);
     });
+    syncFeedChrome();
+  }
+
+  function syncFeedChrome() {
     const sortHost = document.getElementById("sort-tabs");
-    if (sortHost) sortHost.hidden = onSearch && tab !== "all" && tab !== "popular";
+    const pageHead = document.getElementById("page-head");
+    const onSearch = route.type === "search";
+    const tab = onSearch ? String(route.tab || "all") : "all";
+    const postCount = Array.isArray(lastPosts) ? lastPosts.filter((p) => p && !p.hidden).length : 0;
+    const onHomeLike = route.type === "home" || route.type === "popular";
+    if (sortHost) {
+      if (onSearch) sortHost.hidden = tab !== "all" && tab !== "popular";
+      else if (onHomeLike && postCount === 0) sortHost.hidden = true;
+      else if (route.type === "groups" || route.type === "inbox" || route.type === "settings" || route.type === "submit" || route.type === "mod") sortHost.hidden = true;
+      else sortHost.hidden = false;
+    }
+    if (pageHead) {
+      pageHead.classList.toggle("is-home-quiet", route.type === "home" && postCount === 0);
+    }
   }
 
   function closeUserMenu() {
@@ -1283,6 +1300,46 @@
     </a>`;
   }
 
+  function popularDiscoverHtml(data = {}) {
+    const groupSource = Array.isArray(data.groups) ? data.groups : Array.isArray(groups) ? groups : [];
+    const rankedGroups = groupSource
+      .slice()
+      .sort((a, b) => Number(b.postCount || 0) - Number(a.postCount || 0))
+      .slice(0, 6);
+    const users = Array.isArray(data.users) ? data.users.slice(0, 6) : [];
+    let html = "";
+    if (users.length) {
+      html += `<p class="search-section-title">People</p>`;
+      html += users
+        .map((u) =>
+          searchHitCard({
+            href: `/user/${encodeURIComponent(u.username || "")}`,
+            avatarUrl: u.avatarUrl || "",
+            label: u.displayName || u.username || "?",
+            title: u.displayName || u.username || "member",
+            subtitle: `@${u.username || ""}`,
+          })
+        )
+        .join("");
+    }
+    if (rankedGroups.length) {
+      html += `<p class="search-section-title">Popular groups</p>`;
+      html += rankedGroups
+        .map((g) =>
+          searchHitCard({
+            href: `/community/group/${encodeURIComponent(g.slug || "")}`,
+            avatarUrl: "",
+            label: g.slug || g.name || "?",
+            title: g.name || g.slug || "group",
+            subtitle: `${g.slug || ""}${g.postCount != null ? ` · ${g.postCount} posts` : ""}`,
+            isGroup: true,
+          })
+        )
+        .join("");
+    }
+    return html;
+  }
+
   function renderSearchResults(data = {}) {
     const query = String((data.search && data.search.query) || route.query || "").trim();
     const tab = String(route.tab || "all").toLowerCase();
@@ -1308,7 +1365,7 @@
       if (!users.length) {
         feedEl.innerHTML = "";
         feedEmpty.hidden = false;
-        feedEmpty.textContent = query ? `No people found for “${query}”.` : "Search for people.";
+        feedEmpty.innerHTML = query ? `<strong>No people found</strong>Nothing matched “${escapeHtml(query)}”.` : `<strong>Find people</strong>Search by username to connect with members.`;
         return;
       }
       feedEmpty.hidden = true;
@@ -1332,7 +1389,7 @@
       if (!matchedGroups.length) {
         feedEl.innerHTML = "";
         feedEmpty.hidden = false;
-        feedEmpty.textContent = query ? `No groups found for “${query}”.` : "Search for groups.";
+        feedEmpty.innerHTML = query ? `<strong>No groups found</strong>Nothing matched “${escapeHtml(query)}”.` : `<strong>Find groups</strong>Search by name to discover communities.`;
         return;
       }
       feedEmpty.hidden = true;
@@ -1389,9 +1446,21 @@
 
     const ordered = sortedPosts(posts).filter((p) => !p.hidden);
     if (!ordered.length && !html) {
+      const discover = !query ? popularDiscoverHtml(data) : "";
+      if (discover) {
+        feedEmpty.hidden = true;
+        feedEl.innerHTML = `<p class="search-section-title">Suggested</p>${discover}`;
+        syncFeedChrome();
+        return;
+      }
       feedEl.innerHTML = "";
-      feedEmpty.hidden = false;
-      feedEmpty.textContent = query ? `No results for “${query}”.` : "Type something to search.";
+      if (feedEmpty) {
+        feedEmpty.hidden = false;
+        feedEmpty.innerHTML = query
+          ? `<strong>No matches</strong>Nothing turned up for “${escapeHtml(query)}”. Try another name or topic.`
+          : `<strong>Search Community</strong>Find people, groups, and posts. Popular groups appear as you explore.`;
+      }
+      syncFeedChrome();
       return;
     }
     feedEmpty.hidden = true;
@@ -1409,19 +1478,24 @@
     const ordered = sortedPosts(lastPosts).filter((p) => !p.hidden);
     if (!ordered.length) {
       feedEl.innerHTML = "";
-      feedEmpty.hidden = false;
       if (feedEmpty) {
-        feedEmpty.textContent =
-          route.type === "group" && activeChannelSlug
-            ? "No posts in this channel yet. Start the conversation."
-            : route.type === "group"
-              ? "No posts in this community yet. Be the first to post."
-              : "No posts yet. Start the conversation.";
+        feedEmpty.hidden = false;
+        if (route.type === "group" && activeChannelSlug) {
+          feedEmpty.innerHTML = `<strong>This channel is quiet</strong>Be the first to share something here.`;
+        } else if (route.type === "group") {
+          feedEmpty.innerHTML = `<strong>No posts in this group yet</strong>Share an update to get the conversation started.`;
+        } else if (route.type === "popular") {
+          feedEmpty.innerHTML = `<strong>Nothing trending right now</strong>Check back soon, or browse groups to find something interesting.`;
+        } else {
+          feedEmpty.innerHTML = `<strong>Your feed is ready</strong>Follow groups or share an update to see activity here.<div class="community-empty-actions"><a class="btn btn-primary btn-compact" href="/community/groups">Browse groups</a><a class="btn btn-secondary btn-compact" href="/community/submit">New post</a></div>`;
+        }
       }
+      syncFeedChrome();
       return;
     }
-    feedEmpty.hidden = true;
+    if (feedEmpty) feedEmpty.hidden = true;
     syncSortTabs();
+    syncFeedChrome();
     feedEl.innerHTML = ordered
       .map((post) => {
         const group = post.group;
@@ -2312,7 +2386,7 @@ function applyViewState(data) {
       const q = route.query || "";
       setText("page-head-title", q ? `Results for “${q}”` : "Search");
       // Real tab controls live in #search-tabs — keep this subtitle quiet.
-      setText("page-head-sub", "Posts, people, and groups");
+      setText("page-head-sub", "Find people, groups, and posts");
       const jumpInput = document.getElementById("jump-input");
       if (jumpInput && q && document.activeElement !== jumpInput) jumpInput.value = q;
       if (composerCard) composerCard.hidden = true;
@@ -2332,7 +2406,7 @@ function applyViewState(data) {
       }
       if (pageHead) pageHead.hidden = false;
       setText("page-head-title", "Popular");
-      setText("page-head-sub", "Trending across communities");
+      setText("page-head-sub", "What’s getting attention right now");
       updateAboutRail(data);
       return;
     }
@@ -2343,8 +2417,8 @@ function applyViewState(data) {
       viewBlurb.textContent = "";
     }
     if (pageHead) pageHead.hidden = false;
-    setText("page-head-title", "Feed");
-    setText("page-head-sub", "Latest from your communities");
+    setText("page-head-title", "Home");
+    setText("page-head-sub", "Updates from groups you follow");
     updateAboutRail(data);
   }
 
@@ -2903,21 +2977,35 @@ function applyViewState(data) {
   const inboxMarkRead = document.getElementById("inbox-mark-read");
   if (inboxMarkRead) {
     inboxMarkRead.addEventListener("click", async () => {
+      const prev = (lastNotifications || []).slice();
+      notifSeq += 1;
+      const seq = notifSeq;
+      inboxMarkRead.classList.add("is-busy");
+      lastNotifications = [];
+      renderInbox([]);
+      renderNotifPanel([]);
+      unreadCount = 0;
+      updateInboxBadge();
       try {
         const data = await communityAction({ action: "mark-read" });
-        if (typeof data.unreadCount === "number") unreadCount = data.unreadCount;
-        else unreadCount = 0;
+        if (seq !== notifSeq) return;
+        const notes = Array.isArray(data.notifications) ? data.notifications : [];
+        lastNotifications = notes.slice();
+        renderInbox(notes);
+        renderNotifPanel(notes);
+        unreadCount = typeof data.unreadCount === "number" ? data.unreadCount : 0;
         updateInboxBadge();
-        if (Array.isArray(data.notifications)) {
-          renderInbox(data.notifications);
-        } else {
-          lastNotifications = (lastNotifications || []).map((n) => ({
-            ...n,
-            readAt: n.readAt || new Date().toISOString(),
-          }));
-          renderInbox(lastNotifications);
+      } catch (_) {
+        if (seq === notifSeq) {
+          lastNotifications = prev;
+          renderInbox(prev);
+          renderNotifPanel(prev);
+          unreadCount = prev.filter((n) => !n.readAt).length;
+          updateInboxBadge();
         }
-      } catch (_) {}
+      } finally {
+        inboxMarkRead.classList.remove("is-busy");
+      }
     });
   }
 
@@ -4460,6 +4548,7 @@ function applyViewState(data) {
   // —— Notifications popover (bell) ——
   let notifCache = [];
   let notifLoaded = false;
+  let notifSeq = 0;
 
   function renderNotifPanel(notes) {
     const list = document.getElementById("notif-list");
@@ -4505,6 +4594,7 @@ function applyViewState(data) {
   let notifWatchReady = false;
 
   async function refreshNotifications({ open = false } = {}) {
+    const seq = ++notifSeq;
     try {
       const res = await fetch("/api/synk-community?inbox=1", { headers: hubHeaders() });
       const data = await res.json().catch(() => ({}));
@@ -4513,6 +4603,7 @@ function applyViewState(data) {
         unreadCount = data.unreadCount;
         updateInboxBadge();
       }
+      if (seq !== notifSeq) return;
       notifLoaded = true;
       const notes = Array.isArray(data.notifications) ? data.notifications : [];
       if (notifWatchReady && window.SynkPush && window.SynkPush.maybeLocalNotify) {
@@ -4567,21 +4658,32 @@ function applyViewState(data) {
     notifMark.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
+      const prev = (notifCache.length ? notifCache : lastNotifications || []).slice();
+      notifSeq += 1;
+      const seq = notifSeq;
+      notifMark.classList.add("is-busy");
+      renderNotifPanel([]);
+      lastNotifications = [];
+      unreadCount = 0;
+      updateInboxBadge();
       try {
         const data = await communityAction({ action: "mark-read" });
-        if (Array.isArray(data.notifications)) {
-          renderNotifPanel(data.notifications);
-          lastNotifications = data.notifications.slice();
-        }
-        if (typeof data.unreadCount === "number") {
-          unreadCount = data.unreadCount;
-          updateInboxBadge();
-        } else {
-          unreadCount = 0;
-          updateInboxBadge();
-        }
+        if (seq !== notifSeq) return;
+        const notes = Array.isArray(data.notifications) ? data.notifications : [];
+        renderNotifPanel(notes);
+        lastNotifications = notes.slice();
+        unreadCount = typeof data.unreadCount === "number" ? data.unreadCount : 0;
+        updateInboxBadge();
       } catch (err) {
-        showToast(err.message || "Unable to update");
+        if (seq === notifSeq) {
+          renderNotifPanel(prev);
+          lastNotifications = prev.slice();
+          unreadCount = prev.filter((n) => !n.readAt).length;
+          updateInboxBadge();
+          showToast(err.message || "Unable to update");
+        }
+      } finally {
+        notifMark.classList.remove("is-busy");
       }
     });
   }
