@@ -29,6 +29,14 @@
     userPlus: '<path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="3.5"/><path d="M19 8v6M16 11h6"/>',
     userCheck: '<path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="3.5"/><path d="m16 11 2 2 4-4"/>',
     userMinus: '<path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="3.5"/><path d="M16 11h6"/>',
+    hash: '<path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/>',
+    megaphone: '<path d="m3 11 19-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+    lightbulb: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/>',
+    scroll: '<path d="M8 3H7a3 3 0 0 0 0 6h1"/><path d="M16 3h1a3 3 0 0 1 0 6h-1"/><path d="M8 3v14a3 3 0 0 0 3 3h5"/><path d="M16 3v5"/><path d="M10 9h4"/><path d="M10 13h4"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/>',
+    lifeBuoy: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="m7.5 7.5 1.8 1.8"/><path d="m14.7 14.7 1.8 1.8"/><path d="m14.7 9.3 1.8-1.8"/><path d="m7.5 16.5 1.8-1.8"/>',
+    bug: '<path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/>',
+    chatHash: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>',
   };
 
   function ico(name, size = 18) {
@@ -2371,12 +2379,11 @@
 
   function formatChannelLabel(ch, { compact = false } = {}) {
     if (!ch) return "";
-    let emoji = String(ch.emoji || "").trim();
+    // Prefer plain professional names; icons are rendered separately in the channel rail.
     let name = "";
     if (ch.label) {
       const parts = String(ch.label).split("|");
       if (parts.length >= 2) {
-        emoji = emoji || parts[0].trim();
         name = capitalizeChannelName(parts.slice(1).join("|").trim());
       } else {
         name = capitalizeChannelName(ch.label);
@@ -2384,9 +2391,8 @@
     } else {
       name = capitalizeChannelName(ch.name || ch.slug || "");
     }
-    if (!name) return emoji || "";
-    if (compact) return emoji ? `${emoji} ${name}` : name;
-    return emoji ? `${emoji} | ${name}` : name;
+    if (!name) return "";
+    return compact ? name : name;
   }
 
   function activeChannelMeta(group) {
@@ -2405,28 +2411,50 @@
 
   function channelKindMeta(channel) {
     const kind = String((channel && channel.kind) || "").toLowerCase();
-    if (kind === "announcements") return { label: "Announcements", ico: "📢" };
-    if (kind === "suggestions") return { label: "Ideas", ico: "💡" };
-    if (kind === "readonly" || kind === "rules") return { label: "Info", ico: "ℹ️" };
-    if (kind === "help") return { label: "Help", ico: "🆘" };
-    return { label: "", ico: "#" };
+    const slug = String((channel && channel.slug) || "").toLowerCase();
+    if (kind === "announcements" || slug === "announcements") {
+      return { label: "Announcements", icon: "megaphone", tone: "announce" };
+    }
+    if (kind === "suggestions" || slug === "ideas" || slug === "suggestions") {
+      return { label: "Suggestions", icon: "lightbulb", tone: "suggest" };
+    }
+    if (slug === "rules" || kind === "rules") {
+      return { label: "Rules", icon: "scroll", tone: "rules" };
+    }
+    if (slug === "welcome" || slug === "info" || kind === "info") {
+      return { label: "Info", icon: "info", tone: "info" };
+    }
+    if (kind === "readonly") {
+      return { label: "Info", icon: "info", tone: "info" };
+    }
+    if (kind === "help" || slug === "help") {
+      return { label: "Help", icon: "lifeBuoy", tone: "help" };
+    }
+    if (slug === "bugs") {
+      return { label: "", icon: "bug", tone: "bugs" };
+    }
+    if (slug === "lounge" || kind === "text" || kind === "chat") {
+      return { label: "", icon: "hash", tone: "chat" };
+    }
+    return { label: "", icon: "hash", tone: "chat" };
   }
 
   function channelButtonHtml(ch) {
     const on = ch.slug === activeChannelSlug ? "is-active" : "";
-    const full = formatChannelLabel(ch);
-    const compact = formatChannelLabel(ch, { compact: true });
+    const name = formatChannelLabel(ch) || capitalizeChannelName(ch.slug || "channel");
     const kind = String(ch.kind || "chat").toLowerCase();
     const meta = channelKindMeta(ch);
-    const nameOnly = compact.replace(/^[^\s]+\s+/, "").trim() || compact;
+    const tone = meta.tone || "chat";
+    const title = meta.label ? `${name} · ${meta.label}` : name;
     return `<button type="button" class="discord-channel-btn synk-hub-channel ${on}" data-discord-channel="${escapeHtml(
       ch.slug
-    )}" data-kind="${escapeHtml(kind)}" title="${escapeHtml(full)}"><span class="synk-hub-channel-ico" aria-hidden="true">${escapeHtml(
-      meta.ico || "#"
+    )}" data-kind="${escapeHtml(kind)}" data-tone="${escapeHtml(tone)}" title="${escapeHtml(title)}"><span class="synk-hub-channel-ico" aria-hidden="true">${ico(
+      meta.icon || "hash",
+      15
     )}</span><span class="discord-channel-label is-full">${escapeHtml(
-      full
+      name
     )}</span><span class="discord-channel-label is-compact">${escapeHtml(
-      nameOnly || compact
+      name
     )}</span></button>`;
   }
 
@@ -2525,13 +2553,16 @@
     const activeMeta = channelKindMeta(active);
     if (title) {
       const label = active ? formatChannelLabel(active, { compact: true }) : "Synk";
-      const cleaned = String(label || "").replace(/^[^\s]+\s+/, "").trim();
-      title.textContent = cleaned ? `# ${cleaned}` : label || "# Synk";
+      const cleaned = String(label || "").replace(/^[^\s]+\s+/, "").trim() || label || "Synk";
+      const iconName = (activeMeta && activeMeta.icon) || "hash";
+      title.innerHTML = `<span class="synk-hub-title-ico" aria-hidden="true">${ico(iconName, 16)}</span><span class="synk-hub-title-text"># ${escapeHtml(cleaned)}</span>`;
     }
     if (kindEl) {
       const kindLabel = activeMeta && activeMeta.label ? activeMeta.label : "";
       kindEl.textContent = kindLabel;
       kindEl.hidden = !kindLabel;
+      if (activeMeta && activeMeta.tone) kindEl.setAttribute("data-tone", activeMeta.tone);
+      else kindEl.removeAttribute("data-tone");
     }
     if (desc) {
       const text = (active && (active.description || "")) || "";
@@ -2546,7 +2577,7 @@
       if (allowed) {
         composerOpen.href = submitUrlForGroup(route.slug, activeChannelSlug);
         const kind = String((active && active.kind) || "").toLowerCase();
-        if (kind === "suggestions") composerOpen.textContent = "Suggest an idea";
+        if (kind === "suggestions") composerOpen.textContent = "Share a suggestion";
         else if (kind === "announcements") composerOpen.textContent = "Post announcement";
         else composerOpen.textContent = "Message #"+ ((active && active.name) || activeChannelSlug || "channel");
       }
@@ -2564,7 +2595,7 @@
         feedHint.textContent = "Read-only — maintained by Synk staff.";
       } else if (kind === "suggestions") {
         feedHint.hidden = false;
-        feedHint.textContent = "Upvote ideas · staff accept or decline.";
+        feedHint.textContent = "Share suggestions — the team reviews each one.";
       } else {
         feedHint.hidden = true;
         feedHint.textContent = "";
