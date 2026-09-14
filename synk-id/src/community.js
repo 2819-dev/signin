@@ -204,6 +204,38 @@
     }
   }
 
+  function formatDmBubbleTime(iso) {
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "";
+      const now = new Date();
+      const sameDay =
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate();
+      if (sameDay) {
+        return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      }
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const isYesterday =
+        d.getFullYear() === yesterday.getFullYear() &&
+        d.getMonth() === yesterday.getMonth() &&
+        d.getDate() === yesterday.getDate();
+      if (isYesterday) {
+        return `Yday ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+      }
+      return d.toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    } catch {
+      return "";
+    }
+  }
+
   /** Profile "Joined …" — month + year only (no day/time). */
   function formatJoinedMonthYear(iso) {
     try {
@@ -5144,7 +5176,7 @@ function applyViewState(data) {
           : "";
         const when = m.createdAt
           ? `<time class="community-dm-time" datetime="${escapeHtml(m.createdAt)}">${escapeHtml(
-              formatWhen(m.createdAt)
+              formatDmBubbleTime(m.createdAt)
             )}</time>`
           : "";
         return `<div class="community-dm-msg ${mine ? "is-mine" : "is-theirs"}" data-dm-message-id="${escapeHtml(
