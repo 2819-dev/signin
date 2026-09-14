@@ -5546,8 +5546,13 @@ html[data-theme="dark"] {
   justify-items: start;
 }
 .community-dm-msg .community-dm-bubble {
-  justify-self: stretch;
   max-width: min(78%, 300px);
+}
+.community-dm-msg.is-mine .community-dm-bubble {
+  justify-self: end;
+}
+.community-dm-msg.is-theirs .community-dm-bubble {
+  justify-self: start;
 }
 .community-dm-msg-body {
   white-space: pre-wrap;
@@ -14147,4 +14152,34 @@ body.community-body .community-dm-empty-chat p {
     max-width: min(84%, 280px) !important;
     padding: 4px 8px !important;
   }
+}
+
+/* —— DM alignment: mine on the right —— */
+body.community-body .community-dm-message-list {
+  justify-items: stretch !important;
+}
+body.community-body .community-dm-msg {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  align-items: flex-start !important;
+}
+body.community-body .community-dm-msg.is-mine {
+  align-items: flex-end !important;
+}
+body.community-body .community-dm-msg.is-theirs {
+  align-items: flex-start !important;
+}
+body.community-body .community-dm-msg.is-mine .community-dm-bubble,
+body.community-body .community-dm-msg.is-mine .community-dm-reactions {
+  align-self: flex-end !important;
+  margin-left: auto !important;
+  margin-right: 0 !important;
+}
+body.community-body .community-dm-msg.is-theirs .community-dm-bubble,
+body.community-body .community-dm-msg.is-theirs .community-dm-reactions {
+  align-self: flex-start !important;
+  margin-right: auto !important;
+  margin-left: 0 !important;
 }
