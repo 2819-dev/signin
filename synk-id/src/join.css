@@ -9557,7 +9557,7 @@ html[data-theme="dark"] body.community-body.is-discord-group .suggestion-status.
 @media (min-width: 861px) {
   body.community-body.is-discord-group .discord-shell,
   body.community-body.is-discord-group .synk-hub {
-    border-radius: 0 0 16px 16px;
+    border-radius: 16px;
   }
   body.community-body.is-discord-group .synk-hub-channels-toggle {
     display: none !important;
