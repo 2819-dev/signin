@@ -65,6 +65,7 @@ const {
   setDisplayNameForUsername,
   setBioForUsername,
   setDmPolicyForUsername,
+  setPresenceForUsername,
   getFriendship,
   requestFriendship,
   respondFriendship,
@@ -92,6 +93,7 @@ const {
   normalizeDisplayName,
   normalizeBio,
   normalizeDmPolicy,
+  normalizePresenceStatus,
   assignUsernameTag,
   unassignUsernameTag,
   setPinnedTagForUsername,
@@ -428,6 +430,7 @@ function mePayload(auth, role, alts = [], tags = [], pinnedTag = null) {
     avatarUrl: auth.profile.avatarUrl || "",
     bio: auth.profile.bio || "",
     dmPolicy: auth.profile.dmPolicy || "friends",
+    presenceStatus: auth.profile.presenceStatus || "online",
     role: role || null,
     isStaff: isCommunityStaffRole(role),
     isOwner: role === "owner",
@@ -2117,6 +2120,52 @@ exports.handler = async (event) => {
         ok: true,
         username: result.username,
         dmPolicy: result.dmPolicy,
+        me: mePayload(auth, role, nextAlts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "set-presence") {
+      const primary = normalizePublicUsername(auth.profile.publicUsername);
+      if (!primary) return json(400, { error: "Set a public username first" });
+      const requested = normalizePublicUsername(body.username || body.asUsername || primary) || primary;
+      const rawStatus =
+        body.presenceStatus != null
+          ? body.presenceStatus
+          : body.status != null
+            ? body.status
+            : body.presence_status;
+      const normalized = normalizePresenceStatus(rawStatus);
+      if (
+        rawStatus != null &&
+        String(rawStatus).trim() !== "" &&
+        !["online", "idle", "away", "dnd", "do_not_disturb", "do-not-disturb", "offline", "invisible"].includes(
+          String(rawStatus).trim().toLowerCase()
+        )
+      ) {
+        return json(400, { error: "presenceStatus must be online, idle, dnd, or offline" });
+      }
+      const result = await setPresenceForUsername(
+        sql,
+        requested,
+        normalized,
+        auth.profile.id
+      );
+      if (!result.ok) return json(400, { error: result.error || "Unable to save status" });
+      if (requested === primary) {
+        auth.profile.presenceStatus = result.presenceStatus;
+      }
+      const nextAlts =
+        role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
+      if (nextAlts.length) {
+        for (const alt of nextAlts) {
+          alt.tags = await listUsernameTags(sql, alt.username);
+          alt.pinnedTag = alt.tags.find((tag) => tag.pinned) || null;
+        }
+      }
+      return json(200, {
+        ok: true,
+        username: result.username,
+        presenceStatus: result.presenceStatus,
         me: mePayload(auth, role, nextAlts, myTags, myPinnedTag),
       });
     }

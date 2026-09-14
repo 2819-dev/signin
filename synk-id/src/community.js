@@ -92,6 +92,7 @@
   let avatarUrl = "";
   let bio = "";
   let dmPolicy = "friends";
+  let presenceStatus = "online";
   let activeProfile = null;
   let inboxTab = "notifications";
   let dmThreads = [];
@@ -1250,6 +1251,7 @@
         displayName: displayName || "",
         bio: bio || "",
         dmPolicy: dmPolicy || "friends",
+        presenceStatus: presenceStatus || "online",
         avatarUrl: avatarUrl || "",
         isAlt: false,
       };
@@ -1260,9 +1262,56 @@
       displayName: (alt && alt.displayName) || "",
       bio: (alt && alt.bio) || "",
       dmPolicy: (alt && alt.dmPolicy) || "friends",
+      presenceStatus: (alt && alt.presenceStatus) || "online",
       avatarUrl: (alt && alt.avatarUrl) || "",
       isAlt: true,
     };
+  }
+
+  function normalizePresenceStatus(value) {
+    const status = String(value || "")
+      .trim()
+      .toLowerCase();
+    if (status === "idle" || status === "away") return "idle";
+    if (status === "dnd" || status === "do_not_disturb" || status === "do-not-disturb") {
+      return "dnd";
+    }
+    if (status === "offline" || status === "invisible") return "offline";
+    return "online";
+  }
+
+  function presenceLabel(status) {
+    switch (normalizePresenceStatus(status)) {
+      case "idle":
+        return "Idle";
+      case "dnd":
+        return "Do Not Disturb";
+      case "offline":
+        return "Offline";
+      default:
+        return "Online";
+    }
+  }
+
+  function presenceDotMarkup(status, { hidden = false } = {}) {
+    const normalized = normalizePresenceStatus(status);
+    const label = presenceLabel(normalized);
+    const hideAttr = hidden ? " hidden" : "";
+    return `<span class="community-presence-dot is-${escapeHtml(
+      normalized
+    )}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"${hideAttr}></span>`;
+  }
+
+  function paintPresenceDot(el, status, { hidden = false } = {}) {
+    if (!el) return;
+    const normalized = normalizePresenceStatus(status);
+    const label = presenceLabel(normalized);
+    el.className = `community-presence-dot is-${normalized}`;
+    el.title = label;
+    el.setAttribute("aria-label", label);
+    if (hidden) el.setAttribute("aria-hidden", "true");
+    else el.removeAttribute("aria-hidden");
+    el.hidden = !!hidden;
   }
 
   function storePersona(username) {
@@ -2348,6 +2397,8 @@
       }
       const settingsDm = document.getElementById("settings-dm-policy");
       if (settingsDm) settingsDm.value = account.dmPolicy || "friends";
+      const settingsPresence = document.getElementById("settings-presence-status");
+      if (settingsPresence) settingsPresence.value = normalizePresenceStatus(account.presenceStatus || "online");
       if (myProfileLink) {
         myProfileLink.hidden = false;
         myProfileLink.href = `/user/${encodeURIComponent(account.username || publicUsername)}`;
@@ -3188,6 +3239,7 @@ function applyViewState(data) {
       avatarUrl = (me && me.avatarUrl) || "";
       bio = (me && me.bio) || "";
       dmPolicy = (me && me.dmPolicy) || "friends";
+      presenceStatus = normalizePresenceStatus((me && me.presenceStatus) || "online");
       alts = (me && me.alts) || [];
       myTags = (me && me.tags) || [];
       tags = data.tags || [];
@@ -4701,6 +4753,7 @@ function applyViewState(data) {
   }
 
   const dmForm = document.getElementById("settings-dm-form");
+  const presenceForm = document.getElementById("settings-presence-form");
 
   function syncThemePreferenceButtons() {
     const row = document.getElementById("settings-theme-row");
@@ -4726,6 +4779,39 @@ function applyViewState(data) {
     });
     syncThemePreferenceButtons();
     window.addEventListener("synk-theme-change", syncThemePreferenceButtons);
+  }
+
+  if (presenceForm) {
+    presenceForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("settings-presence-status-msg");
+      const select = document.getElementById("settings-presence-status");
+      if (status) status.textContent = "Saving…";
+      try {
+        const data = await communityAction({
+          action: "set-presence",
+          presenceStatus: select ? select.value : "online",
+          username: actingUsername() || publicUsername,
+        });
+        const savedFor = String(data.username || actingUsername() || publicUsername)
+          .trim()
+          .toLowerCase();
+        const savedStatus = normalizePresenceStatus(data.presenceStatus || "online");
+        if (savedFor === publicUsername) {
+          presenceStatus = savedStatus;
+          if (me) me.presenceStatus = savedStatus;
+        } else {
+          alts = (alts || []).map((alt) =>
+            alt.username === savedFor ? { ...alt, presenceStatus: savedStatus } : alt
+          );
+          if (me) me.alts = alts;
+        }
+        if (status) status.textContent = "Saved";
+        applyUsernameState();
+      } catch (err) {
+        if (status) status.textContent = err.message || "Unable to save. Please try again.";
+      }
+    });
   }
 
   if (dmForm) {
@@ -4928,12 +5014,16 @@ function applyViewState(data) {
         const when = escapeHtml(formatWhen(t.lastMessageAt || t.updatedAt || t.createdAt));
         const label = escapeHtml(t.otherDisplayName || other);
         const handle = escapeHtml(other ? `@${other}` : "");
+        const presence = normalizePresenceStatus(t.otherPresence || "offline");
         const avatar = avatarMarkup(t.otherAvatarUrl || "", t.otherDisplayName || other, "community-face community-dm-avatar");
         return `<button type="button" class="community-dm-thread ${active}" data-dm-user="${escapeHtml(other)}" role="listitem">
-          ${avatar}
+          <span class="community-dm-avatar-wrap">
+            ${avatar}
+            ${presenceDotMarkup(presence)}
+          </span>
           <span class="community-dm-thread-copy">
             <span class="community-dm-thread-top"><strong>${label}</strong><span>${when}</span></span>
-            <span class="community-dm-thread-handle">${handle}</span>
+            <span class="community-dm-thread-handle">${handle} · ${escapeHtml(presenceLabel(presence))}</span>
             <span class="community-dm-thread-preview">${preview}</span>
           </span>
         </button>`;
@@ -5108,6 +5198,7 @@ function applyViewState(data) {
     const head = document.getElementById("dm-chat-head");
     const profile = document.getElementById("dm-chat-profile");
     const avatar = document.getElementById("dm-chat-avatar");
+    const presenceEl = document.getElementById("dm-chat-presence");
     const form = document.getElementById("dm-compose-form");
     const hint = document.getElementById("dm-chat-hint");
     const meName = String(publicUsername || "")
@@ -5117,10 +5208,16 @@ function applyViewState(data) {
       (t) => String(t.otherUser || t.otherUsername || "").toLowerCase() === String(otherUser || "").toLowerCase()
     );
     const titleLabel = (thread && (thread.otherDisplayName || thread.otherUser)) || otherUser || "Select a conversation";
+    const presence = normalizePresenceStatus((thread && thread.otherPresence) || "offline");
     if (title) title.textContent = titleLabel;
-    if (sub) sub.textContent = otherUser ? `@${otherUser}` : "";
+    if (sub) {
+      sub.textContent = otherUser
+        ? `@${otherUser} · ${presenceLabel(presence)}`
+        : "";
+    }
     if (profile) profile.href = otherUser ? `/user/${encodeURIComponent(otherUser)}` : "#";
     if (avatar) paintAvatar(avatar, (thread && thread.otherAvatarUrl) || "", titleLabel);
+    paintPresenceDot(presenceEl, presence, { hidden: !otherUser });
     if (head) head.hidden = !otherUser;
     if (form) form.hidden = !otherUser;
     if (hint) hint.hidden = !!otherUser;

@@ -13,14 +13,14 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v46" />
+    <link rel="stylesheet" href="/join.css?v=community-v47" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v46" defer></script>
+    <script src="/force-refresh.js?v=community-v47" defer></script>
   </head>
   <body class="community-body reddit-body">
     <div id="synk-boot-loader" class="synk-loader-overlay" hidden aria-busy="false" aria-live="polite" aria-label="Loading Synk">
@@ -459,7 +459,10 @@
                           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
                         </button>
                         <a class="community-dm-chat-person" id="dm-chat-profile" href="#">
-                          <span id="dm-chat-avatar" class="community-face community-dm-avatar" aria-hidden="true">?</span>
+                          <span class="community-dm-avatar-wrap community-dm-avatar-wrap--chat">
+                            <span id="dm-chat-avatar" class="community-face community-dm-avatar" aria-hidden="true">?</span>
+                            <span class="community-presence-dot is-offline" id="dm-chat-presence" hidden title="Offline" aria-hidden="true"></span>
+                          </span>
                           <span class="community-dm-chat-person-copy">
                             <strong id="dm-chat-title">Conversation</strong>
                             <span class="muted" id="dm-chat-sub"></span>
@@ -646,6 +649,23 @@
 
                 <div class="reddit-settings-section">
                   <h2 class="reddit-settings-heading">Messages</h2>
+
+                  <div class="reddit-settings-row">
+                    <div class="reddit-settings-copy">
+                      <strong>Status</strong>
+                      <p class="muted">Shown next to you in Direct Messages.</p>
+                    </div>
+                    <form id="settings-presence-form" class="reddit-settings-form" autocomplete="off">
+                      <select id="settings-presence-status">
+                        <option value="online">Online</option>
+                        <option value="idle">Idle</option>
+                        <option value="dnd">Do Not Disturb</option>
+                        <option value="offline">Offline</option>
+                      </select>
+                      <button class="btn btn-secondary btn-compact" type="submit" id="settings-presence-btn">Save</button>
+                    </form>
+                    <p id="settings-presence-status-msg" class="muted reddit-settings-status"></p>
+                  </div>
 
                   <div class="reddit-settings-row">
                     <div class="reddit-settings-copy">
@@ -1072,8 +1092,8 @@
       </div>
     </div>
 
-    <script src="/push-client.js?v=community-v46"></script>
+    <script src="/push-client.js?v=community-v47"></script>
     <script src="/image-crop.js?v=crop-v3"></script>
-    <script src="/community.js?v=community-v46"></script>
+    <script src="/community.js?v=community-v47"></script>
   </body>
 </html>

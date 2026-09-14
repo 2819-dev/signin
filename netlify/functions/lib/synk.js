@@ -623,8 +623,10 @@ async function ensureSynkCommunityExtras(sql) {
 
   await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS bio TEXT`;
   await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS dm_policy TEXT NOT NULL DEFAULT 'friends'`;
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS presence_status TEXT NOT NULL DEFAULT 'online'`;
   await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS bio TEXT`;
   await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS dm_policy TEXT NOT NULL DEFAULT 'friends'`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS presence_status TEXT NOT NULL DEFAULT 'online'`;
   await sql`
     UPDATE synk_community_profiles
     SET dm_policy = 'friends'
@@ -638,6 +640,20 @@ async function ensureSynkCommunityExtras(sql) {
     WHERE dm_policy IS NULL
        OR btrim(dm_policy) = ''
        OR lower(dm_policy) NOT IN ('friends', 'nobody', 'everyone')
+  `;
+  await sql`
+    UPDATE synk_community_profiles
+    SET presence_status = 'online'
+    WHERE presence_status IS NULL
+       OR btrim(presence_status) = ''
+       OR lower(presence_status) NOT IN ('online', 'idle', 'dnd', 'offline')
+  `;
+  await sql`
+    UPDATE synk_community_alt_accounts
+    SET presence_status = 'online'
+    WHERE presence_status IS NULL
+       OR btrim(presence_status) = ''
+       OR lower(presence_status) NOT IN ('online', 'idle', 'dnd', 'offline')
   `;
 
   await sql`
@@ -871,7 +887,7 @@ async function renameCommunityUsername(sql, fromUsername, toUsername) {
 async function listOwnerAltAccounts(sql, ownerProfileId) {
   if (!ownerProfileId) return [];
   const rows = await sql`
-    SELECT id, owner_synk_profile_id, public_username, label, display_name, avatar_url, bio, dm_policy, created_at, updated_at
+    SELECT id, owner_synk_profile_id, public_username, label, display_name, avatar_url, bio, dm_policy, presence_status, created_at, updated_at
     FROM synk_community_alt_accounts
     WHERE owner_synk_profile_id = ${ownerProfileId}
     ORDER BY created_at ASC
@@ -884,6 +900,7 @@ async function listOwnerAltAccounts(sql, ownerProfileId) {
     avatarUrl: String(row.avatar_url || "").trim(),
     bio: normalizeBio(row.bio),
     dmPolicy: normalizeDmPolicy(row.dm_policy),
+    presenceStatus: normalizePresenceStatus(row.presence_status),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     isAlt: true,
@@ -3086,7 +3103,7 @@ async function requireHubSession(sql, event, body = {}) {
   const rows = await sql`
     SELECT s.id, s.synk_profile_id, s.expires_at, s.revoked_at, s.stay_signed_in,
            p.synk_code, p.name, p.photo_url, p.enabled,
-           c.public_username, c.display_name, c.avatar_url, c.bio, c.dm_policy
+           c.public_username, c.display_name, c.avatar_url, c.bio, c.dm_policy, c.presence_status
     FROM synk_hub_sessions s
     JOIN synk_profiles p ON p.id = s.synk_profile_id
     LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.id
@@ -3131,6 +3148,7 @@ async function requireHubSession(sql, event, body = {}) {
       avatarUrl: String(row.avatar_url || "").trim(),
       bio: normalizeBio(row.bio),
       dmPolicy: normalizeDmPolicy(row.dm_policy),
+      presenceStatus: normalizePresenceStatus(row.presence_status),
     },
   };
 }
@@ -3164,6 +3182,19 @@ function normalizeDmPolicy(value) {
     .toLowerCase();
   if (policy === "nobody" || policy === "everyone" || policy === "friends") return policy;
   return "friends";
+}
+
+function normalizePresenceStatus(value) {
+  const status = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (status === "idle" || status === "away") return "idle";
+  if (status === "dnd" || status === "do_not_disturb" || status === "do-not-disturb") {
+    return "dnd";
+  }
+  if (status === "offline" || status === "invisible") return "offline";
+  if (status === "online") return "online";
+  return "online";
 }
 
 function normalizeDmBody(value) {
@@ -3322,6 +3353,65 @@ async function setDmPolicyForUsername(sql, username, policy, ownerProfileId = nu
       ok: true,
       username: alt[0].public_username,
       dmPolicy: normalizeDmPolicy(alt[0].dm_policy),
+    };
+  }
+  return { ok: false, error: "Profile not found" };
+}
+
+async function getPresenceByUsernames(sql, usernames) {
+  const names = Array.from(
+    new Set((usernames || []).map((u) => normalizePublicUsername(u)).filter(Boolean))
+  );
+  if (!names.length) return {};
+  const rows = await sql`
+    SELECT public_username, presence_status
+    FROM (
+      SELECT public_username, presence_status
+      FROM synk_community_profiles
+      WHERE public_username = ANY(${names})
+      UNION ALL
+      SELECT public_username, presence_status
+      FROM synk_community_alt_accounts
+      WHERE public_username = ANY(${names})
+    ) x
+  `;
+  const out = {};
+  for (const row of rows) {
+    out[row.public_username] = normalizePresenceStatus(row.presence_status);
+  }
+  return out;
+}
+
+async function setPresenceForUsername(sql, username, status, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  const next = normalizePresenceStatus(status);
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET presence_status = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, presence_status
+  `;
+  if (primary[0]) {
+    return {
+      ok: true,
+      username: primary[0].public_username,
+      presenceStatus: normalizePresenceStatus(primary[0].presence_status),
+    };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET presence_status = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, presence_status
+  `;
+  if (alt[0]) {
+    return {
+      ok: true,
+      username: alt[0].public_username,
+      presenceStatus: normalizePresenceStatus(alt[0].presence_status),
     };
   }
   return { ok: false, error: "Profile not found" };
@@ -3727,14 +3817,16 @@ async function listDmThreads(sql, username) {
   `;
   const threads = rows.map((row) => mapDmThread(row, name));
   const others = threads.map((t) => t.otherUser).filter(Boolean);
-  const [names, avatars] = await Promise.all([
+  const [names, avatars, presence] = await Promise.all([
     getDisplayNamesByUsernames(sql, others),
     getAvatarsByUsernames(sql, others),
+    getPresenceByUsernames(sql, others),
   ]);
   return threads.map((t) => ({
     ...t,
     otherDisplayName: names[t.otherUser] || "",
     otherAvatarUrl: avatars[t.otherUser] || "",
+    otherPresence: presence[t.otherUser] || "offline",
   }));
 }
 
@@ -3814,9 +3906,20 @@ async function listDmMessages(sql, threadId, username) {
       )
     ORDER BY created_at ASC
   `;
+  const other = thread.otherUser || "";
+  const [names, avatars, presence] = await Promise.all([
+    getDisplayNamesByUsernames(sql, other ? [other] : []),
+    getAvatarsByUsernames(sql, other ? [other] : []),
+    getPresenceByUsernames(sql, other ? [other] : []),
+  ]);
   return {
     ok: true,
-    thread,
+    thread: {
+      ...thread,
+      otherDisplayName: names[other] || "",
+      otherAvatarUrl: avatars[other] || "",
+      otherPresence: presence[other] || "offline",
+    },
     messages: rows.map((row) => mapDmMessage(row, name)),
   };
 }
@@ -5438,10 +5541,13 @@ module.exports = {
   normalizeDisplayName,
   normalizeBio,
   normalizeDmPolicy,
+  normalizePresenceStatus,
   getDisplayNamesByUsernames,
+  getPresenceByUsernames,
   setDisplayNameForUsername,
   setBioForUsername,
   setDmPolicyForUsername,
+  setPresenceForUsername,
   getFriendship,
   listFriends,
   requestFriendship,

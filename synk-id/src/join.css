@@ -14276,3 +14276,49 @@ body.community-body .community-dm-bubble:focus-visible {
     padding: 10px 12px !important;
   }
 }
+
+/* Presence status dots (Online / Idle / DND / Offline) */
+body.community-body .community-dm-avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+}
+body.community-body .community-dm-avatar-wrap--chat {
+  width: 34px;
+  height: 34px;
+}
+body.community-body .community-dm-avatar-wrap .community-dm-avatar,
+body.community-body .community-dm-avatar-wrap .community-face {
+  width: 100% !important;
+  height: 100% !important;
+}
+body.community-body .community-presence-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  border: 2px solid var(--r-card, var(--surface, #fff));
+  box-sizing: border-box;
+  background: #747f8d;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--r-card, #fff) 40%, transparent);
+  pointer-events: none;
+}
+body.community-body .community-presence-dot.is-online {
+  background: #23a559;
+}
+body.community-body .community-presence-dot.is-idle {
+  background: #f0b232;
+}
+body.community-body .community-presence-dot.is-dnd {
+  background: #f23f43;
+}
+body.community-body .community-presence-dot.is-offline {
+  background: #80848e;
+}
+body.community-body #settings-presence-form select {
+  min-width: 11rem;
+}
