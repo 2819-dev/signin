@@ -1314,6 +1314,103 @@
     el.hidden = !!hidden;
   }
 
+  function syncMenuPresenceUi(status) {
+    const normalized = normalizePresenceStatus(status || presenceStatus || "online");
+    const label = presenceLabel(normalized);
+    const btn = document.getElementById("menu-presence-btn");
+    const labelEl = document.getElementById("menu-presence-label");
+    const dot = document.getElementById("menu-presence-dot");
+    const menu = document.getElementById("menu-presence-menu");
+    paintPresenceDot(dot, normalized);
+    if (labelEl) labelEl.textContent = label;
+    if (btn) {
+      btn.title = `Status: ${label}`;
+      btn.setAttribute("aria-label", `Status: ${label}. Change status`);
+    }
+    if (menu) {
+      menu.querySelectorAll("[data-presence]").forEach((item) => {
+        const selected = item.getAttribute("data-presence") === normalized;
+        item.classList.toggle("is-selected", selected);
+        item.setAttribute("aria-checked", selected ? "true" : "false");
+      });
+    }
+  }
+
+  function closeMenuPresenceMenu() {
+    const wrap = document.getElementById("menu-presence");
+    const btn = document.getElementById("menu-presence-btn");
+    const menu = document.getElementById("menu-presence-menu");
+    if (menu) {
+      menu.hidden = true;
+      menu.style.position = "";
+      menu.style.left = "";
+      menu.style.top = "";
+      menu.style.minWidth = "";
+      menu.style.zIndex = "";
+    }
+    if (btn) btn.setAttribute("aria-expanded", "false");
+    if (wrap) wrap.classList.remove("is-open");
+  }
+
+  function openMenuPresenceMenu() {
+    const wrap = document.getElementById("menu-presence");
+    const btn = document.getElementById("menu-presence-btn");
+    const menu = document.getElementById("menu-presence-menu");
+    if (!menu || !btn) return;
+    syncMenuPresenceUi(activeAccountProfile().presenceStatus || presenceStatus);
+    menu.hidden = false;
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = Math.max(188, rect.width + 140);
+    let left = rect.left;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - menuWidth - 8);
+    }
+    let top = rect.bottom + 8;
+    menu.style.position = "fixed";
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+    menu.style.minWidth = `${menuWidth}px`;
+    menu.style.zIndex = "400";
+    // If it would hang off the bottom, flip above the button.
+    const menuRect = menu.getBoundingClientRect();
+    if (menuRect.bottom > window.innerHeight - 8) {
+      top = Math.max(8, rect.top - menuRect.height - 8);
+      menu.style.top = `${Math.round(top)}px`;
+    }
+    btn.setAttribute("aria-expanded", "true");
+    if (wrap) wrap.classList.add("is-open");
+  }
+
+  function toggleMenuPresenceMenu() {
+    const menu = document.getElementById("menu-presence-menu");
+    if (!menu || menu.hidden) openMenuPresenceMenu();
+    else closeMenuPresenceMenu();
+  }
+
+  async function savePresenceStatus(nextStatus) {
+    const normalized = normalizePresenceStatus(nextStatus);
+    const data = await communityAction({
+      action: "set-presence",
+      presenceStatus: normalized,
+      username: actingUsername() || publicUsername,
+    });
+    const savedFor = String(data.username || actingUsername() || publicUsername)
+      .trim()
+      .toLowerCase();
+    const savedStatus = normalizePresenceStatus(data.presenceStatus || normalized);
+    if (savedFor === publicUsername) {
+      presenceStatus = savedStatus;
+      if (me) me.presenceStatus = savedStatus;
+    } else {
+      alts = (alts || []).map((alt) =>
+        alt.username === savedFor ? { ...alt, presenceStatus: savedStatus } : alt
+      );
+      if (me) me.alts = alts;
+    }
+    syncMenuPresenceUi(savedStatus);
+    return savedStatus;
+  }
+
   function storePersona(username) {
     const next = String(username || "").trim().toLowerCase();
     const changed = next !== String(activePersona || "").trim().toLowerCase();
@@ -2423,6 +2520,7 @@
           menuProfileLink.href = `/user/${encodeURIComponent(actingUsername() || publicUsername)}`;
           menuProfileLink.hidden = false;
         }
+        syncMenuPresenceUi(account.presenceStatus || presenceStatus || "online");
       }
     } else if (myProfileLink) {
       myProfileLink.hidden = true;
@@ -4753,7 +4851,9 @@ function applyViewState(data) {
   }
 
   const dmForm = document.getElementById("settings-dm-form");
-  const presenceForm = document.getElementById("settings-presence-form");
+  const menuPresenceBtn = document.getElementById("menu-presence-btn");
+  const menuPresenceMenu = document.getElementById("menu-presence-menu");
+  const menuPresenceWrap = document.getElementById("menu-presence");
 
   function syncThemePreferenceButtons() {
     const row = document.getElementById("settings-theme-row");
@@ -4781,38 +4881,36 @@ function applyViewState(data) {
     window.addEventListener("synk-theme-change", syncThemePreferenceButtons);
   }
 
-  if (presenceForm) {
-    presenceForm.addEventListener("submit", async (e) => {
+  if (menuPresenceBtn) {
+    menuPresenceBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      const status = document.getElementById("settings-presence-status-msg");
-      const select = document.getElementById("settings-presence-status");
-      if (status) status.textContent = "Saving…";
+      e.stopPropagation();
+      toggleMenuPresenceMenu();
+    });
+  }
+  if (menuPresenceMenu) {
+    menuPresenceMenu.addEventListener("click", async (e) => {
+      const item = e.target.closest("[data-presence]");
+      if (!item) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const next = item.getAttribute("data-presence");
+      closeMenuPresenceMenu();
       try {
-        const data = await communityAction({
-          action: "set-presence",
-          presenceStatus: select ? select.value : "online",
-          username: actingUsername() || publicUsername,
-        });
-        const savedFor = String(data.username || actingUsername() || publicUsername)
-          .trim()
-          .toLowerCase();
-        const savedStatus = normalizePresenceStatus(data.presenceStatus || "online");
-        if (savedFor === publicUsername) {
-          presenceStatus = savedStatus;
-          if (me) me.presenceStatus = savedStatus;
-        } else {
-          alts = (alts || []).map((alt) =>
-            alt.username === savedFor ? { ...alt, presenceStatus: savedStatus } : alt
-          );
-          if (me) me.alts = alts;
-        }
-        if (status) status.textContent = "Saved";
+        await savePresenceStatus(next);
         applyUsernameState();
       } catch (err) {
-        if (status) status.textContent = err.message || "Unable to save. Please try again.";
+        showToast(err.message || "Could not update status");
       }
     });
   }
+  document.addEventListener("click", (e) => {
+    if (!menuPresenceWrap || menuPresenceWrap.contains(e.target)) return;
+    closeMenuPresenceMenu();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenuPresenceMenu();
+  });
 
   if (dmForm) {
     dmForm.addEventListener("submit", async (e) => {

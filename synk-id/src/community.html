@@ -13,14 +13,14 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v47" />
+    <link rel="stylesheet" href="/join.css?v=community-v48" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v47" defer></script>
+    <script src="/force-refresh.js?v=community-v48" defer></script>
   </head>
   <body class="community-body reddit-body">
     <div id="synk-boot-loader" class="synk-loader-overlay" hidden aria-busy="false" aria-live="polite" aria-label="Loading Synk">
@@ -116,14 +116,50 @@
     <aside class="reddit-leftnav reddit-sidemenu" id="left-nav" aria-label="Community menu" hidden>
       <div class="reddit-leftnav-scroll">
         <div class="menu-profile-wrap">
-          <a class="settings-profile-card" href="#" id="menu-profile-link">
-            <span class="settings-profile-avatar" id="menu-profile-avatar" aria-hidden="true">S</span>
-            <span class="settings-profile-copy">
-              <strong id="menu-profile-name">Member</strong>
-              <span id="menu-profile-handle">Account</span>
-            </span>
-            <svg class="r-ico settings-profile-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
-          </a>
+          <div class="menu-profile-card-shell">
+            <a class="settings-profile-card" href="#" id="menu-profile-link">
+              <span class="settings-profile-avatar-wrap">
+                <span class="settings-profile-avatar" id="menu-profile-avatar" aria-hidden="true">S</span>
+              </span>
+              <span class="settings-profile-copy">
+                <strong id="menu-profile-name">Member</strong>
+                <span id="menu-profile-handle">Account</span>
+              </span>
+              <svg class="r-ico settings-profile-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+            </a>
+            <div class="menu-presence" id="menu-presence">
+              <button
+                class="menu-presence-btn"
+                type="button"
+                id="menu-presence-btn"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-controls="menu-presence-menu"
+                title="Set status"
+              >
+                <span class="community-presence-dot is-online" id="menu-presence-dot" aria-hidden="true"></span>
+                <span class="sr-only" id="menu-presence-label">Online</span>
+              </button>
+              <div class="menu-presence-menu" id="menu-presence-menu" hidden role="menu" aria-label="Status">
+                <button class="menu-presence-item is-selected" type="button" role="menuitemradio" aria-checked="true" data-presence="online">
+                  <span class="community-presence-dot is-online" aria-hidden="true"></span>
+                  <span>Online</span>
+                </button>
+                <button class="menu-presence-item" type="button" role="menuitemradio" aria-checked="false" data-presence="idle">
+                  <span class="community-presence-dot is-idle" aria-hidden="true"></span>
+                  <span>Idle</span>
+                </button>
+                <button class="menu-presence-item" type="button" role="menuitemradio" aria-checked="false" data-presence="dnd">
+                  <span class="community-presence-dot is-dnd" aria-hidden="true"></span>
+                  <span>Do Not Disturb</span>
+                </button>
+                <button class="menu-presence-item" type="button" role="menuitemradio" aria-checked="false" data-presence="offline">
+                  <span class="community-presence-dot is-offline" aria-hidden="true"></span>
+                  <span>Offline</span>
+                </button>
+              </div>
+            </div>
+          </div>
           <div class="persona-switch menu-persona-switch" id="persona-switch" hidden>
             <button class="persona-switch-btn menu-persona-btn" type="button" id="persona-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="persona-menu">
               <span class="reddit-account-avatar" id="persona-avatar" aria-hidden="true">S</span>
@@ -652,23 +688,6 @@
 
                   <div class="reddit-settings-row">
                     <div class="reddit-settings-copy">
-                      <strong>Status</strong>
-                      <p class="muted">Shown next to you in Direct Messages.</p>
-                    </div>
-                    <form id="settings-presence-form" class="reddit-settings-form" autocomplete="off">
-                      <select id="settings-presence-status">
-                        <option value="online">Online</option>
-                        <option value="idle">Idle</option>
-                        <option value="dnd">Do Not Disturb</option>
-                        <option value="offline">Offline</option>
-                      </select>
-                      <button class="btn btn-secondary btn-compact" type="submit" id="settings-presence-btn">Save</button>
-                    </form>
-                    <p id="settings-presence-status-msg" class="muted reddit-settings-status"></p>
-                  </div>
-
-                  <div class="reddit-settings-row">
-                    <div class="reddit-settings-copy">
                       <strong>Who can message you</strong>
                       <p class="muted">Friends can always request first. Choose who may send DMs.</p>
                     </div>
@@ -1092,8 +1111,8 @@
       </div>
     </div>
 
-    <script src="/push-client.js?v=community-v47"></script>
+    <script src="/push-client.js?v=community-v48"></script>
     <script src="/image-crop.js?v=crop-v3"></script>
-    <script src="/community.js?v=community-v47"></script>
+    <script src="/community.js?v=community-v48"></script>
   </body>
 </html>

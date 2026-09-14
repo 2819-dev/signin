@@ -14295,15 +14295,23 @@ body.community-body .community-dm-avatar-wrap .community-face {
   height: 100% !important;
 }
 body.community-body .community-presence-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 2px solid var(--r-card, var(--surface, #fff));
+  box-sizing: border-box;
+  background: #80848e;
+  flex: 0 0 auto;
+}
+body.community-body .community-dm-avatar-wrap .community-presence-dot,
+body.community-body .menu-presence-btn .community-presence-dot,
+body.community-body #dm-chat-presence.community-presence-dot {
   position: absolute;
   right: -1px;
   bottom: -1px;
   width: 11px;
   height: 11px;
-  border-radius: 999px;
-  border: 2px solid var(--r-card, var(--surface, #fff));
-  box-sizing: border-box;
-  background: #747f8d;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--r-card, #fff) 40%, transparent);
   pointer-events: none;
 }
@@ -14319,6 +14327,112 @@ body.community-body .community-presence-dot.is-dnd {
 body.community-body .community-presence-dot.is-offline {
   background: #80848e;
 }
-body.community-body #settings-presence-form select {
-  min-width: 11rem;
+
+/* Sidebar profile presence picker */
+body.community-body .menu-profile-wrap {
+  position: relative;
+  z-index: 30;
+}
+body.community-body .menu-profile-card-shell {
+  position: relative;
+}
+body.community-body .menu-profile-card-shell .settings-profile-card {
+  margin: 0;
+}
+body.community-body .settings-profile-avatar-wrap {
+  position: relative;
+  display: block;
+  width: 56px;
+  height: 56px;
+}
+body.community-body .settings-profile-avatar-wrap .settings-profile-avatar {
+  width: 56px;
+  height: 56px;
+}
+body.community-body .menu-presence {
+  position: absolute;
+  left: 12px;
+  top: 14px;
+  width: 56px;
+  height: 56px;
+  z-index: 8;
+  pointer-events: none;
+}
+body.community-body .menu-presence-btn {
+  pointer-events: auto;
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--r-elev, var(--surface, #fff));
+  box-shadow: 0 0 0 2px var(--r-elev, var(--surface, #fff));
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+body.community-body .menu-presence-btn:hover,
+body.community-body .menu-presence-btn:focus-visible {
+  outline: none;
+  transform: scale(1.08);
+}
+body.community-body .menu-presence-btn .community-presence-dot {
+  right: 50%;
+  bottom: 50%;
+  transform: translate(50%, 50%);
+  width: 12px;
+  height: 12px;
+  border-width: 0;
+  box-shadow: none;
+}
+body.community-body .menu-presence-menu {
+  pointer-events: auto;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 10px);
+  min-width: 188px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--r-line, rgba(0, 0, 0, 0.1));
+  background: var(--r-card, var(--surface, #fff));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  display: grid;
+  gap: 2px;
+  z-index: 60;
+}
+body.community-body .menu-presence-menu[hidden] {
+  display: none !important;
+}
+body.community-body .menu-presence-item {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+body.community-body .menu-presence-item:hover,
+body.community-body .menu-presence-item:focus-visible {
+  background: var(--r-hover, rgba(0, 0, 0, 0.06));
+  outline: none;
+}
+body.community-body .menu-presence-item.is-selected {
+  background: color-mix(in srgb, var(--r-brand, #041a55) 10%, transparent);
+  font-weight: 600;
+}
+body.community-body .menu-presence-item .community-presence-dot {
+  width: 10px;
+  height: 10px;
+  border-width: 0;
 }
