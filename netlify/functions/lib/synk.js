@@ -4315,10 +4315,17 @@ async function getAppUpdateReleaseNotes(sql, version) {
   };
 }
 
+function isReleaseNoteSectionHeading(line) {
+  return /^(what'?s\s+new|new|improvements?|fixes?|updates?|for\s+beta\s+testers?|testing|staff(?:\s+notes)?)\b/i.test(
+    String(line || "").trim()
+  );
+}
+
 function memberFacingReleaseNoteLines(text) {
   return splitReleaseNoteBlocks(text)
     .filter((block) => !isSensitiveReleaseNoteBlock(block))
     .filter((block) => !isBetaOnlyReleaseNoteBlock(block))
+    .filter((block) => /^\s*([-*•+]|\d+[.)])\s+/.test(String(block || "")))
     .map((block) =>
       scrubCopiedPlatformNames(
         stripReleaseNoteAudienceMarkers(block)
@@ -4327,13 +4334,18 @@ function memberFacingReleaseNoteLines(text) {
           .trim()
       )
     )
-    .filter((line) => line && !/^what'?s new\b/i.test(line));
+    .filter((line) => line && !isReleaseNoteSectionHeading(line) && !/^what'?s new\b/i.test(line));
 }
 
 function betaFacingReleaseNoteLines(text) {
   return splitReleaseNoteBlocks(text)
     .filter((block) => !isSensitiveReleaseNoteBlock(block))
     .filter((block) => isBetaOnlyReleaseNoteBlock(block))
+    .filter(
+      (block) =>
+        /^\s*([-*•+]|\d+[.)])\s+/.test(String(block || "")) ||
+        /^\s*\[beta\]\b/i.test(String(block || ""))
+    )
     .map((block) =>
       scrubCopiedPlatformNames(
         stripReleaseNoteAudienceMarkers(block)
@@ -4342,7 +4354,13 @@ function betaFacingReleaseNoteLines(text) {
           .trim()
       )
     )
-    .filter((line) => line && !/^(for\s+)?beta(\s+testers?)?$/i.test(line) && !/^what'?s new\b/i.test(line));
+    .filter(
+      (line) =>
+        line &&
+        !isReleaseNoteSectionHeading(line) &&
+        !/^(for\s+)?beta(\s+testers?)?$/i.test(line) &&
+        !/^what'?s new\b/i.test(line)
+    );
 }
 
 async function clearAllBetaAgendaItems(sql) {
