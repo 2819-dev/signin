@@ -304,6 +304,15 @@
     });
   }
 
+  async function cropImageFile(file, options = {}) {
+    if (!file) return "";
+    if (window.SynkImageCrop && typeof window.SynkImageCrop.open === "function") {
+      const result = await window.SynkImageCrop.open({ file, ...options });
+      return result && result.dataUrl ? result.dataUrl : "";
+    }
+    return readFileAsDataUrl(file);
+  }
+
   function updateSessionPhotoUrl(nextPhotoUrl) {
     try {
       const session = readSession();
@@ -3057,13 +3066,20 @@ function applyViewState(data) {
   });
 
 
-  async function uploadSettingsImage({ fileInput, statusEl, action, extra = {}, onSuccess }) {
+  async function uploadSettingsImage({ fileInput, statusEl, action, extra = {}, onSuccess, crop = null }) {
     const file = fileInput && fileInput.files && fileInput.files[0];
     if (!file) return;
-    if (statusEl) statusEl.textContent = "Uploading…";
     try {
-      if (file.size > 3.5 * 1024 * 1024) throw new Error("Image too large (max ~3.5MB)");
-      const dataUrl = await readFileAsDataUrl(file);
+      if (file.size > 8 * 1024 * 1024) throw new Error("Image too large (max ~8MB)");
+      if (statusEl) statusEl.textContent = "Crop & scale…";
+      const dataUrl = crop
+        ? await cropImageFile(file, crop)
+        : await readFileAsDataUrl(file);
+      if (!dataUrl) {
+        if (statusEl) statusEl.textContent = "";
+        return;
+      }
+      if (statusEl) statusEl.textContent = "Uploading…";
       const res = await fetch("/api/synk-community", {
         method: "POST",
         headers: hubHeaders(),
@@ -3092,6 +3108,14 @@ function applyViewState(data) {
         statusEl: document.getElementById("settings-avatar-status"),
         action: "set-avatar",
         extra: { username: activePersona || publicUsername },
+        crop: {
+          shape: "circle",
+          title: "Crop profile picture",
+          hint: "Drag to reposition. Zoom to scale. The circle is what people will see.",
+          outputSize: 512,
+          mime: "image/jpeg",
+          quality: 0.92,
+        },
         onSuccess: (data) => {
           const savedFor = String(data.username || activePersona || publicUsername).trim().toLowerCase();
           const next = data.avatarUrl || "";
@@ -3568,8 +3592,20 @@ function applyViewState(data) {
           return;
         }
         if (!String(file.type || "").startsWith("image/")) throw new Error("Choose an image file");
-        if (file.size > 512 * 1024) throw new Error("Icon too large (max 512KB)");
-        pendingTagIconData = await readFileAsDataUrl(file);
+        if (file.size > 8 * 1024 * 1024) throw new Error("Icon too large (max ~8MB)");
+        if (status) status.textContent = "Crop & scale…";
+        pendingTagIconData = await cropImageFile(file, {
+          shape: "square",
+          title: "Crop tag icon",
+          hint: "Drag to reposition. Zoom to scale. Icons look best when they fill the square.",
+          outputSize: 256,
+          mime: "image/png",
+        });
+        if (!pendingTagIconData) {
+          tagIconInput.value = "";
+          if (status) status.textContent = "";
+          return;
+        }
         if (tagIconPreview) {
           tagIconPreview.hidden = false;
           tagIconPreview.innerHTML = `<img src="${pendingTagIconData}" alt="" />`;
@@ -3601,9 +3637,20 @@ function applyViewState(data) {
         tagIconFile.value = "";
         if (!file) throw new Error("Choose an image");
         if (!String(file.type || "").startsWith("image/")) throw new Error("Choose an image file");
-        if (file.size > 512 * 1024) throw new Error("Icon too large (max 512KB)");
-        const iconData = await readFileAsDataUrl(file);
-        if (!iconData) throw new Error("Choose an image");
+        if (file.size > 8 * 1024 * 1024) throw new Error("Icon too large (max ~8MB)");
+        if (status) status.textContent = "Crop & scale…";
+        const iconData = await cropImageFile(file, {
+          shape: "square",
+          title: "Crop tag icon",
+          hint: "Drag to reposition. Zoom to scale. Icons look best when they fill the square.",
+          outputSize: 256,
+          mime: "image/png",
+        });
+        if (!iconData) {
+          if (status) status.textContent = "";
+          return;
+        }
+        if (status) status.textContent = "Uploading icon…";
         const res = await fetch("/api/synk-community", {
           method: "POST",
           headers: hubHeaders(),

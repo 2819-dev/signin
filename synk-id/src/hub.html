@@ -15,15 +15,16 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v27" />
+    <link rel="stylesheet" href="/join.css?v=community-v28" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v27" defer></script>
+    <script src="/force-refresh.js?v=community-v28" defer></script>
     <script src="/push-client.js?v=dark-fix2" defer></script>
+    <script src="/image-crop.js?v=crop-v1"></script>
   
     <style>
       .hub-grid {
@@ -226,6 +227,7 @@
         <div class="hub-photo-actions">
           <input id="hub-photo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
           <button class="btn btn-secondary btn-compact" type="button" id="hub-photo-btn">Update photo</button>
+          <p class="muted" style="margin:6px 0 0;font-size:0.82rem;">Crop and scale before saving.</p>
           <p class="muted hub-photo-status" id="hub-photo-status" role="status"></p>
         </div>
       </section>
@@ -439,11 +441,30 @@
           const session = readSession();
           const file = photoFile.files && photoFile.files[0];
           if (!session || !file) return;
-          if (photoStatus) photoStatus.textContent = "Uploading…";
           photoBtn.disabled = true;
           try {
-            if (file.size > 3.5 * 1024 * 1024) throw new Error("Image too large (max ~3.5MB)");
-            const imageData = await readFileAsDataUrl(file);
+            if (file.size > 8 * 1024 * 1024) throw new Error("Image too large (max ~8MB)");
+            if (photoStatus) photoStatus.textContent = "Crop & scale…";
+            let imageData = "";
+            if (window.SynkImageCrop && typeof window.SynkImageCrop.open === "function") {
+              const cropped = await window.SynkImageCrop.open({
+                file,
+                shape: "circle",
+                title: "Crop login photo",
+                hint: "Drag to reposition. Zoom to scale. The circle is your Synk photo.",
+                outputSize: 512,
+                mime: "image/jpeg",
+                quality: 0.92,
+              });
+              if (!cropped || !cropped.dataUrl) {
+                if (photoStatus) photoStatus.textContent = "";
+                return;
+              }
+              imageData = cropped.dataUrl;
+            } else {
+              imageData = await readFileAsDataUrl(file);
+            }
+            if (photoStatus) photoStatus.textContent = "Uploading…";
             const res = await fetch("/api/synk-community", {
               method: "POST",
               headers: {
