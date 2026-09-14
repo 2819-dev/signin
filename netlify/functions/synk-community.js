@@ -1649,19 +1649,25 @@ exports.handler = async (event) => {
       if (profileUsername) {
         profile = await findCommunityPublicProfile(sql, profileUsername);
         if (!profile) return json(404, { error: "Profile not found" });
-        const isSelf = Boolean(primaryUsername && primaryUsername === profileUsername);
+        // Viewer persona may be an alt (asUsername). Self/follow are relative to that persona,
+        // so an alt can follow the owner's primary account and vice versa.
+        const viewerPersona = await resolveActingUsername(sql, auth, role, {}, qs);
+        const viewerUsername = viewerPersona.ok
+          ? viewerPersona.username
+          : primaryUsername;
+        const isSelf = Boolean(viewerUsername && viewerUsername === profileUsername);
         profile.isSelf = isSelf;
         const followCounts = await getFollowCounts(sql, profileUsername);
         profile.followerCount = followCounts.followers;
         profile.followingCount = followCounts.following;
         profile.isFollowing = false;
-        if (primaryUsername && !isSelf) {
-          const friendship = await getFriendship(sql, primaryUsername, profileUsername);
+        if (viewerUsername && !isSelf) {
+          const friendship = await getFriendship(sql, viewerUsername, profileUsername);
           profile.friendship = {
             status: friendshipViewerStatus(friendship),
           };
-          profile.canMessage = await canDm(sql, primaryUsername, profileUsername);
-          profile.isFollowing = await isFollowing(sql, primaryUsername, profileUsername);
+          profile.canMessage = await canDm(sql, viewerUsername, profileUsername);
+          profile.isFollowing = await isFollowing(sql, viewerUsername, profileUsername);
         } else {
           profile.friendship = { status: "none" };
           profile.canMessage = false;

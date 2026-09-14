@@ -1159,7 +1159,7 @@
         if (typeof renderDmThreads === "function") renderDmThreads([]);
       } catch (_) {}
     }
-    // Social graphs are per-username, so refresh inbox when the persona changes.
+    // Social graphs are per-username, so refresh inbox / profile when the persona changes.
     if (route && route.type === "inbox") {
       refreshNotifications().catch(() => {});
       if (typeof loadDmThreads === "function") {
@@ -1168,6 +1168,9 @@
       if (typeof loadDmFriends === "function") {
         loadDmFriends().catch(() => {});
       }
+    }
+    if (changed && route && route.type === "user") {
+      loadCommunity({ soft: true }).catch(() => {});
     }
   }
 
@@ -2064,7 +2067,13 @@
     if (route.type === "popular") tab = "popular";
     else if (route.type === "submit") tab = "submit";
     else if (route.type === "inbox") tab = "inbox";
-    else if (route.type === "user" && publicUsername && route.username === publicUsername) tab = "me";
+    else if (
+      route.type === "user" &&
+      (actingUsername() || publicUsername) &&
+      route.username === (actingUsername() || publicUsername)
+    ) {
+      tab = "me";
+    }
     else if (route.type === "settings") tab = "me";
     bar.querySelectorAll("[data-tab]").forEach((el) => {
       el.classList.toggle("is-active", el.getAttribute("data-tab") === tab);
@@ -2389,7 +2398,8 @@ function applyViewState(data) {
       activeProfile = profile;
       const uname = profile.username || route.username || "";
       const dname = String(profile.displayName || "").trim() || uname;
-      const isSelf = !!(profile.isSelf || (publicUsername && publicUsername === uname));
+      const acting = String(actingUsername() || publicUsername || "").trim().toLowerCase();
+      const isSelf = !!(acting && acting === String(uname || "").trim().toLowerCase());
       const friendship = (profile.friendship && profile.friendship.status) || "none";
       const canMessage = !!profile.canMessage;
       const profileBio = String(profile.bio || "").trim();
@@ -2591,6 +2601,8 @@ function applyViewState(data) {
         if (ch) url += `&channel=${encodeURIComponent(ch)}`;
       } else if (route.type === "user" && route.username) {
         url += `?user=${encodeURIComponent(route.username)}&sort=${encodeURIComponent(sort)}`;
+        const viewer = actingUsername() || publicUsername || "";
+        if (viewer) url += `&asUsername=${encodeURIComponent(viewer)}`;
       } else if (route.type === "search") {
         const q = route.query || "";
         const tab = route.tab || "all";
@@ -3732,9 +3744,10 @@ function applyViewState(data) {
   const menuProfileLink = document.getElementById("menu-profile-link");
   if (menuProfileLink) {
     menuProfileLink.addEventListener("click", (e) => {
-      if (!publicUsername) return;
+      const who = actingUsername() || publicUsername;
+      if (!who) return;
       e.preventDefault();
-      navigate({ type: "user", slug: "", username: publicUsername }).catch(() => {});
+      navigate({ type: "user", slug: "", username: who }).catch(() => {});
     });
   }
   const menuSignout = document.getElementById("menu-signout-btn");
@@ -3756,7 +3769,7 @@ function applyViewState(data) {
   bindNav(document.getElementById("tab-me"), () => ({
     type: "user",
     slug: "",
-    username: publicUsername || "",
+    username: actingUsername() || publicUsername || "",
   }));
 
   // —— Bio & DM privacy settings ——
