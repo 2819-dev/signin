@@ -12,6 +12,11 @@
 </g>
 </svg>`;
 
+  let shownAt = 0;
+  let showTimer = 0;
+  const SHOW_DELAY_MS = 180;
+  const QUICK_HIDE_MS = 260;
+
   function markup({ size = 72, label = "Loading" } = {}) {
     const s = Math.max(24, Number(size) || 72);
     return `<div class="synk-loader" role="status" aria-live="polite" aria-label="${String(label).replace(/"/g, "&quot;")}">
@@ -26,14 +31,15 @@
     el = document.createElement("div");
     el.id = "synk-boot-loader";
     el.className = "synk-loader-overlay";
-    el.setAttribute("aria-busy", "true");
+    el.hidden = true;
+    el.setAttribute("aria-busy", "false");
     el.setAttribute("aria-live", "polite");
     el.innerHTML = markup({ size: 84, label: "Loading Synk" });
     document.body.appendChild(el);
     return el;
   }
 
-  function show(opts = {}) {
+  function revealNow(opts = {}) {
     const el = ensureOverlay();
     if (opts.label) {
       el.setAttribute("aria-label", opts.label);
@@ -48,16 +54,54 @@
     if (logo) logo.classList.remove("is-settled");
     el.setAttribute("aria-busy", "true");
     document.documentElement.classList.add("synk-loading");
+    shownAt = Date.now();
     return el;
   }
 
+  function show(opts = {}) {
+    // Delay reveal so fast loads never flash the loader.
+    if (showTimer) window.clearTimeout(showTimer);
+    const el = ensureOverlay();
+    if (!el.hidden) return revealNow(opts);
+    showTimer = window.setTimeout(() => {
+      showTimer = 0;
+      revealNow(opts);
+    }, opts.immediate ? 0 : SHOW_DELAY_MS);
+    return el;
+  }
+
+  function hideImmediate(el) {
+    el.hidden = true;
+    el.classList.remove("is-leaving", "is-settling");
+    const mark = el.querySelector(".synk-loader");
+    if (mark) mark.classList.remove("is-settling");
+    const logo = el.querySelector(".synk-flow-logo");
+    if (logo) logo.classList.remove("is-settled");
+    el.setAttribute("aria-busy", "false");
+    document.documentElement.classList.remove("synk-loading");
+    shownAt = 0;
+  }
+
   function hide() {
+    if (showTimer) {
+      window.clearTimeout(showTimer);
+      showTimer = 0;
+    }
     const el = document.getElementById("synk-boot-loader");
     document.documentElement.classList.remove("synk-loading");
-    if (!el || el.hidden || el.classList.contains("is-leaving") || el.classList.contains("is-settling")) {
+    if (!el || el.hidden) {
+      shownAt = 0;
       return;
     }
-    // Flowing dashes fill into the solid Synk logo, hold briefly, then fade.
+    if (el.classList.contains("is-leaving") || el.classList.contains("is-settling")) return;
+
+    const elapsed = shownAt ? Date.now() - shownAt : 0;
+    // Fast loads: dismiss instantly — no settle theater.
+    if (elapsed < QUICK_HIDE_MS) {
+      hideImmediate(el);
+      return;
+    }
+
     el.classList.add("is-settling");
     const mark = el.querySelector(".synk-loader");
     if (mark) mark.classList.add("is-settling");
@@ -66,18 +110,11 @@
     const reduceMotion =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // Long enough for the solid logo to read clearly before dismiss.
-    const settleMs = reduceMotion ? 60 : 780;
-    const fadeMs = reduceMotion ? 100 : 360;
+    const settleMs = reduceMotion ? 60 : 520;
+    const fadeMs = reduceMotion ? 80 : 280;
     window.setTimeout(() => {
       el.classList.add("is-leaving");
-      window.setTimeout(() => {
-        el.hidden = true;
-        el.classList.remove("is-leaving", "is-settling");
-        if (mark) mark.classList.remove("is-settling");
-        if (logo) logo.classList.remove("is-settled");
-        el.setAttribute("aria-busy", "false");
-      }, fadeMs);
+      window.setTimeout(() => hideImmediate(el), fadeMs);
     }, settleMs);
   }
 

@@ -699,6 +699,10 @@
     showToast._t = setTimeout(() => el.classList.remove("show"), 2400);
   }
 
+  let contentLoadToken = 0;
+  let contentLoadTimer = 0;
+  const CONTENT_LOADER_DELAY_MS = 280;
+
   function synkLoadingHtml({ size = 64, label = "Loading", inline = true } = {}) {
     const mark =
       window.SynkLoader && typeof window.SynkLoader.markup === "function"
@@ -706,6 +710,10 @@
         : `<p class="muted">${escapeHtml(label)}…</p>`;
     if (!inline) return mark;
     return `<div class="synk-loader-inline" aria-busy="true">${mark}</div>`;
+  }
+
+  function plainLoadingHtml(label = "Loading") {
+    return `<p class="muted" aria-busy="true">${escapeHtml(label)}…</p>`;
   }
 
   function hideSynkBootLoader() {
@@ -720,20 +728,43 @@
     } catch (_) {}
   }
 
-  function renderFeedSkeleton() {
-    if (!feedEl) return;
-    if (feedEmpty) feedEmpty.hidden = true;
-    feedEl.innerHTML = synkLoadingHtml({ size: 72, label: "Loading feed" });
+  function cancelContentLoader() {
+    contentLoadToken += 1;
+    if (contentLoadTimer) {
+      window.clearTimeout(contentLoadTimer);
+      contentLoadTimer = 0;
+    }
   }
 
-  function renderPostLoading() {
+  function scheduleFeedLoader() {
+    if (!feedEl) return;
+    if (feedEmpty) feedEmpty.hidden = true;
+    // Keep current feed visible; only swap to the logo if the wait is real.
+    const token = ++contentLoadToken;
+    if (contentLoadTimer) window.clearTimeout(contentLoadTimer);
+    contentLoadTimer = window.setTimeout(() => {
+      contentLoadTimer = 0;
+      if (token !== contentLoadToken || !feedEl) return;
+      feedEl.innerHTML = synkLoadingHtml({ size: 72, label: "Loading feed" });
+    }, CONTENT_LOADER_DELAY_MS);
+  }
+
+  function schedulePostLoader() {
     const el = document.getElementById("post-detail");
     if (!el) return;
-    el.innerHTML = synkLoadingHtml({ size: 64, label: "Loading post" });
-    const comments = document.getElementById("comments-list");
-    if (comments) comments.innerHTML = "";
-    const empty = document.getElementById("comments-empty");
-    if (empty) empty.hidden = true;
+    const token = ++contentLoadToken;
+    if (contentLoadTimer) window.clearTimeout(contentLoadTimer);
+    contentLoadTimer = window.setTimeout(() => {
+      contentLoadTimer = 0;
+      if (token !== contentLoadToken) return;
+      const detail = document.getElementById("post-detail");
+      if (!detail) return;
+      detail.innerHTML = synkLoadingHtml({ size: 64, label: "Loading post" });
+      const comments = document.getElementById("comments-list");
+      if (comments) comments.innerHTML = "";
+      const empty = document.getElementById("comments-empty");
+      if (empty) empty.hidden = true;
+    }, CONTENT_LOADER_DELAY_MS);
   }
 
   async function communityAction(payload) {
@@ -2527,11 +2558,12 @@ function applyViewState(data) {
       const __touchStay = () => {
         try { if (window.SynkSession) window.SynkSession.touchSession(); } catch (_) {}
       };
+      cancelContentLoader();
       const showFeedSkeleton =
         !soft &&
         ["home", "popular", "group", "user", "search"].includes(route.type);
-      if (showFeedSkeleton) renderFeedSkeleton();
-      if (!soft && route.type === "post") renderPostLoading();
+      if (showFeedSkeleton) scheduleFeedLoader();
+      if (!soft && route.type === "post") schedulePostLoader();
 
       let url = "/api/synk-community";
       const sort = apiSort();
@@ -2653,6 +2685,7 @@ function applyViewState(data) {
       syncSearchTabs();
       renderFeed(data.posts || []);
     } finally {
+      cancelContentLoader();
       hideSynkBootLoader();
     }
   }
@@ -4558,7 +4591,7 @@ function applyViewState(data) {
     if (!modal || !body || !username) return;
     const label = kind === "following" ? "Following" : "Followers";
     if (title) title.textContent = label;
-    body.innerHTML = synkLoadingHtml({ size: 48, label: `Loading ${label.toLowerCase()}` });
+    body.innerHTML = plainLoadingHtml(`Loading ${label.toLowerCase()}`);
     modal.hidden = false;
     document.documentElement.classList.add("follow-list-lock");
     try {
@@ -4881,7 +4914,7 @@ function applyViewState(data) {
         setNotifOpen(true);
       } else {
         const list = document.getElementById("notif-list");
-        if (list) list.innerHTML = synkLoadingHtml({ size: 40, label: "Loading notifications" });
+        if (list) list.innerHTML = plainLoadingHtml("Loading notifications");
         setNotifOpen(true);
       }
       refreshNotifications().catch(() => {});
@@ -5085,7 +5118,7 @@ function applyViewState(data) {
     const sub = document.getElementById("release-notes-sub");
     if (!modal || !body) return;
     modal.hidden = false;
-    body.innerHTML = synkLoadingHtml({ size: 48, label: "Loading release notes" });
+    body.innerHTML = plainLoadingHtml("Loading release notes");
     if (sub) sub.textContent = version ? `Update ${String(version).slice(0, 10)}` : "What’s new in this update";
     try {
       const ver = String(version || "").trim();

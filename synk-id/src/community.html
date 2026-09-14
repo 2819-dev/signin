@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="synk-loading">
+<html lang="en" >
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -13,13 +13,17 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v21" />
+    <link rel="stylesheet" href="/join.css?v=community-v22" />
     <script src="/session.js?v=stay-v1"></script>
-    <script src="/synk-loader.js?v=loader-v2"></script>
-    <script src="/force-refresh.js?v=community-v21" defer></script>
+    <script src="/synk-loader.js?v=loader-v3"></script>
+    <script>
+      // Only reveal the boot loader if this page is still waiting.
+      try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
+    </script>
+    <script src="/force-refresh.js?v=community-v22" defer></script>
   </head>
   <body class="community-body reddit-body">
-    <div id="synk-boot-loader" class="synk-loader-overlay" aria-busy="true" aria-live="polite" aria-label="Loading Synk">
+    <div id="synk-boot-loader" class="synk-loader-overlay" hidden aria-busy="false" aria-live="polite" aria-label="Loading Synk">
       <div class="synk-loader" role="status">
         <div class="synk-loader-mark" style="width:84px;height:84px">
           <svg class="synk-flow-logo" viewBox="0 0 128 128" width="84" height="84" aria-hidden="true" focusable="false">
@@ -974,6 +978,6 @@
     </div>
 
     <script src="/push-client.js?v=dark-fix2"></script>
-    <script src="/community.js?v=community-v21"></script>
+    <script src="/community.js?v=community-v22"></script>
   </body>
 </html>
