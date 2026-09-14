@@ -11795,6 +11795,25 @@ body.reddit-body .reddit-follow-copy .muted {
 .synk-flow-logo {
   display: block;
   color: #041A55;
+  position: relative;
+}
+.synk-flow-solid {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.synk-flow-animated {
+  opacity: 1;
+  transition: opacity 0.35s ease;
+}
+.synk-loader.is-settling .synk-flow-solid,
+.synk-flow-logo.is-settled .synk-flow-solid,
+.synk-loader-overlay.is-settling .synk-flow-solid {
+  opacity: 1;
+}
+.synk-loader.is-settling .synk-flow-animated,
+.synk-flow-logo.is-settled .synk-flow-animated,
+.synk-loader-overlay.is-settling .synk-flow-animated {
+  opacity: 0;
 }
 html[data-theme="dark"] .synk-flow-logo,
 html.dark .synk-flow-logo,
@@ -11811,6 +11830,10 @@ body.community-body.theme-dark .synk-flow-logo {
   stroke-dasharray: 42 200;
   animation: synk-flow-dash 1.35s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
   opacity: 0.95;
+  transition:
+    stroke-dasharray 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    stroke-dashoffset 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.35s ease;
 }
 .synk-flow-ring.is-outer {
   animation-duration: 1.6s;
@@ -11828,6 +11851,23 @@ body.community-body.theme-dark .synk-flow-logo {
   animation-delay: -0.5s;
   stroke-dasharray: 22 120;
   opacity: 0.8;
+}
+
+/* Loading finished: crossfade to the regular solid Synk logo */
+@keyframes synk-logo-settle-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.synk-loader.is-settling .synk-flow-ring,
+.synk-flow-logo.is-settled .synk-flow-ring,
+.synk-loader-overlay.is-settling .synk-flow-ring {
+  animation: none !important;
+}
+.synk-loader.is-settling .synk-flow-logo,
+.synk-flow-logo.is-settled {
+  animation: synk-logo-settle-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .synk-loader {
@@ -11850,7 +11890,7 @@ body.community-body.theme-dark .synk-flow-logo {
   background: color-mix(in srgb, var(--r-canvas, #dae0e6) 88%, #fff);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  transition: opacity .22s ease, visibility .22s ease;
+  transition: opacity .32s ease, visibility .32s ease;
 }
 html[data-theme="dark"] .synk-loader-overlay,
 html.dark .synk-loader-overlay {
@@ -11858,6 +11898,9 @@ html.dark .synk-loader-overlay {
 }
 .synk-loader-overlay[hidden] {
   display: none !important;
+}
+.synk-loader-overlay.is-settling {
+  pointer-events: none;
 }
 .synk-loader-overlay.is-leaving {
   opacity: 0;
@@ -11895,6 +11938,17 @@ html.synk-loading body {
   @keyframes synk-flow-pulse {
     0%, 100% { opacity: 0.35; }
     50% { opacity: 1; }
+  }
+  .synk-loader.is-settling .synk-flow-ring,
+  .synk-flow-logo.is-settled .synk-flow-ring {
+    animation: none !important;
+    stroke-dasharray: none !important;
+    opacity: 1 !important;
+    transition: none !important;
+  }
+  .synk-loader.is-settling .synk-flow-logo,
+  .synk-flow-logo.is-settled {
+    animation: none !important;
   }
   .synk-loader-overlay.is-leaving {
     transition: none;
