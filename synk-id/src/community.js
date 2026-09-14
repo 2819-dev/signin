@@ -127,6 +127,13 @@
   let activeGroupJoined = false;
   let activeChannelSlug = "";
   let activeGroupDetail = null;
+  /** @type {Map<string, { at: number, data: any }>} */
+  const routePayloadCache = new Map();
+  const ROUTE_CACHE_TTL_MS = 90_000;
+  let communityLoadAbort = null;
+  let communityLoadSeq = 0;
+  /** @type {Map<string, { messages: any[], thread: any, at: number }>} */
+  const dmThreadCache = new Map();
 
   function readSession() {
     if (window.SynkSession) return window.SynkSession.readSession();
@@ -826,7 +833,7 @@
 
   let contentLoadToken = 0;
   let contentLoadTimer = 0;
-  const CONTENT_LOADER_DELAY_MS = 280;
+  const CONTENT_LOADER_DELAY_MS = 520;
 
   function synkLoadingHtml({ size = 64, label = "Loading", inline = true } = {}) {
     const mark =
@@ -1185,39 +1192,133 @@
     return "/community";
   }
 
-  async function navigate(next, { replace = false } = {}) {
-    try { setNavOpen(false); } catch (_) {}
-    try { setNotifOpen(false); } catch (_) {}
-    route = next;
-    const url = routeUrl(next);
-    if (replace) history.replaceState(next, "", url);
-    else history.pushState(next, "", url);
+  function routeCacheKey(r = route) {
+    const sort = typeof apiSort === "function" ? apiSort() : currentSort || "new";
+    const type = (r && r.type) || "home";
+    if (type === "post") return `post:${r.postId || ""}`;
+    if (type === "group") return `group:${r.slug || ""}:${r.channel || activeChannelSlug || ""}:${sort}`;
+    if (type === "user") return `user:${r.username || ""}:${sort}`;
+    if (type === "search") return `search:${r.query || ""}:${r.tab || "all"}:${sort}`;
+    if (type === "popular") return `popular:${sort}`;
+    if (type === "inbox") return `inbox`;
+    if (type === "home") return `home:${sort}`;
+    return `${type}`;
+  }
 
-    // Swap chrome instantly for settings / create / mod / groups when we already
-    // have a session — don't block the UI on a full community reload.
-    const light =
-      next.type === "settings" ||
-      next.type === "submit" ||
-      next.type === "mod" ||
-      next.type === "groups" ||
-      next.type === "inbox";
-    if (light && me && publicUsername) {
-      try {
-        applyUsernameState();
-        applyViewState({
+  function readRouteCache(r = route) {
+    const key = routeCacheKey(r);
+    const hit = routePayloadCache.get(key);
+    if (!hit) return null;
+    if (Date.now() - hit.at > ROUTE_CACHE_TTL_MS) {
+      routePayloadCache.delete(key);
+      return null;
+    }
+    return hit.data;
+  }
+
+  function writeRouteCache(r, data) {
+    if (!data) return;
+    routePayloadCache.set(routeCacheKey(r), { at: Date.now(), data });
+    // Soft cap so memory stays bounded during long sessions.
+    if (routePayloadCache.size > 24) {
+      const oldest = routePayloadCache.keys().next().value;
+      if (oldest) routePayloadCache.delete(oldest);
+    }
+  }
+
+  function paintRouteShell(next, cached) {
+    try {
+      applyUsernameState();
+    } catch (_) {}
+    try {
+      applyStaffState();
+    } catch (_) {}
+    try {
+      syncTabBar();
+    } catch (_) {}
+    try {
+      applyViewState(
+        cached || {
           me,
           groups,
           tags,
           staff,
           ownerUsername,
-        });
-        if (next.type === "groups") renderGroupsPage();
+          posts: lastPosts,
+          comments: lastComments,
+          notifications: lastNotifications,
+          post:
+            next.type === "post"
+              ? (lastPosts || []).find((p) => String(p.id) === String(next.postId || ""))
+              : null,
+        }
+      );
+    } catch (_) {}
+    if (next.type === "groups") {
+      try {
+        renderGroupsPage();
       } catch (_) {}
-      loadCommunity({ soft: true }).catch(() => {});
-      return;
     }
+    if (next.type === "inbox") {
+      try {
+        setInboxTab(inboxTab);
+        if (inboxTab === "messages") renderDmThreads(dmThreads || []);
+        else if (lastNotifications && lastNotifications.length) renderInbox(lastNotifications);
+      } catch (_) {}
+    }
+    if (
+      cached &&
+      (next.type === "home" ||
+        next.type === "popular" ||
+        next.type === "group" ||
+        next.type === "user" ||
+        next.type === "search")
+    ) {
+      try {
+        if (next.type === "search") renderSearchResults(cached);
+        else renderFeed(cached.posts || lastPosts || []);
+      } catch (_) {}
+    }
+    if (cached && next.type === "post") {
+      try {
+        const post = cached.post || (cached.posts && cached.posts[0]) || null;
+        if (post) {
+          lastPosts = [post];
+          renderPostDetail(post);
+        }
+        if (Array.isArray(cached.comments)) {
+          lastComments = cached.comments;
+          renderComments(lastComments);
+        }
+      } catch (_) {}
+    }
+  }
 
-    await loadCommunity();
+  async function navigate(next, { replace = false } = {}) {
+    try {
+      setNavOpen(false);
+    } catch (_) {}
+    try {
+      setNotifOpen(false);
+    } catch (_) {}
+    route = next;
+    const url = routeUrl(next);
+    if (replace) history.replaceState(next, "", url);
+    else history.pushState(next, "", url);
+
+    const shellOnly =
+      next.type === "settings" ||
+      next.type === "submit" ||
+      next.type === "mod" ||
+      next.type === "groups" ||
+      next.type === "inbox";
+    const cached = readRouteCache(next);
+
+    // Instant chrome + cached content — never wait on the network to flip views.
+    paintRouteShell(next, cached);
+
+    // Background refresh. Soft = keep current paint / skip skeletons, still fetch real data.
+    loadCommunity({ soft: !!(cached || shellOnly) }).catch(() => {});
   }
 
   function readStoredPersona() {
@@ -3281,9 +3382,19 @@ function applyViewState(data) {
   }
 
   async function loadCommunity({ soft = false } = {}) {
+    const seq = ++communityLoadSeq;
+    if (communityLoadAbort) {
+      try {
+        communityLoadAbort.abort();
+      } catch (_) {}
+    }
+    const abort = typeof AbortController !== "undefined" ? new AbortController() : null;
+    communityLoadAbort = abort;
     try {
       const __touchStay = () => {
-        try { if (window.SynkSession) window.SynkSession.touchSession(); } catch (_) {}
+        try {
+          if (window.SynkSession) window.SynkSession.touchSession();
+        } catch (_) {}
       };
       cancelContentLoader();
       const showFeedSkeleton =
@@ -3294,17 +3405,16 @@ function applyViewState(data) {
 
       let url = "/api/synk-community";
       const sort = apiSort();
+      const shellOnly =
+        route.type === "settings" ||
+        route.type === "submit" ||
+        route.type === "mod" ||
+        route.type === "groups";
       if (route.type === "post" && route.postId) {
         url += `?post=${encodeURIComponent(route.postId)}`;
       } else if (route.type === "inbox") {
         url += "?inbox=1";
-      } else if (
-        route.type === "settings" ||
-        route.type === "submit" ||
-        route.type === "mod" ||
-        route.type === "groups" ||
-        soft
-      ) {
+      } else if (shellOnly) {
         // Lightweight shell payload — no feed posts.
         url += "?shell=1";
       } else if (route.type === "popular") {
@@ -3328,8 +3438,12 @@ function applyViewState(data) {
         url += `?sort=${encodeURIComponent(sort)}`;
       }
 
-      const res = await fetch(url, { headers: hubHeaders() });
+      const res = await fetch(url, {
+        headers: hubHeaders(),
+        signal: abort ? abort.signal : undefined,
+      });
       const data = await res.json().catch(() => ({}));
+      if (seq !== communityLoadSeq) return;
       if (!res.ok) throw new Error(data.error || "Unable to load Community. Please try again.");
       me = data.me || null;
       __touchStay();
@@ -3362,6 +3476,7 @@ function applyViewState(data) {
       if (route.type === "groups") {
         applyViewState(data);
         renderGroupsPage();
+        writeRouteCache(route, data);
         return;
       }
       if (route.type === "inbox") {
@@ -3369,9 +3484,14 @@ function applyViewState(data) {
         if (inboxTab === "messages") {
           loadDmThreads().catch(() => {});
         }
-        if (!Array.isArray(data.groups) || !data.groups.length) {
+        // Avoid a second home fetch when we already know the group list.
+        if ((!Array.isArray(data.groups) || !data.groups.length) && !(groups && groups.length)) {
           try {
-            const baseRes = await fetch("/api/synk-community?feed=home", { headers: hubHeaders() });
+            const baseRes = await fetch("/api/synk-community?feed=home&shell=1", {
+              headers: hubHeaders(),
+              signal: abort ? abort.signal : undefined,
+            });
+            if (seq !== communityLoadSeq) return;
             const base = await baseRes.json().catch(() => ({}));
             if (baseRes.ok) {
               groups = base.groups || groups || [];
@@ -3385,14 +3505,18 @@ function applyViewState(data) {
               if (base.tags) tags = base.tags;
               applyStaffState();
             }
-          } catch (_) {}
+          } catch (err) {
+            if (err && err.name === "AbortError") return;
+          }
         }
         applyUsernameState();
         renderGroups();
         applyViewState(data);
-        renderInbox(data.notifications || []);
-        renderNotifPanel(data.notifications || []);
+        lastNotifications = data.notifications || [];
+        renderInbox(lastNotifications);
+        renderNotifPanel(lastNotifications);
         notifLoaded = true;
+        writeRouteCache(route, data);
         return;
       }
 
@@ -3403,22 +3527,32 @@ function applyViewState(data) {
         applyViewState(data);
         renderPostDetail(post);
         renderComments(lastComments);
+        writeRouteCache(route, data);
         return;
       }
 
       applyViewState(data);
       if (route.type === "settings" || route.type === "submit" || route.type === "mod") {
+        writeRouteCache(route, data);
         return;
       }
       if (route.type === "search") {
         renderSearchResults(data);
+        writeRouteCache(route, data);
         return;
       }
       syncSearchTabs();
-      renderFeed(data.posts || []);
+      lastPosts = data.posts || [];
+      renderFeed(lastPosts);
+      writeRouteCache(route, data);
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      throw err;
     } finally {
-      cancelContentLoader();
-      hideSynkBootLoader();
+      if (seq === communityLoadSeq) {
+        cancelContentLoader();
+        hideSynkBootLoader();
+      }
     }
   }
 
@@ -3601,7 +3735,9 @@ function applyViewState(data) {
 
   window.addEventListener("popstate", () => {
     route = parseRoute();
-    loadCommunity().catch(() => {});
+    const cached = readRouteCache(route);
+    paintRouteShell(route, cached);
+    loadCommunity({ soft: !!cached || !!me }).catch(() => {});
   });
 
   async function saveUsername(username, statusEl) {
@@ -5021,7 +5157,7 @@ function applyViewState(data) {
 
   async function openNotifications() {
     inboxTab = "notifications";
-    await navigate({ type: "inbox", slug: "", username: "" });
+    navigate({ type: "inbox", slug: "", username: "" }).catch(() => {});
     setInboxTab("notifications");
   }
 
@@ -5052,13 +5188,12 @@ function applyViewState(data) {
 
   async function openMessages() {
     inboxTab = "messages";
-    await navigate({ type: "inbox", slug: "", username: "" });
+    navigate({ type: "inbox", slug: "", username: "" }).catch(() => {});
     setInboxTab("messages");
     setDmChatOpen(!!activeDmUser);
-    try {
-      await loadDmThreads();
-      if (activeDmUser) await openDmThread(activeDmUser);
-    } catch (_) {}
+    loadDmThreads()
+      .then(() => (activeDmUser ? openDmThread(activeDmUser) : null))
+      .catch(() => {});
   }
 
   async function openDmWith(username) {
@@ -5406,7 +5541,32 @@ function applyViewState(data) {
     clearDmEditMode();
     closeDmMessageSheet();
     setDmNewOpen(false);
+    setDmChatOpen(true);
+
+    // Paint immediately from cache / thread list so the chat feels instant.
+    const cached = dmThreadCache.get(target);
+    const existing =
+      (dmThreads || []).find(
+        (t) => String(t.otherUser || t.otherUsername || "").toLowerCase() === target
+      ) || null;
+    if (cached && cached.thread) {
+      activeDmThreadId = cached.thread.id || activeDmThreadId || "";
+      renderDmThreads(dmThreads);
+      renderDmMessages(cached.messages || [], { otherUser: target });
+    } else if (existing) {
+      activeDmThreadId = existing.id || "";
+      renderDmThreads(dmThreads);
+      renderDmMessages([], { otherUser: target });
+    } else {
+      renderDmMessages([], { otherUser: target });
+    }
+    const form = document.getElementById("dm-compose-form");
+    if (form) form.hidden = false;
+    const input = document.getElementById("dm-compose-input");
+    if (input) input.focus();
+
     const data = await communityAction({ action: "dm-open", username: target });
+    if (String(activeDmUser || "").toLowerCase() !== target) return;
     activeDmThreadId = (data.thread && data.thread.id) || "";
     if (data.thread) {
       const idx = (dmThreads || []).findIndex(
@@ -5415,24 +5575,31 @@ function applyViewState(data) {
       if (idx >= 0) dmThreads[idx] = { ...dmThreads[idx], ...data.thread };
       else dmThreads = [data.thread, ...(dmThreads || [])];
     }
+    dmThreadCache.set(target, {
+      at: Date.now(),
+      thread: data.thread || existing || null,
+      messages: data.messages || [],
+    });
+    if (dmThreadCache.size > 20) {
+      const oldest = dmThreadCache.keys().next().value;
+      if (oldest) dmThreadCache.delete(oldest);
+    }
     renderDmThreads(dmThreads);
     renderDmMessages(data.messages || [], { otherUser: target });
-    const form = document.getElementById("dm-compose-form");
     if (form) form.hidden = false;
-    const input = document.getElementById("dm-compose-input");
     if (input) input.focus();
   }
 
   document.querySelectorAll("[data-inbox-tab]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", () => {
       setInboxTab(btn.getAttribute("data-inbox-tab"));
       if (inboxTab === "messages") {
         try {
-          await loadDmThreads();
-          if (activeDmUser) await openDmThread(activeDmUser);
-        } catch (err) {
-          showToast(err.message || "Could not load messages");
-        }
+          renderDmThreads(dmThreads || []);
+        } catch (_) {}
+        loadDmThreads()
+          .then(() => (activeDmUser ? openDmThread(activeDmUser) : null))
+          .catch((err) => showToast(err.message || "Could not load messages"));
       }
     });
   });
@@ -5800,14 +5967,23 @@ function applyViewState(data) {
     btn.addEventListener("click", () => {
       const sort = btn.getAttribute("data-sort") || "new";
       currentSort = sort;
-      try { localStorage.setItem(SORT_KEY, sort); } catch (_) {}
+      try {
+        localStorage.setItem(SORT_KEY, sort);
+      } catch (_) {}
       if (route.type === "popular" && sort === "new") {
         navigate({ type: "home", slug: "", username: "" }).catch(() => {});
         return;
       }
       syncSortTabs();
       if (route.type === "home" || route.type === "popular" || route.type === "group" || route.type === "user") {
-        loadCommunity().catch(() => {});
+        const cached = readRouteCache(route);
+        if (cached && Array.isArray(cached.posts)) {
+          lastPosts = cached.posts;
+          try {
+            renderFeed(lastPosts);
+          } catch (_) {}
+        }
+        loadCommunity({ soft: true }).catch(() => {});
         return;
       }
       renderFeed(lastPosts);

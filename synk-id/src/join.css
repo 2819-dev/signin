@@ -14797,3 +14797,43 @@ body.community-body .community-dm-shell {
     transition: none !important;
   }
 }
+
+/* —— Instant press feedback v50 —— */
+body.community-body .reddit-nav-item,
+body.community-body .community-tab,
+body.community-body .reddit-sort-tab,
+body.community-body .reddit-vote-btn,
+body.community-body .reddit-action,
+body.community-body .btn,
+body.community-body .community-dm-thread,
+body.community-body .menu-presence-item,
+body.community-body .reddit-icon-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+body.community-body .reddit-nav-item:active,
+body.community-body .community-tab:active,
+body.community-body .reddit-sort-tab:active,
+body.community-body .reddit-action:active,
+body.community-body .btn:active,
+body.community-body .community-dm-thread:active,
+body.community-body .menu-presence-item:active {
+  transform: scale(0.97);
+}
+body.community-body .reddit-vote-btn:active,
+body.community-body .reddit-icon-btn:active {
+  transform: scale(0.9);
+}
+@media (prefers-reduced-motion: reduce) {
+  body.community-body .reddit-nav-item:active,
+  body.community-body .community-tab:active,
+  body.community-body .reddit-sort-tab:active,
+  body.community-body .reddit-action:active,
+  body.community-body .btn:active,
+  body.community-body .community-dm-thread:active,
+  body.community-body .menu-presence-item:active,
+  body.community-body .reddit-vote-btn:active,
+  body.community-body .reddit-icon-btn:active {
+    transform: none;
+  }
+}
