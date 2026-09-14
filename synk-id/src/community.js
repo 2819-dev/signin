@@ -383,6 +383,7 @@
     if (!canManageTags()) return "";
     const assignedIds = new Set((assigned || []).map((tag) => String(tag.id)));
     const available = (tags || []).filter((tag) => !assignedIds.has(String(tag.id)));
+    const count = (assigned || []).length;
     const chips = (assigned || [])
       .map((tag) => {
         const chip = tagChip(tag, { compact: true });
@@ -401,18 +402,20 @@
           )
           .join("")
       : `<option value="" disabled>No more tags</option>`;
-    return `<div class="community-tag-manager" data-tag-target="${escapeHtml(
+    const summary = count ? `Tags · ${count}` : "Add tags";
+    return `<details class="community-tag-manager" data-tag-target="${escapeHtml(
       targetType
     )}" data-tag-key="${escapeHtml(targetKey)}">
+      <summary class="community-tag-manager-summary">${escapeHtml(summary)}</summary>
       <div class="community-tag-manage-list">${chips || '<span class="muted community-tag-manage-empty">No tags yet</span>'}</div>
       <div class="community-tag-manage-add">
         <label class="sr-only" for="tag-manage-select-${escapeHtml(targetType)}-${escapeHtml(targetKey)}">Add tag</label>
         <select id="tag-manage-select-${escapeHtml(targetType)}-${escapeHtml(targetKey)}" data-tag-select>${options}</select>
         <button type="button" class="btn btn-secondary btn-compact" data-tag-assign data-tag-target="${escapeHtml(
           targetType
-        )}" data-tag-key="${escapeHtml(targetKey)}">Add tag</button>
+        )}" data-tag-key="${escapeHtml(targetKey)}">Add</button>
       </div>
-    </div>`;
+    </details>`;
   }
 
   async function assignTagFromUi({ targetType, targetKey, tagId }) {
@@ -2320,20 +2323,24 @@
     return formatChannelLabel(channel);
   }
 
-  function formatChannelLabel(ch) {
+  function formatChannelLabel(ch, { compact = false } = {}) {
     if (!ch) return "";
+    let emoji = String(ch.emoji || "").trim();
+    let name = "";
     if (ch.label) {
-      // Ensure display capitalizes the name portion after "emoji | ".
       const parts = String(ch.label).split("|");
       if (parts.length >= 2) {
-        const emoji = parts[0].trim();
-        const name = capitalizeChannelName(parts.slice(1).join("|").trim());
-        return emoji && name ? `${emoji} | ${name}` : name || emoji;
+        emoji = emoji || parts[0].trim();
+        name = capitalizeChannelName(parts.slice(1).join("|").trim());
+      } else {
+        name = capitalizeChannelName(ch.label);
       }
-      return capitalizeChannelName(ch.label);
+    } else {
+      name = capitalizeChannelName(ch.name || ch.slug || "");
     }
-    if (ch.emoji && ch.name) return `${ch.emoji} | ${capitalizeChannelName(ch.name)}`;
-    return capitalizeChannelName(ch.name || ch.slug || "");
+    if (!name) return emoji || "";
+    if (compact) return emoji ? `${emoji} ${name}` : name;
+    return emoji ? `${emoji} | ${name}` : name;
   }
 
   function activeChannelMeta(group) {
@@ -2352,11 +2359,14 @@
 
   function channelButtonHtml(ch) {
     const on = ch.slug === activeChannelSlug ? "is-active" : "";
-    const label = formatChannelLabel(ch);
+    const full = formatChannelLabel(ch);
+    const compact = formatChannelLabel(ch, { compact: true });
     return `<button type="button" class="discord-channel-btn ${on}" data-discord-channel="${escapeHtml(
       ch.slug
-    )}" title="${escapeHtml(label)}"><span class="discord-channel-label">${escapeHtml(
-      label
+    )}" title="${escapeHtml(full)}"><span class="discord-channel-label is-full">${escapeHtml(
+      full
+    )}</span><span class="discord-channel-label is-compact">${escapeHtml(
+      compact
     )}</span></button>`;
   }
 
@@ -2434,10 +2444,12 @@
     const active = channels.find((c) => c.slug === activeChannelSlug) || channels[0] || null;
     const title = document.getElementById("discord-channel-title");
     const desc = document.getElementById("discord-channel-desc");
-    if (title) title.textContent = active ? formatChannelLabel(active) : "Synk";
+    if (title) title.textContent = active ? formatChannelLabel(active, { compact: true }) : "Synk";
     if (desc) {
-      desc.textContent = (active && (active.description || "")) || "";
-      desc.hidden = !desc.textContent;
+      const text = (active && (active.description || "")) || "";
+      desc.textContent = text;
+      desc.hidden = !text;
+      desc.title = text;
     }
     const composerOpen = document.getElementById("composer-open-btn");
     if (composerOpen && route.slug) {
@@ -2446,10 +2458,9 @@
       if (allowed) {
         composerOpen.href = submitUrlForGroup(route.slug, activeChannelSlug);
         const kind = String((active && active.kind) || "").toLowerCase();
-        const chName = active ? formatChannelLabel(active) : "this channel";
-        if (kind === "suggestions") composerOpen.textContent = `Suggest in ${chName}`;
-        else if (kind === "announcements") composerOpen.textContent = `Announce in ${chName}`;
-        else composerOpen.textContent = `Post in ${chName}`;
+        if (kind === "suggestions") composerOpen.textContent = "Suggest an idea";
+        else if (kind === "announcements") composerOpen.textContent = "Post announcement";
+        else composerOpen.textContent = "Write a post";
       }
     }
     const feedHint = document.getElementById("discord-channel-hint");
@@ -2458,20 +2469,26 @@
       if (kind === "announcements") {
         feedHint.hidden = false;
         feedHint.textContent = canPostInChannel(active)
-          ? "Announcements — only Synk staff can post here. These stay out of the main feed."
-          : "Announcements — only Synk staff can post here. Browse updates below.";
+          ? "Staff-only announcements."
+          : "Staff announcements only.";
       } else if (kind === "readonly") {
         feedHint.hidden = false;
-        feedHint.textContent = "Read-only channel. Synk staff maintain this board.";
+        feedHint.textContent = "Read-only — maintained by Synk staff.";
       } else if (kind === "suggestions") {
         feedHint.hidden = false;
-        feedHint.textContent =
-          "Suggestions forum — upvote ideas. Synk staff can accept or deny them. Stays out of the main feed.";
+        feedHint.textContent = "Upvote ideas · staff accept or decline.";
       } else {
         feedHint.hidden = true;
         feedHint.textContent = "";
       }
     }
+    // Keep the active channel chip visible in the mobile scroller.
+    try {
+      const activeBtn = host.querySelector(".discord-channel-btn.is-active");
+      if (activeBtn && typeof activeBtn.scrollIntoView === "function") {
+        activeBtn.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+      }
+    } catch (_) {}
   }
 
   function renderGroupRoles(group) {

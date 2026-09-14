@@ -9185,12 +9185,8 @@ body.community-body.is-discord-group .reddit-sortbar {
   vertical-align: middle;
 }
 @media (max-width: 860px) {
+  /* Replaced by Community mobile polish v31 (horizontal channel chips). */
   .discord-shell { grid-template-columns: 1fr; }
-  .discord-channels {
-    max-height: 180px;
-    border-right: 0;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-  }
 }
 
 /* ===== Mod Tools collapsible categories ===== */
@@ -13082,15 +13078,35 @@ body.community-body .community-group-card-avatar {
   }
 }
 
-/* —— Community Synk classic v30 —— */
+/* —— Community mobile polish v31 —— */
 body.community-body .community-tag-manager {
   display: grid;
-  gap: 10px;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px dashed color-mix(in srgb, var(--signal) 28%, var(--r-line, #e5e7eb));
-  border-radius: 10px;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+body.community-body .community-tag-manager-summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--signal, #1a9aa8) 28%, var(--r-line, #e5e7eb));
   background: color-mix(in srgb, var(--signal-soft, #e4f6f8) 55%, var(--r-card, #fff));
+  color: var(--signal-hover, #158490);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+body.community-body .community-tag-manager-summary::-webkit-details-marker { display: none; }
+body.community-body .community-tag-manager[open] {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--signal, #1a9aa8) 22%, var(--r-line, #e5e7eb));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--signal-soft, #e4f6f8) 40%, var(--r-card, #fff));
 }
 body.community-body .community-tag-manage-list {
   display: flex;
@@ -13124,7 +13140,8 @@ body.community-body .community-tag-manage-add {
   align-items: center;
 }
 body.community-body .community-tag-manage-add select {
-  min-width: min(220px, 100%);
+  min-width: min(180px, 100%);
+  flex: 1 1 auto;
   border: 1px solid var(--r-line, #e5e7eb);
   border-radius: 8px;
   padding: 7px 10px;
@@ -13132,17 +13149,168 @@ body.community-body .community-tag-manage-add select {
   color: inherit;
   font: inherit;
 }
-body.community-body .community-tag-manage-empty {
-  font-size: 0.85rem;
+body.community-body .discord-channel-label.is-compact { display: none; }
+body.community-body .discord-channel-label.is-full { display: inline; }
+
+@media (max-width: 860px) {
+  /* Top search: stop truncation / crowding */
+  body.community-body .reddit-topnav {
+    gap: 6px !important;
+    padding-inline: 8px !important;
+  }
+  body.community-body .reddit-search {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+  }
+  body.community-body .reddit-search input {
+    font-size: 0.92rem !important;
+    padding-inline: 34px 10px !important;
+  }
+  body.community-body .reddit-create-top .reddit-create-label {
+    display: none !important;
+  }
+
+  /* Group banner → compact strip above channels */
+  body.community-body.is-discord-group #view-banner {
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+  body.community-body.is-discord-group #view-banner-strip {
+    height: 28px !important;
+    min-height: 28px !important;
+  }
+  body.community-body.is-discord-group #view-banner .reddit-community-head,
+  body.community-body.is-discord-group #view-banner .reddit-community-header-inner {
+    padding: 8px 12px 10px !important;
+    gap: 8px !important;
+  }
+  body.community-body.is-discord-group #view-icon,
+  body.community-body.is-discord-group #view-banner .reddit-community-icon {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 1rem !important;
+    margin-top: -18px !important;
+  }
+  body.community-body.is-discord-group #view-title {
+    font-size: 1.05rem !important;
+  }
+  body.community-body.is-discord-group #view-sub {
+    font-size: 0.78rem !important;
+  }
+  body.community-body.is-discord-group #view-blurb,
+  body.community-body.is-discord-group #view-banner .reddit-community-desc {
+    display: none !important;
+  }
+  body.community-body.is-discord-group #view-banner .reddit-join-btn,
+  body.community-body.is-discord-group #join-community-btn,
+  body.community-body.is-discord-group #view-banner .reddit-community-actions .btn {
+    min-height: 34px !important;
+    padding: 6px 12px !important;
+    font-size: 0.85rem !important;
+  }
+  body.community-body.is-discord-group #profile-meta {
+    padding: 0 12px 10px !important;
+  }
+  body.community-body.is-discord-group #group-roles-widget {
+    display: none !important;
+  }
+
+  /* Discord shell: horizontal channel chips, feed first */
+  body.community-body .discord-shell {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+  body.community-body .discord-channels {
+    order: 0;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    gap: 6px;
+    max-height: none !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 8px 10px !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+    background: #2b2d31 !important;
+  }
+  body.community-body .discord-channels::-webkit-scrollbar { display: none; }
+  body.community-body .discord-cat {
+    display: none !important;
+  }
+  body.community-body .discord-channel-btn {
+    width: auto !important;
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+    padding: 7px 12px !important;
+    border-radius: 999px !important;
+    background: rgba(255,255,255,0.06) !important;
+    font-size: 0.82rem !important;
+    font-weight: 650 !important;
+  }
+  body.community-body .discord-channel-btn.is-active {
+    background: rgba(26, 154, 168, 0.35) !important;
+    color: #fff !important;
+  }
+  body.community-body .discord-channel-label.is-full { display: none !important; }
+  body.community-body .discord-channel-label.is-compact { display: inline !important; }
+
+  body.community-body .discord-main {
+    order: 1;
+    min-width: 0;
+  }
+  body.community-body .discord-channel-head {
+    padding: 8px 12px 6px !important;
+  }
+  body.community-body .discord-channel-head strong {
+    font-size: 0.95rem !important;
+  }
+  body.community-body .discord-channel-head #discord-channel-desc,
+  body.community-body .discord-channel-head #discord-channel-hint,
+  body.community-body .discord-channel-hint {
+    display: none !important;
+  }
+
+  /* Composer + sort denser */
+  body.community-body.is-discord-group .reddit-create {
+    padding: 8px 10px !important;
+  }
+  body.community-body.is-discord-group .reddit-create-fakeinput {
+    font-size: 0.88rem !important;
+    padding: 8px 12px !important;
+  }
+  body.community-body.is-discord-group .reddit-sortbar {
+    padding: 6px 8px !important;
+    position: sticky;
+    top: 48px;
+    z-index: 20;
+  }
+  body.community-body.is-discord-group .reddit-sort-tab {
+    padding: 6px 10px !important;
+    font-size: 0.8rem !important;
+  }
+  body.community-body.is-discord-group .reddit-feed-empty {
+    margin: 8px !important;
+    padding: 28px 16px !important;
+    border-radius: 12px !important;
+  }
 }
-body.community-body .discord-channel-btn.is-active,
-body.community-body .discord-channel-btn:hover {
-  background: color-mix(in srgb, var(--signal-soft, #e4f6f8) 70%, transparent);
+
+@media (min-width: 861px) {
+  /* Desktop: keep tag manager expanded-looking */
+  body.community-body .community-tag-manager-summary {
+    margin-bottom: 4px;
+  }
 }
-body.community-body .discord-cat {
-  letter-spacing: 0.06em;
-  font-size: 0.68rem;
-  font-weight: 750;
-  color: var(--r-muted, #6b7280);
-  margin: 12px 8px 6px;
-}
+
