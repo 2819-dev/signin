@@ -5507,18 +5507,18 @@ html[data-theme="dark"] {
 .community-dm-message-list {
   flex: 1;
   overflow: auto;
-  padding: 10px 12px;
+  padding: 8px 10px;
   display: grid;
-  gap: 5px;
+  gap: 2px;
   align-content: start;
   background: color-mix(in srgb, var(--r-canvas, #f4f6f8) 70%, var(--surface));
 }
 .community-dm-bubble {
   max-width: min(78%, 300px);
-  padding: 6px 10px;
-  border-radius: 12px;
-  font-size: 0.875rem;
-  line-height: 1.35;
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  line-height: 1.25;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -8888,9 +8888,9 @@ body.community-body .community-dm-message-list {
   flex: 1;
   overflow: auto;
   background: var(--r-elev, var(--fill)) !important;
-  padding: 16px !important;
+  padding: 8px 10px !important;
   display: grid;
-  gap: 10px;
+  gap: 2px;
   align-content: start;
 }
 body.community-body .community-dm-compose {
@@ -13972,127 +13972,168 @@ body.community-body .synk-hub-manage-label[for="synk-hub-banner-file"]::after {
   opacity: 0.7;
 }
 
-/* —— Community Messages compact v43 —— */
+/* —— Community Messages compact v44 —— */
 body.community-body .community-dm-shell {
-  min-height: 420px !important;
-  max-height: min(70vh, 620px);
+  min-height: 400px !important;
+  max-height: min(70vh, 600px);
   border-radius: 12px !important;
 }
 body.community-body .community-dm-chat {
-  min-height: 420px !important;
+  min-height: 400px !important;
 }
 body.community-body .community-dm-sidebar-head {
-  padding: 10px 12px !important;
-}
-body.community-body .community-dm-sidebar-head h3 {
-  font-size: 0.95rem !important;
-}
-body.community-body .community-dm-new {
   padding: 8px 10px !important;
 }
+body.community-body .community-dm-sidebar-head h3 {
+  font-size: 0.92rem !important;
+}
+body.community-body .community-dm-new {
+  padding: 6px 10px !important;
+}
 body.community-body .community-dm-new input {
-  padding: 8px 12px !important;
-  font-size: 0.875rem !important;
+  padding: 7px 12px !important;
+  font-size: 0.84rem !important;
 }
 body.community-body .community-dm-friend,
 body.community-body .community-dm-thread {
-  grid-template-columns: 32px minmax(0, 1fr) !important;
+  grid-template-columns: 28px minmax(0, 1fr) !important;
   gap: 8px !important;
-  padding: 8px 10px !important;
+  padding: 7px 10px !important;
 }
 body.community-body .community-dm-avatar,
 body.community-body .community-dm-chat-person .community-face,
 body.community-body #dm-chat-avatar.community-face {
-  width: 32px !important;
-  height: 32px !important;
-  font-size: 0.72rem !important;
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 0.68rem !important;
 }
 body.community-body .community-dm-thread-top strong,
 body.community-body .community-dm-friend strong,
 body.community-body .community-dm-chat-person-copy strong {
-  font-size: 0.86rem !important;
+  font-size: 0.84rem !important;
 }
 body.community-body .community-dm-thread-preview,
 body.community-body .community-dm-thread-handle,
 body.community-body .community-dm-thread-top span {
-  font-size: 0.72rem !important;
+  font-size: 0.7rem !important;
 }
 body.community-body .community-dm-chat-head {
-  padding: 8px 10px !important;
+  padding: 6px 10px !important;
 }
 body.community-body .community-dm-chat-person {
-  grid-template-columns: 32px minmax(0, 1fr) !important;
+  grid-template-columns: 28px minmax(0, 1fr) !important;
   gap: 8px !important;
 }
 body.community-body .community-dm-message-list {
-  padding: 10px 12px !important;
-  gap: 5px !important;
+  padding: 8px 10px !important;
+  gap: 2px !important;
 }
 body.community-body .community-dm-msg {
-  gap: 2px !important;
+  gap: 1px !important;
   max-width: 100% !important;
 }
 body.community-body .community-dm-bubble,
 body.community-body .community-dm-msg .community-dm-bubble,
 body.community-body .community-dm-bubble.is-mine,
 body.community-body .community-dm-bubble.is-theirs {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: flex-end !important;
+  column-gap: 8px !important;
+  row-gap: 2px !important;
   max-width: min(78%, 300px) !important;
-  padding: 6px 10px !important;
-  border-radius: 12px !important;
-  font-size: 0.875rem !important;
-  line-height: 1.35 !important;
+  padding: 4px 8px !important;
+  border-radius: 10px !important;
+  font-size: 0.8125rem !important;
+  line-height: 1.25 !important;
   box-sizing: border-box !important;
-}
-body.community-body .community-dm-bubble.is-mine {
-  border-bottom-right-radius: 4px !important;
-}
-body.community-body .community-dm-bubble.is-theirs {
-  border-bottom-left-radius: 4px !important;
-}
-body.community-body .community-dm-msg-body {
-  font-size: inherit !important;
-  line-height: inherit !important;
-}
-body.community-body .community-dm-time {
-  font-size: 0.64rem !important;
-  margin-top: 1px !important;
-  line-height: 1.2 !important;
-}
-body.community-body .community-dm-edited {
-  margin-top: 3px !important;
-  font-size: 0.66rem !important;
-}
-body.community-body .community-dm-reactions {
-  gap: 4px !important;
-  margin-top: 2px !important;
-}
-body.community-body .community-dm-reaction {
-  padding: 2px 6px !important;
-  font-size: 0.72rem !important;
-  border-radius: 999px !important;
   min-height: 0 !important;
 }
+body.community-body .community-dm-bubble.is-mine {
+  border-bottom-right-radius: 3px !important;
+}
+body.community-body .community-dm-bubble.is-theirs {
+  border-bottom-left-radius: 3px !important;
+}
+body.community-body .community-dm-msg-body {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+}
+body.community-body .community-dm-bubble-meta {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+  max-width: 100%;
+}
+body.community-body .community-dm-time {
+  display: inline !important;
+  margin: 0 !important;
+  font-size: 0.62rem !important;
+  line-height: 1 !important;
+  opacity: 0.72 !important;
+  white-space: nowrap !important;
+}
+body.community-body .community-dm-msg.is-mine .community-dm-time {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+body.community-body .community-dm-edited {
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  font-size: 0.62rem !important;
+  line-height: 1 !important;
+  opacity: 0.75 !important;
+}
+body.community-body .community-dm-history {
+  flex: 1 1 100% !important;
+  margin-top: 2px !important;
+  gap: 3px !important;
+}
+body.community-body .community-dm-history-item {
+  padding-left: 6px !important;
+}
+body.community-body .community-dm-history-item p {
+  font-size: 0.75rem !important;
+  line-height: 1.25 !important;
+}
+body.community-body .community-dm-reactions {
+  gap: 3px !important;
+  margin-top: 1px !important;
+}
+body.community-body .community-dm-reaction {
+  padding: 1px 5px !important;
+  font-size: 0.68rem !important;
+  border-radius: 999px !important;
+  min-height: 0 !important;
+  line-height: 1.2 !important;
+}
 body.community-body .community-dm-compose {
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px)) !important;
   gap: 6px !important;
 }
 body.community-body .community-dm-compose input {
-  height: 38px !important;
+  height: 34px !important;
   padding: 0 12px !important;
-  font-size: 0.875rem !important;
+  font-size: 0.84rem !important;
 }
 body.community-body .community-dm-send {
-  width: 38px !important;
-  height: 38px !important;
+  width: 34px !important;
+  height: 34px !important;
 }
 body.community-body .community-dm-empty,
 body.community-body .community-dm-empty-chat,
 body.community-body .community-dm-new-empty {
-  padding: 16px 12px !important;
+  padding: 14px 12px !important;
 }
 body.community-body .community-dm-empty p,
 body.community-body .community-dm-empty-chat p {
-  font-size: 0.82rem !important;
+  font-size: 0.8rem !important;
 }
 @media (max-width: 860px) {
   body.community-body .community-dm-shell,
@@ -14104,5 +14145,6 @@ body.community-body .community-dm-empty-chat p {
   body.community-body .community-dm-bubble,
   body.community-body .community-dm-msg .community-dm-bubble {
     max-width: min(84%, 280px) !important;
+    padding: 4px 8px !important;
   }
 }

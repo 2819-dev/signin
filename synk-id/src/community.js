@@ -5152,11 +5152,10 @@ function applyViewState(data) {
         )}">
           <div class="community-dm-bubble ${mine ? "is-mine" : "is-theirs"} ${edited ? "is-edited" : ""}" tabindex="0">
             <div class="community-dm-msg-body">${escapeHtml(m.body || "")}</div>
-            ${meta}
+            <div class="community-dm-bubble-meta">${meta}${when}</div>
             ${historyHtml}
           </div>
           ${reactionsHtml}
-          ${when}
         </div>`;
       })
       .join("");
