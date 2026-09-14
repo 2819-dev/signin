@@ -5043,9 +5043,18 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
     LIMIT 1
   `;
   if (existing[0]) {
+    // Refresh stored copy without re-notifying everyone.
+    await sql`
+      UPDATE synk_app_update_broadcasts
+      SET
+        body = CASE WHEN ${message} <> '' THEN ${message} ELSE body END,
+        notes = CASE WHEN ${releaseNotes} <> '' THEN ${releaseNotes} ELSE notes END
+      WHERE version = ${ver}
+    `;
     return {
       ok: true,
       alreadyBroadcast: true,
+      notesRefreshed: !!releaseNotes,
       version: ver,
       notified: Number(existing[0].notified_count) || 0,
     };

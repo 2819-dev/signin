@@ -5377,12 +5377,16 @@ function applyViewState(data) {
     if (audience === "staff" || /\bstaff\b/.test(lower)) {
       return { key: "staff", flair: "Staff", title: label || "Staff notes" };
     }
-    if (/^new\b/.test(lower)) return { key: "new", flair: "New", title: label || "New" };
-    if (/^fix/.test(lower)) return { key: "fixes", flair: "Fixes", title: label || "Fixes" };
+    if (/^new\b/.test(lower)) {
+      return { key: "new", flair: "New features", title: label || "New features" };
+    }
+    if (/^bug\s*fix|^fix/.test(lower)) {
+      return { key: "fixes", flair: "Bug fixes", title: label || "Bug fixes" };
+    }
     if (/improv/.test(lower)) {
       return { key: "improvements", flair: "Improvements", title: label || "Improvements" };
     }
-    return { key: "update", flair: "Update", title: label || "What's new" };
+    return { key: "update", flair: "What's new", title: label || "What's new" };
   }
 
   function renderReleaseNotesEmbeds(embeds, blocks) {
@@ -5455,7 +5459,11 @@ function applyViewState(data) {
     if (!modal || !body) return;
     modal.hidden = false;
     body.innerHTML = plainLoadingHtml("Loading release notes");
-    if (sub) sub.textContent = version ? `Update ${String(version).slice(0, 10)}` : "What’s new in this update";
+    if (sub) {
+      sub.textContent = version
+        ? `A clear summary of what changed in this Synk update`
+        : "A clear summary of what changed in this Synk update";
+    }
     try {
       const ver = String(version || "").trim();
       const queryVer = ver || "latest";

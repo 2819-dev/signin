@@ -102,18 +102,102 @@ function subjectsFromNotes(notes) {
   return set;
 }
 
-function polishReleaseNoteSubject(subject) {
-  let text = scrubCopiedPlatformNames(String(subject || "").trim());
-  text = text
+function softenReleaseNoteJargon(text) {
+  return String(text || "")
+    .replace(/\bUI\b/g, "interface")
+    .replace(/\bUX\b/g, "experience")
+    .replace(/\bCTA\b/g, "button")
+    .replace(/\bCTAs\b/g, "buttons")
+    .replace(/\bavatars?\b/gi, (m) => (/s$/i.test(m) ? "profile photos" : "profile photo"))
+    .replace(/\binbox\b/gi, "notifications inbox")
+    .replace(/\bempty states?\b/gi, "empty screens")
+    .replace(/\bchrome\b/gi, "look and feel")
+    .replace(/\blayout and chrome\b/gi, "layout and look")
+    .replace(/\bmobile layout\b/gi, "phone layout")
+    .replace(/\bon mobile\b/gi, "on phones")
+    .replace(/\bmobile\b/gi, "phone")
+    .replace(/\bcache\s*bust(?:ing|ed)?\b/gi, "refresh support")
+    .replace(/\bdeploy(?:ed|s|ment)?\b/gi, "update")
+    .replace(/\brefactor(?:ed|ing)?\b/gi, "cleanup")
+    .replace(/\bCSS\b/g, "styling")
+    .replace(/\bAPI\b/g, "service")
+    .replace(/\bPoC\b/g, "prototype")
+    .replace(/\bv\d+\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function consumerizeReleaseNoteSubject(subject) {
+  const original = scrubCopiedPlatformNames(String(subject || "").trim());
+  let text = original
     .replace(/^(chore|fix|feat|docs|refactor|style|test|build|ci)(\([^)]*\))?:\s*/i, "")
     .replace(/\s+/g, " ")
     .replace(/\.$/, "")
     .trim();
   if (!text) return "";
 
-  text = text.charAt(0).toUpperCase() + text.slice(1);
+  // Prefer clear product language for common Synk Community themes.
+  const patterns = [
+    [
+      /\b(crop|scale).*(profile|photo|avatar|icon)|(?:profile|photo|avatar|icon).*(crop|scale)/i,
+      "You can now crop and zoom profile photos and icons before saving them",
+    ],
+    [
+      /\b(g\/|u\/).*(prefix|label)|remove.*\b(g\/|u\/)|drop.*\b(g\/|u\/)/i,
+      "Group and profile names are shown more simply, without extra prefixes",
+    ],
+    [
+      /\btags?\b.*\b(group|profile|user)|(?:group|profile|user).*\btags?\b/i,
+      "Tags can be managed from group and profile pages, making Community roles easier to spot",
+    ],
+    [
+      /\b(synk\s+)?(server|channels?|navigation).*(group|community)|redo.*synk|rebuild.*synk|revise.*synk.*channel/i,
+      "The official Synk community is easier to browse, with clearer channels and simpler navigation",
+    ],
+    [
+      /\bmobile\b.*\b(community|channel|layout|polish)|community.*\bmobile\b/i,
+      "Community is easier to use on phones, with a cleaner channel bar and less scrolling to reach posts",
+    ],
+    [
+      /\b(your\s+)?groups?\b.*\b(broken|overwrite|empty|fix)|fix.*\b(your\s+)?groups?\b/i,
+      "Fixed a problem where Your Groups could disappear or show an empty feed",
+    ],
+    [
+      /\b(avatar|profile photo).*\b(inbox|feed|comment)|(?:inbox|feed|comment).*\b(avatar|profile photo)/i,
+      "Profile photos now show more consistently across the feed, comments, and inbox",
+    ],
+    [
+      /\b(empty state|empty screen).*(inbox|feed|comment)|(?:inbox|feed|comment).*(empty state|empty screen)/i,
+      "Empty screens in Community now explain what to do next in clearer language",
+    ],
+    [
+      /\bsignal\s+teal|no\s+.*orange|restyle.*community|synk\s+palette/i,
+      "Community styling now follows the Synk look more closely",
+    ],
+    [
+      /\bloader\b|\bloading animation\b|\bsynk logo loader\b/i,
+      "Loading feels smoother, with the Synk logo animation used only when something is actually waiting",
+    ],
+    [
+      /\balt accounts?\b|\bact(?:ive)?\s+alt\b/i,
+      "Alt accounts behave more like regular Community profiles, including profile and follow links",
+    ],
+    [
+      /\binbox\b.*\bunread|\bunread\b.*\binbox|\bnotification.*avatar/i,
+      "Notifications are clearer, with profile photos and a simpler unread layout",
+    ],
+  ];
+  for (const [re, phrase] of patterns) {
+    if (!re.test(text)) continue;
+    const polished = String(phrase || "").trim();
+    if (!polished) continue;
+    return /[.!?]$/.test(polished) ? polished : `${polished}.`;
+  }
+
+  text = softenReleaseNoteJargon(text);
   text = text
     .replace(/^(Redo|Redesign)\b/i, "Redesigned")
+    .replace(/^Revise\b/i, "Improved")
     .replace(/^Fix\b/i, "Fixed")
     .replace(/^Add\b/i, "Added")
     .replace(/^Update\b/i, "Updated")
@@ -122,8 +206,32 @@ function polishReleaseNoteSubject(subject) {
     .replace(/^Polish\b/i, "Polished")
     .replace(/^Clean up\b/i, "Cleaned up")
     .replace(/^Make\b/i, "Made")
-    .replace(/^Re-?enable\b/i, "Re-enabled");
+    .replace(/^Allow\b/i, "You can now")
+    .replace(/^Keep revising\b/i, "Continued refining")
+    .replace(/^Re-?enable\b/i, "Re-enabled")
+    .replace(/^Treat\b/i, "Updated how we treat")
+    .replace(/^Point\b/i, "Updated")
+    .replace(/^Show\b/i, "Now shows")
+    .replace(/^Settle\b/i, "Settled");
+
+  // Turn leftover engineering phrasing into member-facing wording.
+  text = text
+    .replace(/\bfor Synk channels\b/gi, "in Synk Community")
+    .replace(/\bCommunity v\d+\b/gi, "Community")
+    .replace(/\bclassic Synk look and feel\b/gi, "Synk look and feel")
+    .replace(/\bempty screens\b/gi, "empty screens")
+    .replace(/\bpage being overwritten\b/gi, "page getting replaced")
+    .replace(/\blook and feel \(v\d+\)\b/gi, "look and feel");
+
+  text = text.replace(/\s+/g, " ").replace(/^[,:;.\-\s]+|[,:;.\-\s]+$/g, "").trim();
+  if (!text) return "";
+  text = text.charAt(0).toUpperCase() + text.slice(1);
+  if (!/[.!?]$/.test(text)) text += ".";
   return scrubCopiedPlatformNames(text).trim();
+}
+
+function polishReleaseNoteSubject(subject) {
+  return consumerizeReleaseNoteSubject(subject);
 }
 
 function categorizeReleaseNoteSubject(subject, isBeta) {
@@ -133,7 +241,7 @@ function categorizeReleaseNoteSubject(subject, isBeta) {
     return "fixes";
   }
   if (
-    /\b(add(?:ed)?|new|launch(?:ed)?|introduce[sd]?|creat(?:e|ed)|enable[sd]?|ship(?:ped)?)\b/.test(
+    /\b(you can now|add(?:ed)?|new|launch(?:ed)?|introduce[sd]?|creat(?:e|ed)|enable[sd]?|ship(?:ped)?)\b/.test(
       text
     )
   ) {
@@ -199,9 +307,9 @@ function buildReleaseNotesFromGit(version, { previousVersion = "", previousNotes
     parts.push(`## ${title}`, "", ...lines);
   };
 
-  pushSection("New", buckets.new);
+  pushSection("New features", buckets.new);
   pushSection("Improvements", buckets.improvements);
-  pushSection("Fixes", buckets.fixes);
+  pushSection("Bug fixes", buckets.fixes);
   pushSection("For beta testers", buckets.testing);
   return parts.join("\n");
 }
@@ -247,10 +355,10 @@ async function main() {
 
   const result = await broadcastAppUpdate(sql, {
     version,
-    body: "Synk was updated. Refresh or reopen the app to get the latest.",
+    body: "Synk has a new update with product improvements. Refresh or reopen the app to get the latest.",
     notes:
       notes ||
-      "Synk was updated with improvements and fixes. Refresh to get the latest.",
+      "## Improvements\n\n- Synk has a new update with product improvements and fixes. Refresh or reopen the app to get the latest.",
   });
 
   if (!result.ok) {
@@ -262,6 +370,9 @@ async function main() {
     console.log(
       `App update ${result.version} already notified (${result.notified} users).`
     );
+    if (result.notesRefreshed) {
+      console.log("Refreshed stored release notes with consumer-facing copy.");
+    }
   } else {
     console.log(
       `Notified ${result.notified} users about app update ${result.version}.`
