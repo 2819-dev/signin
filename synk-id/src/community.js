@@ -191,6 +191,18 @@
     }
   }
 
+  /** Profile "Joined …" — month + year only (no day/time). */
+  function formatJoinedMonthYear(iso) {
+    try {
+      return new Date(iso).toLocaleDateString([], {
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return "";
+    }
+  }
+
 
   function tagInitial(tag) {
     const name = String((tag && tag.name) || "?").trim();
@@ -2311,7 +2323,7 @@ function applyViewState(data) {
       setText("view-title", dname);
       const bits = [];
       bits.push(`${Number(profile.postCount || 0)} post${Number(profile.postCount || 0) === 1 ? "" : "s"}`);
-      if (profile.joinedAt) bits.push(`Joined ${formatWhen(profile.joinedAt)}`);
+      if (profile.joinedAt) bits.push(`Joined ${formatJoinedMonthYear(profile.joinedAt)}`);
       setText("view-sub", bits.join(" · "));
       if (viewBlurb) {
         viewBlurb.hidden = !profileBio;
