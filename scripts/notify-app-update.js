@@ -50,9 +50,11 @@ function normalizeCommitSubject(subject) {
 }
 
 function commitLooksBetaOnly(subject) {
-  return (
-    isBetaOnlyReleaseNoteBlock(subject) ||
-    /\b(beta|tester|testing|agenda|clock[\s-]?in)\b/i.test(subject)
+  if (isBetaOnlyReleaseNoteBlock(subject)) return true;
+  // Keep this strict so infrastructure commits that merely mention "beta"
+  // (e.g. release-note scrubbing) stay in the public Improvements section.
+  return /\b(beta\s+testers?|for\s+testers?|testing\s+(tab|portal|console|desk|agenda|shift)|clock[\s-]?in|tester\s+agenda)\b/i.test(
+    String(subject || "")
   );
 }
 
@@ -100,6 +102,46 @@ function subjectsFromNotes(notes) {
   return set;
 }
 
+function polishReleaseNoteSubject(subject) {
+  let text = scrubCopiedPlatformNames(String(subject || "").trim());
+  text = text
+    .replace(/^(chore|fix|feat|docs|refactor|style|test|build|ci)(\([^)]*\))?:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .replace(/\.$/, "")
+    .trim();
+  if (!text) return "";
+
+  text = text.charAt(0).toUpperCase() + text.slice(1);
+  text = text
+    .replace(/^(Redo|Redesign)\b/i, "Redesigned")
+    .replace(/^Fix\b/i, "Fixed")
+    .replace(/^Add\b/i, "Added")
+    .replace(/^Update\b/i, "Updated")
+    .replace(/^Improve\b/i, "Improved")
+    .replace(/^Remove\b/i, "Removed")
+    .replace(/^Polish\b/i, "Polished")
+    .replace(/^Clean up\b/i, "Cleaned up")
+    .replace(/^Make\b/i, "Made")
+    .replace(/^Re-?enable\b/i, "Re-enabled");
+  return scrubCopiedPlatformNames(text).trim();
+}
+
+function categorizeReleaseNoteSubject(subject, isBeta) {
+  if (isBeta) return "testing";
+  const text = String(subject || "").toLowerCase();
+  if (/\b(fix(?:ed|es)?|bug|crash|hotfix|patch|resolve[sd]?|repair(?:ed)?|broken|regression)\b/.test(text)) {
+    return "fixes";
+  }
+  if (
+    /\b(add(?:ed)?|new|launch(?:ed)?|introduce[sd]?|creat(?:e|ed)|enable[sd]?|ship(?:ped)?)\b/.test(
+      text
+    )
+  ) {
+    return "new";
+  }
+  return "improvements";
+}
+
 function buildReleaseNotesFromGit(version, { previousVersion = "", previousNotes = "" } = {}) {
   const short = String(version || "").slice(0, 10);
   let commits = gitCommitSubjectsSince(previousVersion);
@@ -114,15 +156,23 @@ function buildReleaseNotesFromGit(version, { previousVersion = "", previousNotes
 
   const seenBefore = subjectsFromNotes(previousNotes);
   const seenNow = new Set();
-  const everyone = [];
-  const beta = [];
+  const buckets = {
+    new: [],
+    improvements: [],
+    fixes: [],
+    testing: [],
+  };
 
   for (const row of commits) {
-    const subject = scrubCopiedPlatformNames(String(row.subject || "").trim());
+    const rawSubject = String(row.subject || "").trim();
+    if (!rawSubject) continue;
+    if (isSensitiveReleaseNoteBlock(rawSubject)) continue;
+    if (/^stamp (public )?version\b/i.test(rawSubject)) continue;
+    if (/^merge\b/i.test(rawSubject)) continue;
+
+    const isBeta = commitLooksBetaOnly(rawSubject);
+    const subject = polishReleaseNoteSubject(rawSubject);
     if (!subject) continue;
-    if (isSensitiveReleaseNoteBlock(subject)) continue;
-    if (/^stamp (public )?version\b/i.test(subject)) continue;
-    if (/^merge\b/i.test(subject)) continue;
 
     const key = normalizeCommitSubject(subject);
     if (!key) continue;
@@ -130,28 +180,29 @@ function buildReleaseNotesFromGit(version, { previousVersion = "", previousNotes
     if (seenNow.has(key)) continue;
     seenNow.add(key);
 
-    if (commitLooksBetaOnly(subject)) {
-      beta.push(`- [beta] ${subject}`);
-    } else {
-      everyone.push(`- ${subject}`);
-    }
+    const category = categorizeReleaseNoteSubject(subject, isBeta);
+    const line = category === "testing" ? `- [beta] ${subject}` : `- ${subject}`;
+    buckets[category].push(line);
   }
 
   // Always include at least the current update, even if it's a one-line change.
-  if (!everyone.length && !beta.length) {
-    everyone.push(
+  if (!buckets.new.length && !buckets.improvements.length && !buckets.fixes.length && !buckets.testing.length) {
+    buckets.improvements.push(
       `- Synk update ${short || "latest"} is live. Refresh or reopen the app to get it.`
     );
   }
 
-  const parts = [
-    short ? `## What's new (${short})` : "## What's new",
-    "",
-    ...everyone,
-  ];
-  if (beta.length) {
-    parts.push("", "## For beta testers", "", ...beta);
-  }
+  const parts = [];
+  const pushSection = (title, lines) => {
+    if (!lines.length) return;
+    if (parts.length) parts.push("");
+    parts.push(`## ${title}`, "", ...lines);
+  };
+
+  pushSection("New", buckets.new);
+  pushSection("Improvements", buckets.improvements);
+  pushSection("Fixes", buckets.fixes);
+  pushSection("For beta testers", buckets.testing);
   return parts.join("\n");
 }
 
@@ -175,9 +226,9 @@ async function main() {
   const sql = neon(dbUrl);
   await ensureSynkCoreTables(sql);
 
-  // Clear existing agenda while the Testing portal is redesigned.
-  // Set CLEAR_BETA_AGENDA=0 to keep manual items on later deploys.
-  if (String(process.env.CLEAR_BETA_AGENDA || "0").trim() !== "0") {
+  // Auto-refresh tester agenda from each update's release notes.
+  // Set CLEAR_BETA_AGENDA=0 to keep manual agenda items across deploys.
+  if (String(process.env.CLEAR_BETA_AGENDA || "1").trim() !== "0") {
     try {
       const cleared = await clearAllBetaAgendaItems(sql);
       console.log(`Cleared ${cleared.cleared} beta agenda item(s).`);
@@ -224,7 +275,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

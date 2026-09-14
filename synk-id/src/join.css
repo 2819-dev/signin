@@ -7825,7 +7825,109 @@ body.tm-on-session .tm-card-accent {
   }
 }
 
-/* Release notes embeds */
+/* Release notes — Reddit-style categorized feed */
+.rn-feed {
+  display: grid;
+  gap: 10px;
+}
+.rn-card {
+  border: 1px solid var(--line, #d5dbe6);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+}
+.rn-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+.rn-flair {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  background: color-mix(in srgb, var(--accent, #2f80ed) 14%, transparent);
+  color: var(--accent-ink, #1d5bb8);
+}
+.rn-flair[data-category="new"] {
+  background: color-mix(in srgb, #12b76a 18%, transparent);
+  color: #027a48;
+}
+.rn-flair[data-category="improvements"] {
+  background: color-mix(in srgb, #2f80ed 16%, transparent);
+  color: #1d5bb8;
+}
+.rn-flair[data-category="fixes"] {
+  background: color-mix(in srgb, #f79009 18%, transparent);
+  color: #b54708;
+}
+.rn-flair[data-category="testing"] {
+  background: color-mix(in srgb, #7a5cff 18%, transparent);
+  color: #5b21b6;
+}
+.rn-flair[data-category="staff"] {
+  background: color-mix(in srgb, #f04438 16%, transparent);
+  color: #b42318;
+}
+.rn-flair[data-category="update"] {
+  background: color-mix(in srgb, var(--muted, #5a6b7d) 14%, transparent);
+  color: var(--ink, #0b1f3a);
+}
+.rn-card[data-category="new"] .rn-flair { background: color-mix(in srgb, #12b76a 18%, transparent); color: #027a48; }
+.rn-card[data-category="improvements"] .rn-flair { background: color-mix(in srgb, #2f80ed 16%, transparent); color: #1d5bb8; }
+.rn-card[data-category="fixes"] .rn-flair { background: color-mix(in srgb, #f79009 18%, transparent); color: #b54708; }
+.rn-card[data-category="testing"] .rn-flair { background: color-mix(in srgb, #7a5cff 18%, transparent); color: #5b21b6; }
+.rn-card[data-category="staff"] .rn-flair { background: color-mix(in srgb, #f04438 16%, transparent); color: #b42318; }
+
+.rn-audience {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border: 1px solid color-mix(in srgb, #7a5cff 28%, transparent);
+  color: #5b21b6;
+  background: color-mix(in srgb, #7a5cff 8%, transparent);
+}
+.rn-card[data-audience="staff"] .rn-audience {
+  border-color: color-mix(in srgb, #f04438 28%, transparent);
+  color: #b42318;
+  background: color-mix(in srgb, #f04438 8%, transparent);
+}
+.rn-card-title {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 8rem;
+  font-size: 0.98rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+.rn-card-body {
+  padding: 8px 14px 14px;
+}
+.rn-card-body.release-notes-md ul {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.rn-card-body.release-notes-md li {
+  margin: 0;
+  line-height: 1.45;
+}
+
+/* Legacy release-notes embed styles (fallback blocks) */
 .release-notes-embeds { display: grid; gap: 12px; }
 .release-notes-embed {
   border: 1px solid var(--line, #d5dbe6);
@@ -9071,7 +9173,7 @@ body.community-body .reddit-notif-desc {
 }
 
 
-/* Release notes modal */
+/* Release notes modal — clean post-style dialog */
 .release-notes-modal {
   position: fixed;
   inset: 0;
@@ -9084,19 +9186,20 @@ body.community-body .reddit-notif-desc {
 .release-notes-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(8, 15, 30, 0.48);
+  background: rgba(8, 15, 30, 0.52);
+  backdrop-filter: blur(2px);
 }
 .release-notes-card {
   position: relative;
   z-index: 1;
-  width: min(560px, 100%);
-  max-height: min(78vh, 720px);
+  width: min(580px, 100%);
+  max-height: min(80vh, 760px);
   overflow: auto;
-  background: var(--r-card, #fff);
+  background: var(--r-card, var(--surface, #fff));
   color: inherit;
   border: 1px solid var(--r-line, rgba(0,0,0,.1));
   border-radius: 16px;
-  box-shadow: 0 20px 50px rgba(0,0,0,.22);
+  box-shadow: 0 24px 60px rgba(0,0,0,.24);
   padding: 16px 16px 18px;
 }
 .release-notes-card-head {
@@ -9104,11 +9207,15 @@ body.community-body .reddit-notif-desc {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--r-line, rgba(0,0,0,.08));
 }
 .release-notes-card-head h2 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.18rem;
+  letter-spacing: -0.02em;
+  font-weight: 800;
 }
 .release-notes-card-head .muted {
   margin: 4px 0 0;

@@ -4035,9 +4035,34 @@ async function claimAdminActAsHandoff(sql, { token } = {}) {
 }
 
 
-// Platforms we may copy UX from in chat/commits — never show these names in
-// member-facing release notes or beta agenda titles.
-const COPIED_PLATFORM_NAMES = ["melonly"];
+// Platforms/products we may copy UX from in chat/commits — never show these
+// names in member-facing release notes or beta agenda titles.
+const COPIED_PLATFORM_NAMES = [
+  "melonly",
+  "reddit",
+  "discord",
+  "slack",
+  "notion",
+  "linear",
+  "figma",
+  "twitter",
+  "instagram",
+  "tiktok",
+  "facebook",
+  "messenger",
+  "whatsapp",
+  "telegram",
+  "snapchat",
+  "pinterest",
+  "linkedin",
+  "youtube",
+  "twitch",
+  "spotify",
+  "beeper",
+  "imessage",
+  "threads",
+  "mastodon",
+];
 
 function scrubCopiedPlatformNames(text) {
   const scrubLine = (line) => {
@@ -4045,12 +4070,21 @@ function scrubCopiedPlatformNames(text) {
     const marker = raw.match(/^(\s*(?:[-*•+]|\d+[.)])\s+)/);
     const prefix = marker ? marker[1] : "";
     let out = marker ? raw.slice(prefix.length) : raw;
+
+    // Generic inspiration phrasing: "like Brand", "Brand-style", "copy Brand", etc.
+    out = out
+      .replace(
+        /\b(?:like|inspired\s+by|similar\s+to|based\s+on|modeled\s+after|copied\s+from|copy(?:ing)?)\s+[A-Z][\w.+-]{1,40}\b/g,
+        ""
+      )
+      .replace(/\b[A-Z][\w.+-]{1,40}(?:-|\s)?style\b/g, "");
+
     for (const brand of COPIED_PLATFORM_NAMES) {
       const escaped = brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       out = out
         .replace(
           new RegExp(
-            `\\b(?:like\\s+|inspired\\s+by\\s+|similar\\s+to\\s+|based\\s+on\\s+)?${escaped}(?:[-\\s]?style)?\\b`,
+            `\\b(?:like\\s+|inspired\\s+by\\s+|similar\\s+to\\s+|based\\s+on\\s+|modeled\\s+after\\s+|copied\\s+from\\s+|copy(?:ing)?\\s+)?${escaped}(?:[-\\s]?style)?\\b`,
             "gi"
           ),
           ""
@@ -4064,6 +4098,7 @@ function scrubCopiedPlatformNames(text) {
       .replace(/[^\S\n]+([,.;:!?])/g, "$1")
       .replace(/\(\s*\)/g, "")
       .replace(/\b[^\S\n]+-[^\S\n]+\b/g, " ")
+      .replace(/\b(?:with|and|as|for|to|a|an|the)\s*$/i, "")
       .trim();
     if (!out) return prefix ? prefix.trimEnd() : "";
     return `${prefix}${out}`.replace(/[^\S\n]{2,}/g, " ").trimEnd();

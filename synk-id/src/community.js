@@ -4770,24 +4770,44 @@ function applyViewState(data) {
     return out.join("");
   }
 
+  function releaseNotesCategoryMeta(title, audience) {
+    const label = String(title || "").trim();
+    const lower = label.toLowerCase();
+    if (audience === "beta" || /\bbeta|tester|testing\b/.test(lower)) {
+      return { key: "testing", flair: "Testing", title: label || "For beta testers" };
+    }
+    if (audience === "staff" || /\bstaff\b/.test(lower)) {
+      return { key: "staff", flair: "Staff", title: label || "Staff notes" };
+    }
+    if (/^new\b/.test(lower)) return { key: "new", flair: "New", title: label || "New" };
+    if (/^fix/.test(lower)) return { key: "fixes", flair: "Fixes", title: label || "Fixes" };
+    if (/improv/.test(lower)) {
+      return { key: "improvements", flair: "Improvements", title: label || "Improvements" };
+    }
+    return { key: "update", flair: "Update", title: label || "What's new" };
+  }
+
   function renderReleaseNotesEmbeds(embeds, blocks) {
     if (Array.isArray(embeds) && embeds.length) {
-      return `<div class="release-notes-embeds">${embeds
+      return `<div class="rn-feed">${embeds
         .map((embed) => {
           const audience = String(embed.audience || "everyone");
-          const badge =
+          const meta = releaseNotesCategoryMeta(embed.title, audience);
+          const audienceBadge =
             audience === "beta"
-              ? `<span class="release-notes-embed-badge">Beta testers</span>`
+              ? `<span class="rn-audience">Beta</span>`
               : audience === "staff"
-                ? `<span class="release-notes-embed-badge">Staff</span>`
+                ? `<span class="rn-audience">Staff</span>`
                 : "";
-          return `<article class="release-notes-embed" data-audience="${escapeHtml(audience)}">
-            <div class="release-notes-embed-accent" aria-hidden="true"></div>
-            <div class="release-notes-embed-body">
-              <h3 class="release-notes-embed-title">${escapeHtml(embed.title || "What's new")}</h3>
-              ${badge}
-              <div class="release-notes-md">${markdownToSafeHtml(embed.markdown || "")}</div>
-            </div>
+          return `<article class="rn-card" data-category="${escapeHtml(meta.key)}" data-audience="${escapeHtml(audience)}">
+            <header class="rn-card-head">
+              <span class="rn-flair" data-category="${escapeHtml(meta.key)}">${escapeHtml(meta.flair)}</span>
+              ${audienceBadge}
+              ${meta.title && meta.title.toLowerCase() !== meta.flair.toLowerCase()
+                ? `<h3 class="rn-card-title">${escapeHtml(meta.title)}</h3>`
+                : ""}
+            </header>
+            <div class="rn-card-body release-notes-md">${markdownToSafeHtml(embed.markdown || "")}</div>
           </article>`;
         })
         .join("")}</div>`;
