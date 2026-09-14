@@ -934,7 +934,6 @@
         route.type === "mod" ||
         route.type === "post" ||
         route.type === "inbox" ||
-        route.type === "groups" ||
         route.type === "user" ||
         route.type === "search" ||
         (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 1100px)").matches);
@@ -991,7 +990,19 @@
     }
     if (route.type === "groups") {
       if (aboutTitle) aboutTitle.textContent = "Your groups";
-      if (aboutBlurb) aboutBlurb.textContent = "Communities you can browse and join.";
+      const joinedCount = (groups || []).filter(isGroupJoined).length;
+      const total = (groups || []).length;
+      if (aboutBlurb) {
+        aboutBlurb.textContent =
+          joinedCount > 0
+            ? `You’re in ${joinedCount} of ${total} communities. Join more from Discover.`
+            : "Browse Discover to join communities and build your feed.";
+      }
+      if (statPostsLabel) statPostsLabel.textContent = "Joined";
+      if (statPosts) statPosts.textContent = String(joinedCount);
+      if (statGroups) statGroups.textContent = String(total);
+      const aboutJoin = document.getElementById("about-join-btn");
+      if (aboutJoin) aboutJoin.hidden = true;
       return;
     }
     if (aboutTitle) aboutTitle.textContent = "Feed";
@@ -1317,6 +1328,14 @@
   }
 
   
+  let groupsPageFilter = "joined"; // joined | discover | all
+  let groupsPageQuery = "";
+
+  function isGroupJoined(group) {
+    if (!group) return false;
+    return !!(group.joined || group.isMember || group.member);
+  }
+
   function groupCardHtml(group) {
     const members =
       group.memberCount != null
@@ -1326,19 +1345,23 @@
       group.postCount != null
         ? `${Number(group.postCount).toLocaleString()} post${Number(group.postCount) === 1 ? "" : "s"}`
         : "";
-    const meta = [group.slug, members || posts].filter(Boolean).join(" · ");
+    const meta = [group.slug ? `g/${group.slug}` : "", members || posts].filter(Boolean).join(" · ");
     const initial = String(group.slug || group.name || "?").slice(0, 1).toUpperCase();
-    const joined = !!group.joined;
+    const joined = isGroupJoined(group);
     const desc = String(group.description || "").trim();
-    return `<a class="community-group-card" href="/community/group/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
-      <span class="community-group-card-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
-      <span class="community-group-card-main">
-        <strong class="community-group-card-name">${escapeHtml(group.name || group.slug)}</strong>
-        <span class="community-group-card-meta muted">${escapeHtml(meta)}</span>
-        ${desc ? `<span class="community-group-card-desc muted">${escapeHtml(desc)}</span>` : ""}
-      </span>
-      ${joined ? `<span class="community-group-card-pill">Joined</span>` : `<span class="community-group-card-pill is-ghost">View</span>`}
-    </a>`;
+    const official = !!(group.isOfficial || group.slug === "synk");
+    const joinLabel = joined ? "Joined" : "Join";
+    return `<article class="community-group-card${joined ? " is-joined" : ""}${official ? " is-official" : ""}" data-group-card="${escapeHtml(group.slug)}">
+      <a class="community-group-card-link" href="/community/group/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
+        <span class="community-group-card-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
+        <span class="community-group-card-main">
+          <strong class="community-group-card-name">${escapeHtml(group.name || group.slug)}${official ? `<span class="community-group-official">Official</span>` : ""}</strong>
+          <span class="community-group-card-meta muted">${escapeHtml(meta)}</span>
+          ${desc ? `<span class="community-group-card-desc muted">${escapeHtml(desc)}</span>` : ""}
+        </span>
+      </a>
+      <button class="community-group-card-pill${joined ? "" : " is-ghost"}" type="button" data-join-group="${escapeHtml(group.slug)}" aria-pressed="${joined ? "true" : "false"}">${escapeHtml(joinLabel)}</button>
+    </article>`;
   }
 
   function renderGroupsPage() {
@@ -1350,29 +1373,80 @@
       syncFeedChrome();
     } catch (_) {}
     const list = Array.isArray(groups) ? groups.slice() : [];
+    const q = String(groupsPageQuery || "").trim().toLowerCase();
+    const filtered = list.filter((g) => {
+      if (!g) return false;
+      if (!q) return true;
+      const hay = `${g.slug || ""} ${g.name || ""} ${g.description || ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+    const joined = filtered.filter((g) => isGroupJoined(g));
+    const other = filtered.filter((g) => !isGroupJoined(g));
+    const rankedOther = other
+      .slice()
+      .sort((a, b) => Number(b.postCount || 0) - Number(a.postCount || 0) || String(a.name || "").localeCompare(String(b.name || "")));
+    const rankedJoined = joined
+      .slice()
+      .sort((a, b) => String(a.name || a.slug || "").localeCompare(String(b.name || b.slug || "")));
+
+    const filter = groupsPageFilter === "discover" || groupsPageFilter === "all" ? groupsPageFilter : "joined";
+    const showJoined = filter === "joined" || filter === "all";
+    const showDiscover = filter === "discover" || filter === "all";
+
+    let html = `<div class="community-groups-toolbar">
+      <div class="community-groups-filters" role="tablist" aria-label="Group filters">
+        <button type="button" class="community-groups-filter${filter === "joined" ? " is-active" : ""}" data-groups-filter="joined" role="tab" aria-selected="${filter === "joined" ? "true" : "false"}">Joined${list.filter(isGroupJoined).length ? ` · ${list.filter(isGroupJoined).length}` : ""}</button>
+        <button type="button" class="community-groups-filter${filter === "discover" ? " is-active" : ""}" data-groups-filter="discover" role="tab" aria-selected="${filter === "discover" ? "true" : "false"}">Discover</button>
+        <button type="button" class="community-groups-filter${filter === "all" ? " is-active" : ""}" data-groups-filter="all" role="tab" aria-selected="${filter === "all" ? "true" : "false"}">All</button>
+      </div>
+      <label class="community-groups-search">
+        <span class="sr-only">Search groups</span>
+        <input type="search" id="groups-page-search" placeholder="Search groups" value="${escapeHtml(groupsPageQuery)}" autocomplete="off" />
+      </label>
+    </div>`;
+
     if (!list.length) {
-      host.innerHTML = "";
+      host.innerHTML = html;
       if (feedEmpty) {
         feedEmpty.hidden = false;
-        feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("feed", 28)}</div><strong>No groups yet</strong><p>Communities will show up here once they’re available.</p>`;
+        feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("users", 28)}</div><strong>No groups yet</strong><p>Communities will show up here once they’re available.</p>`;
       }
       return;
     }
-    const joined = list.filter((g) => g && g.joined);
-    const other = list.filter((g) => g && !g.joined);
-    const rankedOther = other
-      .slice()
-      .sort((a, b) => Number(b.postCount || 0) - Number(a.postCount || 0));
-    let html = "";
-    if (joined.length) {
-      html += `<p class="search-section-title">Joined</p>`;
-      html += joined.map(groupCardHtml).join("");
+
+    let body = "";
+    if (showJoined) {
+      if (rankedJoined.length) {
+        body += `<p class="search-section-title">Joined</p>`;
+        body += rankedJoined.map(groupCardHtml).join("");
+      } else if (filter === "joined") {
+        body += `<div class="community-groups-empty">
+          <strong>You haven’t joined any groups yet</strong>
+          <p class="muted">Browse Discover to find communities that fit you.</p>
+          <button type="button" class="btn btn-primary btn-compact reddit-join-orange" data-groups-filter="discover">Explore groups</button>
+        </div>`;
+      }
     }
-    if (rankedOther.length) {
-      html += `<p class="search-section-title">${joined.length ? "Discover" : "Communities"}</p>`;
-      html += rankedOther.map(groupCardHtml).join("");
+    if (showDiscover) {
+      if (rankedOther.length) {
+        body += `<p class="search-section-title">${filter === "all" && rankedJoined.length ? "Discover" : filter === "discover" ? "Discover" : "Communities"}</p>`;
+        body += rankedOther.map(groupCardHtml).join("");
+      } else if (filter === "discover") {
+        body += `<div class="community-groups-empty">
+          <strong>${q ? "No matching groups" : "You’re in everything"}</strong>
+          <p class="muted">${q ? "Try a different search." : "You’ve already joined every available community."}</p>
+        </div>`;
+      }
     }
-    host.innerHTML = html;
+    if (!body && q) {
+      body = `<div class="community-groups-empty"><strong>No matches</strong><p class="muted">Nothing matched “${escapeHtml(groupsPageQuery)}”.</p></div>`;
+    }
+
+    host.innerHTML = html + body;
+    const searchInput = document.getElementById("groups-page-search");
+    if (searchInput && document.activeElement !== searchInput) {
+      // keep caret only when user isn't typing; value already set above
+    }
   }
 
   function renderGroups() {
@@ -2797,6 +2871,21 @@ function applyViewState(data) {
   });
 
   feedEl.addEventListener("click", (e) => {
+    const filterBtn = e.target.closest("[data-groups-filter]");
+    if (filterBtn && route.type === "groups") {
+      e.preventDefault();
+      groupsPageFilter = filterBtn.getAttribute("data-groups-filter") || "joined";
+      renderGroupsPage();
+      return;
+    }
+    const joinBtn = e.target.closest("[data-join-group]");
+    if (joinBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const slug = joinBtn.getAttribute("data-join-group") || "";
+      toggleGroupMembership(slug, joinBtn).catch(() => {});
+      return;
+    }
     const groupLink = e.target.closest('a[href^="/community/group/"], a[href^="/community/g/"]');
     const userLink = e.target.closest('a[href^="/user/"], a[href^="/u/"], a[href^="/community/u/"]');
     if (groupLink) {
@@ -2815,6 +2904,21 @@ function applyViewState(data) {
         slug: "",
         username: userLink.getAttribute("href").split("/").pop(),
       }).catch(() => {});
+    }
+  });
+
+  feedEl.addEventListener("input", (e) => {
+    const input = e.target.closest("#groups-page-search");
+    if (!input || route.type !== "groups") return;
+    groupsPageQuery = input.value || "";
+    renderGroupsPage();
+    const again = document.getElementById("groups-page-search");
+    if (again) {
+      again.focus();
+      try {
+        const len = again.value.length;
+        again.setSelectionRange(len, len);
+      } catch (_) {}
     }
   });
 
@@ -5617,55 +5721,78 @@ document.addEventListener("click", async (e) => {
       null;
     syncJoinCopy(joined, group);
   }
+
+  async function toggleGroupMembership(slug, sourceBtn) {
+    const groupSlug = String(slug || "").trim();
+    if (!groupSlug) return;
+    const group = (groups || []).find((g) => g.slug === groupSlug) || (activeGroupDetail && activeGroupDetail.slug === groupSlug ? activeGroupDetail : null);
+    const currentlyJoined = group ? isGroupJoined(group) : route.type === "group" && route.slug === groupSlug && activeGroupJoined;
+    const next = !currentlyJoined;
+    if (!next) {
+      const label = group && (group.isOfficial || group.slug === "synk") ? "Synk" : (group && group.name) || groupSlug;
+      if (!window.confirm(`Leave ${label}? You can rejoin anytime.`)) return;
+    }
+    if (sourceBtn) {
+      sourceBtn.disabled = true;
+      sourceBtn.textContent = next ? "Joining…" : "Leaving…";
+    }
+    if (route.type === "group" && route.slug === groupSlug) {
+      activeGroupJoined = next;
+      syncJoinButtons();
+    }
+    try {
+      const data = await communityAction({
+        action: "join",
+        group: groupSlug,
+        joined: next,
+      });
+      const joinedNow = !!(data.joined != null ? data.joined : next);
+      groups = (groups || []).map((g) =>
+        g.slug === groupSlug
+          ? {
+              ...g,
+              joined: joinedNow,
+              memberCount: typeof data.memberCount === "number" ? data.memberCount : g.memberCount,
+            }
+          : g
+      );
+      if (route.type === "group" && route.slug === groupSlug) {
+        activeGroupJoined = joinedNow;
+        if (activeGroupDetail) {
+          activeGroupDetail.joined = joinedNow;
+          if (typeof data.memberCount === "number") activeGroupDetail.memberCount = data.memberCount;
+        }
+        syncJoinButtons();
+        const memberCount = activeGroupDetail && activeGroupDetail.memberCount;
+        if (memberCount != null) {
+          setText(
+            "view-sub",
+            [route.slug || "", `${Number(memberCount).toLocaleString()} member${Number(memberCount) === 1 ? "" : "s"}`]
+              .filter(Boolean)
+              .join(" · ")
+          );
+        }
+      }
+      if (route.type === "groups") renderGroupsPage();
+      showToast(joinedNow ? "Joined" : "Left community");
+    } catch (err) {
+      if (route.type === "group" && route.slug === groupSlug) {
+        activeGroupJoined = currentlyJoined;
+        syncJoinButtons();
+      }
+      if (route.type === "groups") renderGroupsPage();
+      showToast((err && err.message) || "Could not update membership");
+    } finally {
+      if (sourceBtn) sourceBtn.disabled = false;
+    }
+  }
+
   ["join-community-btn", "about-join-btn"].forEach((id) => {
     const btn = document.getElementById(id);
     if (!btn) return;
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", () => {
       if (route.type !== "group" || !route.slug) return;
-      const group =
-        activeGroupDetail ||
-        (groups || []).find((g) => g.slug === route.slug) ||
-        null;
-      const next = !activeGroupJoined;
-      if (!next) {
-        const label = group && (group.isOfficial || group.slug === "synk") ? "Synk" : (group && group.name) || route.slug;
-        if (!window.confirm(`Leave ${label}? You can rejoin anytime.`)) return;
-      }
-      activeGroupJoined = next;
-      syncJoinButtons();
-      try {
-        const data = await communityAction({
-          action: "join",
-          group: route.slug,
-          joined: next,
-        });
-        activeGroupJoined = !!(data.joined != null ? data.joined : next);
-        if (activeGroupDetail) activeGroupDetail.joined = activeGroupJoined;
-        if (typeof data.memberCount === "number" && activeGroupDetail) {
-          activeGroupDetail.memberCount = data.memberCount;
-        }
-        groups = (groups || []).map((g) =>
-          g.slug === route.slug ? { ...g, joined: activeGroupJoined } : g
-        );
-        syncJoinButtons();
-        showToast(activeGroupJoined ? "Joined" : "Left community");
-        if (route.type === "group") {
-          const memberCount = activeGroupDetail && activeGroupDetail.memberCount;
-          if (memberCount != null) {
-            const slug = route.slug || "";
-            setText(
-              "view-sub",
-              [slug, `${Number(memberCount).toLocaleString()} member${Number(memberCount) === 1 ? "" : "s"}`]
-                .filter(Boolean)
-                .join(" · ")
-            );
-          }
-        }
-      } catch (err) {
-        activeGroupJoined = !next;
-        syncJoinButtons();
-        showToast((err && err.message) || "Could not update membership");
-      }
+      toggleGroupMembership(route.slug, btn).catch(() => {});
     });
   });
 
