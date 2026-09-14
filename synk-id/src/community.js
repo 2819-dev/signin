@@ -7129,6 +7129,108 @@ document.addEventListener("click", async (e) => {
     }
   }
 
+  let betaFeedbackCache = [];
+  let betaFeedbackActiveId = null;
+
+  function renderBetaFeedbackChat(thread) {
+    const chat = document.getElementById("beta-feedback-chat");
+    const list = document.getElementById("beta-feedback-chat-messages");
+    const title = document.getElementById("beta-feedback-chat-title");
+    const meta = document.getElementById("beta-feedback-chat-meta");
+    if (!chat || !list) return;
+    if (!thread) {
+      chat.hidden = true;
+      betaFeedbackActiveId = null;
+      return;
+    }
+    betaFeedbackActiveId = thread.id;
+    chat.hidden = false;
+    const who = thread.authorDisplayName || thread.authorUsername || "Tester";
+    const handle = thread.authorUsername ? `@${thread.authorUsername}` : "";
+    if (title) title.textContent = who;
+    if (meta) {
+      const when = thread.updatedAt || thread.createdAt
+        ? new Date(thread.updatedAt || thread.createdAt).toLocaleString()
+        : "";
+      meta.textContent = [handle, when ? `Updated ${when}` : ""].filter(Boolean).join(" · ");
+    }
+    const messages = Array.isArray(thread.messages) && thread.messages.length
+      ? thread.messages
+      : [{ body: thread.body, isMine: false, isStaff: false, createdAt: thread.createdAt }];
+    list.innerHTML = messages
+      .map((m) => {
+        const mine = !!m.isMine;
+        const label = mine
+          ? "You"
+          : m.isStaff
+            ? "Staff"
+            : m.authorDisplayName || m.authorUsername || who;
+        const stamp = m.createdAt ? new Date(m.createdAt).toLocaleString() : "";
+        return `
+          <div class="tm-fb-msg ${mine ? "is-mine" : "is-theirs"}">
+            <div class="tm-fb-bubble">
+              <span class="tm-fb-who">${escapeHtml(label)}</span>
+              <p>${escapeHtml(m.body)}</p>
+              ${stamp ? `<time class="muted">${escapeHtml(stamp)}</time>` : ""}
+            </div>
+          </div>`;
+      })
+      .join("");
+    list.scrollTop = list.scrollHeight;
+    document.querySelectorAll("#beta-feedback-thread-list [data-open-feedback]").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.getAttribute("data-open-feedback") === String(thread.id));
+    });
+  }
+
+  async function loadBetaFeedbackAdmin(preserveActive) {
+    if (!(me && me.isStaff)) return;
+    const list = document.getElementById("beta-feedback-thread-list");
+    if (!list) return;
+    try {
+      const res = await fetch("/api/synk-community", {
+        method: "POST",
+        headers: hubHeaders(),
+        body: JSON.stringify({ action: "beta-admin-feedback" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not load feedback");
+      betaFeedbackCache = data.feedback || [];
+      if (!betaFeedbackCache.length) {
+        list.innerHTML = '<p class="muted" style="margin:0;font-size:0.85rem;">No feedback conversations yet.</p>';
+        renderBetaFeedbackChat(null);
+        return;
+      }
+      list.innerHTML = betaFeedbackCache
+        .map((thread) => {
+          const who = thread.authorDisplayName || thread.authorUsername || "Tester";
+          const handle = thread.authorUsername ? `@${thread.authorUsername}` : "";
+          const preview = String(thread.preview || thread.body || "").slice(0, 120);
+          const when = thread.updatedAt || thread.createdAt
+            ? new Date(thread.updatedAt || thread.createdAt).toLocaleString()
+            : "";
+          const count = Number(thread.messageCount) || (thread.messages || []).length || 1;
+          return `
+            <button class="beta-fb-thread-btn" type="button" data-open-feedback="${escapeHtml(thread.id)}">
+              <span class="beta-fb-thread-top">
+                <strong>${escapeHtml(who)}</strong>
+                <span class="muted">${escapeHtml(String(count))} msg</span>
+              </span>
+              ${handle ? `<span class="muted beta-fb-thread-handle">${escapeHtml(handle)}</span>` : ""}
+              <span class="beta-fb-thread-preview">${escapeHtml(preview)}</span>
+              <span class="muted beta-fb-thread-time">${escapeHtml(when)}</span>
+            </button>`;
+        })
+        .join("");
+      const keepId = preserveActive ? betaFeedbackActiveId : null;
+      const active = keepId
+        ? betaFeedbackCache.find((t) => String(t.id) === String(keepId))
+        : null;
+      renderBetaFeedbackChat(active || null);
+    } catch (err) {
+      list.innerHTML = `<p class="muted">${escapeHtml(err.message || "Could not load feedback")}</p>`;
+    }
+  }
+
   const learnEnable = document.getElementById("tag-learn-more-enabled");
   const learnWrap = document.getElementById("tag-learn-more-page-wrap");
   if (learnEnable && learnWrap) {
@@ -7333,6 +7435,60 @@ document.addEventListener("click", async (e) => {
     });
   }
 
+  const betaFeedbackList = document.getElementById("beta-feedback-thread-list");
+  if (betaFeedbackList) {
+    betaFeedbackList.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-open-feedback]");
+      if (!btn) return;
+      const id = btn.getAttribute("data-open-feedback");
+      const thread = (betaFeedbackCache || []).find((t) => String(t.id) === String(id));
+      renderBetaFeedbackChat(thread || null);
+    });
+  }
+  const betaFeedbackClose = document.getElementById("beta-feedback-chat-close");
+  if (betaFeedbackClose) {
+    betaFeedbackClose.addEventListener("click", () => renderBetaFeedbackChat(null));
+  }
+  const betaFeedbackReplyForm = document.getElementById("beta-feedback-reply-form");
+  if (betaFeedbackReplyForm) {
+    betaFeedbackReplyForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!betaFeedbackActiveId) return;
+      const status = document.getElementById("beta-feedback-reply-status");
+      const bodyEl = document.getElementById("beta-feedback-reply-body");
+      const btn = betaFeedbackReplyForm.querySelector('button[type="submit"]');
+      if (!bodyEl) return;
+      if (status) status.textContent = "Sending…";
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({
+            action: "beta-reply-feedback",
+            threadId: betaFeedbackActiveId,
+            body: bodyEl.value,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not reply");
+        bodyEl.value = "";
+        if (status) status.textContent = "Sent";
+        if (data.feedback) {
+          const idx = betaFeedbackCache.findIndex((t) => String(t.id) === String(data.feedback.id));
+          if (idx >= 0) betaFeedbackCache[idx] = data.feedback;
+          else betaFeedbackCache.unshift(data.feedback);
+          renderBetaFeedbackChat(data.feedback);
+        }
+        await loadBetaFeedbackAdmin(true);
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not reply";
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+  }
+
   document.addEventListener(
     "touchmove",
     (e) => {
@@ -7495,6 +7651,7 @@ document.addEventListener("click", async (e) => {
       if (me && me.isStaff) {
         loadInfoPagesForMods();
         loadBetaAgendaAdmin();
+        loadBetaFeedbackAdmin(true);
       }
       refreshModToolsChrome();
     };

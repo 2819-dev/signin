@@ -13,10 +13,10 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=dark-fix2" />
+    <link rel="stylesheet" href="/join.css?v=community-v51" />
     <script src="/session.js?v=stay-v1"></script>
-    <script src="/force-refresh.js" defer></script>
-    <script src="/push-client.js?v=dark-fix2" defer></script>
+    <script src="/force-refresh.js?v=community-v51" defer></script>
+    <script src="/push-client.js?v=community-v51" defer></script>
   </head>
   <body class="testing-page testing-melonly">
     <div class="tm-app">
@@ -213,21 +213,21 @@
                 <div class="tm-card-head">
                   <div>
                     <p class="tm-label">Compose</p>
-                    <h2>Send feedback</h2>
+                    <h2>Start a conversation</h2>
                   </div>
                 </div>
-                <p class="muted">Share bugs, improvements, or anything unclear while reviewing.</p>
+                <p class="muted">Share bugs, improvements, or anything unclear. Staff can reply here in chat.</p>
                 <form id="feedback-form" class="form">
                   <div class="field">
                     <label for="feedback-body">Your note</label>
                     <textarea id="feedback-body" rows="5" maxlength="2000" required placeholder="The new sidebar felt clearer, but the top bar still jumps on iPhone…"></textarea>
                   </div>
                   <p id="feedback-status" class="muted" style="font-size:0.85rem;"></p>
-                  <button class="btn btn-primary btn-compact" type="submit">Submit feedback</button>
+                  <button class="btn btn-primary btn-compact" type="submit">Send feedback</button>
                 </form>
               </article>
               <article class="tm-card">
-                <div class="tm-card-head"><h2>Recent notes</h2></div>
+                <div class="tm-card-head"><h2>Conversations</h2></div>
                 <div id="feedback-list" class="tm-feedback-list" aria-live="polite"></div>
               </article>
             </div>
@@ -464,13 +464,47 @@
 
       function renderFeedback(items) {
         if (!items.length) {
-          ui.feedbackList.innerHTML = '<p class="muted">No feedback yet.</p>';
+          ui.feedbackList.innerHTML = '<p class="muted">No conversations yet. Send a note to start one.</p>';
           return;
         }
         ui.feedbackList.innerHTML = items
-          .map((f) => {
-            const when = f.createdAt ? new Date(f.createdAt).toLocaleString() : "";
-            return `<div class="tm-feedback"><p>${escapeHtml(f.body)}</p><p class="muted">${escapeHtml(when)}</p></div>`;
+          .map((thread) => {
+            const when = thread.updatedAt || thread.createdAt
+              ? new Date(thread.updatedAt || thread.createdAt).toLocaleString()
+              : "";
+            const messages = Array.isArray(thread.messages) && thread.messages.length
+              ? thread.messages
+              : [{ body: thread.body, isMine: true, isStaff: false, createdAt: thread.createdAt }];
+            const bubbles = messages
+              .map((m) => {
+                const mine = !!m.isMine;
+                const label = m.isStaff ? "Staff" : mine ? "You" : (m.authorDisplayName || m.authorUsername || "Member");
+                const stamp = m.createdAt ? new Date(m.createdAt).toLocaleString() : "";
+                return `
+                  <div class="tm-fb-msg ${mine ? "is-mine" : "is-theirs"}">
+                    <div class="tm-fb-bubble">
+                      <span class="tm-fb-who">${escapeHtml(label)}</span>
+                      <p>${escapeHtml(m.body)}</p>
+                      ${stamp ? `<time class="muted">${escapeHtml(stamp)}</time>` : ""}
+                    </div>
+                  </div>`;
+              })
+              .join("");
+            return `
+              <div class="tm-feedback tm-feedback-thread" data-thread-id="${escapeHtml(thread.id)}">
+                <div class="tm-feedback-meta muted">Updated ${escapeHtml(when || "—")}</div>
+                <div class="tm-fb-chat">${bubbles}</div>
+                <form class="tm-fb-reply form" data-reply-thread="${escapeHtml(thread.id)}">
+                  <div class="field">
+                    <label class="sr-only" for="reply-${escapeHtml(thread.id)}">Reply</label>
+                    <textarea id="reply-${escapeHtml(thread.id)}" rows="2" maxlength="2000" required placeholder="Reply to staff…"></textarea>
+                  </div>
+                  <div class="tm-fb-reply-row">
+                    <p class="muted tm-fb-reply-status" aria-live="polite"></p>
+                    <button class="btn btn-secondary btn-compact" type="submit">Reply</button>
+                  </div>
+                </form>
+              </div>`;
           })
           .join("");
       }
@@ -628,6 +662,31 @@
           setTab("feedback");
         } catch (err) {
           ui.feedbackStatus.textContent = err.message || "Could not send";
+        }
+      });
+
+      ui.feedbackList.addEventListener("submit", async (e) => {
+        const form = e.target.closest("form[data-reply-thread]");
+        if (!form) return;
+        e.preventDefault();
+        const threadId = form.getAttribute("data-reply-thread");
+        const textarea = form.querySelector("textarea");
+        const status = form.querySelector(".tm-fb-reply-status");
+        const btn = form.querySelector('button[type="submit"]');
+        if (!threadId || !textarea) return;
+        const body = textarea.value;
+        if (status) status.textContent = "Sending…";
+        if (btn) btn.disabled = true;
+        try {
+          await postAction("beta-reply-feedback", { threadId, body });
+          textarea.value = "";
+          if (status) status.textContent = "Sent";
+          await loadDashboard();
+          setTab("feedback");
+        } catch (err) {
+          if (status) status.textContent = err.message || "Could not reply";
+        } finally {
+          if (btn) btn.disabled = false;
         }
       });
 

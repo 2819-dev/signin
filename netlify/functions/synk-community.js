@@ -104,6 +104,9 @@ const {
   getAppUpdateReleaseNotes,
   ensureBetaTestingTables,
   getBetaTesterClock,
+  listBetaFeedbackThreads,
+  createBetaFeedbackThread,
+  replyBetaFeedbackThread,
   resolveBetaCurrentUpdate,
   clearAllBetaAgendaItems,
   notifyBetaTestersOfShift,
@@ -4130,13 +4133,11 @@ if (action === "create-alt") {
         WHERE synk_profile_id = ${profileId}
       `;
       const checkMap = new Map(checks.map((c) => [c.agenda_item_id, c.completed_at]));
-      const feedback = await sql`
-        SELECT id, body, created_at
-        FROM synk_beta_feedback
-        WHERE synk_profile_id = ${profileId}
-        ORDER BY created_at DESC
-        LIMIT 50
-      `;
+      const feedback = await listBetaFeedbackThreads(sql, {
+        profileId,
+        limit: 50,
+        viewerProfileId: profileId,
+      });
 
       const agenda = items.map((item) => ({
         id: item.id,
@@ -4165,11 +4166,7 @@ if (action === "create-alt") {
           canCompleteAgenda: !!currentVersion && clock.clockedIn && updateItems.length > 0,
         },
         agenda,
-        feedback: feedback.map((f) => ({
-          id: f.id,
-          body: f.body,
-          createdAt: f.created_at,
-        })),
+        feedback,
       });
     }
 
@@ -4345,15 +4342,59 @@ if (action === "create-alt") {
       if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
       const bodyText = String(body.body || body.message || "").trim().replace(/\s+/g, " ").slice(0, 2000);
       if (bodyText.length < 3) return json(400, { error: "Write a bit more feedback" });
-      const rows = await sql`
-        INSERT INTO synk_beta_feedback (synk_profile_id, body)
-        VALUES (${profileId}, ${bodyText})
-        RETURNING id, body, created_at
-      `;
-      return json(201, {
-        ok: true,
-        feedback: { id: rows[0].id, body: rows[0].body, createdAt: rows[0].created_at },
+      const thread = await createBetaFeedbackThread(sql, { profileId, bodyText });
+      return json(201, { ok: true, feedback: thread });
+    }
+
+    if (action === "beta-reply-feedback") {
+      const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
+      const threadId = String(body.threadId || body.id || "").trim();
+      const bodyText = String(body.body || body.message || "").trim().replace(/\s+/g, " ").slice(0, 2000);
+      if (!threadId) return json(400, { error: "Feedback thread required" });
+      if (bodyText.length < 1) return json(400, { error: "Write a reply" });
+      const isStaff = role === "owner" || role === "admin";
+      if (!isStaff) {
+        const usernames = await sql`
+          SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+          UNION
+          SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+        `;
+        let beta = false;
+        for (const row of usernames) {
+          const tags = await listUsernameTags(sql, row.public_username);
+          if (tags.some(isBetaTesterTag)) { beta = true; break; }
+        }
+        if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
+      }
+      try {
+        const thread = await replyBetaFeedbackThread(sql, {
+          threadId,
+          authorProfileId: profileId,
+          bodyText,
+          viewerProfileId: profileId,
+          isStaff,
+        });
+        return json(200, { ok: true, feedback: thread });
+      } catch (err) {
+        const status = Number(err && err.statusCode) || 500;
+        if (status === 404 || status === 403) {
+          return json(status, { error: err.message || "Could not reply" });
+        }
+        throw err;
+      }
+    }
+
+    if (action === "beta-admin-feedback") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can view beta feedback" });
+      }
+      const feedback = await listBetaFeedbackThreads(sql, {
+        profileId: null,
+        limit: 100,
+        viewerProfileId: auth.profile.id,
       });
+      return json(200, { ok: true, feedback });
     }
 
     if (action === "beta-admin-agenda") {

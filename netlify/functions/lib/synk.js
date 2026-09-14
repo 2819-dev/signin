@@ -4810,8 +4810,36 @@ async function ensureBetaTestingTables(sql) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE synk_beta_feedback ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`;
   await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_created_idx ON synk_beta_feedback (created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_profile_idx ON synk_beta_feedback (synk_profile_id, created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_updated_idx ON synk_beta_feedback (updated_at DESC)`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_feedback_messages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      thread_id UUID NOT NULL REFERENCES synk_beta_feedback(id) ON DELETE CASCADE,
+      author_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_messages_thread_idx ON synk_beta_feedback_messages (thread_id, created_at ASC)`;
+
+  // One-time backfill: legacy feedback rows become the first chat message.
+  try {
+    await sql`
+      INSERT INTO synk_beta_feedback_messages (thread_id, author_profile_id, body, created_at)
+      SELECT f.id, f.synk_profile_id, f.body, f.created_at
+      FROM synk_beta_feedback f
+      WHERE NOT EXISTS (
+        SELECT 1 FROM synk_beta_feedback_messages m WHERE m.thread_id = f.id
+      )
+        AND COALESCE(btrim(f.body), '') <> ''
+    `;
+  } catch (_) {
+    /* ignore backfill race during first migrate */
+  }
 
   await sql`
     CREATE TABLE IF NOT EXISTS synk_beta_tester_clock (
@@ -4852,6 +4880,245 @@ async function getBetaTesterClock(sql, profileId) {
     clockedIn: true,
     clockedInAt: row.clocked_in_at,
     clockedOutAt: null,
+  };
+}
+
+function mapBetaFeedbackMessage(row, { viewerProfileId, threadOwnerId }) {
+  const authorId = row.author_profile_id;
+  const isMine = String(authorId) === String(viewerProfileId);
+  const isStaff = String(authorId) !== String(threadOwnerId);
+  return {
+    id: row.id,
+    body: row.body,
+    createdAt: row.created_at,
+    authorProfileId: authorId,
+    authorUsername: row.author_username || null,
+    authorDisplayName: row.author_display_name || null,
+    isMine,
+    isStaff,
+  };
+}
+
+async function listBetaFeedbackMessagesForThreads(sql, threadIds) {
+  const ids = (threadIds || []).filter(Boolean);
+  if (!ids.length) return new Map();
+  const rows = await sql`
+    SELECT
+      m.id,
+      m.thread_id,
+      m.author_profile_id,
+      m.body,
+      m.created_at,
+      COALESCE(cp.public_username, '') AS author_username,
+      COALESCE(NULLIF(btrim(cp.display_name), ''), cp.public_username, '') AS author_display_name
+    FROM synk_beta_feedback_messages m
+    LEFT JOIN synk_community_profiles cp ON cp.synk_profile_id = m.author_profile_id
+    WHERE m.thread_id = ANY(${ids}::uuid[])
+    ORDER BY m.created_at ASC
+  `;
+  const map = new Map();
+  for (const row of rows) {
+    const key = String(row.thread_id);
+    const list = map.get(key) || [];
+    list.push(row);
+    map.set(key, list);
+  }
+  return map;
+}
+
+async function listBetaFeedbackThreads(sql, { profileId = null, limit = 50, viewerProfileId } = {}) {
+  await ensureBetaTestingTables(sql);
+  const take = Math.max(1, Math.min(200, Number(limit) || 50));
+  const threads = profileId
+    ? await sql`
+        SELECT
+          f.id,
+          f.synk_profile_id,
+          f.body,
+          f.created_at,
+          f.updated_at,
+          COALESCE(cp.public_username, '') AS author_username,
+          COALESCE(NULLIF(btrim(cp.display_name), ''), cp.public_username, '') AS author_display_name
+        FROM synk_beta_feedback f
+        LEFT JOIN synk_community_profiles cp ON cp.synk_profile_id = f.synk_profile_id
+        WHERE f.synk_profile_id = ${profileId}
+        ORDER BY COALESCE(f.updated_at, f.created_at) DESC, f.created_at DESC
+        LIMIT ${take}
+      `
+    : await sql`
+        SELECT
+          f.id,
+          f.synk_profile_id,
+          f.body,
+          f.created_at,
+          f.updated_at,
+          COALESCE(cp.public_username, '') AS author_username,
+          COALESCE(NULLIF(btrim(cp.display_name), ''), cp.public_username, '') AS author_display_name
+        FROM synk_beta_feedback f
+        LEFT JOIN synk_community_profiles cp ON cp.synk_profile_id = f.synk_profile_id
+        ORDER BY COALESCE(f.updated_at, f.created_at) DESC, f.created_at DESC
+        LIMIT ${take}
+      `;
+
+  const viewer = viewerProfileId || profileId;
+  const msgMap = await listBetaFeedbackMessagesForThreads(
+    sql,
+    threads.map((t) => t.id)
+  );
+
+  return threads.map((t) => {
+    const rawMessages = msgMap.get(String(t.id)) || [];
+    let messages = rawMessages.map((m) =>
+      mapBetaFeedbackMessage(m, {
+        viewerProfileId: viewer,
+        threadOwnerId: t.synk_profile_id,
+      })
+    );
+    if (!messages.length && String(t.body || "").trim()) {
+      messages = [
+        {
+          id: `${t.id}-legacy`,
+          body: t.body,
+          createdAt: t.created_at,
+          authorProfileId: t.synk_profile_id,
+          authorUsername: t.author_username || null,
+          authorDisplayName: t.author_display_name || null,
+          isMine: String(t.synk_profile_id) === String(viewer),
+          isStaff: false,
+        },
+      ];
+    }
+    const last = messages[messages.length - 1];
+    return {
+      id: t.id,
+      body: t.body,
+      createdAt: t.created_at,
+      updatedAt: t.updated_at || t.created_at,
+      authorProfileId: t.synk_profile_id,
+      authorUsername: t.author_username || null,
+      authorDisplayName: t.author_display_name || null,
+      preview: last ? last.body : t.body,
+      messageCount: messages.length,
+      messages,
+    };
+  });
+}
+
+async function createBetaFeedbackThread(sql, { profileId, bodyText }) {
+  await ensureBetaTestingTables(sql);
+  const rows = await sql`
+    INSERT INTO synk_beta_feedback (synk_profile_id, body, updated_at)
+    VALUES (${profileId}, ${bodyText}, NOW())
+    RETURNING id, body, created_at, updated_at, synk_profile_id
+  `;
+  const thread = rows[0];
+  await sql`
+    INSERT INTO synk_beta_feedback_messages (thread_id, author_profile_id, body, created_at)
+    VALUES (${thread.id}, ${profileId}, ${bodyText}, ${thread.created_at})
+  `;
+  const listed = await listBetaFeedbackThreads(sql, {
+    profileId,
+    limit: 50,
+    viewerProfileId: profileId,
+  });
+  const matched = listed.find((t) => String(t.id) === String(thread.id));
+  if (matched) return matched;
+  return {
+    id: thread.id,
+    body: thread.body,
+    createdAt: thread.created_at,
+    updatedAt: thread.updated_at || thread.created_at,
+    authorProfileId: thread.synk_profile_id,
+    authorUsername: null,
+    authorDisplayName: null,
+    preview: thread.body,
+    messageCount: 1,
+    messages: [
+      {
+        id: `${thread.id}-first`,
+        body: thread.body,
+        createdAt: thread.created_at,
+        authorProfileId: profileId,
+        authorUsername: null,
+        authorDisplayName: null,
+        isMine: true,
+        isStaff: false,
+      },
+    ],
+  };
+}
+
+async function replyBetaFeedbackThread(sql, { threadId, authorProfileId, bodyText, viewerProfileId, isStaff }) {
+  await ensureBetaTestingTables(sql);
+  const threads = await sql`
+    SELECT id, synk_profile_id, body, created_at, updated_at
+    FROM synk_beta_feedback
+    WHERE id = ${threadId}
+    LIMIT 1
+  `;
+  const thread = threads[0];
+  if (!thread) {
+    const err = new Error("Feedback thread not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  const ownsThread = String(thread.synk_profile_id) === String(authorProfileId);
+  if (!ownsThread && !isStaff) {
+    const err = new Error("You can only reply to your own feedback");
+    err.statusCode = 403;
+    throw err;
+  }
+  await sql`
+    INSERT INTO synk_beta_feedback_messages (thread_id, author_profile_id, body)
+    VALUES (${thread.id}, ${authorProfileId}, ${bodyText})
+  `;
+  await sql`
+    UPDATE synk_beta_feedback
+    SET updated_at = NOW()
+    WHERE id = ${thread.id}
+  `;
+  const listed = await listBetaFeedbackThreads(sql, {
+    profileId: isStaff && !ownsThread ? null : thread.synk_profile_id,
+    limit: isStaff && !ownsThread ? 200 : 50,
+    viewerProfileId: viewerProfileId || authorProfileId,
+  });
+  const matched = listed.find((t) => String(t.id) === String(thread.id));
+  if (matched) return matched;
+  // Staff reply on someone else's thread — re-fetch just this thread's messages
+  const one = await sql`
+    SELECT
+      f.id,
+      f.synk_profile_id,
+      f.body,
+      f.created_at,
+      f.updated_at,
+      COALESCE(cp.public_username, '') AS author_username,
+      COALESCE(NULLIF(btrim(cp.display_name), ''), cp.public_username, '') AS author_display_name
+    FROM synk_beta_feedback f
+    LEFT JOIN synk_community_profiles cp ON cp.synk_profile_id = f.synk_profile_id
+    WHERE f.id = ${thread.id}
+    LIMIT 1
+  `;
+  const msgMap = await listBetaFeedbackMessagesForThreads(sql, [thread.id]);
+  const row = one[0];
+  const messages = (msgMap.get(String(thread.id)) || []).map((m) =>
+    mapBetaFeedbackMessage(m, {
+      viewerProfileId: viewerProfileId || authorProfileId,
+      threadOwnerId: row.synk_profile_id,
+    })
+  );
+  const last = messages[messages.length - 1];
+  return {
+    id: row.id,
+    body: row.body,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
+    authorProfileId: row.synk_profile_id,
+    authorUsername: row.author_username || null,
+    authorDisplayName: row.author_display_name || null,
+    preview: last ? last.body : row.body,
+    messageCount: messages.length,
+    messages,
   };
 }
 
@@ -5526,6 +5793,9 @@ module.exports = {
   listBetaTesterProfileIds,
   notifyBetaTestersOfShift,
   getBetaTesterClock,
+  listBetaFeedbackThreads,
+  createBetaFeedbackThread,
+  replyBetaFeedbackThread,
   listBetaUpdateVersions,
   resolveBetaCurrentUpdate,
   buildReleaseNotesPayload,

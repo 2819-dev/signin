@@ -13,14 +13,14 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v50" />
+    <link rel="stylesheet" href="/join.css?v=community-v51" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v50" defer></script>
+    <script src="/force-refresh.js?v=community-v51" defer></script>
   </head>
   <body class="community-body reddit-body">
     <div id="synk-boot-loader" class="synk-loader-overlay" hidden aria-busy="false" aria-live="polite" aria-label="Loading Synk">
@@ -990,6 +990,40 @@
                       </form>
                     </div>
                   </details>
+
+                  <details class="card mod-panel" id="beta-feedback-card" data-mod-panel="beta-feedback">
+                    <summary class="mod-panel-summary">
+                      <span class="mod-panel-title">Beta feedback</span>
+                      <span class="mod-panel-hint">Chat with testers</span>
+                      <span class="mod-panel-chevron" aria-hidden="true"></span>
+                    </summary>
+                    <div class="mod-panel-body">
+                      <p class="muted">Conversations from the Testing hub. Open a thread to reply like chat.</p>
+                      <div class="beta-fb-admin" id="beta-feedback-admin">
+                        <div class="beta-fb-admin-list" id="beta-feedback-thread-list" aria-label="Feedback threads"></div>
+                        <div class="beta-fb-admin-chat" id="beta-feedback-chat" hidden>
+                          <div class="beta-fb-admin-chat-head">
+                            <div>
+                              <strong id="beta-feedback-chat-title">Conversation</strong>
+                              <p class="muted" id="beta-feedback-chat-meta" style="margin:2px 0 0;font-size:0.8rem;"></p>
+                            </div>
+                            <button class="btn btn-secondary btn-compact" type="button" id="beta-feedback-chat-close">Close</button>
+                          </div>
+                          <div class="tm-fb-chat" id="beta-feedback-chat-messages"></div>
+                          <form id="beta-feedback-reply-form" class="tm-fb-reply form">
+                            <div class="field">
+                              <label for="beta-feedback-reply-body">Reply</label>
+                              <textarea id="beta-feedback-reply-body" rows="3" maxlength="2000" required placeholder="Reply to this tester…"></textarea>
+                            </div>
+                            <div class="tm-fb-reply-row">
+                              <p class="muted" id="beta-feedback-reply-status" aria-live="polite"></p>
+                              <button class="btn btn-primary btn-compact" type="submit">Send reply</button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
                 </div>
               </div>
             </div>
@@ -1111,8 +1145,8 @@
       </div>
     </div>
 
-    <script src="/push-client.js?v=community-v50"></script>
+    <script src="/push-client.js?v=community-v51"></script>
     <script src="/image-crop.js?v=crop-v3"></script>
-    <script src="/community.js?v=community-v50"></script>
+    <script src="/community.js?v=community-v51"></script>
   </body>
 </html>
