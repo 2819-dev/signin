@@ -87,6 +87,7 @@ const {
   ensureBetaTestingTables,
   getBetaTesterClock,
   resolveBetaCurrentUpdate,
+  clearAllBetaAgendaItems,
 } = require("./lib/synk");
 const {
   getVapidConfig,
@@ -1444,6 +1445,7 @@ exports.handler = async (event) => {
         if (!row) return json(404, { error: "Release notes not found" });
         const payload = buildReleaseNotesPayload(row.notes || row.body, {
           isStaff: isCommunityStaffRole(role),
+          isBetaTester: !!(mePayload(auth, role, alts, myTags, myPinnedTag) || {}).betaTester,
           version: row.version,
           body: row.body,
           createdAt: row.createdAt,
@@ -1455,8 +1457,10 @@ exports.handler = async (event) => {
         if (!ver) return json(400, { error: "Version is required" });
         const row = await getAppUpdateReleaseNotes(sql, ver);
         if (!row) return json(404, { error: "Release notes not found" });
+        const me = mePayload(auth, role, alts, myTags, myPinnedTag);
         const payload = buildReleaseNotesPayload(row.notes || row.body, {
           isStaff: isCommunityStaffRole(role),
+          isBetaTester: !!me.betaTester,
           version: row.version,
           body: row.body,
           createdAt: row.createdAt,
@@ -3955,6 +3959,14 @@ if (action === "create-alt") {
       if (!id) return json(400, { error: "Agenda item required" });
       await sql`DELETE FROM synk_beta_agenda_items WHERE id = ${id}`;
       return json(200, { ok: true });
+    }
+
+    if (action === "beta-clear-agenda") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can manage the beta agenda" });
+      }
+      const result = await clearAllBetaAgendaItems(sql);
+      return json(200, { ok: true, cleared: result.cleared });
     }
 
     if (action === "hub-feature-flags") {

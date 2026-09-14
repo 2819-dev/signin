@@ -14,7 +14,8 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=pro-copy1" />
+    <script src="/theme.js?v=theme1"></script>
+    <link rel="stylesheet" href="/join.css?v=testing-shifts2" />
     <script src="/force-refresh.js" defer></script>
     <script src="/push-client.js?v=pro-copy1" defer></script>
   
@@ -185,7 +186,7 @@
           </a>
           <a class="hub-tile" href="/testing" id="hub-testing-tile" hidden>
             <strong>Testing</strong>
-            <span>Clock in, complete each update’s agenda items, then move to the next.</span>
+            <span>Clock in for a testing shift, work the agenda, and send notes.</span>
           </a>
         </div>
       </section>
@@ -590,6 +591,31 @@
         return out.join("");
       }
 
+      function renderReleaseNotesEmbeds(embeds, blocks) {
+        if (Array.isArray(embeds) && embeds.length) {
+          return `<div class="release-notes-embeds">${embeds
+            .map((embed) => {
+              const audience = String(embed.audience || "everyone");
+              const badge =
+                audience === "beta"
+                  ? `<span class="release-notes-embed-badge">Beta testers</span>`
+                  : audience === "staff"
+                    ? `<span class="release-notes-embed-badge">Staff</span>`
+                    : "";
+              return `<article class="release-notes-embed" data-audience="${escapeHubHtml(audience)}">
+                <div class="release-notes-embed-accent" aria-hidden="true"></div>
+                <div class="release-notes-embed-body">
+                  <h3 class="release-notes-embed-title">${escapeHubHtml(embed.title || "What's new")}</h3>
+                  ${badge}
+                  <div class="release-notes-md">${markdownToSafeHtml(embed.markdown || "")}</div>
+                </div>
+              </article>`;
+            })
+            .join("")}</div>`;
+        }
+        return renderReleaseNotesBlocks(blocks || []);
+      }
+
       function renderReleaseNotesBlocks(blocks) {
         if (!Array.isArray(blocks) || !blocks.length) {
           return `<p class="muted">No release notes for this update yet.</p>`;
@@ -644,9 +670,13 @@
           if (!res.ok) throw new Error(data.error || "Unable to load release notes");
           if (sub) {
             const short = String(data.version || ver).slice(0, 10);
-            sub.textContent = data.isStaff ? `Update ${short} · full staff notes` : `Update ${short}`;
+            sub.textContent = data.isStaff
+              ? `Update ${short} · full staff notes`
+              : data.isBetaTester
+                ? `Update ${short} · includes beta notes`
+                : `Update ${short}`;
           }
-          body.innerHTML = renderReleaseNotesBlocks(data.blocks || []);
+          body.innerHTML = renderReleaseNotesEmbeds(data.embeds || [], data.blocks || []);
         } catch (err) {
           body.innerHTML = `<p class="muted">${escapeHubHtml(err.message || "Unable to load release notes")}</p>`;
         }

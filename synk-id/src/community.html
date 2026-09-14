@@ -12,7 +12,8 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
-    <link rel="stylesheet" href="/join.css?v=real-push1" />
+    <script src="/theme.js?v=theme1"></script>
+    <link rel="stylesheet" href="/join.css?v=testing-shifts2" />
     <script src="/force-refresh.js?v=community-search-switch3" defer></script>
   </head>
   <body class="community-body reddit-body">
@@ -499,6 +500,23 @@
                 </div>
 
                 <div class="reddit-settings-section">
+                  <h2 class="reddit-settings-heading">Appearance</h2>
+
+                  <div class="reddit-settings-row">
+                    <div class="reddit-settings-copy">
+                      <strong>Theme</strong>
+                      <p class="muted">Choose automatic (system), light, or dark. Applies across Synk ID.</p>
+                    </div>
+                    <div class="reddit-settings-form theme-choice-row" id="settings-theme-row">
+                      <button class="btn btn-secondary btn-compact" type="button" data-theme-pref="auto">Automatic</button>
+                      <button class="btn btn-secondary btn-compact" type="button" data-theme-pref="light">Light</button>
+                      <button class="btn btn-secondary btn-compact" type="button" data-theme-pref="dark">Dark</button>
+                    </div>
+                    <p id="settings-theme-status" class="muted reddit-settings-status"></p>
+                  </div>
+                </div>
+
+                <div class="reddit-settings-section">
                   <h2 class="reddit-settings-heading">Messages</h2>
 
                   <div class="reddit-settings-row">
@@ -770,6 +788,10 @@
                     </summary>
                     <div class="mod-panel-body">
                       <p class="muted">Checklist shown to Beta tester members on the Testing hub tile. App updates add one item per change.</p>
+                      <p class="muted">Checklist shown to Beta tester members on the Testing hub. App-update auto-fill is paused while this board is redesigned.</p>
+                      <div class="btn-row" style="margin-bottom:10px;">
+                        <button class="btn btn-secondary btn-compact" type="button" id="beta-agenda-clear-all-btn">Clear all agenda items</button>
+                      </div>
                       <div id="beta-agenda-admin-list" class="community-staff-list"></div>
                       <form id="beta-agenda-form" class="form" style="margin-top:12px">
                         <input type="hidden" id="beta-agenda-id" value="" />
@@ -893,6 +915,6 @@
     </div>
 
     <script src="/push-client.js?v=pro-copy1"></script>
-    <script src="/community.js?v=testing-clock1"></script>
+    <script src="/community.js?v=testing-shifts2"></script>
   </body>
 </html>

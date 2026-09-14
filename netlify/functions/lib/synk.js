@@ -4041,21 +4041,50 @@ function isSensitiveReleaseNoteBlock(text) {
   );
 }
 
+function isBetaOnlyReleaseNoteBlock(text) {
+  const value = String(text || "");
+  if (/<!--\s*beta(?:-only)?\s*-->/i.test(value)) return true;
+  if (/^\s*#{1,3}\s*(for\s+)?beta(\s+testers?)?\b/i.test(value)) return true;
+  if (/^\s*(?:[-*•+]|\d+[.)])\s*\[beta\]\b/i.test(value)) return true;
+  if (/^\s*\[beta\]\b/i.test(value)) return true;
+  if (/^\s*(?:[-*•+]|\d+[.)])\s*beta(?:\s+testers?)?\s*[:—-]/i.test(value)) return true;
+  return /\b(beta\s+tester(?:s)?\s+only|testers?\s+only|clock[\s-]?in(?:\s+system)?|complete\s+agenda|testing\s+agenda|beta\s+testing\s+portal)\b/i.test(
+    value
+  );
+}
+
+function stripReleaseNoteAudienceMarkers(text) {
+  return String(text || "")
+    .replace(/<!--\s*beta(?:-only)?\s*-->/gi, "")
+    .replace(/^\s*\[beta\]\s*/i, "")
+    .replace(/^(\s*(?:[-*•+]|\d+[.)])\s*)\[beta\]\s*/i, "$1")
+    .trim();
+}
+
 function splitReleaseNoteBlocks(text) {
   const lines = String(text || "")
     .replace(/\r\n/g, "\n")
     .split("\n");
   const blocks = [];
   let para = [];
+  let betaSection = false;
   const flushPara = () => {
     const value = para.join("\n").trim();
-    if (value) blocks.push(value);
+    if (value) blocks.push(betaSection ? `${value}\n<!--beta-only-->` : value);
     para = [];
   };
   for (const line of lines) {
+    const heading = String(line || "").match(/^\s*(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushPara();
+      betaSection = /^(for\s+)?beta(\s+testers?)?\b/i.test(String(heading[2] || "").trim());
+      blocks.push(betaSection ? `${String(line).trim()}\n<!--beta-only-->` : String(line).trim());
+      continue;
+    }
     if (/^\s*([-*•+]|\d+[.)])\s+/.test(line)) {
       flushPara();
-      blocks.push(String(line).trim());
+      const item = String(line).trim();
+      blocks.push(betaSection ? `${item}\n<!--beta-only-->` : item);
       continue;
     }
     if (!String(line).trim()) {
@@ -4070,31 +4099,93 @@ function splitReleaseNoteBlocks(text) {
 
 function buildReleaseNotesPayload(
   rawNotes,
-  { isStaff = false, version = "", body = "", createdAt = null } = {}
+  { isStaff = false, isBetaTester = false, version = "", body = "", createdAt = null } = {}
 ) {
   const notes = String(rawNotes || "").trim() || String(body || "").trim();
-  const blocks = splitReleaseNoteBlocks(notes).map((text) => {
-    const sensitive = isSensitiveReleaseNoteBlock(text);
-    if (sensitive && !isStaff) {
-      return {
-        type: "staff-only",
-        message:
-          "This part may contain sensitive information and is only available to staff.",
+  const embeds = [];
+  let current = {
+    title: "What's new",
+    audience: "everyone",
+    lines: [],
+  };
+  const pushEmbed = () => {
+    if (!current.lines.length && current.title === "What's new" && embeds.length) return;
+    if (!current.lines.length && embeds.length) return;
+    embeds.push({
+      title: current.title,
+      audience: current.audience,
+      markdown: current.lines.join("\n").trim(),
+    });
+  };
+
+  for (const block of splitReleaseNoteBlocks(notes)) {
+    const sensitive = isSensitiveReleaseNoteBlock(block);
+    const betaOnly = isBetaOnlyReleaseNoteBlock(block);
+    const cleaned = stripReleaseNoteAudienceMarkers(block);
+    if (!cleaned) continue;
+
+    if (sensitive && !isStaff) continue;
+    if (betaOnly && !isBetaTester && !isStaff) continue;
+
+    const heading = cleaned.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      pushEmbed();
+      current = {
+        title: String(heading[2] || "").trim() || "Update",
+        audience: sensitive ? "staff" : betaOnly ? "beta" : "everyone",
+        lines: [],
       };
+      continue;
     }
-    return {
-      type: sensitive ? "staff" : "text",
-      text,
-      staffOnly: sensitive,
-    };
+
+    if (sensitive) current.audience = "staff";
+    else if (betaOnly && current.audience === "everyone") current.audience = "beta";
+    current.lines.push(cleaned);
+  }
+  pushEmbed();
+
+  const visibleEmbeds = embeds.filter((embed) => {
+    if (!embed.markdown && embeds.length > 1) return false;
+    if (embed.audience === "staff" && !isStaff) return false;
+    if (embed.audience === "beta" && !isBetaTester && !isStaff) return false;
+    return true;
   });
+
+  const blocks = splitReleaseNoteBlocks(notes)
+    .map((text) => {
+      const sensitive = isSensitiveReleaseNoteBlock(text);
+      const betaOnly = isBetaOnlyReleaseNoteBlock(text);
+      if (sensitive && !isStaff) {
+        return {
+          type: "staff-only",
+          message:
+            "This part may contain sensitive information and is only available to staff.",
+        };
+      }
+      if (betaOnly && !isBetaTester && !isStaff) {
+        return null;
+      }
+      return {
+        type: sensitive ? "staff" : betaOnly ? "beta" : "text",
+        text: stripReleaseNoteAudienceMarkers(text),
+        staffOnly: sensitive,
+        betaOnly,
+      };
+    })
+    .filter(Boolean);
+
   return {
     version: String(version || ""),
     createdAt: createdAt || null,
     isStaff: !!isStaff,
+    isBetaTester: !!isBetaTester,
     hasStaffOnlyContent: splitReleaseNoteBlocks(notes).some((t) =>
       isSensitiveReleaseNoteBlock(t)
     ),
+    hasBetaOnlyContent: splitReleaseNoteBlocks(notes).some((t) =>
+      isBetaOnlyReleaseNoteBlock(t)
+    ),
+    embeds: visibleEmbeds,
     blocks,
     // Full raw notes only for staff.
     notes: isStaff ? notes : undefined,
@@ -4152,13 +4243,34 @@ async function getAppUpdateReleaseNotes(sql, version) {
 function memberFacingReleaseNoteLines(text) {
   return splitReleaseNoteBlocks(text)
     .filter((block) => !isSensitiveReleaseNoteBlock(block))
+    .filter((block) => !isBetaOnlyReleaseNoteBlock(block))
     .map((block) =>
-      String(block || "")
+      stripReleaseNoteAudienceMarkers(block)
         .replace(/^\s*([-*•+]|\d+[.)])\s+/, "")
         .replace(/^#+\s*/, "")
         .trim()
     )
     .filter(Boolean);
+}
+
+function betaFacingReleaseNoteLines(text) {
+  return splitReleaseNoteBlocks(text)
+    .filter((block) => !isSensitiveReleaseNoteBlock(block))
+    .filter((block) => isBetaOnlyReleaseNoteBlock(block))
+    .map((block) =>
+      stripReleaseNoteAudienceMarkers(block)
+        .replace(/^\s*([-*•+]|\d+[.)])\s+/, "")
+        .replace(/^#+\s*/, "")
+        .trim()
+    )
+    .filter((line) => line && !/^(for\s+)?beta(\s+testers?)?$/i.test(line));
+}
+
+async function clearAllBetaAgendaItems(sql) {
+  await ensureBetaTestingTables(sql);
+  const deleted = await sql`DELETE FROM synk_beta_agenda_items RETURNING id`;
+  await sql`DELETE FROM synk_beta_update_completions`;
+  return { cleared: deleted.length };
 }
 
 async function ensureBetaTestingTables(sql) {
@@ -4293,57 +4405,9 @@ async function ensureBetaAgendaForAppUpdate(sql, { version, body, notes } = {}) 
 
   await ensureBetaTestingTables(sql);
 
-  const marker = `<!--synk-update:${ver}-->`;
-  const existing = await sql`
-    SELECT id
-    FROM synk_beta_agenda_items
-    WHERE update_version = ${ver}
-       OR detail LIKE ${"%" + marker + "%"}
-    LIMIT 1
-  `;
-  if (existing[0]) return { created: 0, already: true, version: ver };
-
-  const short = ver.length > 10 ? ver.slice(0, 7) : ver;
-  const publicLines = memberFacingReleaseNoteLines(notes || body || "").slice(0, 20);
-  const lines = publicLines.length
-    ? publicLines
-    : [
-        String(
-          body ||
-            "Synk was updated. Please try the latest build and report anything that feels broken."
-        )
-          .trim()
-          .slice(0, 160) || "Try the latest Synk update and report anything that feels broken.",
-      ];
-
-  const sortRows = await sql`
-    SELECT COALESCE(MIN(sort_order), 0)::int AS min_sort
-    FROM synk_beta_agenda_items
-  `;
-  let sortOrder = (Number(sortRows[0] && sortRows[0].min_sort) || 0) - lines.length;
-  const createdIds = [];
-
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = String(lines[i] || "").trim();
-    if (!line) continue;
-    const title = line.slice(0, 160);
-    const detail = `Update ${short}\n\n${marker}`.slice(0, 1000);
-    const rows = await sql`
-      INSERT INTO synk_beta_agenda_items (title, detail, sort_order, active, created_by, update_version)
-      VALUES (${title}, ${detail}, ${sortOrder}, TRUE, NULL, ${ver})
-      RETURNING id
-    `;
-    if (rows[0]) createdIds.push(rows[0].id);
-    sortOrder += 1;
-  }
-
-  return {
-    created: createdIds.length,
-    already: false,
-    version: ver,
-    agendaItemIds: createdIds,
-    agendaItemId: createdIds[0] || null,
-  };
+  // Agenda auto-fill is paused while the Testing portal is redesigned.
+  // Staff can still add items manually from Community tools.
+  return { created: 0, paused: true, version: ver };
 }
 
 async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
@@ -4491,8 +4555,11 @@ module.exports = {
   buildReleaseNotesPayload,
   getAppUpdateReleaseNotes,
   isSensitiveReleaseNoteBlock,
+  isBetaOnlyReleaseNoteBlock,
   splitReleaseNoteBlocks,
   memberFacingReleaseNoteLines,
+  betaFacingReleaseNoteLines,
+  clearAllBetaAgendaItems,
   normalizePublicUsername,
   normalizeDisplayName,
   normalizeBio,

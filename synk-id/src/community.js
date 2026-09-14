@@ -3533,6 +3533,33 @@ function applyViewState(data) {
   }
 
   const dmForm = document.getElementById("settings-dm-form");
+
+  function syncThemePreferenceButtons() {
+    const row = document.getElementById("settings-theme-row");
+    const status = document.getElementById("settings-theme-status");
+    if (!row || !window.SynkTheme) return;
+    const pref = window.SynkTheme.getPreference();
+    row.querySelectorAll("[data-theme-pref]").forEach((btn) => {
+      btn.classList.toggle("is-selected", btn.getAttribute("data-theme-pref") === pref);
+    });
+    if (status) {
+      const label = pref === "auto" ? "Automatic" : pref === "dark" ? "Dark" : "Light";
+      status.textContent = `Using ${label}${pref === "auto" ? ` (${window.SynkTheme.getTheme()})` : ""}`;
+    }
+  }
+
+  const themeRow = document.getElementById("settings-theme-row");
+  if (themeRow) {
+    themeRow.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-theme-pref]");
+      if (!btn || !window.SynkTheme) return;
+      window.SynkTheme.setPreference(btn.getAttribute("data-theme-pref"));
+      syncThemePreferenceButtons();
+    });
+    syncThemePreferenceButtons();
+    window.addEventListener("synk-theme-change", syncThemePreferenceButtons);
+  }
+
   if (dmForm) {
     dmForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -4636,6 +4663,31 @@ function applyViewState(data) {
     return out.join("");
   }
 
+  function renderReleaseNotesEmbeds(embeds, blocks) {
+    if (Array.isArray(embeds) && embeds.length) {
+      return `<div class="release-notes-embeds">${embeds
+        .map((embed) => {
+          const audience = String(embed.audience || "everyone");
+          const badge =
+            audience === "beta"
+              ? `<span class="release-notes-embed-badge">Beta testers</span>`
+              : audience === "staff"
+                ? `<span class="release-notes-embed-badge">Staff</span>`
+                : "";
+          return `<article class="release-notes-embed" data-audience="${escapeHtml(audience)}">
+            <div class="release-notes-embed-accent" aria-hidden="true"></div>
+            <div class="release-notes-embed-body">
+              <h3 class="release-notes-embed-title">${escapeHtml(embed.title || "What's new")}</h3>
+              ${badge}
+              <div class="release-notes-md">${markdownToSafeHtml(embed.markdown || "")}</div>
+            </div>
+          </article>`;
+        })
+        .join("")}</div>`;
+    }
+    return renderReleaseNotesBlocks(blocks || []);
+  }
+
   function renderReleaseNotesBlocks(blocks) {
     if (!Array.isArray(blocks) || !blocks.length) {
       return `<p class="muted">No release notes for this update yet.</p>`;
@@ -4692,9 +4744,11 @@ function applyViewState(data) {
         const short = String(data.version || ver).slice(0, 10);
         sub.textContent = data.isStaff
           ? `Update ${short} · full staff notes`
-          : `Update ${short}`;
+          : data.isBetaTester
+            ? `Update ${short} · includes beta notes`
+            : `Update ${short}`;
       }
-      body.innerHTML = renderReleaseNotesBlocks(data.blocks || []);
+      body.innerHTML = renderReleaseNotesEmbeds(data.embeds || [], data.blocks || []);
     } catch (err) {
       body.innerHTML = `<p class="muted">${escapeHtml(err.message || "Unable to load release notes")}</p>`;
     }
@@ -5462,6 +5516,27 @@ document.addEventListener("click", async (e) => {
       document.getElementById("beta-agenda-active").checked = true;
       const status = document.getElementById("beta-agenda-status");
       if (status) status.textContent = "";
+    });
+  }
+  const agendaClearAll = document.getElementById("beta-agenda-clear-all-btn");
+  if (agendaClearAll) {
+    agendaClearAll.addEventListener("click", async () => {
+      if (!confirm("Clear every agenda item for all testers?")) return;
+      const status = document.getElementById("beta-agenda-status");
+      if (status) status.textContent = "Clearing…";
+      try {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({ action: "beta-clear-agenda" }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not clear agenda");
+        if (status) status.textContent = `Cleared ${Number(data.cleared) || 0} item(s)`;
+        await loadBetaAgendaAdmin();
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not clear agenda";
+      }
     });
   }
   const agendaList = document.getElementById("beta-agenda-admin-list");
