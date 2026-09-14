@@ -13,8 +13,9 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=hub-pro3" />
+    <link rel="stylesheet" href="/join.css?v=push-badge1" />
     <script src="/force-refresh.js" defer></script>
+    <script src="/push-client.js?v=push-badge1" defer></script>
   </head>
   <body class="testing-page">
     <header class="site-nav site-nav-light">
@@ -306,6 +307,16 @@
             agenda: data.agenda || [],
           };
           statusEl.textContent = "Early access workspace";
+          try {
+            if (window.SynkPush && session && session.hubSession && session.hubSession.token) {
+              const headers = {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + session.hubSession.token,
+              };
+              window.SynkPush.bootstrapPush(headers, { offerBanner: true }).catch(() => {});
+              if (window.SynkPush.watchInstallPrompt) window.SynkPush.watchInstallPrompt(() => headers);
+            }
+          } catch (_) {}
           renderClock(state.clock);
           renderProgress(state.progress);
           renderAgenda(state.agenda, !!(state.clock && state.clock.clockedIn));

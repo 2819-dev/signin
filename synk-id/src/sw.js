@@ -22,7 +22,7 @@ function buildOptions(data) {
     vibrate: isDm ? [70, 40, 70] : [120, 60, 120],
     timestamp: Date.now(),
     data: {
-      url: data.url || "/community/inbox",
+      url: data.url || "/hub",
       type,
     },
     actions: [
@@ -36,7 +36,7 @@ self.addEventListener("push", (event) => {
   let data = {
     title: "Synk",
     body: "You have a new notification",
-    url: "/community/inbox",
+    url: "/hub",
     tag: "synk-notification",
     type: "notification",
   };
@@ -48,7 +48,16 @@ self.addEventListener("push", (event) => {
   } catch (_) {}
 
   const title = data.title || "Synk";
-  event.waitUntil(self.registration.showNotification(title, buildOptions(data)));
+  const badgeCount = Number(data.badgeCount || data.badge || 1);
+  event.waitUntil((async () => {
+    await self.registration.showNotification(title, buildOptions(data));
+    try {
+      if (self.navigator && typeof self.navigator.setAppBadge === "function") {
+        const n = Number.isFinite(badgeCount) && badgeCount > 0 ? Math.min(99, Math.round(badgeCount)) : 1;
+        await self.navigator.setAppBadge(n);
+      }
+    } catch (_) {}
+  })());
 });
 
 self.addEventListener("notificationclick", (event) => {
@@ -57,10 +66,15 @@ self.addEventListener("notificationclick", (event) => {
   if (action === "dismiss") return;
 
   const targetUrl =
-    (event.notification.data && event.notification.data.url) || "/community/inbox";
+    (event.notification.data && event.notification.data.url) || "/hub";
 
   event.waitUntil(
     (async () => {
+      try {
+        if (self.navigator && typeof self.navigator.clearAppBadge === "function") {
+          await self.navigator.clearAppBadge();
+        }
+      } catch (_) {}
       const allClients = await self.clients.matchAll({
         type: "window",
         includeUncontrolled: true,

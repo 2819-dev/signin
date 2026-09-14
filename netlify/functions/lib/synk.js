@@ -4397,6 +4397,123 @@ async function resolveBetaCurrentUpdate(sql, profileId) {
   };
 }
 
+async function listBetaTesterProfileIds(sql) {
+  await ensureSynkCoreTables(sql);
+  const rows = await sql`
+    SELECT DISTINCT profile_id
+    FROM (
+      SELECT c.synk_profile_id AS profile_id
+      FROM synk_community_username_tags ut
+      JOIN synk_community_tags t ON t.id = ut.tag_id
+      JOIN synk_community_profiles c ON lower(c.public_username) = lower(ut.public_username)
+      WHERE lower(coalesce(t.slug, '')) IN ('beta-tester', 'beta_tester', 'betatester')
+         OR lower(coalesce(t.slug, '')) LIKE '%beta-tester%'
+         OR lower(coalesce(t.name, '')) LIKE '%beta tester%'
+      UNION
+      SELECT pt.synk_profile_id AS profile_id
+      FROM synk_community_profile_tags pt
+      JOIN synk_community_tags t ON t.id = pt.tag_id
+      WHERE lower(coalesce(t.slug, '')) IN ('beta-tester', 'beta_tester', 'betatester')
+         OR lower(coalesce(t.slug, '')) LIKE '%beta-tester%'
+         OR lower(coalesce(t.name, '')) LIKE '%beta tester%'
+      UNION
+      SELECT a.owner_synk_profile_id AS profile_id
+      FROM synk_community_username_tags ut
+      JOIN synk_community_tags t ON t.id = ut.tag_id
+      JOIN synk_community_alt_accounts a ON lower(a.public_username) = lower(ut.public_username)
+      WHERE a.owner_synk_profile_id IS NOT NULL
+        AND (
+          lower(coalesce(t.slug, '')) IN ('beta-tester', 'beta_tester', 'betatester')
+          OR lower(coalesce(t.slug, '')) LIKE '%beta-tester%'
+          OR lower(coalesce(t.name, '')) LIKE '%beta tester%'
+        )
+    ) beta_profiles
+    WHERE profile_id IS NOT NULL
+  `;
+  return rows.map((row) => String(row.profile_id)).filter(Boolean);
+}
+
+async function notifyBetaTestersOfShift(
+  sql,
+  { version = "", title = "", body = "", createInbox = true } = {}
+) {
+  await ensureSynkCoreTables(sql);
+  const profileIds = await listBetaTesterProfileIds(sql);
+  if (!profileIds.length) {
+    return { ok: true, notified: 0, pushSent: 0, skipped: true, reason: "no-beta-testers" };
+  }
+
+  const ver = String(version || "").trim().slice(0, 120);
+  const short = ver ? (ver.length > 10 ? ver.slice(0, 7) : ver) : "";
+  const notifTitle = String(title || "Early access shift").trim().slice(0, 120);
+  const notifBody = String(
+    body ||
+      (short
+        ? `A new testing shift is ready for update ${short}. Open Testing to start your session.`
+        : "A new testing shift is ready. Open Testing to start your session.")
+  )
+    .trim()
+    .slice(0, 500);
+  const storedBody = ver ? `${notifBody}\n\n<!--synk-version:${ver}-->` : notifBody;
+
+  let notified = 0;
+  if (createInbox) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS synk_community_notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        actor_username TEXT,
+        post_id UUID,
+        comment_id UUID,
+        body TEXT NOT NULL DEFAULT '',
+        read_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+    const inserted = await sql`
+      INSERT INTO synk_community_notifications (
+        synk_profile_id, kind, actor_username, body
+      )
+      SELECT
+        x.profile_id,
+        'testing_shift',
+        'synk',
+        ${storedBody}
+      FROM unnest(${profileIds}::uuid[]) AS x(profile_id)
+      RETURNING id
+    `;
+    notified = inserted.length;
+  }
+
+  let push = { sent: 0, removed: 0 };
+  try {
+    const { notifySynkProfiles, notificationPushPayload } = require("./synk-push");
+    push = await notifySynkProfiles(
+      sql,
+      profileIds,
+      notificationPushPayload({
+        kind: "testing_shift",
+        actorUsername: "synk",
+        body: notifBody,
+        url: "/testing",
+      })
+    );
+  } catch (err) {
+    console.error("notifyBetaTestersOfShift push failed:", err);
+  }
+
+  return {
+    ok: true,
+    notified,
+    pushSent: Number(push && push.sent) || 0,
+    pushRemoved: Number(push && push.removed) || 0,
+    betaTesters: profileIds.length,
+    version: ver || null,
+    title: notifTitle,
+  };
+}
+
 async function ensureBetaAgendaForAppUpdate(sql, { version, body, notes } = {}) {
   const ver = String(version || "")
     .trim()
@@ -4405,9 +4522,62 @@ async function ensureBetaAgendaForAppUpdate(sql, { version, body, notes } = {}) 
 
   await ensureBetaTestingTables(sql);
 
-  // Agenda auto-fill is paused while the Testing portal is redesigned.
-  // Staff can still add items manually from Community tools.
-  return { created: 0, paused: true, version: ver };
+  const existing = await sql`
+    SELECT id
+    FROM synk_beta_agenda_items
+    WHERE update_version = ${ver}
+      AND active = TRUE
+    LIMIT 1
+  `;
+  if (existing[0]) {
+    return { created: 0, already: true, version: ver, agendaItemId: existing[0].id };
+  }
+
+  const short = ver.length > 10 ? ver.slice(0, 7) : ver;
+  const betaLines = betaFacingReleaseNoteLines(notes || "").slice(0, 12);
+  const publicLines = memberFacingReleaseNoteLines(notes || body || "").slice(0, 8);
+  const lines = (betaLines.length ? betaLines : publicLines).filter(Boolean);
+  const fallback =
+    String(body || "").trim().slice(0, 160) ||
+    "Review the latest Synk build and report anything that feels unclear or broken.";
+  const items = lines.length ? lines : [fallback];
+
+  const sortRows = await sql`
+    SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort
+    FROM synk_beta_agenda_items
+  `;
+  let sortOrder = (Number(sortRows[0] && sortRows[0].max_sort) || 0) + 1;
+  const createdIds = [];
+
+  for (const line of items) {
+    const title = String(line || "").trim().slice(0, 160);
+    if (!title) continue;
+    const detail = `Update ${short}`.slice(0, 1000);
+    const rows = await sql`
+      INSERT INTO synk_beta_agenda_items (
+        title, detail, sort_order, active, created_by, update_version
+      )
+      VALUES (
+        ${title},
+        ${detail},
+        ${sortOrder},
+        TRUE,
+        NULL,
+        ${ver}
+      )
+      RETURNING id
+    `;
+    if (rows[0]) createdIds.push(rows[0].id);
+    sortOrder += 1;
+  }
+
+  return {
+    created: createdIds.length,
+    already: false,
+    version: ver,
+    agendaItemIds: createdIds,
+    agendaItemId: createdIds[0] || null,
+  };
 }
 
 async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
@@ -4491,6 +4661,22 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
     console.error("ensureBetaAgendaForAppUpdate failed:", err);
   }
 
+  let betaShift = { notified: 0, pushSent: 0 };
+  try {
+    const short = ver.length > 10 ? ver.slice(0, 7) : ver;
+    betaShift = await notifyBetaTestersOfShift(sql, {
+      version: ver,
+      title: "Early access shift",
+      body:
+        Number(agenda && agenda.created) > 0
+          ? `A new testing shift is ready for update ${short}. Open Testing to start your session.`
+          : `Synk update ${short} is live for early access review. Open Testing when you are ready.`,
+      createInbox: true,
+    });
+  } catch (err) {
+    console.error("notifyBetaTestersOfShift failed:", err);
+  }
+
   let push = { sent: 0, removed: 0 };
   try {
     const { broadcastSynkPush, notificationPushPayload } = require("./synk-push");
@@ -4500,6 +4686,7 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
         kind: "app_update",
         actorUsername: "synk",
         body: message,
+        url: "/hub",
       })
     );
   } catch (err) {
@@ -4515,6 +4702,8 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
     notes: releaseNotes,
     agendaCreated: Number(agenda && agenda.created) || 0,
     agendaItemId: (agenda && agenda.agendaItemId) || null,
+    betaNotified: Number(betaShift && betaShift.notified) || 0,
+    betaPushSent: Number(betaShift && betaShift.pushSent) || 0,
     pushSent: Number(push && push.sent) || 0,
   };
 }
@@ -4549,6 +4738,8 @@ module.exports = {
   broadcastAppUpdate,
   ensureBetaTestingTables,
   ensureBetaAgendaForAppUpdate,
+  listBetaTesterProfileIds,
+  notifyBetaTestersOfShift,
   getBetaTesterClock,
   listBetaUpdateVersions,
   resolveBetaCurrentUpdate,

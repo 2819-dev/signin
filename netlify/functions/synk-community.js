@@ -88,6 +88,7 @@ const {
   getBetaTesterClock,
   resolveBetaCurrentUpdate,
   clearAllBetaAgendaItems,
+  notifyBetaTestersOfShift,
 } = require("./lib/synk");
 const {
   getVapidConfig,
@@ -350,6 +351,15 @@ function notificationCopy({ kind, actorUsername, body }) {
         body && String(body).trim()
           ? String(body).trim()
           : "Synk was updated. Refresh or reopen to get the latest.",
+    };
+  }
+  if (k === "testing_shift" || k === "beta_shift" || k === "testing_agenda") {
+    return {
+      title: "Early access shift",
+      description:
+        body && String(body).trim()
+          ? String(body).trim()
+          : "A new testing shift is ready. Open Testing to start your session.",
     };
   }
   return {
@@ -3947,7 +3957,24 @@ if (action === "create-alt") {
         VALUES (${title}, ${detail}, ${sortOrder}, ${active}, ${auth.profile.id}, ${updateVersion})
         RETURNING id, title, detail, sort_order, active, created_at, updated_at, update_version
       `;
-      return json(201, { ok: true, item: rows[0] });
+      let shiftNotify = null;
+      if (active) {
+        try {
+          shiftNotify = await notifyBetaTestersOfShift(sql, {
+            version: updateVersion || "",
+            title: "Early access shift",
+            body: `New checklist item: ${title}. Open Testing to start your session.`,
+            createInbox: true,
+          });
+        } catch (err) {
+          console.error("beta agenda push failed:", err);
+        }
+      }
+      return json(201, {
+        ok: true,
+        item: rows[0],
+        shiftNotify,
+      });
     }
 
     if (action === "beta-delete-agenda-item") {

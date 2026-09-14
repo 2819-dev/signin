@@ -15,9 +15,9 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=hub-pro3" />
+    <link rel="stylesheet" href="/join.css?v=push-badge1" />
     <script src="/force-refresh.js" defer></script>
-    <script src="/push-client.js?v=hub-pro3" defer></script>
+    <script src="/push-client.js?v=push-badge1" defer></script>
   
     <style>
       .hub-grid {
@@ -337,6 +337,9 @@
         try {
           if (window.SynkPush && session.hubSession && session.hubSession.token) {
             window.SynkPush.bootstrapPush(hubHeaders(session), { offerBanner: true }).catch(() => {});
+            if (window.SynkPush.watchInstallPrompt) {
+              window.SynkPush.watchInstallPrompt(() => hubHeaders(session));
+            }
           }
         } catch (_) {}
       }
@@ -449,6 +452,11 @@
         if (!dot) return;
         const n = Number(count) || 0;
         dot.hidden = n <= 0;
+        try {
+          if (window.SynkPush && window.SynkPush.setAppBadge) {
+            window.SynkPush.setAppBadge(n).catch(() => {});
+          }
+        } catch (_) {}
       }
 
       function describeHubNotification(note) {
@@ -471,6 +479,9 @@
         } else if (kind === "dm" || kind === "message") {
           title = title || "New message";
           description = description || `${actor} sent you a message.`;
+        } else if (kind === "testing_shift" || kind === "beta_shift" || kind === "testing_agenda") {
+          title = title || "Early access shift";
+          description = description || "A new testing shift is ready. Open Testing to start your session.";
         } else if (kind === "app_update" || kind === "app_updated" || kind === "update") {
           title = title || "App updated";
           description = description || "Synk was updated. Refresh to get the latest.";
@@ -480,7 +491,9 @@
         }
         if (description && !/[.!?]$/.test(description)) description += ".";
         const actions = [];
-        if (kind === "app_update" || kind === "app_updated" || kind === "update") {
+        if (kind === "testing_shift" || kind === "beta_shift" || kind === "testing_agenda") {
+          actions.push({ type: "open", label: "Open Testing", href: "/testing", primary: true });
+        } else if (kind === "app_update" || kind === "app_updated" || kind === "update") {
           actions.push({ type: "refresh", label: "Refresh", primary: true });
           actions.push({ type: "release-notes", label: "Release notes", primary: false, version: note && note.version });
           if (hubBetaTester) {

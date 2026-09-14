@@ -125,7 +125,7 @@
       "background:#041A55;color:#fff;font:600 13px/1.35 system-ui,sans-serif;" +
       "box-shadow:0 12px 32px rgba(0,0,0,.28);";
     el.innerHTML =
-      '<span style="flex:1 1 180px;text-align:left;">Enable notifications for messages and inbox updates</span>' +
+      '<span style="flex:1 1 180px;text-align:left;">Turn on notifications so Synk can alert you about updates, messages, and testing shifts</span>' +
       '<button type="button" id="synk-push-enable" style="border:0;border-radius:999px;padding:8px 12px;background:#fff;color:#041A55;font:700 12px system-ui,sans-serif;cursor:pointer;">Enable</button>' +
       '<button type="button" id="synk-push-dismiss" style="border:0;border-radius:999px;padding:8px 10px;background:transparent;color:#c9d7ff;font:600 12px system-ui,sans-serif;cursor:pointer;">Dismiss</button>';
     document.body.appendChild(el);
@@ -186,11 +186,11 @@
         try {
           const reg = await navigator.serviceWorker.ready;
           await reg.showNotification("Notifications enabled", {
-            body: "You will receive notifications for messages and inbox updates.",
+            body: "You’ll get alerts for messages, updates, and early-access shifts.",
             tag: "synk-push-enabled",
             icon: "/apple-touch-icon.png",
             badge: "/apple-touch-icon.png",
-            data: { url: "/community/inbox", type: "notification" },
+            data: { url: "/hub", type: "notification" },
           });
         } catch (_) {}
         return result;
@@ -240,6 +240,39 @@
     } catch (_) {}
   }
 
+  async function setAppBadge(count) {
+    try {
+      const n = Math.max(0, Math.round(Number(count) || 0));
+      if (!("setAppBadge" in navigator)) return false;
+      if (n > 0) await navigator.setAppBadge(n);
+      else if ("clearAppBadge" in navigator) await navigator.clearAppBadge();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function clearAppBadge() {
+    return setAppBadge(0);
+  }
+
+  function watchInstallPrompt(headersProvider) {
+    try {
+      window.addEventListener("appinstalled", () => {
+        try {
+          localStorage.removeItem(PROMPT_KEY);
+        } catch (_) {}
+        setTimeout(() => {
+          try {
+            const headers = typeof headersProvider === "function" ? headersProvider() : headersProvider;
+            if (!headers) return;
+            bootstrapPush(headers, { offerBanner: true }).catch(() => {});
+          } catch (_) {}
+        }, 600);
+      });
+    } catch (_) {}
+  }
+
   global.SynkPush = {
     supportsPush,
     registerWorker,
@@ -247,6 +280,9 @@
     disablePush,
     bootstrapPush,
     maybeLocalNotify,
+    setAppBadge,
+    clearAppBadge,
+    watchInstallPrompt,
     getPref,
     setPref,
   };

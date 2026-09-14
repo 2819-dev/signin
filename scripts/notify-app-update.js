@@ -176,7 +176,7 @@ async function main() {
 
   // Clear existing agenda while the Testing portal is redesigned.
   // Set CLEAR_BETA_AGENDA=0 to keep manual items on later deploys.
-  if (String(process.env.CLEAR_BETA_AGENDA || "1").trim() !== "0") {
+  if (String(process.env.CLEAR_BETA_AGENDA || "0").trim() !== "0") {
     try {
       const cleared = await clearAllBetaAgendaItems(sql);
       console.log(`Cleared ${cleared.cleared} beta agenda item(s).`);
@@ -216,6 +216,9 @@ async function main() {
     );
     if (result.agendaCreated) {
       console.log(`Added ${result.agendaCreated} beta testing agenda item(s).`);
+    }
+    if (result.betaPushSent != null) {
+      console.log(`Sent ${result.betaPushSent} beta shift push notification(s) to testers.`);
     }
   }
 }

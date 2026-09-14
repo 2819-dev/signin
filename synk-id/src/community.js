@@ -637,6 +637,11 @@
     if (notifDot) notifDot.hidden = n <= 0;
     const notifWrap = document.getElementById("notif-wrap");
     if (notifWrap) notifWrap.classList.toggle("has-unread", n > 0);
+      try {
+      if (window.SynkPush && window.SynkPush.setAppBadge) {
+        window.SynkPush.setAppBadge(unreadCount > 0 ? unreadCount : 0).catch(() => {});
+      }
+    } catch (_) {}
   }
 
   function apiSort() {
@@ -4946,6 +4951,9 @@ document.addEventListener("click", async (e) => {
   setTimeout(() => {
     if (!hubToken || !window.SynkPush) return;
     window.SynkPush.bootstrapPush(hubHeaders(), { offerBanner: true }).catch(() => {});
+    if (window.SynkPush.watchInstallPrompt) {
+      window.SynkPush.watchInstallPrompt(() => hubHeaders());
+    }
   }, 1800);
 
   if (window.SynkPush && navigator.serviceWorker) {
