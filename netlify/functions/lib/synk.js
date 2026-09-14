@@ -4250,7 +4250,7 @@ function memberFacingReleaseNoteLines(text) {
         .replace(/^#+\s*/, "")
         .trim()
     )
-    .filter(Boolean);
+    .filter((line) => line && !/^what'?s new\b/i.test(line));
 }
 
 function betaFacingReleaseNoteLines(text) {
@@ -4263,7 +4263,7 @@ function betaFacingReleaseNoteLines(text) {
         .replace(/^#+\s*/, "")
         .trim()
     )
-    .filter((line) => line && !/^(for\s+)?beta(\s+testers?)?$/i.test(line));
+    .filter((line) => line && !/^(for\s+)?beta(\s+testers?)?$/i.test(line) && !/^what'?s new\b/i.test(line));
 }
 
 async function clearAllBetaAgendaItems(sql) {
