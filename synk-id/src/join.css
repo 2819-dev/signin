@@ -6053,20 +6053,32 @@ aside.reddit-right {
 @media (min-width: 1101px) {
   body.community-body .shell,
   body.community-body .community-shell.reddit-shell {
-    width: min(1120px, 100%) !important;
-    max-width: 1120px !important;
+    width: min(1440px, 100%) !important;
+    max-width: 1440px !important;
     margin: 0 auto !important;
     padding: 16px 16px 40px !important;
   }
   .reddit-layout,
-  .community-layout.reddit-layout {
-    grid-template-columns: minmax(0, 1fr) 300px !important;
-    gap: 20px !important;
+  .community-layout.reddit-layout,
+  #community-main .reddit-layout,
+  #community-main .community-layout.reddit-layout {
+    grid-template-columns: minmax(0, 1fr) 320px !important;
+    gap: 24px !important;
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 12px 8px 40px !important;
   }
   .reddit-right:not([hidden]):not(.is-hidden),
-  #right-rail:not([hidden]):not(.is-hidden) {
-    display: grid !important;
+  #right-rail:not([hidden]):not(.is-hidden),
+  #community-main .reddit-right:not([hidden]):not(.is-hidden),
+  #community-main #right-rail:not([hidden]):not(.is-hidden) {
+    display: flex !important;
+    flex-direction: column !important;
     gap: 14px !important;
+    width: 320px !important;
+    max-width: 320px !important;
+    min-width: 280px !important;
   }
 }
 
@@ -10203,11 +10215,12 @@ body.reddit-body {
   body.reddit-body.reddit-nav-desktop .shell.reddit-shell,
   body.community-body.reddit-nav-desktop .community-shell.reddit-shell,
   body.reddit-body.reddit-nav-desktop main.reddit-shell {
-    width: min(1180px, 100%) !important;
-    max-width: 1180px !important;
+    width: min(1440px, 100%) !important;
+    max-width: 1440px !important;
     margin-left: auto !important;
     margin-right: auto !important;
     padding-left: 256px !important;
+    padding-right: 20px !important;
     box-sizing: border-box !important;
   }
 
@@ -10217,7 +10230,7 @@ body.reddit-body {
   body.reddit-body.reddit-nav-desktop aside#left-nav.reddit-sidemenu {
     position: fixed !important;
     top: 48px !important;
-    left: max(0px, calc(50% - 590px)) !important;
+    left: max(0px, calc(50% - 720px)) !important;
     bottom: 0 !important;
     width: 240px !important;
     max-width: 240px !important;
@@ -10242,16 +10255,26 @@ body.reddit-body {
   }
 
   body.community-body.reddit-nav-desktop .reddit-layout,
-  body.reddit-body.reddit-nav-desktop .community-layout.reddit-layout {
-    grid-template-columns: minmax(0, 1fr) 300px !important;
-    gap: 16px !important;
+  body.reddit-body.reddit-nav-desktop .community-layout.reddit-layout,
+  body.community-body.reddit-nav-desktop #community-main .reddit-layout,
+  body.reddit-body.reddit-nav-desktop #community-main .community-layout.reddit-layout {
+    grid-template-columns: minmax(0, 1fr) 320px !important;
+    gap: 24px !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 16px 12px 48px !important;
   }
 
   body.community-body.reddit-nav-desktop .reddit-right:not([hidden]):not(.is-hidden),
-  body.reddit-body.reddit-nav-desktop #right-rail:not([hidden]):not(.is-hidden) {
-    display: grid !important;
-    gap: 12px !important;
+  body.reddit-body.reddit-nav-desktop #right-rail:not([hidden]):not(.is-hidden),
+  body.community-body.reddit-nav-desktop #community-main .reddit-right:not([hidden]):not(.is-hidden) {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
     align-content: start;
+    width: 320px !important;
+    max-width: 320px !important;
   }
 }
 
@@ -13818,3 +13841,94 @@ body.community-body:not(.is-discord-group) .reddit-sortbar-pills {
 body.community-body:not(.is-discord-group) .reddit-sort-tab {
   border-radius: 999px;
 }
+
+/* —— Community desktop layout fix v41 ——
+ * Earlier rules used `#community-main .reddit-layout { 1fr }` with an ID,
+ * which beat later desktop 2-column overrides and stacked the about rail
+ * under the feed as a narrow left column with a huge empty right void.
+ */
+@media (min-width: 1101px) {
+  body.community-body.reddit-nav-desktop .shell.reddit-shell,
+  body.community-body.reddit-nav-desktop .community-shell.reddit-shell,
+  body.reddit-body.reddit-nav-desktop main.reddit-shell {
+    width: min(1440px, 100%) !important;
+    max-width: 1440px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 12px 24px 48px 256px !important;
+    box-sizing: border-box !important;
+  }
+
+  body.community-body.reddit-nav-desktop #left-nav,
+  body.community-body.reddit-nav-desktop aside#left-nav.reddit-leftnav {
+    left: max(0px, calc(50% - 720px)) !important;
+  }
+
+  body.community-body #community-main .reddit-layout,
+  body.community-body #community-main .community-layout.reddit-layout,
+  body.community-body.reddit-nav-desktop #community-main .reddit-layout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 320px !important;
+    gap: 24px !important;
+    align-items: start !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 8px 0 40px !important;
+  }
+
+  /* Official Synk hub owns the full stage — no about-rail column */
+  body.community-body.is-discord-group #community-main .reddit-layout,
+  body.community-body.is-discord-group #community-main .community-layout.reddit-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0 !important;
+  }
+
+  body.community-body #community-main .reddit-main,
+  body.community-body #community-main .community-main-col {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+
+  body.community-body #community-main .reddit-right:not([hidden]):not(.is-hidden),
+  body.community-body #community-main #right-rail:not([hidden]):not(.is-hidden) {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+    width: 320px !important;
+    max-width: 320px !important;
+    min-width: 280px !important;
+    position: sticky !important;
+    top: 64px !important;
+    align-self: start !important;
+    max-height: calc(100dvh - 80px);
+    overflow: auto;
+  }
+}
+
+@media (max-width: 1100px) {
+  body.community-body #community-main .reddit-layout,
+  body.community-body #community-main .community-layout.reddit-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0 !important;
+  }
+  body.community-body #community-main .reddit-right,
+  body.community-body #community-main #right-rail {
+    display: none !important;
+  }
+}
+
+/* Moderators are shown via profile tags — keep legacy hooks hidden if present */
+#mods-widget,
+#mods-list {
+  display: none !important;
+}
+
+/* .btn display can override UA [hidden] */
+#about-join-btn[hidden],
+.reddit-about-join[hidden],
+#join-community-btn[hidden] {
+  display: none !important;
+}
+

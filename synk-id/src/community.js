@@ -1033,13 +1033,6 @@
     }
     const aboutMeta = document.getElementById("about-meta");
     if (aboutMeta) aboutMeta.hidden = true;
-    const modsList = document.getElementById("mods-list");
-    if (modsList) {
-      const mods = (staff || []).filter((p) => p.role === "owner" || p.role === "admin");
-      modsList.innerHTML = mods.length
-        ? mods.map((p) => `<a class="reddit-mod-link" href="/user/${escapeHtml(p.username || "")}">${escapeHtml(p.username || "mod")}</a>`).join("")
-        : '<p class="muted">No moderators listed.</p>';
-    }
     if (statGroups) statGroups.textContent = String(groups.length);
     if (route.type === "user") {
       const profile = (data && data.profile) || {};
