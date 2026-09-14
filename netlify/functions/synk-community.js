@@ -24,6 +24,12 @@ const {
   createGroupRole,
   updateGroupRole,
   deleteGroupRole,
+  updateCommunityGroup,
+  createGroupChannel,
+  updateGroupChannel,
+  deleteGroupChannel,
+  listGroupChannels,
+  listGroupCategories,
   ensureOfficialSynkGroup,
   formatChannelLabel,
   normalizeChannelKind,
@@ -1287,6 +1293,18 @@ async function saveCommunityAvatar(event, rawInput) {
   if (!saved) return null;
   return `/api/community-avatar?id=${encodeURIComponent(saved.id)}&v=${Date.now()}`;
 }
+
+async function saveCommunityBanner(event, rawInput) {
+  // Reuse the community-avatar blob prefix so /api/community-avatar can serve it.
+  const saved = await saveImageToStore(event, rawInput, {
+    keyPrefix: "community-avatar",
+    maxBytes: Math.max(AVATAR_MAX_BYTES, 2_500_000),
+    source: "community-banner",
+  });
+  if (!saved) return null;
+  return `/api/community-avatar?id=${encodeURIComponent(saved.id)}&v=${Date.now()}`;
+}
+
 
 async function saveMemberSynkPhoto(event, rawInput) {
   const saved = await saveImageToStore(event, rawInput, {
@@ -3221,6 +3239,133 @@ if (action === "create-alt") {
       return json(200, { ok: true, postId, hidden });
     }
 
+
+
+    if (action === "update-group") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug || "synk",
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) {
+        return json(403, { error: "Only community staff can edit this group" });
+      }
+      if (group.isOfficial || group.slug === "synk") {
+        if (!isCommunityStaffRole(role)) {
+          return json(403, { error: "Only Synk staff can edit the official group" });
+        }
+      }
+      let bannerUrl = body.bannerUrl;
+      if (body.clearBanner || body.removeBanner) bannerUrl = "";
+      else if (body.imageData || body.bannerData || body.data) {
+        try {
+          bannerUrl = await saveCommunityBanner(
+            event,
+            body.imageData || body.bannerData || body.data
+          );
+        } catch (err) {
+          return json(err.statusCode || 400, { error: err.message || "Unable to save banner" });
+        }
+      }
+      const result = await updateCommunityGroup(sql, group.id, {
+        name: body.name,
+        description: body.description != null ? body.description : body.about,
+        bannerUrl,
+      });
+      if (!result.ok) return json(400, { error: result.error || "Could not update group" });
+      const hydrated = await hydrateCommunityGroup(sql, result.group);
+      return json(200, { ok: true, group: hydrated });
+    }
+
+    if (action === "create-channel") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug || "synk",
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only staff can manage channels" });
+      if ((group.isOfficial || group.slug === "synk") && !isCommunityStaffRole(role)) {
+        return json(403, { error: "Only Synk staff can manage official channels" });
+      }
+      const result = await createGroupChannel(sql, group.id, {
+        name: body.name || body.title,
+        slug: body.slug,
+        description: body.description,
+        kind: body.kind || body.type,
+        emoji: body.emoji,
+        categoryId: body.categoryId,
+        categoryName: body.categoryName || body.category,
+        sortOrder: body.sortOrder,
+      });
+      if (!result.ok) return json(400, { error: result.error || "Could not create channel" });
+      return json(200, {
+        ok: true,
+        channel: result.channel,
+        channels: await listGroupChannels(sql, group.id),
+        categories: await listGroupCategories(sql, group.id),
+      });
+    }
+
+    if (action === "update-channel") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug || "synk",
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only staff can manage channels" });
+      if ((group.isOfficial || group.slug === "synk") && !isCommunityStaffRole(role)) {
+        return json(403, { error: "Only Synk staff can manage official channels" });
+      }
+      const result = await updateGroupChannel(sql, body.channelId || body.id, group.id, {
+        name: body.name,
+        slug: body.slug,
+        description: body.description,
+        kind: body.kind || body.type,
+        emoji: body.emoji,
+        categoryId: body.categoryId,
+        categoryName: body.categoryName || body.category,
+        sortOrder: body.sortOrder,
+      });
+      if (!result.ok) return json(400, { error: result.error || "Could not update channel" });
+      return json(200, {
+        ok: true,
+        channel: result.channel,
+        channels: await listGroupChannels(sql, group.id),
+        categories: await listGroupCategories(sql, group.id),
+      });
+    }
+
+    if (action === "delete-channel") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug || "synk",
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only staff can manage channels" });
+      if ((group.isOfficial || group.slug === "synk") && !isCommunityStaffRole(role)) {
+        return json(403, { error: "Only Synk staff can manage official channels" });
+      }
+      const result = await deleteGroupChannel(sql, body.channelId || body.id, group.id);
+      if (!result.ok) return json(400, { error: result.error || "Could not delete channel" });
+      return json(200, {
+        ok: true,
+        deleted: result.deleted,
+        channels: await listGroupChannels(sql, group.id),
+        categories: await listGroupCategories(sql, group.id),
+      });
+    }
 
     if (action === "create-group-role") {
       const group = await findCommunityGroup(sql, {

@@ -13,14 +13,14 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v39" />
+    <link rel="stylesheet" href="/join.css?v=community-v40" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v39" defer></script>
+    <script src="/force-refresh.js?v=community-v40" defer></script>
   </head>
   <body class="community-body reddit-body">
     <div id="synk-boot-loader" class="synk-loader-overlay" hidden aria-busy="false" aria-live="polite" aria-label="Loading Synk">
@@ -259,6 +259,52 @@
                     </div>
                   </div>
                   <div class="synk-hub-rail-scroll" id="discord-channel-list"></div>
+                  <details class="synk-hub-manage" id="synk-hub-manage" hidden>
+                    <summary class="synk-hub-manage-summary">
+                      <span>Server settings</span>
+                      <span class="synk-hub-manage-hint">Staff</span>
+                    </summary>
+                    <div class="synk-hub-manage-body">
+                      <form id="synk-hub-banner-form" class="synk-hub-manage-form">
+                        <label class="synk-hub-manage-label" for="synk-hub-banner-file">Banner image</label>
+                        <input id="synk-hub-banner-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                        <label class="synk-hub-manage-label" for="synk-hub-banner-url">Or banner URL</label>
+                        <input id="synk-hub-banner-url" type="url" maxlength="700" placeholder="https://…" />
+                        <div class="synk-hub-manage-actions">
+                          <button class="btn btn-primary btn-compact" type="submit">Save banner</button>
+                          <button class="btn btn-secondary btn-compact" type="button" id="synk-hub-banner-clear">Clear</button>
+                        </div>
+                        <p class="muted synk-hub-manage-status" id="synk-hub-banner-status"></p>
+                      </form>
+
+                      <form id="synk-hub-channel-form" class="synk-hub-manage-form">
+                        <p class="synk-hub-manage-section">Channels</p>
+                        <input type="hidden" id="synk-hub-channel-id" value="" />
+                        <label class="synk-hub-manage-label" for="synk-hub-channel-name">Name</label>
+                        <input id="synk-hub-channel-name" type="text" maxlength="60" required placeholder="Ideas" />
+                        <label class="synk-hub-manage-label" for="synk-hub-channel-slug">Slug</label>
+                        <input id="synk-hub-channel-slug" type="text" maxlength="40" placeholder="ideas" spellcheck="false" autocapitalize="none" />
+                        <label class="synk-hub-manage-label" for="synk-hub-channel-kind">Type</label>
+                        <select id="synk-hub-channel-kind">
+                          <option value="text">Chat</option>
+                          <option value="announcements">Announcements</option>
+                          <option value="suggestions">Suggestions</option>
+                          <option value="readonly">Info / Rules</option>
+                        </select>
+                        <label class="synk-hub-manage-label" for="synk-hub-channel-category">Category</label>
+                        <input id="synk-hub-channel-category" type="text" maxlength="60" placeholder="Feedback" />
+                        <label class="synk-hub-manage-label" for="synk-hub-channel-desc">Description</label>
+                        <input id="synk-hub-channel-desc" type="text" maxlength="200" placeholder="What this channel is for" />
+                        <div class="synk-hub-manage-actions">
+                          <button class="btn btn-primary btn-compact" type="submit" id="synk-hub-channel-save">Add channel</button>
+                          <button class="btn btn-secondary btn-compact" type="button" id="synk-hub-channel-reset" hidden>Cancel edit</button>
+                        </div>
+                        <p class="muted synk-hub-manage-status" id="synk-hub-channel-status"></p>
+                      </form>
+
+                      <div id="synk-hub-channel-admin-list" class="synk-hub-channel-admin-list"></div>
+                    </div>
+                  </details>
                 </aside>
                 <div class="discord-main synk-hub-main">
                   <header class="discord-channel-head synk-hub-head" id="discord-channel-head">
@@ -1008,8 +1054,8 @@
       </div>
     </div>
 
-    <script src="/push-client.js?v=community-v39"></script>
+    <script src="/push-client.js?v=community-v40"></script>
     <script src="/image-crop.js?v=crop-v2"></script>
-    <script src="/community.js?v=community-v39"></script>
+    <script src="/community.js?v=community-v40"></script>
   </body>
 </html>

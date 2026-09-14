@@ -2632,6 +2632,91 @@
         activeBtn.scrollIntoView({ block: "nearest", behavior: "smooth" });
       }
     } catch (_) {}
+    renderSynkServerManage(group);
+  }
+
+  function canManageSynkServer(group) {
+    if (!(group && (group.isOfficial || group.slug === "synk"))) return false;
+    return !!(me && (me.isStaff || me.isOwner || me.role === "owner" || me.role === "admin"));
+  }
+
+  function resetSynkChannelForm() {
+    const idEl = document.getElementById("synk-hub-channel-id");
+    const nameEl = document.getElementById("synk-hub-channel-name");
+    const slugEl = document.getElementById("synk-hub-channel-slug");
+    const kindEl = document.getElementById("synk-hub-channel-kind");
+    const catEl = document.getElementById("synk-hub-channel-category");
+    const descEl = document.getElementById("synk-hub-channel-desc");
+    const saveBtn = document.getElementById("synk-hub-channel-save");
+    const resetBtn = document.getElementById("synk-hub-channel-reset");
+    if (idEl) idEl.value = "";
+    if (nameEl) nameEl.value = "";
+    if (slugEl) slugEl.value = "";
+    if (kindEl) kindEl.value = "text";
+    if (catEl) catEl.value = "";
+    if (descEl) descEl.value = "";
+    if (saveBtn) saveBtn.textContent = "Add channel";
+    if (resetBtn) resetBtn.hidden = true;
+  }
+
+  function fillSynkChannelForm(channel) {
+    if (!channel) return resetSynkChannelForm();
+    const idEl = document.getElementById("synk-hub-channel-id");
+    const nameEl = document.getElementById("synk-hub-channel-name");
+    const slugEl = document.getElementById("synk-hub-channel-slug");
+    const kindEl = document.getElementById("synk-hub-channel-kind");
+    const catEl = document.getElementById("synk-hub-channel-category");
+    const descEl = document.getElementById("synk-hub-channel-desc");
+    const saveBtn = document.getElementById("synk-hub-channel-save");
+    const resetBtn = document.getElementById("synk-hub-channel-reset");
+    if (idEl) idEl.value = channel.id || "";
+    if (nameEl) nameEl.value = channel.name || "";
+    if (slugEl) slugEl.value = channel.slug || "";
+    if (kindEl) kindEl.value = String(channel.kind || "text").toLowerCase();
+    if (catEl) {
+      const cats = Array.isArray(activeGroupDetail && activeGroupDetail.categories)
+        ? activeGroupDetail.categories
+        : [];
+      const match = cats.find((c) => String(c.id) === String(channel.categoryId || ""));
+      catEl.value = (match && match.name) || "";
+    }
+    if (descEl) descEl.value = channel.description || "";
+    if (saveBtn) saveBtn.textContent = "Save channel";
+    if (resetBtn) resetBtn.hidden = false;
+  }
+
+  function renderSynkServerManage(group) {
+    const panel = document.getElementById("synk-hub-manage");
+    const list = document.getElementById("synk-hub-channel-admin-list");
+    const bannerUrl = document.getElementById("synk-hub-banner-url");
+    if (!panel) return;
+    const allowed = canManageSynkServer(group);
+    panel.hidden = !allowed;
+    if (!allowed) return;
+    if (bannerUrl && document.activeElement !== bannerUrl) {
+      bannerUrl.value = String((group && (group.bannerUrl || group.coverUrl || "")) || "");
+    }
+    const channels = Array.isArray(group && group.channels) ? group.channels.slice() : [];
+    channels.sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0));
+    if (list) {
+      list.innerHTML = channels.length
+        ? channels
+            .map((ch) => {
+              const kind = String(ch.kind || "text");
+              return `<div class="synk-hub-channel-admin-row" data-channel-id="${escapeHtml(ch.id || "")}">
+                <div class="synk-hub-channel-admin-copy">
+                  <strong># ${escapeHtml(ch.name || ch.slug || "channel")}</strong>
+                  <span class="muted">${escapeHtml(kind)}${ch.description ? ` · ${escapeHtml(ch.description)}` : ""}</span>
+                </div>
+                <div class="synk-hub-channel-admin-actions">
+                  <button type="button" class="btn btn-secondary btn-compact" data-synk-edit-channel="${escapeHtml(ch.id || "")}">Edit</button>
+                  <button type="button" class="btn btn-secondary btn-compact" data-synk-delete-channel="${escapeHtml(ch.id || "")}">Delete</button>
+                </div>
+              </div>`;
+            })
+            .join("")
+        : `<p class="muted" style="margin:0;font-size:0.82rem;">No channels yet.</p>`;
+    }
   }
 
   function renderGroupRoles(group) {
@@ -4246,7 +4331,173 @@ function applyViewState(data) {
     username: actingUsername() || publicUsername || "",
   }));
 
-  // —— Bio & DM privacy settings ——
+  
+  const synkBannerForm = document.getElementById("synk-hub-banner-form");
+  if (synkBannerForm) {
+    synkBannerForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("synk-hub-banner-status");
+      const fileInput = document.getElementById("synk-hub-banner-file");
+      const urlInput = document.getElementById("synk-hub-banner-url");
+      if (status) status.textContent = "Saving banner…";
+      try {
+        if (!canManageSynkServer(activeGroupDetail)) throw new Error("Staff only");
+        const payload = {
+          action: "update-group",
+          group: "synk",
+          groupId: activeGroupDetail && activeGroupDetail.id,
+        };
+        const file = fileInput && fileInput.files && fileInput.files[0];
+        if (file) {
+          if (!String(file.type || "").startsWith("image/")) throw new Error("Choose an image file");
+          payload.imageData = await cropImageFile(file, {
+            maxWidth: 1500,
+            maxHeight: 500,
+            mime: "image/jpeg",
+            quality: 0.9,
+          });
+        } else {
+          payload.bannerUrl = String((urlInput && urlInput.value) || "").trim();
+        }
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...hubHeaders() },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not save banner");
+        if (fileInput) fileInput.value = "";
+        if (status) status.textContent = "Banner saved.";
+        activeGroupDetail = data.group || activeGroupDetail;
+        renderDiscordChannels(activeGroupDetail);
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not save banner";
+      }
+    });
+  }
+  const synkBannerClear = document.getElementById("synk-hub-banner-clear");
+  if (synkBannerClear) {
+    synkBannerClear.addEventListener("click", async () => {
+      const status = document.getElementById("synk-hub-banner-status");
+      if (status) status.textContent = "Clearing…";
+      try {
+        if (!canManageSynkServer(activeGroupDetail)) throw new Error("Staff only");
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...hubHeaders() },
+          body: JSON.stringify({
+            action: "update-group",
+            group: "synk",
+            groupId: activeGroupDetail && activeGroupDetail.id,
+            clearBanner: true,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not clear banner");
+        const urlInput = document.getElementById("synk-hub-banner-url");
+        if (urlInput) urlInput.value = "";
+        if (status) status.textContent = "Banner cleared.";
+        activeGroupDetail = data.group || activeGroupDetail;
+        renderDiscordChannels(activeGroupDetail);
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not clear banner";
+      }
+    });
+  }
+  const synkChannelForm = document.getElementById("synk-hub-channel-form");
+  if (synkChannelForm) {
+    synkChannelForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("synk-hub-channel-status");
+      if (status) status.textContent = "Saving…";
+      try {
+        if (!canManageSynkServer(activeGroupDetail)) throw new Error("Staff only");
+        const id = String((document.getElementById("synk-hub-channel-id") || {}).value || "").trim();
+        const payload = {
+          action: id ? "update-channel" : "create-channel",
+          group: "synk",
+          groupId: activeGroupDetail && activeGroupDetail.id,
+          channelId: id || undefined,
+          name: document.getElementById("synk-hub-channel-name").value,
+          slug: document.getElementById("synk-hub-channel-slug").value,
+          kind: document.getElementById("synk-hub-channel-kind").value,
+          categoryName: document.getElementById("synk-hub-channel-category").value,
+          description: document.getElementById("synk-hub-channel-desc").value,
+        };
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...hubHeaders() },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not save channel");
+        if (status) status.textContent = id ? "Channel updated." : "Channel added.";
+        resetSynkChannelForm();
+        if (activeGroupDetail) {
+          activeGroupDetail.channels = data.channels || activeGroupDetail.channels;
+          activeGroupDetail.categories = data.categories || activeGroupDetail.categories;
+        }
+        renderDiscordChannels(activeGroupDetail);
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not save channel";
+      }
+    });
+  }
+  const synkChannelReset = document.getElementById("synk-hub-channel-reset");
+  if (synkChannelReset) {
+    synkChannelReset.addEventListener("click", () => {
+      resetSynkChannelForm();
+      const status = document.getElementById("synk-hub-channel-status");
+      if (status) status.textContent = "";
+    });
+  }
+  document.addEventListener("click", async (e) => {
+    const editBtn = e.target.closest("[data-synk-edit-channel]");
+    if (editBtn) {
+      const id = editBtn.getAttribute("data-synk-edit-channel");
+      const channels = Array.isArray(activeGroupDetail && activeGroupDetail.channels)
+        ? activeGroupDetail.channels
+        : [];
+      const channel = channels.find((c) => String(c.id) === String(id));
+      fillSynkChannelForm(channel);
+      const panel = document.getElementById("synk-hub-manage");
+      if (panel) panel.open = true;
+      return;
+    }
+    const delBtn = e.target.closest("[data-synk-delete-channel]");
+    if (delBtn) {
+      const id = delBtn.getAttribute("data-synk-delete-channel");
+      if (!id || !canManageSynkServer(activeGroupDetail)) return;
+      if (!window.confirm("Delete this channel? Posts move to Lounge when possible.")) return;
+      const status = document.getElementById("synk-hub-channel-status");
+      if (status) status.textContent = "Deleting…";
+      try {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...hubHeaders() },
+          body: JSON.stringify({
+            action: "delete-channel",
+            group: "synk",
+            groupId: activeGroupDetail && activeGroupDetail.id,
+            channelId: id,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not delete channel");
+        if (status) status.textContent = "Channel deleted.";
+        if (activeGroupDetail) {
+          activeGroupDetail.channels = data.channels || [];
+          activeGroupDetail.categories = data.categories || activeGroupDetail.categories;
+        }
+        resetSynkChannelForm();
+        renderDiscordChannels(activeGroupDetail);
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not delete channel";
+      }
+    }
+  });
+
+// —— Bio & DM privacy settings ——
   const bioForm = document.getElementById("settings-bio-form");
   if (bioForm) {
     bioForm.addEventListener("submit", async (e) => {

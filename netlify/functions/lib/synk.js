@@ -161,6 +161,7 @@ function mapCommunityGroup(row) {
     description: row.description || "",
     theme,
     isOfficial: row.is_official === true,
+    bannerUrl: row.banner_url || "",
     createdBy: row.created_by || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -726,6 +727,7 @@ async function ensureSynkCommunityExtras(sql) {
 
   await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'standard'`;
   await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS is_official BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS banner_url TEXT`;
   await sql`
     CREATE TABLE IF NOT EXISTS synk_community_group_categories (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1472,7 +1474,7 @@ async function ensureOfficialSynkGroup(sql) {
 
   let group = null;
   const existing = await sql`
-    SELECT id, slug, name, description, theme, is_official, created_by, created_at, updated_at
+    SELECT id, slug, name, description, theme, is_official, banner_url, created_by, created_at, updated_at
     FROM synk_community_groups
     WHERE slug = 'synk' OR is_official = TRUE
     ORDER BY CASE WHEN slug = 'synk' THEN 0 ELSE 1 END
@@ -1638,6 +1640,7 @@ function officialSynkBlueprint() {
 }
 
 async function ensureChannelStub(sql, groupId, channel) {
+  // Seed only — never overwrite staff customizations.
   await sql`
     INSERT INTO synk_community_group_channels (
       group_id, category_id, emoji, name, slug, description, kind, sort_order
@@ -1646,38 +1649,59 @@ async function ensureChannelStub(sql, groupId, channel) {
       ${groupId}, NULL, ${channel.emoji || ""}, ${channel.name}, ${channel.slug},
       ${channel.description || ""}, ${channel.kind || "text"}, ${Number(channel.sortOrder) || 0}
     )
-    ON CONFLICT (group_id, slug) DO UPDATE
-    SET
-      emoji = EXCLUDED.emoji,
-      name = EXCLUDED.name,
-      description = EXCLUDED.description,
-      kind = EXCLUDED.kind,
-      sort_order = EXCLUDED.sort_order
+    ON CONFLICT (group_id, slug) DO NOTHING
   `;
 }
 
 async function syncOfficialSynkLayout(sql, groupId) {
   if (!groupId) return;
   const blueprint = officialSynkBlueprint();
-  const desiredSlugs = new Set();
+
+  // Ensure default categories exist (by name), without wiping custom ones.
+  const existingCats = await sql`
+    SELECT id, name FROM synk_community_group_categories WHERE group_id = ${groupId}
+  `;
+  const catByName = new Map(
+    existingCats.map((row) => [String(row.name || "").trim().toLowerCase(), row.id])
+  );
+  let catOrder = existingCats.length;
   for (const cat of blueprint) {
-    for (const ch of cat.channels) desiredSlugs.add(ch.slug);
+    const key = String(cat.name || "").trim().toLowerCase();
+    if (!key || catByName.has(key)) continue;
+    const created = await sql`
+      INSERT INTO synk_community_group_categories (group_id, name, sort_order)
+      VALUES (${groupId}, ${cat.name}, ${catOrder})
+      RETURNING id, name
+    `;
+    catByName.set(key, created[0].id);
+    catOrder += 1;
   }
 
+  // Seed missing default channels only; keep any staff-created extras.
   let sort = 0;
   for (const cat of blueprint) {
+    const categoryId = catByName.get(String(cat.name || "").trim().toLowerCase()) || null;
     for (const ch of cat.channels) {
       await ensureChannelStub(sql, groupId, { ...ch, sortOrder: sort });
+      if (categoryId) {
+        await sql`
+          UPDATE synk_community_group_channels
+          SET category_id = COALESCE(category_id, ${categoryId})
+          WHERE group_id = ${groupId}
+            AND slug = ${ch.slug}
+            AND category_id IS NULL
+        `;
+      }
       sort += 1;
     }
   }
 
+  // One-time merges for legacy slug renames (safe if already applied).
   const rows = await sql`
     SELECT id, slug FROM synk_community_group_channels WHERE group_id = ${groupId}
   `;
   const bySlug = {};
   for (const row of rows) bySlug[row.slug] = row.id;
-
   const merges = {
     general: "lounge",
     introductions: "lounge",
@@ -1695,58 +1719,7 @@ async function syncOfficialSynkLayout(sql, groupId) {
       WHERE group_id = ${groupId}
         AND channel_id = ${fromId}
     `;
-  }
-
-  await sql`DELETE FROM synk_community_group_categories WHERE group_id = ${groupId}`;
-  let catOrder = 0;
-  for (const cat of blueprint) {
-    const createdCat = await sql`
-      INSERT INTO synk_community_group_categories (group_id, name, sort_order)
-      VALUES (${groupId}, ${cat.name}, ${catOrder})
-      RETURNING id
-    `;
-    const categoryId = createdCat[0].id;
-    let chOrder = 0;
-    for (const ch of cat.channels) {
-      await sql`
-        UPDATE synk_community_group_channels
-        SET
-          category_id = ${categoryId},
-          emoji = ${ch.emoji || ""},
-          name = ${ch.name},
-          description = ${ch.description || ""},
-          kind = ${ch.kind || "text"},
-          sort_order = ${chOrder}
-        WHERE group_id = ${groupId}
-          AND slug = ${ch.slug}
-      `;
-      chOrder += 1;
-    }
-    catOrder += 1;
-  }
-
-  const leftover = await sql`
-    SELECT id, slug FROM synk_community_group_channels WHERE group_id = ${groupId}
-  `;
-  for (const row of leftover) {
-    if (desiredSlugs.has(row.slug)) continue;
-    const loungeId = bySlug.lounge || bySlug.announcements || null;
-    if (loungeId) {
-      await sql`
-        UPDATE synk_community_posts
-        SET channel_id = ${loungeId}
-        WHERE group_id = ${groupId}
-          AND channel_id = ${row.id}
-      `;
-    } else {
-      await sql`
-        UPDATE synk_community_posts
-        SET channel_id = NULL
-        WHERE group_id = ${groupId}
-          AND channel_id = ${row.id}
-      `;
-    }
-    await sql`DELETE FROM synk_community_group_channels WHERE id = ${row.id}`;
+    await sql`DELETE FROM synk_community_group_channels WHERE id = ${fromId}`;
   }
 }
 
@@ -2072,7 +2045,7 @@ async function findCommunityGroup(sql, { id, slug } = {}) {
   const groupSlug = normalizeGroupSlug(slug);
   if (groupId) {
     const rows = await sql`
-      SELECT id, slug, name, description, theme, is_official, created_by, created_at, updated_at
+      SELECT id, slug, name, description, theme, is_official, banner_url, created_by, created_at, updated_at
       FROM synk_community_groups
       WHERE id = ${groupId}
       LIMIT 1
@@ -2081,7 +2054,7 @@ async function findCommunityGroup(sql, { id, slug } = {}) {
   }
   if (groupSlug) {
     const rows = await sql`
-      SELECT id, slug, name, description, theme, is_official, created_by, created_at, updated_at
+      SELECT id, slug, name, description, theme, is_official, banner_url, created_by, created_at, updated_at
       FROM synk_community_groups
       WHERE slug = ${groupSlug}
       LIMIT 1
@@ -5250,6 +5223,173 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
   };
 }
 
+
+async function updateCommunityGroup(sql, groupId, { name, description, bannerUrl } = {}) {
+  const id = String(groupId || "").trim();
+  if (!id) return { ok: false, error: "Group required" };
+  const existing = await sql`
+    SELECT id, slug, name, description, theme, is_official, banner_url, created_by, created_at, updated_at
+    FROM synk_community_groups
+    WHERE id = ${id}
+    LIMIT 1
+  `;
+  if (!existing[0]) return { ok: false, error: "Group not found" };
+  const nextName = name != null ? normalizeGroupName(name) : existing[0].name;
+  if (!nextName) return { ok: false, error: "Group name required" };
+  const nextDescription =
+    description != null ? normalizeGroupDescription(description) : existing[0].description || "";
+  let nextBanner = existing[0].banner_url || "";
+  if (bannerUrl !== undefined) {
+    const raw = String(bannerUrl || "").trim();
+    if (!raw) nextBanner = "";
+    else if (/^https:\/\//i.test(raw) || raw.startsWith("/api/")) nextBanner = raw.slice(0, 700);
+    else return { ok: false, error: "Banner must be an https URL or uploaded image" };
+  }
+  const rows = await sql`
+    UPDATE synk_community_groups
+    SET
+      name = ${nextName},
+      description = ${nextDescription},
+      banner_url = ${nextBanner},
+      updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING id, slug, name, description, theme, is_official, banner_url, created_by, created_at, updated_at
+  `;
+  return { ok: true, group: mapCommunityGroup(rows[0]) };
+}
+
+async function ensureGroupCategory(sql, groupId, name, sortOrder = 0) {
+  const label = String(name || "").trim().slice(0, 80);
+  if (!label) return null;
+  const existing = await sql`
+    SELECT id FROM synk_community_group_categories
+    WHERE group_id = ${groupId} AND lower(name) = ${label.toLowerCase()}
+    LIMIT 1
+  `;
+  if (existing[0]) return existing[0].id;
+  const created = await sql`
+    INSERT INTO synk_community_group_categories (group_id, name, sort_order)
+    VALUES (${groupId}, ${label}, ${Number(sortOrder) || 0})
+    RETURNING id
+  `;
+  return created[0].id;
+}
+
+async function createGroupChannel(sql, groupId, { name, slug, description, kind, emoji, categoryId, categoryName, sortOrder } = {}) {
+  const channelName = capitalizeChannelName(name || slug);
+  const channelSlug = normalizeChannelSlug(slug || name);
+  if (!channelName) return { ok: false, error: "Channel name required" };
+  if (!channelSlug || channelSlug.length < 2) return { ok: false, error: "Channel slug needs at least 2 characters" };
+  const channelKind = normalizeChannelKind(kind || "text", channelSlug);
+  let catId = String(categoryId || "").trim() || null;
+  if (!catId && categoryName) {
+    catId = await ensureGroupCategory(sql, groupId, categoryName);
+  }
+  const maxSort = await sql`
+    SELECT COALESCE(MAX(sort_order), -1)::int AS max FROM synk_community_group_channels WHERE group_id = ${groupId}
+  `;
+  const nextSort = sortOrder != null ? Number(sortOrder) || 0 : Number(maxSort[0] && maxSort[0].max) + 1;
+  try {
+    const rows = await sql`
+      INSERT INTO synk_community_group_channels (
+        group_id, category_id, emoji, name, slug, description, kind, sort_order
+      )
+      VALUES (
+        ${groupId}, ${catId}, ${String(emoji || "").trim().slice(0, 8)}, ${channelName}, ${channelSlug},
+        ${String(description || "").trim().slice(0, 280)}, ${channelKind}, ${nextSort}
+      )
+      RETURNING id, group_id, category_id, emoji, name, slug, description, kind, sort_order
+    `;
+    return { ok: true, channel: mapCommunityChannel(rows[0]) };
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      return { ok: false, error: "A channel with that slug already exists" };
+    }
+    throw err;
+  }
+}
+
+async function updateGroupChannel(sql, channelId, groupId, patch = {}) {
+  const id = String(channelId || "").trim();
+  if (!id) return { ok: false, error: "Channel required" };
+  const existing = await sql`
+    SELECT id, group_id, category_id, emoji, name, slug, description, kind, sort_order
+    FROM synk_community_group_channels
+    WHERE id = ${id} AND group_id = ${groupId}
+    LIMIT 1
+  `;
+  if (!existing[0]) return { ok: false, error: "Channel not found" };
+  const nextName = patch.name != null ? capitalizeChannelName(patch.name) : existing[0].name;
+  if (!nextName) return { ok: false, error: "Channel name required" };
+  const nextSlug =
+    patch.slug != null ? normalizeChannelSlug(patch.slug) : existing[0].slug;
+  if (!nextSlug || nextSlug.length < 2) return { ok: false, error: "Channel slug needs at least 2 characters" };
+  const nextKind =
+    patch.kind != null ? normalizeChannelKind(patch.kind, nextSlug) : normalizeChannelKind(existing[0].kind, nextSlug);
+  const nextDesc =
+    patch.description != null
+      ? String(patch.description || "").trim().slice(0, 280)
+      : existing[0].description || "";
+  const nextEmoji =
+    patch.emoji != null ? String(patch.emoji || "").trim().slice(0, 8) : existing[0].emoji || "";
+  let nextCat = existing[0].category_id;
+  if (patch.categoryId !== undefined) nextCat = String(patch.categoryId || "").trim() || null;
+  if (patch.categoryName) nextCat = await ensureGroupCategory(sql, groupId, patch.categoryName);
+  const nextSort = patch.sortOrder != null ? Number(patch.sortOrder) || 0 : existing[0].sort_order;
+  try {
+    const rows = await sql`
+      UPDATE synk_community_group_channels
+      SET
+        name = ${nextName},
+        slug = ${nextSlug},
+        kind = ${nextKind},
+        description = ${nextDesc},
+        emoji = ${nextEmoji},
+        category_id = ${nextCat},
+        sort_order = ${nextSort}
+      WHERE id = ${id}
+      RETURNING id, group_id, category_id, emoji, name, slug, description, kind, sort_order
+    `;
+    return { ok: true, channel: mapCommunityChannel(rows[0]) };
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      return { ok: false, error: "A channel with that slug already exists" };
+    }
+    throw err;
+  }
+}
+
+async function deleteGroupChannel(sql, channelId, groupId) {
+  const id = String(channelId || "").trim();
+  if (!id) return { ok: false, error: "Channel required" };
+  const lounge = await sql`
+    SELECT id FROM synk_community_group_channels
+    WHERE group_id = ${groupId} AND slug IN ('lounge', 'general')
+    ORDER BY CASE WHEN slug = 'lounge' THEN 0 ELSE 1 END
+    LIMIT 1
+  `;
+  const fallbackId = lounge[0] && lounge[0].id !== id ? lounge[0].id : null;
+  if (fallbackId) {
+    await sql`
+      UPDATE synk_community_posts
+      SET channel_id = ${fallbackId}
+      WHERE group_id = ${groupId} AND channel_id = ${id}
+    `;
+  } else {
+    await sql`
+      UPDATE synk_community_posts
+      SET channel_id = NULL
+      WHERE group_id = ${groupId} AND channel_id = ${id}
+    `;
+  }
+  const deleted = await sql`
+    DELETE FROM synk_community_group_channels
+    WHERE id = ${id} AND group_id = ${groupId}
+    RETURNING id
+  `;
+  return { ok: true, deleted: deleted.length > 0 };
+}
+
 module.exports = {
   hashSecret,
   verifySecret,
@@ -5345,6 +5485,11 @@ module.exports = {
   assignGroupTag,
   unassignGroupTag,
   syncOfficialSynkLayout,
+  updateCommunityGroup,
+  createGroupChannel,
+  updateGroupChannel,
+  deleteGroupChannel,
+  ensureGroupCategory,
   purgeLegacyCommunityGroups,
   listGroupCategories,
   listGroupChannels,
