@@ -1083,6 +1083,7 @@
           staff,
           ownerUsername,
         });
+        if (next.type === "groups") renderGroupsPage();
       } catch (_) {}
       loadCommunity({ soft: true }).catch(() => {});
       return;
@@ -1316,24 +1317,62 @@
   }
 
   
+  function groupCardHtml(group) {
+    const members =
+      group.memberCount != null
+        ? `${Number(group.memberCount).toLocaleString()} member${Number(group.memberCount) === 1 ? "" : "s"}`
+        : "";
+    const posts =
+      group.postCount != null
+        ? `${Number(group.postCount).toLocaleString()} post${Number(group.postCount) === 1 ? "" : "s"}`
+        : "";
+    const meta = [group.slug, members || posts].filter(Boolean).join(" · ");
+    const initial = String(group.slug || group.name || "?").slice(0, 1).toUpperCase();
+    const joined = !!group.joined;
+    const desc = String(group.description || "").trim();
+    return `<a class="community-group-card" href="/community/group/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
+      <span class="community-group-card-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
+      <span class="community-group-card-main">
+        <strong class="community-group-card-name">${escapeHtml(group.name || group.slug)}</strong>
+        <span class="community-group-card-meta muted">${escapeHtml(meta)}</span>
+        ${desc ? `<span class="community-group-card-desc muted">${escapeHtml(desc)}</span>` : ""}
+      </span>
+      ${joined ? `<span class="community-group-card-pill">Joined</span>` : `<span class="community-group-card-pill is-ghost">View</span>`}
+    </a>`;
+  }
+
   function renderGroupsPage() {
     const host = document.getElementById("feed") || document.getElementById("feed-list") || document.getElementById("posts-list");
     if (!host) return;
-    if (!groups.length) {
-      host.innerHTML = `<article class="card"><p class="muted" style="margin:0;">No groups yet.</p></article>`;
+    if (feedEmpty) feedEmpty.hidden = true;
+    try {
+      syncSortTabs();
+      syncFeedChrome();
+    } catch (_) {}
+    const list = Array.isArray(groups) ? groups.slice() : [];
+    if (!list.length) {
+      host.innerHTML = "";
+      if (feedEmpty) {
+        feedEmpty.hidden = false;
+        feedEmpty.innerHTML = `<div class="reddit-empty-ico" aria-hidden="true">${ico("feed", 28)}</div><strong>No groups yet</strong><p>Communities will show up here once they’re available.</p>`;
+      }
       return;
     }
-    host.innerHTML = groups.map((group) => {
-      const count = group.postCount != null ? `${group.postCount} post${Number(group.postCount) === 1 ? "" : "s"}` : "";
-      const initial = String(group.slug || "?").slice(0, 1).toUpperCase();
-      return `<a class="card community-group-card" href="/community/group/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}" style="display:grid;grid-template-columns:48px 1fr;gap:12px;align-items:center;text-decoration:none;color:inherit;">
-        <span class="reddit-nav-avatar" aria-hidden="true" style="width:48px;height:48px;border-radius:12px;display:grid;place-items:center;font-weight:700;">${escapeHtml(initial)}</span>
-        <span>
-          <strong style="display:block;">${escapeHtml(group.name || group.slug)}</strong>
-          <span class="muted" style="font-size:0.85rem;">${escapeHtml(group.slug)}${count ? ` · ${escapeHtml(count)}` : ""}</span>
-        </span>
-      </a>`;
-    }).join("");
+    const joined = list.filter((g) => g && g.joined);
+    const other = list.filter((g) => g && !g.joined);
+    const rankedOther = other
+      .slice()
+      .sort((a, b) => Number(b.postCount || 0) - Number(a.postCount || 0));
+    let html = "";
+    if (joined.length) {
+      html += `<p class="search-section-title">Joined</p>`;
+      html += joined.map(groupCardHtml).join("");
+    }
+    if (rankedOther.length) {
+      html += `<p class="search-section-title">${joined.length ? "Discover" : "Communities"}</p>`;
+      html += rankedOther.map(groupCardHtml).join("");
+    }
+    host.innerHTML = html;
   }
 
   function renderGroups() {
@@ -1957,7 +1996,7 @@
     const onPost = route.type === "post";
     const onInbox = route.type === "inbox";
     const onGroups = route.type === "groups";
-    const onFeed = !onSettings && !onSubmit && !onMod && !onPost && !onInbox;
+    const onFeed = !onSettings && !onSubmit && !onMod && !onPost && !onInbox && !onGroups;
     if (feedView) feedView.hidden = needsUsername || !(onFeed || onGroups);
     if (settingsView) settingsView.hidden = needsUsername || !onSettings;
     if (submitView) submitView.hidden = needsUsername || !onSubmit;
@@ -1965,7 +2004,8 @@
     if (postView) postView.hidden = needsUsername || !onPost;
     if (inboxView) inboxView.hidden = needsUsername || !onInbox;
     if (composerCard) {
-      composerCard.hidden = needsUsername || !onFeed || route.type === "user" || route.type === "search";
+      composerCard.hidden =
+        needsUsername || !onFeed || onGroups || route.type === "user" || route.type === "search";
     }
     const settingsNav = document.getElementById("settings-nav-link");
     if (settingsNav) settingsNav.classList.toggle("is-active", onSettings);
@@ -2552,6 +2592,23 @@ function applyViewState(data) {
       updateAboutRail(data);
       return;
     }
+    if (route.type === "groups") {
+      setBannerMode("home", false);
+      if (viewBlurb) {
+        viewBlurb.hidden = true;
+        viewBlurb.textContent = "";
+      }
+      if (pageHead) pageHead.hidden = false;
+      setText("page-head-title", "Your groups");
+      setText("page-head-sub", "Communities you’ve joined and more to explore");
+      if (composerCard) composerCard.hidden = true;
+      const discordShell = document.getElementById("discord-shell");
+      if (discordShell) discordShell.hidden = true;
+      document.body.classList.remove("is-discord-group");
+      mountFeedStack(false);
+      updateAboutRail(data);
+      return;
+    }
     // home
     setBannerMode("home", false);
     if (viewBlurb) {
@@ -2643,7 +2700,9 @@ function applyViewState(data) {
       renderMyTags();
 
       if (route.type === "groups") {
+        applyViewState(data);
         renderGroupsPage();
+        return;
       }
       if (route.type === "inbox") {
         setInboxTab(inboxTab);
