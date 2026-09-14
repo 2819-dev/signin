@@ -11783,3 +11783,120 @@ body.reddit-body .reddit-follow-copy .muted {
     max-height: min(70vh, 560px);
   }
 }
+
+/* —— Synk flowing logo loader —— */
+@keyframes synk-flow-dash {
+  to { stroke-dashoffset: -256; }
+}
+@keyframes synk-loader-fade-out {
+  to { opacity: 0; visibility: hidden; }
+}
+
+.synk-flow-logo {
+  display: block;
+  color: #041A55;
+}
+html[data-theme="dark"] .synk-flow-logo,
+html.dark .synk-flow-logo,
+body.community-body.theme-dark .synk-flow-logo {
+  color: #8eb6ff;
+}
+
+.synk-flow-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 12;
+  stroke-linecap: round;
+  /* Short glowing segment + long gap = flowing lines along each arc */
+  stroke-dasharray: 42 200;
+  animation: synk-flow-dash 1.35s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  opacity: 0.95;
+}
+.synk-flow-ring.is-outer {
+  animation-duration: 1.6s;
+  stroke-dasharray: 52 210;
+}
+.synk-flow-ring.is-mid {
+  animation-duration: 1.2s;
+  animation-direction: reverse;
+  animation-delay: -0.25s;
+  stroke-dasharray: 34 170;
+  opacity: 0.88;
+}
+.synk-flow-ring.is-inner {
+  animation-duration: 0.95s;
+  animation-delay: -0.5s;
+  stroke-dasharray: 22 120;
+  opacity: 0.8;
+}
+
+.synk-loader {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 12px;
+}
+.synk-loader-mark {
+  display: grid;
+  place-items: center;
+}
+
+.synk-loader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--r-canvas, #dae0e6) 88%, #fff);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: opacity .22s ease, visibility .22s ease;
+}
+html[data-theme="dark"] .synk-loader-overlay,
+html.dark .synk-loader-overlay {
+  background: color-mix(in srgb, #030303 86%, #1a1a1b);
+}
+.synk-loader-overlay[hidden] {
+  display: none !important;
+}
+.synk-loader-overlay.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.synk-loader-inline {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  padding: 36px 16px;
+  background: transparent;
+}
+body.community-body .synk-loader-inline,
+body.reddit-body .synk-loader-inline {
+  min-height: 280px;
+}
+.reddit-notif-panel .synk-loader-inline,
+.reddit-follow-card .synk-loader-inline,
+.release-notes-card-body .synk-loader-inline {
+  min-height: 120px;
+  padding: 24px 12px;
+}
+
+html.synk-loading,
+html.synk-loading body {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .synk-flow-ring {
+    animation: synk-flow-pulse 1.2s ease-in-out infinite !important;
+    stroke-dasharray: none !important;
+  }
+  @keyframes synk-flow-pulse {
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 1; }
+  }
+  .synk-loader-overlay.is-leaving {
+    transition: none;
+  }
+}

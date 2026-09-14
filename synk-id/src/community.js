@@ -699,30 +699,41 @@
     showToast._t = setTimeout(() => el.classList.remove("show"), 2400);
   }
 
-  function renderFeedSkeleton(count = 4) {
+  function synkLoadingHtml({ size = 64, label = "Loading", inline = true } = {}) {
+    const mark =
+      window.SynkLoader && typeof window.SynkLoader.markup === "function"
+        ? window.SynkLoader.markup({ size, label })
+        : `<p class="muted">${escapeHtml(label)}…</p>`;
+    if (!inline) return mark;
+    return `<div class="synk-loader-inline" aria-busy="true">${mark}</div>`;
+  }
+
+  function hideSynkBootLoader() {
+    try {
+      if (window.SynkLoader && typeof window.SynkLoader.hide === "function") {
+        window.SynkLoader.hide();
+      } else {
+        const el = document.getElementById("synk-boot-loader");
+        if (el) el.hidden = true;
+        document.documentElement.classList.remove("synk-loading");
+      }
+    } catch (_) {}
+  }
+
+  function renderFeedSkeleton() {
     if (!feedEl) return;
     if (feedEmpty) feedEmpty.hidden = true;
-    const cards = Array.from({ length: count }, () => {
-      return `<article class="reddit-post reddit-skel" aria-hidden="true">
-        <div class="reddit-vote">
-          <span class="reddit-skel-block is-sq"></span>
-          <span class="reddit-skel-block is-score"></span>
-          <span class="reddit-skel-block is-sq"></span>
-        </div>
-        <div class="reddit-post-main">
-          <div class="reddit-skel-line is-meta"></div>
-          <div class="reddit-skel-line is-title"></div>
-          <div class="reddit-skel-line is-body"></div>
-          <div class="reddit-skel-line is-body is-short"></div>
-          <div class="reddit-skel-actions">
-            <span class="reddit-skel-block is-pill"></span>
-            <span class="reddit-skel-block is-pill"></span>
-            <span class="reddit-skel-block is-pill"></span>
-          </div>
-        </div>
-      </article>`;
-    }).join("");
-    feedEl.innerHTML = `<div class="reddit-skel-feed" aria-busy="true" aria-live="polite">${cards}</div>`;
+    feedEl.innerHTML = synkLoadingHtml({ size: 72, label: "Loading feed" });
+  }
+
+  function renderPostLoading() {
+    const el = document.getElementById("post-detail");
+    if (!el) return;
+    el.innerHTML = synkLoadingHtml({ size: 64, label: "Loading post" });
+    const comments = document.getElementById("comments-list");
+    if (comments) comments.innerHTML = "";
+    const empty = document.getElementById("comments-empty");
+    if (empty) empty.hidden = true;
   }
 
   async function communityAction(payload) {
@@ -2516,133 +2527,138 @@ function applyViewState(data) {
   }
 
   async function loadCommunity({ soft = false } = {}) {
-    const __touchStay = () => {
-      try { if (window.SynkSession) window.SynkSession.touchSession(); } catch (_) {}
-    };
-    const showFeedSkeleton =
-      !soft &&
-      ["home", "popular", "group", "user", "search"].includes(route.type);
-    if (showFeedSkeleton) renderFeedSkeleton(route.type === "search" ? 3 : 5);
+    try {
+      const __touchStay = () => {
+        try { if (window.SynkSession) window.SynkSession.touchSession(); } catch (_) {}
+      };
+      const showFeedSkeleton =
+        !soft &&
+        ["home", "popular", "group", "user", "search"].includes(route.type);
+      if (showFeedSkeleton) renderFeedSkeleton();
+      if (!soft && route.type === "post") renderPostLoading();
 
-    let url = "/api/synk-community";
-    const sort = apiSort();
-    if (route.type === "post" && route.postId) {
-      url += `?post=${encodeURIComponent(route.postId)}`;
-    } else if (route.type === "inbox") {
-      url += "?inbox=1";
-    } else if (
-      route.type === "settings" ||
-      route.type === "submit" ||
-      route.type === "mod" ||
-      route.type === "groups" ||
-      soft
-    ) {
-      // Lightweight shell payload — no feed posts.
-      url += "?shell=1";
-    } else if (route.type === "popular") {
-      url += `?feed=popular&sort=${encodeURIComponent(sort)}`;
-    } else if (route.type === "home") {
-      url += `?feed=home&sort=${encodeURIComponent(sort)}`;
-    } else if (route.type === "group" && route.slug) {
-      url += `?group=${encodeURIComponent(route.slug)}&sort=${encodeURIComponent(sort)}`;
-      const ch = route.channel || activeChannelSlug || "";
-      if (ch) url += `&channel=${encodeURIComponent(ch)}`;
-    } else if (route.type === "user" && route.username) {
-      url += `?user=${encodeURIComponent(route.username)}&sort=${encodeURIComponent(sort)}`;
-    } else if (route.type === "search") {
-      const q = route.query || "";
-      const tab = route.tab || "all";
-      const searchSort = tab === "popular" ? "hot" : sort;
-      url += `?q=${encodeURIComponent(q)}&tab=${encodeURIComponent(tab)}&sort=${encodeURIComponent(searchSort)}`;
-    } else if (sort && sort !== "new") {
-      url += `?sort=${encodeURIComponent(sort)}`;
-    }
-
-    const res = await fetch(url, { headers: hubHeaders() });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Unable to load Community. Please try again.");
-    me = data.me || null;
-    __touchStay();
-    publicUsername = (me && me.publicUsername) || "";
-    displayName = (me && me.displayName) || "";
-    photoUrl = (me && me.photoUrl) || "";
-    avatarUrl = (me && me.avatarUrl) || "";
-    bio = (me && me.bio) || "";
-    dmPolicy = (me && me.dmPolicy) || "friends";
-    alts = (me && me.alts) || [];
-    myTags = (me && me.tags) || [];
-    tags = data.tags || [];
-    groups = data.groups || groups || [];
-    staff = data.staff || [];
-    ownerUsername = data.ownerUsername || "vision";
-    if (typeof data.unreadCount === "number") unreadCount = data.unreadCount;
-    if (data.group && typeof data.group.joined === "boolean") {
-      activeGroupJoined = !!data.group.joined;
-    }
-    if (data.group) activeGroupDetail = data.group;
-    if (data.channel && data.channel.slug) activeChannelSlug = data.channel.slug;
-    updateInboxBadge();
-    applyUsernameState();
-    applyStaffState();
-    setupActAsBanner();
-    if (route.type !== "inbox") renderGroups();
-    renderMyTags();
-
-    if (route.type === "groups") {
-      renderGroupsPage();
-    }
-    if (route.type === "inbox") {
-      setInboxTab(inboxTab);
-      if (inboxTab === "messages") {
-        loadDmThreads().catch(() => {});
+      let url = "/api/synk-community";
+      const sort = apiSort();
+      if (route.type === "post" && route.postId) {
+        url += `?post=${encodeURIComponent(route.postId)}`;
+      } else if (route.type === "inbox") {
+        url += "?inbox=1";
+      } else if (
+        route.type === "settings" ||
+        route.type === "submit" ||
+        route.type === "mod" ||
+        route.type === "groups" ||
+        soft
+      ) {
+        // Lightweight shell payload — no feed posts.
+        url += "?shell=1";
+      } else if (route.type === "popular") {
+        url += `?feed=popular&sort=${encodeURIComponent(sort)}`;
+      } else if (route.type === "home") {
+        url += `?feed=home&sort=${encodeURIComponent(sort)}`;
+      } else if (route.type === "group" && route.slug) {
+        url += `?group=${encodeURIComponent(route.slug)}&sort=${encodeURIComponent(sort)}`;
+        const ch = route.channel || activeChannelSlug || "";
+        if (ch) url += `&channel=${encodeURIComponent(ch)}`;
+      } else if (route.type === "user" && route.username) {
+        url += `?user=${encodeURIComponent(route.username)}&sort=${encodeURIComponent(sort)}`;
+      } else if (route.type === "search") {
+        const q = route.query || "";
+        const tab = route.tab || "all";
+        const searchSort = tab === "popular" ? "hot" : sort;
+        url += `?q=${encodeURIComponent(q)}&tab=${encodeURIComponent(tab)}&sort=${encodeURIComponent(searchSort)}`;
+      } else if (sort && sort !== "new") {
+        url += `?sort=${encodeURIComponent(sort)}`;
       }
-      if (!Array.isArray(data.groups) || !data.groups.length) {
-        try {
-          const baseRes = await fetch("/api/synk-community?feed=home", { headers: hubHeaders() });
-          const base = await baseRes.json().catch(() => ({}));
-          if (baseRes.ok) {
-            groups = base.groups || groups || [];
-            if (base.me) {
-              me = base.me;
-              publicUsername = (me && me.publicUsername) || publicUsername;
-              alts = (me && me.alts) || alts;
-              myTags = (me && me.tags) || myTags;
-            }
-            if (base.staff) staff = base.staff;
-            if (base.tags) tags = base.tags;
-            applyStaffState();
-          }
-        } catch (_) {}
+
+      const res = await fetch(url, { headers: hubHeaders() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Unable to load Community. Please try again.");
+      me = data.me || null;
+      __touchStay();
+      publicUsername = (me && me.publicUsername) || "";
+      displayName = (me && me.displayName) || "";
+      photoUrl = (me && me.photoUrl) || "";
+      avatarUrl = (me && me.avatarUrl) || "";
+      bio = (me && me.bio) || "";
+      dmPolicy = (me && me.dmPolicy) || "friends";
+      alts = (me && me.alts) || [];
+      myTags = (me && me.tags) || [];
+      tags = data.tags || [];
+      groups = data.groups || groups || [];
+      staff = data.staff || [];
+      ownerUsername = data.ownerUsername || "vision";
+      if (typeof data.unreadCount === "number") unreadCount = data.unreadCount;
+      if (data.group && typeof data.group.joined === "boolean") {
+        activeGroupJoined = !!data.group.joined;
       }
+      if (data.group) activeGroupDetail = data.group;
+      if (data.channel && data.channel.slug) activeChannelSlug = data.channel.slug;
+      updateInboxBadge();
       applyUsernameState();
-      renderGroups();
-      applyViewState(data);
-      renderInbox(data.notifications || []);
-      renderNotifPanel(data.notifications || []);
-      notifLoaded = true;
-      return;
-    }
+      applyStaffState();
+      setupActAsBanner();
+      if (route.type !== "inbox") renderGroups();
+      renderMyTags();
 
-    if (route.type === "post") {
-      const post = data.post || (data.posts && data.posts[0]) || null;
-      lastPosts = post ? [post] : [];
-      lastComments = data.comments || [];
-      applyViewState(data);
-      renderPostDetail(post);
-      renderComments(lastComments);
-      return;
-    }
+      if (route.type === "groups") {
+        renderGroupsPage();
+      }
+      if (route.type === "inbox") {
+        setInboxTab(inboxTab);
+        if (inboxTab === "messages") {
+          loadDmThreads().catch(() => {});
+        }
+        if (!Array.isArray(data.groups) || !data.groups.length) {
+          try {
+            const baseRes = await fetch("/api/synk-community?feed=home", { headers: hubHeaders() });
+            const base = await baseRes.json().catch(() => ({}));
+            if (baseRes.ok) {
+              groups = base.groups || groups || [];
+              if (base.me) {
+                me = base.me;
+                publicUsername = (me && me.publicUsername) || publicUsername;
+                alts = (me && me.alts) || alts;
+                myTags = (me && me.tags) || myTags;
+              }
+              if (base.staff) staff = base.staff;
+              if (base.tags) tags = base.tags;
+              applyStaffState();
+            }
+          } catch (_) {}
+        }
+        applyUsernameState();
+        renderGroups();
+        applyViewState(data);
+        renderInbox(data.notifications || []);
+        renderNotifPanel(data.notifications || []);
+        notifLoaded = true;
+        return;
+      }
 
-    applyViewState(data);
-    if (route.type === "settings" || route.type === "submit" || route.type === "mod") {
-      return;
+      if (route.type === "post") {
+        const post = data.post || (data.posts && data.posts[0]) || null;
+        lastPosts = post ? [post] : [];
+        lastComments = data.comments || [];
+        applyViewState(data);
+        renderPostDetail(post);
+        renderComments(lastComments);
+        return;
+      }
+
+      applyViewState(data);
+      if (route.type === "settings" || route.type === "submit" || route.type === "mod") {
+        return;
+      }
+      if (route.type === "search") {
+        renderSearchResults(data);
+        return;
+      }
+      syncSearchTabs();
+      renderFeed(data.posts || []);
+    } finally {
+      hideSynkBootLoader();
     }
-    if (route.type === "search") {
-      renderSearchResults(data);
-      return;
-    }
-    syncSearchTabs();
-    renderFeed(data.posts || []);
   }
 
   personaBtn.addEventListener("click", (e) => {
@@ -4538,7 +4554,7 @@ function applyViewState(data) {
     if (!modal || !body || !username) return;
     const label = kind === "following" ? "Following" : "Followers";
     if (title) title.textContent = label;
-    body.innerHTML = `<p class="muted reddit-follow-empty">Loading…</p>`;
+    body.innerHTML = synkLoadingHtml({ size: 48, label: `Loading ${label.toLowerCase()}` });
     modal.hidden = false;
     document.documentElement.classList.add("follow-list-lock");
     try {
@@ -4861,7 +4877,7 @@ function applyViewState(data) {
         setNotifOpen(true);
       } else {
         const list = document.getElementById("notif-list");
-        if (list) list.innerHTML = `<p class="muted reddit-notif-empty">Loading…</p>`;
+        if (list) list.innerHTML = synkLoadingHtml({ size: 40, label: "Loading notifications" });
         setNotifOpen(true);
       }
       refreshNotifications().catch(() => {});
@@ -5065,7 +5081,7 @@ function applyViewState(data) {
     const sub = document.getElementById("release-notes-sub");
     if (!modal || !body) return;
     modal.hidden = false;
-    body.innerHTML = `<p class="muted">Loading…</p>`;
+    body.innerHTML = synkLoadingHtml({ size: 48, label: "Loading release notes" });
     if (sub) sub.textContent = version ? `Update ${String(version).slice(0, 10)}` : "What’s new in this update";
     try {
       const ver = String(version || "").trim();
@@ -5596,9 +5612,11 @@ document.addEventListener("click", async (e) => {
   history.replaceState(route, "", bootUrl);
   if (!session || !hubToken) {
     lockedCard.hidden = false;
+    hideSynkBootLoader();
   } else {
     communityApp.hidden = false;
     loadCommunity().catch((err) => {
+      hideSynkBootLoader();
       const msg = String((err && err.message) || "");
       const authDead = /sign in|session expired|unauthorized|log in again/i.test(msg);
       if (authDead) {
@@ -5613,6 +5631,7 @@ document.addEventListener("click", async (e) => {
       lockedCard.hidden = true;
       setTimeout(() => {
         loadCommunity().catch((err2) => {
+          hideSynkBootLoader();
           communityApp.hidden = true;
           lockedCard.hidden = false;
           document.getElementById("locked-help").textContent =
