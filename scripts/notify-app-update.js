@@ -226,6 +226,10 @@ function releaseNoteThemePhrases(subject) {
     "Alt accounts behave more like regular Community profiles, including profile and follow links"
   );
   add(
+    /\brelease notes?\b.*\bdescriptive\b|\bmore descriptive\b.*\brelease notes?\b/i,
+    "Release notes now go into a bit more detail, while staying clear and easy to read"
+  );
+  add(
     /\brelease notes?\b|\bwhats?\s*new\b|\bconsumer-facing\b/i,
     "Release notes are written in clearer everyday language so updates are easier to understand"
   );
@@ -334,7 +338,6 @@ function buildReleaseNotesFromGit(version, { previousVersion = "", previousNotes
     commits = gitCommitSubjectsSince("", tip);
   }
 
-  const seenBefore = subjectsFromNotes(previousNotes);
   const seenNow = new Set();
   const buckets = {
     new: [],
@@ -357,7 +360,7 @@ function buildReleaseNotesFromGit(version, { previousVersion = "", previousNotes
 
       const key = normalizeCommitSubject(subject);
       if (!key) continue;
-      if (seenBefore.has(key)) continue;
+      // Dedup only within this update. Prior broadcasts already scoped by git range.
       if (seenNow.has(key)) continue;
       seenNow.add(key);
 
