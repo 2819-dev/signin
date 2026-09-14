@@ -1144,7 +1144,7 @@
     if (publicUsername) {
       options.push({
         username: publicUsername,
-        label: "Primary",
+        label: `@${publicUsername}`,
         isAlt: false,
         displayName: displayName || "",
         avatarUrl: avatarUrl || "",
@@ -1153,7 +1153,7 @@
     (alts || []).forEach((alt) => {
       options.push({
         username: alt.username,
-        label: alt.label || "Alt",
+        label: `@${alt.username}`,
         isAlt: true,
         displayName: alt.displayName || "",
         avatarUrl: alt.avatarUrl || "",
@@ -1222,7 +1222,7 @@
             ${avatarMarkup(optAvatar, optLabel, "persona-menu-avatar community-face")}
             <span class="persona-menu-copy">
               <strong>${escapeHtml(optLabel)}</strong>
-              <span>${escapeHtml(opt.label || (opt.isAlt ? opt.username : "Primary"))}</span>
+              <span>${escapeHtml(opt.label || `@${opt.username}`)}</span>
             </span>
           </button>
         `;
@@ -1347,7 +1347,7 @@
 
   function renderAlts() {
     if (!alts.length) {
-      altList.innerHTML = '<p class="muted" style="margin:0;font-size:0.85rem;">No alts yet.</p>';
+      altList.innerHTML = '<p class="muted" style="margin:0;font-size:0.85rem;">No additional accounts yet.</p>';
       return;
     }
     altList.innerHTML = alts
@@ -1356,7 +1356,7 @@
           <div class="community-staff-row">
             <div>
               <a class="community-user-link" href="/user/${escapeHtml(alt.username)}">${escapeHtml(alt.username)}</a>
-              <span class="muted" style="font-size:0.78rem;">${escapeHtml(alt.label || "Alt")}</span>
+              <span class="muted" style="font-size:0.78rem;">@${escapeHtml(alt.username)}</span>
             </div>
             <button class="btn btn-secondary btn-compact" type="button" data-delete-alt="${escapeHtml(alt.username)}">Delete</button>
           </div>
@@ -1457,7 +1457,7 @@
               avatarUrl: u.avatarUrl || "",
               label: u.displayName || u.username || "?",
               title: u.displayName || u.username || "member",
-              subtitle: `@${u.username || ""}${u.isAlt ? " · alt" : ""}`,
+              subtitle: `@${u.username || ""}`,
             })
           )
           .join("");
@@ -1959,19 +1959,15 @@
       if (gateInput) gateInput.value = publicUsername;
       if (settingsUsername) {
         settingsUsername.value = account.username || publicUsername;
-        // Primary username can be renamed here; alt usernames are fixed at creation.
-        settingsUsername.readOnly = Boolean(account.isAlt);
-        settingsUsername.title = account.isAlt
-          ? "Alt usernames are assigned when the account is created"
-          : "";
+        settingsUsername.readOnly = false;
+        settingsUsername.title = "";
       }
       const usernameBtn = document.getElementById("settings-username-btn");
-      if (usernameBtn) usernameBtn.hidden = Boolean(account.isAlt);
+      if (usernameBtn) usernameBtn.hidden = false;
       const settingsLead = document.querySelector(".reddit-settings-lead");
       if (settingsLead) {
-        settingsLead.textContent = account.isAlt
-          ? `Managing settings for @${account.username}. Posts, messages, and this profile use this account while it is selected.`
-          : "Manage how you appear in Community. Your legal name remains private.";
+        settingsLead.textContent =
+          "Manage how you appear in Community. Your legal name remains private.";
       }
       const settingsDisplay = document.getElementById("settings-display-name");
       if (settingsDisplay) settingsDisplay.value = account.displayName || "";
@@ -2815,15 +2811,23 @@ function applyViewState(data) {
 
   async function saveUsername(username, statusEl) {
     statusEl.textContent = "Saving…";
+    const current = actingUsername() || publicUsername || "";
     const res = await fetch("/api/synk-community", {
       method: "POST",
       headers: hubHeaders(),
-      body: JSON.stringify({ action: "set-username", username }),
+      body: JSON.stringify({
+        action: "set-username",
+        username,
+        asUsername: current,
+      }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Unable to save username. Please try again.");
-    publicUsername = data.publicUsername;
-    storePersona(publicUsername);
+    const nextName = String(data.username || username || "").trim().toLowerCase();
+    const nextPrimary = String(data.publicUsername || publicUsername || "").trim().toLowerCase();
+    if (nextPrimary) publicUsername = nextPrimary;
+    // Keep the switched-in account selected after a rename (primary or alt).
+    storePersona(nextName || nextPrimary || publicUsername);
     statusEl.textContent = "Saved";
     await loadCommunity();
   }
@@ -3232,16 +3236,16 @@ function applyViewState(data) {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Could not create alt");
+      if (!res.ok) throw new Error(data.error || "Could not create account");
       document.getElementById("alt-username").value = "";
       document.getElementById("alt-label").value = "";
       alts = data.alts || [];
       if (me) me.alts = alts;
       renderAlts();
       syncPersonaUi();
-      status.textContent = `Created ${data.alt.username}`;
+      status.textContent = `Created @${data.alt.username}`;
     } catch (err) {
-      status.textContent = err.message || "Could not create alt";
+      status.textContent = err.message || "Could not create account";
     }
   });
 
@@ -3258,15 +3262,15 @@ function applyViewState(data) {
         body: JSON.stringify({ action: "delete-alt", username }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Could not delete alt");
+      if (!res.ok) throw new Error(data.error || "Could not delete account");
       alts = data.alts || [];
       if (me) me.alts = alts;
       if (activePersona === username) storePersona(publicUsername);
       renderAlts();
       syncPersonaUi();
-      status.textContent = "Alt deleted";
+      status.textContent = "Account deleted";
     } catch (err) {
-      status.textContent = err.message || "Could not delete alt";
+      status.textContent = err.message || "Could not delete account";
     }
   });
 

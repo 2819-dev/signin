@@ -30,6 +30,7 @@ const {
   normalizeSuggestionStatus,
   capitalizeChannelName,
   isCommunityUsernameTaken,
+  renameCommunityUsername,
   listOwnerAltAccounts,
   findCommunityAltAccount,
   findCommunityPublicProfile,
@@ -1405,7 +1406,8 @@ async function searchCommunityUsers(sql, query, limit = 30) {
     username: row.username,
     displayName: String(row.display_name || "").trim(),
     avatarUrl: String(row.avatar_url || "").trim(),
-    isAlt: Boolean(row.is_alt),
+    // Alts are first-class accounts in the product UI — do not mark them publicly.
+    isAlt: false,
     joinedAt: row.created_at || null,
   }));
 }
@@ -1808,16 +1810,58 @@ exports.handler = async (event) => {
       if (!/^[a-z0-9_]+$/.test(username)) {
         return json(400, { error: "Use only letters, numbers, and underscores" });
       }
-      if (await isCommunityUsernameTaken(sql, username, { exceptProfileId: auth.profile.id })) {
+
+      const primary = normalizePublicUsername(auth.profile.publicUsername);
+      const asUsername =
+        normalizePublicUsername(body.asUsername || body.currentUsername || body.fromUsername) ||
+        primary;
+      const renamingAlt = Boolean(asUsername && primary && asUsername !== primary);
+
+      let alt = null;
+      if (renamingAlt) {
+        if (role !== "owner") {
+          return json(403, { error: "Only the owner can rename alt accounts" });
+        }
+        alt = await findCommunityAltAccount(sql, {
+          username: asUsername,
+          ownerProfileId: auth.profile.id,
+        });
+        if (!alt) return json(403, { error: "That account is unavailable" });
+      }
+
+      if (
+        await isCommunityUsernameTaken(sql, username, {
+          exceptProfileId: renamingAlt ? null : auth.profile.id,
+          exceptAltId: renamingAlt ? alt.id : null,
+        })
+      ) {
         return json(409, { error: "That username is already taken" });
       }
+
       try {
-        await sql`
-          INSERT INTO synk_community_profiles (synk_profile_id, public_username)
-          VALUES (${auth.profile.id}, ${username})
-          ON CONFLICT (synk_profile_id) DO UPDATE
-          SET public_username = EXCLUDED.public_username, updated_at = NOW()
-        `;
+        if (renamingAlt) {
+          await sql`
+            UPDATE synk_community_alt_accounts
+            SET public_username = ${username}, updated_at = NOW()
+            WHERE id = ${alt.id}
+              AND owner_synk_profile_id = ${auth.profile.id}
+          `;
+          await renameCommunityUsername(sql, asUsername, username);
+        } else {
+          const previous = primary || "";
+          await sql`
+            INSERT INTO synk_community_profiles (synk_profile_id, public_username)
+            VALUES (${auth.profile.id}, ${username})
+            ON CONFLICT (synk_profile_id) DO UPDATE
+            SET public_username = EXCLUDED.public_username, updated_at = NOW()
+          `;
+          if (previous && previous !== username) {
+            await renameCommunityUsername(sql, previous, username);
+          }
+          if (username === COMMUNITY_OWNER_USERNAME) {
+            await ensureCommunityOwner(sql);
+          }
+        }
       } catch (err) {
         if (String(err.message || "").includes("unique") || err.code === "23505") {
           return json(409, { error: "That username is already taken" });
@@ -1825,27 +1869,32 @@ exports.handler = async (event) => {
         throw err;
       }
 
-      if (username === COMMUNITY_OWNER_USERNAME) {
-        await ensureCommunityOwner(sql);
-      }
-
       await logSynkEvent(sql, {
         eventType: "community_username",
         profileId: auth.profile.id,
         ip,
-        detail: username,
+        detail: renamingAlt ? `${asUsername}->${username}` : username,
       });
       const nextRole = await getCommunityStaffRole(sql, auth.profile.id);
       const nextAlts =
         nextRole === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
+      if (nextAlts.length) {
+        for (const item of nextAlts) {
+          item.tags = await listUsernameTags(sql, item.username);
+          item.pinnedTag = item.tags.find((tag) => tag.pinned) || null;
+        }
+      }
+      const nextAuth = renamingAlt
+        ? auth
+        : { ...auth, profile: { ...auth.profile, publicUsername: username } };
       return json(200, {
         ok: true,
-        publicUsername: username,
-        me: mePayload(
-          { ...auth, profile: { ...auth.profile, publicUsername: username } },
-          nextRole,
-          nextAlts
-        ),
+        publicUsername: renamingAlt
+          ? auth.profile.publicUsername
+          : username,
+        username,
+        asUsername: renamingAlt ? username : username,
+        me: mePayload(nextAuth, nextRole, nextAlts),
       });
     }
 

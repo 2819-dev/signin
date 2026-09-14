@@ -815,6 +815,42 @@ async function isCommunityUsernameTaken(sql, username, { exceptProfileId = null,
   return false;
 }
 
+/**
+ * Rename a community username everywhere it is referenced.
+ * Used for both primary profiles and alt accounts so alts can be managed like regular accounts.
+ */
+async function renameCommunityUsername(sql, fromUsername, toUsername) {
+  const from = normalizePublicUsername(fromUsername);
+  const to = normalizePublicUsername(toUsername);
+  if (!from || !to) {
+    return { ok: false, error: "Invalid username" };
+  }
+  if (from === to) return { ok: true, username: to, unchanged: true };
+
+  await sql`UPDATE synk_community_posts SET author_username = ${to} WHERE author_username = ${from}`;
+  await sql`UPDATE synk_community_comments SET author_username = ${to} WHERE author_username = ${from}`;
+  await sql`UPDATE synk_community_username_tags SET public_username = ${to} WHERE public_username = ${from}`;
+  await sql`UPDATE synk_community_follows SET follower_username = ${to} WHERE follower_username = ${from}`;
+  await sql`UPDATE synk_community_follows SET following_username = ${to} WHERE following_username = ${from}`;
+  await sql`UPDATE synk_community_friendships SET requester_username = ${to} WHERE requester_username = ${from}`;
+  await sql`UPDATE synk_community_friendships SET addressee_username = ${to} WHERE addressee_username = ${from}`;
+  await sql`UPDATE synk_community_dm_threads SET user_a = ${to} WHERE user_a = ${from}`;
+  await sql`UPDATE synk_community_dm_threads SET user_b = ${to} WHERE user_b = ${from}`;
+  await sql`UPDATE synk_community_dm_messages SET sender_username = ${to} WHERE sender_username = ${from}`;
+  await sql`
+    UPDATE synk_community_notifications
+    SET actor_username = ${to}
+    WHERE actor_username = ${from}
+  `.catch(() => null);
+  await sql`
+    UPDATE synk_community_group_role_members
+    SET username = ${to}
+    WHERE username = ${from}
+  `.catch(() => null);
+
+  return { ok: true, username: to };
+}
+
 async function listOwnerAltAccounts(sql, ownerProfileId) {
   if (!ownerProfileId) return [];
   const rows = await sql`
@@ -5035,6 +5071,7 @@ module.exports = {
   normalizeRoleName,
   normalizeRoleColor,
   isCommunityUsernameTaken,
+  renameCommunityUsername,
   listOwnerAltAccounts,
   findCommunityAltAccount,
   findCommunityPublicProfile,
