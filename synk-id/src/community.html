@@ -235,7 +235,7 @@
                 <section class="card community-composer reddit-create" id="composer-card" hidden>
                   <div class="reddit-create-bar" id="composer-collapsed">
                     <div class="reddit-create-avatar" id="composer-avatar" aria-hidden="true">S</div>
-                    <a class="reddit-create-fakeinput" href="/community/submit" id="composer-open-btn">Share an update</a>
+                    <a class="reddit-create-fakeinput" href="/community/submit" id="composer-open-btn">Create Post</a>
                   </div>
                   <p class="muted" id="composer-as" hidden>Posting as —</p>
                 </section>
@@ -248,9 +248,18 @@
                 </section>
 
                 <section class="reddit-sortbar" id="sort-tabs" aria-label="Sort">
-                  <button class="reddit-sort-tab" type="button" data-sort="hot" id="sort-hot">Hot</button>
-                  <button class="reddit-sort-tab is-active" type="button" data-sort="new" id="sort-new">New</button>
-                  <button class="reddit-sort-tab" type="button" data-sort="top" id="sort-top">Top</button>
+                  <button class="reddit-sort-tab" type="button" data-sort="hot" id="sort-hot">
+                    <svg class="r-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s4 4.2 4 7.5a4 4 0 1 1-8 0C8 7.2 12 3 12 3z"/><path d="M10 17.5c.5 1.5 1.5 2.5 2 3.5.5-1 1.5-2 2-3.5"/></svg>
+                    <span>Hot</span>
+                  </button>
+                  <button class="reddit-sort-tab is-active" type="button" data-sort="new" id="sort-new">
+                    <svg class="r-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                    <span>New</span>
+                  </button>
+                  <button class="reddit-sort-tab" type="button" data-sort="top" id="sort-top">
+                    <svg class="r-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 5 3 6h6l-5 4 2 6-6-4-6 4 2-6-5-4h6z"/></svg>
+                    <span>Top</span>
+                  </button>
                 </section>
 
                 <section class="card reddit-feed-wrap" id="feed-card">

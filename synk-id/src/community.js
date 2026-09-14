@@ -304,7 +304,7 @@
     const { username, label } = authorLabel(author);
     const tag = author && author.pinnedTag ? tagChip(author.pinnedTag, { compact: compactTag }) : "";
     const avatar = withAvatar ? avatarMarkup(author && author.avatarUrl, label, "community-face is-inline") : "";
-    return `<span class="author-with-tag">${avatar}<a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(label)}</a>${tag}</span>`;
+    return `<span class="author-with-tag">${avatar}<a class="community-user-link" href="/user/${escapeHtml(username)}">u/${escapeHtml(label)}</a>${tag}</span>`;
   }
 
   function tagChip(tag, { compact = false, canPin = false } = {}) {
@@ -1552,7 +1552,7 @@
               <div class="reddit-post-meta">
                 ${
                   showGroup
-                    ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="reddit-meta-dot">•</span>`
+                    ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)}</a><span class="reddit-meta-dot">•</span>`
                     : ""
                 }
                 ${
@@ -1612,7 +1612,7 @@
         </div>
         <div class="reddit-post-main">
           <div class="reddit-post-meta">
-            ${group.slug ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>` : ""}
+            ${group.slug ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">g/${escapeHtml(group.slug)}</a><span class="muted">•</span>` : ""}
             <span class="muted">by</span>
             ${renderAuthorLink(author, { withAvatar: true })}
             <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
@@ -4520,6 +4520,11 @@ function applyViewState(data) {
   }
 
   function setNavOpen(open) {
+    // Desktop keeps a persistent left rail — drawer behavior is mobile-only.
+    if (window.matchMedia("(min-width: 1101px)").matches) {
+      syncDesktopNav();
+      return;
+    }
     const next = !!open;
     if (next) {
       document.body.dataset.navScrollY = String(window.scrollY || 0);
@@ -4547,6 +4552,25 @@ function applyViewState(data) {
       const y = Number(document.body.dataset.navScrollY || 0);
       delete document.body.dataset.navScrollY;
       if (y) window.scrollTo(0, y);
+    }
+  }
+
+  function syncDesktopNav() {
+    const desktop = window.matchMedia("(min-width: 1101px)").matches;
+    document.body.classList.toggle("reddit-nav-desktop", desktop);
+    if (!desktop) return;
+    document.body.classList.remove("reddit-nav-open");
+    document.documentElement.classList.remove("reddit-nav-lock");
+    document.documentElement.style.overflow = "";
+    document.body.style.overflow = "";
+    if (backdrop) backdrop.hidden = true;
+    if (leftNav) {
+      leftNav.hidden = false;
+      leftNav.setAttribute("aria-hidden", "false");
+    }
+    if (navToggle) {
+      navToggle.setAttribute("aria-expanded", "true");
+      navToggle.setAttribute("aria-label", "Community menu");
     }
   }
 
@@ -4989,6 +5013,12 @@ document.addEventListener("click", async (e) => {
 
   // Start closed — sidebar opens from the profile avatar.
   setNavOpen(false);
+  syncDesktopNav();
+  window.addEventListener("resize", () => {
+    try {
+      syncDesktopNav();
+    } catch (_) {}
+  });
 
   try {
     const railMq = window.matchMedia("(max-width: 1100px)");
