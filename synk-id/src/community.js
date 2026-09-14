@@ -104,6 +104,24 @@
   let dmPressTimer = null;
   let dmPressMoved = false;
   const DM_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👏", "🎉"];
+  const SUGGESTION_TAGS = [
+    { id: "feature", label: "Feature", color: "#57F287" },
+    { id: "ui", label: "UI", color: "#5865F2" },
+    { id: "mobile", label: "Mobile", color: "#FEE75C" },
+    { id: "performance", label: "Performance", color: "#EB459E" },
+    { id: "bugfix", label: "Bugfix", color: "#ED4245" },
+    { id: "other", label: "Other", color: "#99AAB5" },
+  ];
+  const SUGGESTION_STATUS_LABELS = {
+    open: "Open",
+    planned: "Planned",
+    accepted: "Accepted",
+    implemented: "Implemented",
+    denied: "Denied",
+    closed: "Closed",
+  };
+  let forumSelectedTags = [];
+
   let activePersona = "";
   let me = null;
   let groups = [];
@@ -122,6 +140,7 @@
   let lastSearch = { query: "", posts: [], users: [], groups: [] };
   let currentSort = "new";
   let activePostId = "";
+  let activePost = null;
   let unreadCount = 0;
   let activeSubmitType = "text";
   let activeGroupJoined = false;
@@ -2120,8 +2139,113 @@
     feedEl.innerHTML = html;
   }
 
+
+  function isSuggestionsChannel(channel) {
+    if (!channel) return false;
+    const kind = String(channel.kind || "").toLowerCase();
+    const slug = String(channel.slug || "").toLowerCase();
+    return kind === "suggestions" || slug === "ideas" || slug === "suggestions";
+  }
+
+  function activeGroupIsForum() {
+    if (route.type !== "group") return false;
+    const group = activeGroupDetail || {};
+    const channels = Array.isArray(group.channels) ? group.channels : [];
+    const active = channels.find((c) => c.slug === activeChannelSlug) || null;
+    return isSuggestionsChannel(active) || !!(active && active.isForum);
+  }
+
+  function suggestionStatusLabel(status) {
+    const key = String(status || "open").toLowerCase();
+    return SUGGESTION_STATUS_LABELS[key] || "Open";
+  }
+
+  function renderSuggestionTagChips(tags) {
+    const list = Array.isArray(tags) ? tags : [];
+    if (!list.length) return "";
+    return `<div class="forum-tags">${list
+      .map((tag) => {
+        const id = String((tag && tag.id) || tag || "");
+        const meta = SUGGESTION_TAGS.find((t) => t.id === id) || tag || { id, label: id, color: "#99AAB5" };
+        const label = escapeHtml(meta.label || meta.id || id);
+        const color = escapeHtml(meta.color || "#99AAB5");
+        return `<span class="forum-tag" style="--forum-tag:${color}">${label}</span>`;
+      })
+      .join("")}</div>`;
+  }
+
+  function sortedForumPosts(posts) {
+    return (Array.isArray(posts) ? posts.slice() : []).sort((a, b) => {
+      const pin = Number(!!b.isPinned) - Number(!!a.isPinned);
+      if (pin) return pin;
+      if (currentSort === "top" || currentSort === "hot") {
+        const score = (Number(b.score) || 0) - (Number(a.score) || 0);
+        if (score) return score;
+      }
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
+  }
+
+  function renderForumFeed(posts) {
+    const ordered = sortedForumPosts(posts).filter((p) => !p.hidden);
+    if (!ordered.length) {
+      feedEl.innerHTML = `<div class="forum-empty">
+        <strong>No suggestions yet</strong>
+        <p class="muted">Tap + to post an idea. Staff can pin a rules post at the top.</p>
+      </div>`;
+      return;
+    }
+    feedEl.innerHTML = `<div class="forum-thread-list">${ordered
+      .map((post) => {
+        const author = post.author || {};
+        const title = postTitle(post);
+        const bodyText = postBodyText(post);
+        const vote = Number(post.myVote) || 0;
+        const score = displayScore(post);
+        const comments = Number(post.commentCount) || 0;
+        const pid = escapeHtml(String(post.id || ""));
+        const status = String(post.suggestionStatus || "open").toLowerCase();
+        const reply = String(post.suggestionReply || "").trim();
+        return `
+          <article class="forum-thread ${post.isPinned ? "is-pinned" : ""} is-${escapeHtml(status)}" data-post-id="${pid}">
+            <div class="forum-thread-votes" aria-label="Vote">
+              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
+              <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${score}</span>
+              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
+            </div>
+            <a class="forum-thread-main" href="/community/post/${pid}" data-open-post="${pid}">
+              <div class="forum-thread-top">
+                ${post.isPinned ? `<span class="forum-pin">Pinned</span>` : ""}
+                <span class="suggestion-status is-${escapeHtml(status)}">${escapeHtml(suggestionStatusLabel(status))}</span>
+                ${renderSuggestionTagChips(post.suggestionTags)}
+              </div>
+              <h3 class="forum-thread-title">${escapeHtml(title)}</h3>
+              ${bodyText ? `<p class="forum-thread-preview">${escapeHtml(truncateText(bodyText, 140))}</p>` : ""}
+              ${reply ? `<p class="forum-thread-reply"><strong>Staff:</strong> ${escapeHtml(reply)}</p>` : ""}
+              <div class="forum-thread-meta">
+                ${renderAuthorLink(author, { withAvatar: true })}
+                <span class="reddit-meta-dot">•</span>
+                <time>${escapeHtml(formatRelative(post.createdAt))}</time>
+                <span class="reddit-meta-dot">•</span>
+                <span>${comments} reply${comments === 1 ? "" : "ies"}</span>
+              </div>
+            </a>
+          </article>`;
+      })
+      .join("")}</div>`;
+  }
+
   function renderFeed(posts) {
     lastPosts = Array.isArray(posts) ? posts.slice() : [];
+    if (activeGroupIsForum()) {
+      if (feedEmpty) feedEmpty.hidden = true;
+      syncSortTabs();
+      syncFeedChrome();
+      document.body.classList.add("is-forum-channel");
+      renderForumFeed(lastPosts);
+      return;
+    }
+    document.body.classList.remove("is-forum-channel");
     const ordered = sortedPosts(lastPosts).filter((p) => !p.hidden);
     if (!ordered.length) {
       feedEl.innerHTML = "";
@@ -2169,12 +2293,8 @@
         );
         const statusBadge = isSuggestion
           ? `<span class="suggestion-status is-${escapeHtml(suggestionStatus || "open")}">${escapeHtml(
-              suggestionStatus === "accepted"
-                ? "Accepted"
-                : suggestionStatus === "denied"
-                  ? "Denied"
-                  : "Open"
-            )}</span>`
+              suggestionStatusLabel(suggestionStatus || "open")
+            )}</span>${renderSuggestionTagChips(post.suggestionTags)}`
           : "";
         const suggestionActions = canModerateSuggestion
           ? `<div class="suggestion-actions">
@@ -2247,8 +2367,54 @@
     const commentLabel = comments === 1 ? "1 comment" : `${comments} comments`;
     const pid = escapeHtml(String(post.id || ""));
     const media = renderPostMedia(post, { large: true });
+    const suggestionStatus = String(post.suggestionStatus || "").toLowerCase();
+    const isSuggestion =
+      suggestionStatus ||
+      (post.channel && String(post.channel.kind || "").toLowerCase() === "suggestions");
+    const canModerateSuggestion = !!(
+      isSuggestion &&
+      me &&
+      (me.isStaff || me.role === "owner" || me.role === "admin")
+    );
+    const reply = String(post.suggestionReply || "").trim();
+    const statusBadge = isSuggestion
+      ? `<span class="suggestion-status is-${escapeHtml(suggestionStatus || "open")}">${escapeHtml(
+          suggestionStatusLabel(suggestionStatus || "open")
+        )}</span>${renderSuggestionTagChips(post.suggestionTags)}`
+      : "";
+    const staffPanel = canModerateSuggestion
+      ? `<div class="forum-staff-panel">
+          <p class="forum-staff-title">Staff reply</p>
+          <div class="forum-staff-presets">
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="accepted" data-suggestion-reply="Yes — we'll do this" data-post-id="${pid}">Yes</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="denied" data-suggestion-reply="No — not planned" data-post-id="${pid}">No</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="implemented" data-suggestion-reply="Already implemented" data-post-id="${pid}">Already implemented</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="planned" data-suggestion-reply="Planned" data-post-id="${pid}">Planned</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="closed" data-suggestion-reply="Closed" data-post-id="${pid}">Close</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="open" data-suggestion-reply="" data-post-id="${pid}">Reopen</button>
+          </div>
+          <form class="forum-staff-form" data-suggestion-form="${pid}">
+            <label class="sr-only" for="suggestion-reply-${pid}">Custom reply</label>
+            <textarea id="suggestion-reply-${pid}" rows="2" maxlength="500" placeholder="Custom reply (optional)…">${escapeHtml(reply)}</textarea>
+            <div class="forum-staff-form-actions">
+              <select data-suggestion-status-select aria-label="Status">
+                <option value="open" ${suggestionStatus === "open" ? "selected" : ""}>Open</option>
+                <option value="planned" ${suggestionStatus === "planned" ? "selected" : ""}>Planned</option>
+                <option value="accepted" ${suggestionStatus === "accepted" ? "selected" : ""}>Accepted</option>
+                <option value="implemented" ${suggestionStatus === "implemented" ? "selected" : ""}>Implemented</option>
+                <option value="denied" ${suggestionStatus === "denied" ? "selected" : ""}>Denied</option>
+                <option value="closed" ${suggestionStatus === "closed" ? "selected" : ""}>Closed</option>
+              </select>
+              <button class="btn btn-primary btn-compact" type="submit">Save reply</button>
+              <button class="btn btn-secondary btn-compact" type="button" data-pin-post="${pid}" data-pinned="${post.isPinned ? "0" : "1"}">${post.isPinned ? "Unpin" : "Pin"}</button>
+            </div>
+          </form>
+        </div>`
+      : reply
+        ? `<div class="forum-staff-reply"><strong>Staff:</strong> ${escapeHtml(reply)}</div>`
+        : "";
     el.innerHTML = `
-      <article class="reddit-post reddit-post-detail-inner" data-post-id="${pid}">
+      <article class="reddit-post reddit-post-detail-inner ${isSuggestion ? "is-suggestion" : ""}" data-post-id="${pid}">
         <div class="reddit-vote">
           <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 20)}</button>
           <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${displayScore(post)}</span>
@@ -2266,10 +2432,13 @@
             ${renderAuthorLink(author, { withAvatar: true })}
             <span class="reddit-meta-dot">•</span>
             <time class="reddit-meta-time">${escapeHtml(formatRelative(post.createdAt))}</time>
+            ${statusBadge}
+            ${post.isPinned ? `<span class="forum-pin">Pinned</span>` : ""}
           </div>
           <h1 class="reddit-post-title reddit-post-title-lg">${escapeHtml(title)}</h1>
           ${bodyText ? `<div class="reddit-post-body reddit-post-body-lg">${escapeHtml(bodyText)}</div>` : ""}
           ${media}
+          ${staffPanel}
           <div class="reddit-post-actions">
             <span class="reddit-action">${ico("comment", 16)} <span>${escapeHtml(commentLabel)}</span></span>
             <button class="reddit-action" type="button" data-share-post="${pid}">${ico("share", 16)} <span>Share</span></button>
@@ -2933,14 +3102,20 @@
       desc.title = text;
     }
     const composerOpen = document.getElementById("composer-open-btn");
+    const forumCreateBtn = document.getElementById("synk-hub-forum-create");
+    const isForum = isSuggestionsChannel(active);
+    document.body.classList.toggle("is-forum-channel", !!isForum);
+    if (forumCreateBtn) {
+      const allowed = canPostInChannel(active) && isForum;
+      forumCreateBtn.hidden = !allowed;
+    }
     if (composerOpen && route.slug) {
-      const allowed = canPostInChannel(active);
+      const allowed = canPostInChannel(active) && !isForum;
       composerOpen.hidden = !allowed;
       if (allowed) {
         composerOpen.href = submitUrlForGroup(route.slug, activeChannelSlug);
         const kind = String((active && active.kind) || "").toLowerCase();
-        if (kind === "suggestions") composerOpen.textContent = "Share a suggestion";
-        else if (kind === "announcements") composerOpen.textContent = "Post announcement";
+        if (kind === "announcements") composerOpen.textContent = "Post announcement";
         else composerOpen.textContent = "Message #"+ ((active && active.name) || activeChannelSlug || "channel");
       }
     }
@@ -2955,9 +3130,9 @@
       } else if (kind === "readonly") {
         feedHint.hidden = false;
         feedHint.textContent = "Read-only — maintained by Synk staff.";
-      } else if (kind === "suggestions") {
+      } else if (kind === "suggestions" || isForum) {
         feedHint.hidden = false;
-        feedHint.textContent = "Share suggestions — the team reviews each one.";
+        feedHint.textContent = "Forum channel — post ideas, add tags, and vote. Staff can reply and close threads.";
       } else {
         feedHint.hidden = true;
         feedHint.textContent = "";
@@ -3167,6 +3342,7 @@ function applyViewState(data) {
         (data && data.post) ||
         (lastPosts || []).find((p) => String(p.id) === String(activePostId)) ||
         ((data && data.posts) || []).find((p) => String(p.id) === String(activePostId));
+      activePost = post || null;
       renderPostDetail(post || null);
       renderComments((data && data.comments) || lastComments || []);
       updateAboutRail(data);
@@ -6792,20 +6968,189 @@ document.addEventListener("click", async (e) => {
       e.preventDefault();
       const postId = suggestionBtn.getAttribute("data-post-id");
       const status = suggestionBtn.getAttribute("data-suggestion-status");
+      const replyAttr = suggestionBtn.getAttribute("data-suggestion-reply");
       if (!postId || !status) return;
       try {
-        await communityAction({ action: "set-suggestion-status", postId, status });
+        const data = await communityAction({
+          action: "set-suggestion-status",
+          postId,
+          status,
+          reply: replyAttr != null ? replyAttr : undefined,
+        });
+        const patch = {
+          suggestionStatus: data.suggestionStatus || status,
+          suggestionReply:
+            data.suggestionReply != null ? data.suggestionReply : replyAttr != null ? replyAttr : undefined,
+        };
         lastPosts = (lastPosts || []).map((p) =>
-          String(p.id) === String(postId) ? { ...p, suggestionStatus: status } : p
+          String(p.id) === String(postId) ? { ...p, ...patch } : p
         );
+        if (activePost && String(activePost.id) === String(postId)) {
+          activePost = { ...activePost, ...patch };
+          renderPostDetail(activePost);
+        }
         renderFeed(lastPosts);
-        showToast(status === "accepted" ? "Suggestion accepted" : status === "denied" ? "Suggestion denied" : "Suggestion reopened");
+        showToast(suggestionStatusLabel(status));
       } catch (err) {
         showToast(err.message || "Could not update suggestion");
       }
       return;
     }
+
+    const pinBtn = e.target.closest("[data-pin-post]");
+    if (pinBtn) {
+      e.preventDefault();
+      const postId = pinBtn.getAttribute("data-pin-post");
+      const pinned = pinBtn.getAttribute("data-pinned") === "1";
+      if (!postId) return;
+      try {
+        const data = await communityAction({ action: "pin-post", postId, pinned });
+        lastPosts = (lastPosts || []).map((p) =>
+          String(p.id) === String(postId) ? { ...p, isPinned: !!data.isPinned } : p
+        );
+        if (activePost && String(activePost.id) === String(postId)) {
+          activePost = { ...activePost, isPinned: !!data.isPinned };
+          renderPostDetail(activePost);
+        }
+        renderFeed(lastPosts);
+        showToast(data.isPinned ? "Pinned" : "Unpinned");
+      } catch (err) {
+        showToast(err.message || "Could not pin post");
+      }
+      return;
+    }
   });
+
+  document.addEventListener("submit", async (e) => {
+    const form = e.target.closest("[data-suggestion-form]");
+    if (!form) return;
+    e.preventDefault();
+    const postId = form.getAttribute("data-suggestion-form");
+    const statusSel = form.querySelector("[data-suggestion-status-select]");
+    const replyEl = form.querySelector("textarea");
+    if (!postId) return;
+    try {
+      const data = await communityAction({
+        action: "set-suggestion-status",
+        postId,
+        status: (statusSel && statusSel.value) || "open",
+        reply: replyEl ? replyEl.value : "",
+      });
+      const patch = {
+        suggestionStatus: data.suggestionStatus || (statusSel && statusSel.value) || "open",
+        suggestionReply: data.suggestionReply != null ? data.suggestionReply : replyEl ? replyEl.value : "",
+      };
+      lastPosts = (lastPosts || []).map((p) =>
+        String(p.id) === String(postId) ? { ...p, ...patch } : p
+      );
+      if (activePost && String(activePost.id) === String(postId)) {
+        activePost = { ...activePost, ...patch };
+        renderPostDetail(activePost);
+      }
+      renderFeed(lastPosts);
+      showToast("Reply saved");
+    } catch (err) {
+      showToast(err.message || "Could not save reply");
+    }
+  });
+
+  function setForumCreateOpen(open) {
+    const modal = document.getElementById("forum-create-modal");
+    if (!modal) return;
+    modal.hidden = !open;
+    document.body.classList.toggle("forum-create-open", !!open);
+    if (open) {
+      const tagsHost = document.getElementById("forum-create-tags");
+      forumSelectedTags = [];
+      if (tagsHost) {
+        tagsHost.innerHTML = SUGGESTION_TAGS.map(
+          (tag) =>
+            `<button type="button" class="forum-tag-pick" data-forum-tag="${escapeHtml(tag.id)}" style="--forum-tag:${escapeHtml(
+              tag.color
+            )}">${escapeHtml(tag.label)}</button>`
+        ).join("");
+      }
+      const title = document.getElementById("forum-create-title-input");
+      const body = document.getElementById("forum-create-body");
+      const status = document.getElementById("forum-create-status");
+      if (title) title.value = "";
+      if (body) body.value = "";
+      if (status) status.textContent = "";
+      if (title) title.focus();
+    }
+  }
+
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("#synk-hub-forum-create")) {
+      e.preventDefault();
+      setForumCreateOpen(true);
+      return;
+    }
+    if (e.target.closest("[data-forum-close]")) {
+      e.preventDefault();
+      setForumCreateOpen(false);
+      return;
+    }
+    const tagBtn = e.target.closest("[data-forum-tag]");
+    if (tagBtn && tagBtn.closest("#forum-create-tags")) {
+      e.preventDefault();
+      const id = tagBtn.getAttribute("data-forum-tag");
+      if (!id) return;
+      if (forumSelectedTags.includes(id)) {
+        forumSelectedTags = forumSelectedTags.filter((t) => t !== id);
+      } else if (forumSelectedTags.length < 3) {
+        forumSelectedTags = forumSelectedTags.concat(id);
+      }
+      document.querySelectorAll("#forum-create-tags [data-forum-tag]").forEach((btn) => {
+        btn.classList.toggle("is-selected", forumSelectedTags.includes(btn.getAttribute("data-forum-tag")));
+      });
+    }
+  });
+
+  const forumCreateForm = document.getElementById("forum-create-form");
+  if (forumCreateForm) {
+    forumCreateForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("forum-create-status");
+      const titleEl = document.getElementById("forum-create-title-input");
+      const bodyEl = document.getElementById("forum-create-body");
+      const title = titleEl ? titleEl.value.trim() : "";
+      const body = bodyEl ? bodyEl.value.trim() : "";
+      if (title.length < 3) {
+        if (status) status.textContent = "Add a short title";
+        return;
+      }
+      if (body.length < 3) {
+        if (status) status.textContent = "Add a bit more detail";
+        return;
+      }
+      if (status) status.textContent = "Posting…";
+      try {
+        const data = await communityAction({
+          action: "post",
+          type: "text",
+          title,
+          body,
+          group: route.slug || "synk",
+          channel: activeChannelSlug || "ideas",
+          tags: forumSelectedTags.slice(),
+          asUsername: activePersona || (me && me.username) || undefined,
+        });
+        setForumCreateOpen(false);
+        if (data.post && data.post.id) {
+          await navigate(
+            { type: "post", slug: "", username: "", postId: String(data.post.id) },
+            { replace: false }
+          );
+        } else {
+          await loadCommunity();
+        }
+        showToast("Suggestion posted");
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not post";
+      }
+    });
+  }
 
   document.addEventListener("click", (e) => {
     const closeBtn = e.target.closest("[data-synk-channels-close]");
@@ -6832,7 +7177,12 @@ document.addEventListener("click", async (e) => {
   });
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && document.body.classList.contains("synk-channels-open")) {
+    if (e.key !== "Escape") return;
+    if (document.body.classList.contains("forum-create-open")) {
+      setForumCreateOpen(false);
+      return;
+    }
+    if (document.body.classList.contains("synk-channels-open")) {
       setSynkChannelsOpen(false);
     }
   });

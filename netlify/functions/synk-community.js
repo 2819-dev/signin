@@ -34,6 +34,10 @@ const {
   formatChannelLabel,
   normalizeChannelKind,
   normalizeSuggestionStatus,
+  normalizeSuggestionTags,
+  suggestionTagsToIds,
+  mapSuggestionTagsFromRow,
+  DEFAULT_SUGGESTION_TAGS,
   capitalizeChannelName,
   isCommunityUsernameTaken,
   renameCommunityUsername,
@@ -266,6 +270,9 @@ function mapPost(row) {
     saved: Boolean(row.saved),
     hidden: Boolean(row.hidden),
     suggestionStatus: suggestionStatus || (channelKind === "suggestions" ? "open" : ""),
+    suggestionTags: mapSuggestionTagsFromRow(row),
+    suggestionReply: String(row.suggestion_reply || "").trim(),
+    isPinned: Boolean(row.is_pinned),
     createdAt: row.created_at,
     group: row.group_slug
       ? {
@@ -823,6 +830,9 @@ async function loadPosts(
           p.group_id,
           p.author_username,
           p.suggestion_status,
+          p.suggestion_tags,
+          p.suggestion_reply,
+          p.is_pinned,
           m.name,
           c.public_username,
           g.slug AS group_slug,
@@ -890,7 +900,7 @@ async function loadPosts(
             ${hideOfficial ? 1 : 0} = 0
             OR COALESCE(g.is_official, FALSE) = FALSE
           )
-        ORDER BY p.score DESC, p.created_at DESC
+        ORDER BY COALESCE(p.is_pinned, FALSE) DESC, p.score DESC, p.created_at DESC
         LIMIT ${capped}
       `
     : await sql`
@@ -907,6 +917,9 @@ async function loadPosts(
           p.group_id,
           p.author_username,
           p.suggestion_status,
+          p.suggestion_tags,
+          p.suggestion_reply,
+          p.is_pinned,
           m.name,
           c.public_username,
           g.slug AS group_slug,
@@ -974,7 +987,7 @@ async function loadPosts(
             ${hideOfficial ? 1 : 0} = 0
             OR COALESCE(g.is_official, FALSE) = FALSE
           )
-        ORDER BY p.created_at DESC
+        ORDER BY COALESCE(p.is_pinned, FALSE) DESC, p.created_at DESC
         LIMIT ${capped}
       `;
 
@@ -996,10 +1009,21 @@ async function loadPostById(sql, postId, profileId = null) {
       p.created_at,
       p.group_id,
       p.author_username,
+      p.suggestion_status,
+      p.suggestion_tags,
+      p.suggestion_reply,
+      p.is_pinned,
+      p.channel_id,
+      ch.slug AS channel_slug,
+      ch.name AS channel_name,
+      ch.emoji AS channel_emoji,
+      ch.kind AS channel_kind,
       m.name,
       c.public_username,
       g.slug AS group_slug,
       g.name AS group_name,
+      g.theme AS group_theme,
+      g.is_official AS group_is_official,
       (
         SELECT COUNT(*)::int
         FROM synk_community_comments cc
@@ -1015,6 +1039,7 @@ async function loadPostById(sql, postId, profileId = null) {
     JOIN synk_profiles m ON m.id = p.synk_profile_id
     LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
     LEFT JOIN synk_community_groups g ON g.id = p.group_id
+    LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
     LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
     LEFT JOIN synk_community_alt_accounts a
       ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
@@ -1372,6 +1397,9 @@ async function searchCommunityPosts(sql, { query, profileId = null, sort = "new"
           p.group_id,
           p.author_username,
           p.suggestion_status,
+          p.suggestion_tags,
+          p.suggestion_reply,
+          p.is_pinned,
           m.name,
           c.public_username,
           g.slug AS group_slug,
@@ -1418,7 +1446,7 @@ async function searchCommunityPosts(sql, { query, profileId = null, sort = "new"
                 AND hd.post_id = p.id
             )
           )
-        ORDER BY p.score DESC, p.created_at DESC
+        ORDER BY COALESCE(p.is_pinned, FALSE) DESC, p.score DESC, p.created_at DESC
         LIMIT ${capped}
       `
     : await sql`
@@ -1435,6 +1463,9 @@ async function searchCommunityPosts(sql, { query, profileId = null, sort = "new"
           p.group_id,
           p.author_username,
           p.suggestion_status,
+          p.suggestion_tags,
+          p.suggestion_reply,
+          p.is_pinned,
           m.name,
           c.public_username,
           g.slug AS group_slug,
@@ -1481,7 +1512,7 @@ async function searchCommunityPosts(sql, { query, profileId = null, sort = "new"
                 AND hd.post_id = p.id
             )
           )
-        ORDER BY p.created_at DESC
+        ORDER BY COALESCE(p.is_pinned, FALSE) DESC, p.created_at DESC
         LIMIT ${capped}
       `;
 
@@ -2905,6 +2936,12 @@ if (action === "create-alt") {
         channel && normalizeChannelKind(channel.kind, channel.slug) === "suggestions"
           ? "open"
           : null;
+      const suggestionTags =
+        suggestionStatus === "open"
+          ? suggestionTagsToIds(
+              normalizeSuggestionTags(body.tags || body.suggestionTags || body.suggestion_tags)
+            )
+          : [];
       const rows = await sql`
         INSERT INTO synk_community_posts (
           synk_profile_id,
@@ -2918,7 +2955,10 @@ if (action === "create-alt") {
           poll_options,
           score,
           author_username,
-          suggestion_status
+          suggestion_status,
+          suggestion_tags,
+          suggestion_reply,
+          is_pinned
         )
         VALUES (
           ${auth.profile.id},
@@ -2932,11 +2972,15 @@ if (action === "create-alt") {
           ${pollJson}::jsonb,
           1,
           ${persona.username},
-          ${suggestionStatus}
+          ${suggestionStatus},
+          ${suggestionTags},
+          ${""},
+          ${false}
         )
         RETURNING
           id, title, post_type, body, link_url, image_url, poll_options,
-          score, created_at, group_id, author_username, channel_id, suggestion_status
+          score, created_at, group_id, author_username, channel_id, suggestion_status,
+          suggestion_tags, suggestion_reply, is_pinned
       `;
 
       await sql`
@@ -2986,16 +3030,27 @@ if (action === "create-alt") {
 
     if (action === "set-suggestion-status") {
       if (!isCommunityStaffRole(role)) {
-        return json(403, { error: "Only Synk staff can accept or deny suggestions" });
+        return json(403, { error: "Only Synk staff can update suggestions" });
       }
       const postId = String(body.postId || body.id || "").trim();
       const status = normalizeSuggestionStatus(body.status || body.suggestionStatus);
+      const reply = String(body.reply || body.suggestionReply || body.note || "")
+        .trim()
+        .replace(/\s+/g, " ")
+        .slice(0, 500);
       if (!isUuid(postId)) return json(400, { error: "Invalid post id" });
-      if (!status) return json(400, { error: "status must be open, accepted, or denied" });
+      if (!status) {
+        return json(400, {
+          error: "Status must be open, planned, accepted, implemented, denied, or closed",
+        });
+      }
       const rows = await sql`
         SELECT
           p.id,
           p.suggestion_status,
+          p.suggestion_tags,
+          p.suggestion_reply,
+          p.is_pinned,
           ch.kind AS channel_kind,
           ch.slug AS channel_slug
         FROM synk_community_posts p
@@ -3010,14 +3065,40 @@ if (action === "create-alt") {
       }
       const updated = await sql`
         UPDATE synk_community_posts
-        SET suggestion_status = ${status}
+        SET
+          suggestion_status = ${status},
+          suggestion_reply = ${reply}
         WHERE id = ${postId}
-        RETURNING id, suggestion_status
+        RETURNING id, suggestion_status, suggestion_reply, suggestion_tags, is_pinned
       `;
       return json(200, {
         ok: true,
         postId: updated[0].id,
         suggestionStatus: updated[0].suggestion_status || status,
+        suggestionReply: String(updated[0].suggestion_reply || "").trim(),
+        suggestionTags: mapSuggestionTagsFromRow(updated[0]),
+        isPinned: Boolean(updated[0].is_pinned),
+      });
+    }
+
+    if (action === "pin-post") {
+      if (!isCommunityStaffRole(role)) {
+        return json(403, { error: "Only Synk staff can pin posts" });
+      }
+      const postId = String(body.postId || body.id || "").trim();
+      const pinned = body.pinned !== false && body.pinned !== "false" && body.pinned !== 0;
+      if (!isUuid(postId)) return json(400, { error: "Invalid post id" });
+      const updated = await sql`
+        UPDATE synk_community_posts
+        SET is_pinned = ${!!pinned}
+        WHERE id = ${postId}
+        RETURNING id, is_pinned
+      `;
+      if (!updated[0]) return json(404, { error: "Post not found" });
+      return json(200, {
+        ok: true,
+        postId: updated[0].id,
+        isPinned: Boolean(updated[0].is_pinned),
       });
     }
 

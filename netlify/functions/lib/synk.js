@@ -206,9 +206,58 @@ function normalizeChannelKind(value, slug = "") {
 function normalizeSuggestionStatus(value) {
   const raw = String(value || "")
     .trim()
-    .toLowerCase();
-  if (["open", "accepted", "denied"].includes(raw)) return raw;
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  if (raw === "approve" || raw === "approved" || raw === "yes") return "accepted";
+  if (raw === "deny" || raw === "rejected" || raw === "no") return "denied";
+  if (raw === "done" || raw === "shipped" || raw === "already_implemented") return "implemented";
+  if (raw === "in_progress" || raw === "in-progress" || raw === "coming") return "planned";
+  if (["open", "planned", "accepted", "implemented", "denied", "closed"].includes(raw)) return raw;
   return "";
+}
+
+const DEFAULT_SUGGESTION_TAGS = [
+  { id: "feature", label: "Feature", color: "#57F287" },
+  { id: "ui", label: "UI", color: "#5865F2" },
+  { id: "mobile", label: "Mobile", color: "#FEE75C" },
+  { id: "performance", label: "Performance", color: "#EB459E" },
+  { id: "bugfix", label: "Bugfix", color: "#ED4245" },
+  { id: "other", label: "Other", color: "#99AAB5" },
+];
+
+function normalizeSuggestionTags(value) {
+  const allowed = new Map(DEFAULT_SUGGESTION_TAGS.map((t) => [t.id, t]));
+  const raw = Array.isArray(value)
+    ? value
+    : String(value || "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    const id = String(item && item.id != null ? item.id : item)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "")
+      .slice(0, 32);
+    if (!id || seen.has(id) || !allowed.has(id)) continue;
+    seen.add(id);
+    out.push(allowed.get(id));
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+function suggestionTagsToIds(tags) {
+  return (Array.isArray(tags) ? tags : [])
+    .map((t) => String((t && t.id) || t || "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function mapSuggestionTagsFromRow(row) {
+  const ids = Array.isArray(row && row.suggestion_tags) ? row.suggestion_tags : [];
+  return normalizeSuggestionTags(ids);
 }
 
 function mapCommunityChannel(row) {
@@ -772,6 +821,9 @@ async function ensureSynkCommunityExtras(sql) {
   `;
   await sql`ALTER TABLE synk_community_group_channels ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'text'`;
   await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS suggestion_status TEXT`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS suggestion_tags TEXT[] NOT NULL DEFAULT '{}'`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS suggestion_reply TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`
     CREATE UNIQUE INDEX IF NOT EXISTS synk_community_group_channels_group_slug_idx
     ON synk_community_group_channels (group_id, slug)
@@ -1643,7 +1695,7 @@ function officialSynkBlueprint() {
           name: "Ideas",
           slug: "ideas",
           kind: "suggestions",
-          description: "Suggest improvements for the Synk team",
+          description: "Forum for product suggestions — pick tags, vote, and staff will reply",
         },
         {
           emoji: "",
@@ -5937,6 +5989,10 @@ module.exports = {
   formatChannelLabel,
   normalizeChannelKind,
   normalizeSuggestionStatus,
+  normalizeSuggestionTags,
+  suggestionTagsToIds,
+  mapSuggestionTagsFromRow,
+  DEFAULT_SUGGESTION_TAGS,
   capitalizeChannelName,
   normalizeRoleName,
   normalizeRoleColor,

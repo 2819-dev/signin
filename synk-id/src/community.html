@@ -13,14 +13,14 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v52" />
+    <link rel="stylesheet" href="/join.css?v=community-v54" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v52" defer></script>
+    <script src="/force-refresh.js?v=community-v54" defer></script>
   </head>
   <body class="community-body reddit-body">
     <div id="synk-boot-loader" class="synk-loader-overlay" hidden aria-busy="false" aria-live="polite" aria-label="Loading Synk">
@@ -357,8 +357,45 @@
                       <p class="muted synk-hub-desc" id="discord-channel-desc"></p>
                       <p class="muted discord-channel-hint synk-hub-hint" id="discord-channel-hint" hidden></p>
                     </div>
+                    <button type="button" class="synk-hub-forum-create" id="synk-hub-forum-create" hidden aria-label="Create post">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                    </button>
                   </header>
                   <div id="discord-feed-slot" class="synk-hub-feed"></div>
+                </div>
+              </div>
+
+              <div id="forum-create-modal" class="forum-create-modal" hidden>
+                <button type="button" class="forum-create-backdrop" data-forum-close aria-label="Close"></button>
+                <div class="forum-create-sheet" role="dialog" aria-modal="true" aria-labelledby="forum-create-title">
+                  <div class="forum-create-head">
+                    <div>
+                      <p class="forum-create-kicker">Ideas forum</p>
+                      <h2 id="forum-create-title">New suggestion</h2>
+                    </div>
+                    <button type="button" class="forum-create-x" data-forum-close aria-label="Close">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                  <form id="forum-create-form" class="form forum-create-form">
+                    <div class="field">
+                      <label for="forum-create-title-input">Title</label>
+                      <input id="forum-create-title-input" type="text" maxlength="120" required placeholder="Short summary of your idea" />
+                    </div>
+                    <div class="field">
+                      <label for="forum-create-body">Details</label>
+                      <textarea id="forum-create-body" rows="5" maxlength="2000" required placeholder="What should change, and why?"></textarea>
+                    </div>
+                    <div class="field">
+                      <span class="forum-create-label">Tags <span class="muted">(pick up to 3)</span></span>
+                      <div id="forum-create-tags" class="forum-tag-picker" role="group" aria-label="Suggestion tags"></div>
+                    </div>
+                    <p id="forum-create-status" class="muted" aria-live="polite"></p>
+                    <div class="forum-create-actions">
+                      <button class="btn btn-secondary btn-compact" type="button" data-forum-close>Cancel</button>
+                      <button class="btn btn-primary btn-compact" type="submit" id="forum-create-submit">Post suggestion</button>
+                    </div>
+                  </form>
                 </div>
               </div>
 
@@ -1145,8 +1182,8 @@
       </div>
     </div>
 
-    <script src="/push-client.js?v=community-v52"></script>
+    <script src="/push-client.js?v=community-v54"></script>
     <script src="/image-crop.js?v=crop-v3"></script>
-    <script src="/community.js?v=community-v52"></script>
+    <script src="/community.js?v=community-v54"></script>
   </body>
 </html>
