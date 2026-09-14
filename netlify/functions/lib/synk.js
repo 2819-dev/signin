@@ -1996,9 +1996,11 @@ async function ensureSynkCoreTables(sql) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       expires_at TIMESTAMPTZ NOT NULL,
-      revoked_at TIMESTAMPTZ
+      revoked_at TIMESTAMPTZ,
+      stay_signed_in BOOLEAN NOT NULL DEFAULT TRUE
     )
   `;
+  await sql`ALTER TABLE synk_hub_sessions ADD COLUMN IF NOT EXISTS stay_signed_in BOOLEAN NOT NULL DEFAULT TRUE`;
   await sql`
     CREATE INDEX IF NOT EXISTS synk_hub_sessions_profile_idx
     ON synk_hub_sessions (synk_profile_id, revoked_at, expires_at DESC)
@@ -2851,19 +2853,20 @@ async function requireSynkApp(sql, event, body = {}) {
 async function issueHubSession(sql, { profileId, staySignedIn = true, ttlMs: ttlMsOverride = null } = {}) {
   const token = mintPassToken();
   const tokenHash = hashToken(token);
+  const stay = staySignedIn !== false;
   const ttlMs = Number.isFinite(Number(ttlMsOverride)) && Number(ttlMsOverride) > 0
     ? Math.min(Math.round(Number(ttlMsOverride)), HUB_SESSION_TTL_MS)
-    : (staySignedIn ? HUB_SESSION_TTL_MS : HUB_SESSION_SHORT_TTL_MS);
+    : (stay ? HUB_SESSION_TTL_MS : HUB_SESSION_SHORT_TTL_MS);
   const expiresAt = new Date(Date.now() + ttlMs).toISOString();
   await sql`
-    INSERT INTO synk_hub_sessions (synk_profile_id, token_hash, expires_at)
-    VALUES (${profileId}, ${tokenHash}, ${expiresAt}::timestamptz)
+    INSERT INTO synk_hub_sessions (synk_profile_id, token_hash, expires_at, stay_signed_in)
+    VALUES (${profileId}, ${tokenHash}, ${expiresAt}::timestamptz, ${stay})
   `;
   return {
     token,
     expiresAt,
     ttlSeconds: Math.round(ttlMs / 1000),
-    staySignedIn: Boolean(staySignedIn),
+    staySignedIn: stay,
   };
 }
 
@@ -2887,7 +2890,7 @@ async function requireHubSession(sql, event, body = {}) {
   if (!token) return { ok: false, status: 401, error: "Sign in to Synk first" };
   const tokenHash = hashToken(token);
   const rows = await sql`
-    SELECT s.id, s.synk_profile_id, s.expires_at, s.revoked_at,
+    SELECT s.id, s.synk_profile_id, s.expires_at, s.revoked_at, s.stay_signed_in,
            p.synk_code, p.name, p.photo_url, p.enabled,
            c.public_username, c.display_name, c.avatar_url, c.bio, c.dm_policy
     FROM synk_hub_sessions s
@@ -2906,10 +2909,24 @@ async function requireHubSession(sql, event, body = {}) {
   if (row.enabled === false) {
     return { ok: false, status: 403, error: "This Synk membership is paused" };
   }
-  await sql`UPDATE synk_hub_sessions SET last_seen_at = NOW() WHERE id = ${row.id}`;
+  const staySignedIn = row.stay_signed_in !== false;
+  let expiresAt = row.expires_at;
+  // Stay-signed-in sessions slide forward on activity so reopen keeps working.
+  if (staySignedIn) {
+    expiresAt = new Date(Date.now() + HUB_SESSION_TTL_MS).toISOString();
+    await sql`
+      UPDATE synk_hub_sessions
+      SET last_seen_at = NOW(), expires_at = ${expiresAt}::timestamptz
+      WHERE id = ${row.id}
+    `;
+  } else {
+    await sql`UPDATE synk_hub_sessions SET last_seen_at = NOW() WHERE id = ${row.id}`;
+  }
   return {
     ok: true,
     sessionId: row.id,
+    expiresAt,
+    staySignedIn,
     profile: {
       id: row.synk_profile_id,
       synkCode: row.synk_code,

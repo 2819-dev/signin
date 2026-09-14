@@ -112,6 +112,7 @@
   let activeGroupDetail = null;
 
   function readSession() {
+    if (window.SynkSession) return window.SynkSession.readSession();
     try {
       let store = localStorage;
       let raw = localStorage.getItem(STORAGE_KEY);
@@ -288,9 +289,20 @@
       const session = readSession();
       if (!session || !session.profile) return;
       session.profile.photoUrl = nextPhotoUrl || "";
-      const raw = JSON.stringify(session);
-      if (localStorage.getItem(STORAGE_KEY)) localStorage.setItem(STORAGE_KEY, raw);
-      else sessionStorage.setItem(STORAGE_KEY, raw);
+      if (window.SynkSession) {
+        window.SynkSession.writeSession(session);
+      } else {
+        const raw = JSON.stringify(session);
+        const stay = !!(session.staySignedIn || (session.hubSession && session.hubSession.staySignedIn));
+        if (stay) {
+          localStorage.setItem(STORAGE_KEY, raw);
+          sessionStorage.removeItem(STORAGE_KEY);
+        } else if (localStorage.getItem(STORAGE_KEY)) {
+          localStorage.setItem(STORAGE_KEY, raw);
+        } else {
+          sessionStorage.setItem(STORAGE_KEY, raw);
+        }
+      }
     } catch (_) {}
   }
 
@@ -2428,6 +2440,9 @@ function applyViewState(data) {
   }
 
   async function loadCommunity({ soft = false } = {}) {
+    const __touchStay = () => {
+      try { if (window.SynkSession) window.SynkSession.touchSession(); } catch (_) {}
+    };
     let url = "/api/synk-community";
     const sort = apiSort();
     if (route.type === "post" && route.postId) {
@@ -2466,6 +2481,7 @@ function applyViewState(data) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Unable to load Community. Please try again.");
     me = data.me || null;
+    __touchStay();
     publicUsername = (me && me.publicUsername) || "";
     displayName = (me && me.displayName) || "";
     photoUrl = (me && me.photoUrl) || "";
@@ -3577,9 +3593,12 @@ function applyViewState(data) {
       const legacy = document.getElementById("signout-btn");
       if (legacy) legacy.click();
       else {
-        localStorage.removeItem(STORAGE_KEY);
-        sessionStorage.removeItem(STORAGE_KEY);
-        location.href = "/verify";
+        if (window.SynkSession) window.SynkSession.clearSession();
+    else {
+      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
+    }
+        location.href = "/verify?reauth=1";
       }
     });
   }
@@ -4510,11 +4529,14 @@ function applyViewState(data) {
     if (exit) {
       exit.addEventListener("click", () => {
         try {
-          localStorage.removeItem(STORAGE_KEY);
-          sessionStorage.removeItem(STORAGE_KEY);
+          if (window.SynkSession) window.SynkSession.clearSession();
+    else {
+      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
+    }
           sessionStorage.removeItem(ACT_AS_KEY);
         } catch (_) {}
-        location.href = "/verify";
+        location.href = "/verify?reauth=1";
       });
     }
   }
@@ -5062,13 +5084,16 @@ document.addEventListener("click", async (e) => {
   });
 
   document.getElementById("signout-btn").addEventListener("click", () => {
-    localStorage.removeItem(STORAGE_KEY);
-    sessionStorage.removeItem(STORAGE_KEY);
+    if (window.SynkSession) window.SynkSession.clearSession();
+    else {
+      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
+    }
     try {
       localStorage.removeItem(PERSONA_KEY);
       sessionStorage.removeItem(PERSONA_KEY);
     } catch (_) {}
-    location.href = "/verify";
+    location.href = "/verify?reauth=1";
   });
 
 

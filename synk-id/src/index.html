@@ -22,8 +22,9 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid11" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=dark-fix2" />
-    <script src="/force-refresh.js" defer></script>
+    <link rel="stylesheet" href="/join.css?v=stay-v1" />
+    <script src="/session.js?v=stay-v1"></script>
+    <script src="/force-refresh.js?v=stay-v1" defer></script>
   </head>
   <body class="marketing">
     <header class="site-nav site-nav-light">
@@ -145,5 +146,26 @@
       </div>
     </footer>
       <script src="/support-chat.js?v=support4" defer></script>
+      <script>
+      (function () {
+        try {
+          const session = window.SynkSession && window.SynkSession.readSession();
+          if (!session || !session.hubSession || !session.hubSession.token) return;
+          const signLinks = document.querySelectorAll('a[href="/verify"], a[href="/verify?autostart=1"]');
+          signLinks.forEach((a) => {
+            a.href = "/hub";
+            if (/sign in/i.test(a.textContent || "")) a.textContent = "Open hub";
+          });
+          // Home-screen / standalone PWA reopen should land in hub when stay-signed-in is on.
+          const isStandalone = window.matchMedia("(display-mode: standalone)").matches
+            || window.navigator.standalone === true;
+          if (isStandalone && (session.staySignedIn || (session.hubSession && session.hubSession.staySignedIn))) {
+            if (location.pathname === "/" || location.pathname === "/index.html") {
+              location.replace("/hub");
+            }
+          }
+        } catch (_) {}
+      })();
+    </script>
   </body>
 </html>

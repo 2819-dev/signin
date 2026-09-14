@@ -13,6 +13,7 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="stylesheet" href="/join.css?v=dark-fix2" />
+    <script src="/session.js?v=stay-v1"></script>
     <script src="/force-refresh.js" defer></script>
   </head>
   <body>
@@ -69,6 +70,7 @@
       }
 
       function readSession() {
+        if (window.SynkSession) return window.SynkSession.readSession();
         try {
           let raw = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
           if (!raw) return null;
