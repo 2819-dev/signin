@@ -1391,19 +1391,76 @@
     actionsHost.innerHTML = `<button class="btn btn-primary btn-compact reddit-join-btn reddit-join-orange" type="button" id="join-community-btn" hidden>Join</button>`;
   }
 
-  function setBannerMode(mode, visible) {
+  const BANNER_CROP = {
+    shape: "banner",
+    title: "Crop community banner",
+    hint: "Drag to frame the wide banner. Zoom to scale. The rectangle is what members will see.",
+    aspectRatio: 3,
+    outputWidth: 1500,
+    outputHeight: 500,
+    maxWidth: 1500,
+    maxHeight: 500,
+    mime: "image/jpeg",
+    quality: 0.9,
+  };
+
+  function setBannerMode(mode, visible, group = null) {
     const banner = document.getElementById("view-banner");
     if (!banner) return null;
     banner.dataset.mode = mode || "";
     banner.hidden = !visible;
     const strip = document.getElementById("view-banner-strip");
     if (strip) {
-      // Blue banner strip is for communities only — never on user profiles.
+      // Colored/image strip is for communities only — never on user profiles.
       const showStrip = visible && mode === "group";
       strip.hidden = !showStrip;
       strip.setAttribute("aria-hidden", showStrip ? "false" : "true");
+      const bannerUrl = showStrip
+        ? String((group && (group.bannerUrl || group.coverUrl || group.banner)) || "").trim()
+        : "";
+      if (bannerUrl) {
+        strip.style.backgroundImage = `url("${bannerUrl.replace(/\\/g, "\\\\").replace(/"/g, "%22")}")`;
+        strip.classList.add("has-image");
+      } else {
+        strip.style.backgroundImage = "";
+        strip.classList.remove("has-image");
+      }
     }
+    if (mode !== "group" || !visible) syncGroupBannerForm(null);
     return banner;
+  }
+
+  function canManageGroup(group) {
+    if (!group) return false;
+    if (group.isOfficial || group.slug === "synk") return canManageSynkServer(group);
+    const myId = me && (me.profileId || me.id || "");
+    if (group.createdBy && myId && String(group.createdBy) === String(myId)) return true;
+    return !!(me && (me.isStaff || me.isOwner || me.role === "owner" || me.role === "admin"));
+  }
+
+  function syncGroupBannerForm(group) {
+    const widget = document.getElementById("group-banner-widget");
+    if (!widget) return;
+    const show = !!(group && !isDiscordTheme(group) && canManageGroup(group));
+    widget.hidden = !show;
+    if (!show) return;
+    const urlInput = document.getElementById("group-banner-url");
+    const status = document.getElementById("group-banner-status");
+    const preview = document.getElementById("group-banner-preview");
+    const current = String((group && (group.bannerUrl || group.coverUrl || "")) || "").trim();
+    if (urlInput && document.activeElement !== urlInput) urlInput.value = current;
+    if (status && !status.dataset.keep) status.textContent = "";
+    if (preview) {
+      if (current) {
+        preview.hidden = false;
+        preview.style.backgroundImage = `url("${current.replace(/\\/g, "\\\\").replace(/"/g, "%22")}")`;
+        preview.classList.add("has-image");
+      } else {
+        preview.hidden = true;
+        preview.style.backgroundImage = "";
+        preview.classList.remove("has-image");
+      }
+    }
   }
 
   function setText(id, text) {
@@ -2938,7 +2995,8 @@ function applyViewState(data) {
       const memberCount = group && group.memberCount != null ? Number(group.memberCount) : null;
       // Reddit-style community card is for other groups only.
       // Official Synk uses the Discord-style server banner inside the hub rail.
-      setBannerMode("group", !isDiscordTheme(group));
+      setBannerMode("group", !isDiscordTheme(group), group);
+      syncGroupBannerForm(group);
       if (viewIcon) viewIcon.textContent = (slug || "?").slice(0, 1).toUpperCase();
       const official =
         group && (group.isOfficial || group.slug === "synk")
@@ -4343,12 +4401,11 @@ function applyViewState(data) {
         const file = fileInput && fileInput.files && fileInput.files[0];
         if (file) {
           if (!String(file.type || "").startsWith("image/")) throw new Error("Choose an image file");
-          payload.imageData = await cropImageFile(file, {
-            maxWidth: 1500,
-            maxHeight: 500,
-            mime: "image/jpeg",
-            quality: 0.9,
-          });
+          payload.imageData = await cropImageFile(file, BANNER_CROP);
+          if (!payload.imageData) {
+            if (status) status.textContent = "";
+            return;
+          }
         } else {
           payload.bannerUrl = String((urlInput && urlInput.value) || "").trim();
         }
@@ -4397,6 +4454,92 @@ function applyViewState(data) {
       }
     });
   }
+
+  async function saveGroupBanner({ clear = false } = {}) {
+    const status = document.getElementById("group-banner-status");
+    const fileInput = document.getElementById("group-banner-file");
+    const urlInput = document.getElementById("group-banner-url");
+    const group = activeGroupDetail;
+    if (!group || isDiscordTheme(group)) throw new Error("Open a group to edit its banner");
+    if (!canManageGroup(group)) throw new Error("Only the group owner can edit this banner");
+    if (status) {
+      status.dataset.keep = "1";
+      status.textContent = clear ? "Clearing…" : "Saving banner…";
+    }
+    const payload = {
+      action: "update-group",
+      group: group.slug,
+      groupId: group.id,
+    };
+    if (clear) {
+      payload.clearBanner = true;
+    } else {
+      const file = fileInput && fileInput.files && fileInput.files[0];
+      if (file) {
+        if (!String(file.type || "").startsWith("image/")) throw new Error("Choose an image file");
+        payload.imageData = await cropImageFile(file, BANNER_CROP);
+        if (!payload.imageData) {
+          if (status) {
+            status.textContent = "";
+            delete status.dataset.keep;
+          }
+          return;
+        }
+      } else {
+        payload.bannerUrl = String((urlInput && urlInput.value) || "").trim();
+      }
+    }
+    const res = await fetch("/api/synk-community", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...hubHeaders() },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not save banner");
+    if (fileInput) fileInput.value = "";
+    activeGroupDetail = data.group || activeGroupDetail;
+    const idx = groups.findIndex((g) => g.slug === (activeGroupDetail && activeGroupDetail.slug));
+    if (idx >= 0) groups[idx] = { ...groups[idx], ...activeGroupDetail };
+    setBannerMode("group", true, activeGroupDetail);
+    syncGroupBannerForm(activeGroupDetail);
+    if (status) {
+      status.textContent = clear ? "Banner cleared." : "Banner saved.";
+      delete status.dataset.keep;
+    }
+  }
+
+  const groupBannerForm = document.getElementById("group-banner-form");
+  if (groupBannerForm) {
+    groupBannerForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("group-banner-status");
+      try {
+        await saveGroupBanner({ clear: false });
+      } catch (err) {
+        if (status) {
+          status.textContent = err.message || "Could not save banner";
+          delete status.dataset.keep;
+        }
+      }
+    });
+  }
+  const groupBannerClear = document.getElementById("group-banner-clear");
+  if (groupBannerClear) {
+    groupBannerClear.addEventListener("click", async () => {
+      const status = document.getElementById("group-banner-status");
+      try {
+        await saveGroupBanner({ clear: true });
+        const urlInput = document.getElementById("group-banner-url");
+        if (urlInput) urlInput.value = "";
+      } catch (err) {
+        if (status) {
+          status.textContent = err.message || "Could not clear banner";
+          delete status.dataset.keep;
+        }
+      }
+    });
+  }
+
   const synkChannelForm = document.getElementById("synk-hub-channel-form");
   if (synkChannelForm) {
     synkChannelForm.addEventListener("submit", async (e) => {

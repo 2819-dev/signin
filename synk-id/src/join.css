@@ -13932,3 +13932,41 @@ body.community-body:not(.is-discord-group) .reddit-sort-tab {
   display: none !important;
 }
 
+/* —— Community banner crop / display v42 —— */
+body.community-body #view-banner-strip.has-image,
+body.community-body .reddit-community-banner.has-image {
+  background-color: #0b1f3a !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  height: 96px !important;
+  min-height: 96px !important;
+}
+@media (min-width: 720px) {
+  body.community-body #view-banner-strip.has-image,
+  body.community-body .reddit-community-banner.has-image {
+    height: 120px !important;
+    min-height: 120px !important;
+  }
+}
+.group-banner-preview {
+  width: 100%;
+  aspect-ratio: 3 / 1;
+  border-radius: 10px;
+  border: 1px solid var(--r-line, #d9e1ea);
+  background: #0b1f3a center / cover no-repeat;
+  margin: 0 0 10px;
+}
+.group-banner-preview.has-image { background-color: #0b1f3a; }
+.group-banner-form .field { margin-bottom: 8px; }
+.group-banner-form label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+body.community-body .synk-hub-manage-label[for="synk-hub-banner-file"]::after {
+  content: " (wide crop)";
+  font-weight: 500;
+  opacity: 0.7;
+}

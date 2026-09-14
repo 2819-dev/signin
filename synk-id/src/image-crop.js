@@ -32,6 +32,9 @@
         grid-template-rows: auto 1fr auto;
         max-height: min(92dvh, 720px);
       }
+      .synk-crop-dialog.is-banner {
+        width: min(720px, 100%);
+      }
       .synk-crop-head {
         display: flex;
         align-items: center;
@@ -72,6 +75,10 @@
         cursor: grab;
         user-select: none;
       }
+      .synk-crop-stage.is-banner {
+        aspect-ratio: 3 / 1;
+        max-height: min(46dvh, 280px);
+      }
       .synk-crop-stage.is-dragging { cursor: grabbing; }
       .synk-crop-stage img {
         position: absolute;
@@ -89,6 +96,7 @@
       }
       .synk-crop-mask.is-circle { border-radius: 50%; }
       .synk-crop-mask.is-square { border-radius: 12px; }
+      .synk-crop-mask.is-banner { border-radius: 10px; }
       .synk-crop-hint {
         margin: 0;
         font-size: 0.84rem;
@@ -172,15 +180,43 @@
     });
   }
 
+  function resolveShape(options = {}) {
+    const raw = String(options.shape || options.mode || "").toLowerCase();
+    if (raw === "banner" || raw === "rect" || raw === "rectangle" || raw === "cover") {
+      return "banner";
+    }
+    if (raw === "square" || raw === "icon") return "square";
+    if (raw === "circle" || raw === "avatar" || raw === "photo") return "circle";
+
+    // Legacy banner uploads passed maxWidth/maxHeight without a shape.
+    const w = Number(options.maxWidth || options.outputWidth || options.width || 0);
+    const h = Number(options.maxHeight || options.outputHeight || options.height || 0);
+    if (w > 0 && h > 0 && w / h >= 1.4) return "banner";
+    return "circle";
+  }
+
+  function resolveBannerSize(options = {}) {
+    const aspect = Math.max(1.2, Math.min(4, Number(options.aspectRatio) || 3));
+    let outW = Math.round(Number(options.outputWidth || options.maxWidth) || 1500);
+    let outH = Math.round(Number(options.outputHeight || options.maxHeight) || 0);
+    outW = Math.max(320, Math.min(2000, outW));
+    if (!outH || outH < 80) outH = Math.round(outW / aspect);
+    outH = Math.max(80, Math.min(1200, outH));
+    return { outW, outH, aspect: outW / outH };
+  }
+
   /**
    * Open a crop/scale dialog.
    * @param {object} options
    * @param {File} [options.file]
    * @param {string} [options.src]
-   * @param {"circle"|"square"} [options.shape]
+   * @param {"circle"|"square"|"banner"} [options.shape]
    * @param {string} [options.title]
    * @param {string} [options.hint]
    * @param {number} [options.outputSize]
+   * @param {number} [options.outputWidth]
+   * @param {number} [options.outputHeight]
+   * @param {number} [options.aspectRatio]
    * @param {string} [options.mime]
    * @param {number} [options.quality]
    * @returns {Promise<null|{dataUrl:string,mime:string,width:number,height:number,shape:string}>}
@@ -188,16 +224,30 @@
   function openCropper(options = {}) {
     ensureStyles();
 
-    const shape = options.shape === "square" ? "square" : "circle";
-    const title = options.title || (shape === "circle" ? "Crop photo" : "Crop icon");
+    const shape = resolveShape(options);
+    const isBanner = shape === "banner";
+    const bannerSize = isBanner ? resolveBannerSize(options) : null;
+    const title =
+      options.title || options.heading ||
+      (shape === "banner" ? "Crop banner" : shape === "circle" ? "Crop photo" : "Crop icon");
     const hint =
-      options.hint ||
-      (shape === "circle"
-        ? "Drag to reposition. Use the slider to zoom."
-        : "Drag to reposition. Scale until the icon fills the square.");
+      options.hint || options.description ||
+      (shape === "banner"
+        ? "Drag to frame the wide banner. Zoom to scale. The rectangle is what people will see."
+        : shape === "circle"
+          ? "Drag to reposition. Use the slider to zoom."
+          : "Drag to reposition. Scale until the icon fills the square.");
     const outputSize = Math.max(64, Math.min(1024, Number(options.outputSize) || 512));
-    const mime = options.mime || (shape === "circle" ? "image/jpeg" : "image/png");
+    const outputWidth = isBanner ? bannerSize.outW : outputSize;
+    const outputHeight = isBanner ? bannerSize.outH : outputSize;
+    const mime =
+      options.mime ||
+      options.type ||
+      (shape === "circle" || shape === "banner" ? "image/jpeg" : "image/png");
     const quality = typeof options.quality === "number" ? options.quality : 0.92;
+    const applyLabel =
+      options.applyLabel ||
+      (shape === "banner" ? "Use banner" : shape === "circle" ? "Use photo" : "Use icon");
 
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -221,16 +271,19 @@
         document.body.appendChild(root);
       }
 
+      const maskClass =
+        shape === "banner" ? "is-banner" : shape === "circle" ? "is-circle" : "is-square";
+
       root.innerHTML = `
-        <div class="synk-crop-dialog" role="dialog" aria-modal="true" aria-labelledby="synk-crop-title">
+        <div class="synk-crop-dialog${isBanner ? " is-banner" : ""}" role="dialog" aria-modal="true" aria-labelledby="synk-crop-title">
           <div class="synk-crop-head">
             <h2 id="synk-crop-title">${escapeText(title)}</h2>
             <button class="synk-crop-close" type="button" data-crop-cancel aria-label="Cancel">×</button>
           </div>
           <div class="synk-crop-body">
-            <div class="synk-crop-stage" data-crop-stage>
+            <div class="synk-crop-stage${isBanner ? " is-banner" : ""}" data-crop-stage>
               <img alt="" draggable="false" data-crop-image />
-              <div class="synk-crop-mask ${shape === "circle" ? "is-circle" : "is-square"}" data-crop-mask aria-hidden="true"></div>
+              <div class="synk-crop-mask ${maskClass}" data-crop-mask aria-hidden="true"></div>
             </div>
             <p class="synk-crop-hint">${escapeText(hint)}</p>
             <div class="synk-crop-zoom">
@@ -242,7 +295,7 @@
           <div class="synk-crop-actions">
             <button class="btn btn-secondary" type="button" data-crop-reset>Reset</button>
             <button class="btn btn-secondary" type="button" data-crop-cancel>Cancel</button>
-            <button class="btn btn-primary" type="button" data-crop-apply>${shape === "circle" ? "Use photo" : "Use icon"}</button>
+            <button class="btn btn-primary" type="button" data-crop-apply>${escapeText(applyLabel)}</button>
           </div>
         </div>
       `;
@@ -277,31 +330,46 @@
         reject(err);
       }
 
-      function viewportSize() {
+      function viewportBox() {
         const rect = stage.getBoundingClientRect();
-        return Math.max(1, Math.min(rect.width, rect.height));
+        if (!isBanner) {
+          const side = Math.max(1, Math.min(rect.width, rect.height));
+          return { width: side, height: side, left: (rect.width - side) / 2, top: (rect.height - side) / 2 };
+        }
+        const aspect = bannerSize.aspect;
+        let width = rect.width;
+        let height = width / aspect;
+        if (height > rect.height) {
+          height = rect.height;
+          width = height * aspect;
+        }
+        width = Math.max(1, width);
+        height = Math.max(1, height);
+        return {
+          width,
+          height,
+          left: (rect.width - width) / 2,
+          top: (rect.height - height) / 2,
+        };
       }
 
       function maxOffset(scale) {
-        const vp = viewportSize();
+        const vp = viewportBox();
         const drawnW = source.naturalWidth * scale;
         const drawnH = source.naturalHeight * scale;
         return {
-          x: Math.max(0, (drawnW - vp) / 2),
-          y: Math.max(0, (drawnH - vp) / 2),
+          x: Math.max(0, (drawnW - vp.width) / 2),
+          y: Math.max(0, (drawnH - vp.height) / 2),
         };
       }
 
       function layoutMask() {
         if (!mask || !stage) return;
-        const rect = stage.getBoundingClientRect();
-        const vp = viewportSize();
-        const left = (rect.width - vp) / 2;
-        const top = (rect.height - vp) / 2;
-        mask.style.left = `${left}px`;
-        mask.style.top = `${top}px`;
-        mask.style.width = `${vp}px`;
-        mask.style.height = `${vp}px`;
+        const vp = viewportBox();
+        mask.style.left = `${vp.left}px`;
+        mask.style.top = `${vp.top}px`;
+        mask.style.width = `${vp.width}px`;
+        mask.style.height = `${vp.height}px`;
         mask.style.right = "auto";
         mask.style.bottom = "auto";
         applyTransform();
@@ -321,8 +389,9 @@
       }
 
       function fitBase() {
-        const vp = viewportSize();
-        baseScale = Math.max(vp / source.naturalWidth, vp / source.naturalHeight);
+        const vp = viewportBox();
+        // Cover the crop frame completely.
+        baseScale = Math.max(vp.width / source.naturalWidth, vp.height / source.naturalHeight);
         zoom = 1;
         offsetX = 0;
         offsetY = 0;
@@ -331,36 +400,38 @@
 
       function exportCropped() {
         const scale = baseScale * zoom;
-        const vp = viewportSize();
+        const vp = viewportBox();
         const canvas = document.createElement("canvas");
-        canvas.width = outputSize;
-        canvas.height = outputSize;
+        canvas.width = outputWidth;
+        canvas.height = outputHeight;
         const ctx = canvas.getContext("2d", { alpha: mime === "image/png" });
         if (!ctx) throw new Error("Could not crop image");
 
         if (mime !== "image/png") {
           ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, outputSize, outputSize);
+          ctx.fillRect(0, 0, outputWidth, outputHeight);
         }
 
         if (shape === "circle") {
           ctx.beginPath();
-          ctx.arc(outputSize / 2, outputSize / 2, outputSize / 2, 0, Math.PI * 2);
+          ctx.arc(outputWidth / 2, outputHeight / 2, Math.min(outputWidth, outputHeight) / 2, 0, Math.PI * 2);
           ctx.closePath();
           ctx.clip();
         }
 
         const drawnW = source.naturalWidth * scale;
         const drawnH = source.naturalHeight * scale;
-        const imageLeft = (vp - drawnW) / 2 + offsetX;
-        const imageTop = (vp - drawnH) / 2 + offsetY;
+        // Image is centered in the stage, then offset. Crop frame is also centered.
+        const imageLeft = (vp.width - drawnW) / 2 + offsetX;
+        const imageTop = (vp.height - drawnH) / 2 + offsetY;
         const sx = (0 - imageLeft) / scale;
         const sy = (0 - imageTop) / scale;
-        const sSize = vp / scale;
+        const sWidth = vp.width / scale;
+        const sHeight = vp.height / scale;
 
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(source, sx, sy, sSize, sSize, 0, 0, outputSize, outputSize);
+        ctx.drawImage(source, sx, sy, sWidth, sHeight, 0, 0, outputWidth, outputHeight);
         return canvas.toDataURL(mime, quality);
       }
 
@@ -427,7 +498,7 @@
       applyBtn.addEventListener("click", () => {
         try {
           const dataUrl = exportCropped();
-          done({ dataUrl, mime, width: outputSize, height: outputSize, shape });
+          done({ dataUrl, mime, width: outputWidth, height: outputHeight, shape });
         } catch (err) {
           fail(err);
         }
