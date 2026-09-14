@@ -156,6 +156,7 @@ function releaseNoteThemePhrases(subject) {
     yourGroups: false,
     crop: false,
     mobile: false,
+    releaseNotes: false,
   };
   const add = (re, phrase, flagName) => {
     if (!re.test(text)) return;
@@ -227,12 +228,15 @@ function releaseNoteThemePhrases(subject) {
   );
   add(
     /\brelease notes?\b.*\bdescriptive\b|\bmore descriptive\b.*\brelease notes?\b/i,
-    "Release notes now go into a bit more detail, while staying clear and easy to read"
+    "Release notes now go into a bit more detail, while staying clear and easy to read",
+    "releaseNotes"
   );
-  add(
-    /\brelease notes?\b|\bwhats?\s*new\b|\bconsumer-facing\b/i,
-    "Release notes are written in clearer everyday language so updates are easier to understand"
-  );
+  if (!flags.releaseNotes) {
+    add(
+      /\brelease notes?\b|\bwhats?\s*new\b|\bconsumer-facing\b/i,
+      "Release notes are written in clearer everyday language so updates are easier to understand"
+    );
+  }
   add(
     /\bfollow lists?\b|\bsocial actions?\b|\bfollow icons?\b/i,
     "Following people is clearer, with profile follow lists and simpler social actions"
@@ -473,7 +477,7 @@ async function main() {
       : notes;
 
   const body =
-    "Synk has a new update. Open Release notes for a clear summary of what changed, then refresh or reopen the app to get it.";
+    "Synk has a new update. Open Release notes for a plain-language look at what’s new, then refresh or reopen the app to get it.";
 
   if (dryRun) {
     console.log(`DRY_RUN version=${version}`);
