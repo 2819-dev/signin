@@ -2357,16 +2357,30 @@
     return true;
   }
 
+  function channelKindMeta(channel) {
+    const kind = String((channel && channel.kind) || "").toLowerCase();
+    if (kind === "announcements") return { label: "Announcements", ico: "📢" };
+    if (kind === "suggestions") return { label: "Ideas", ico: "💡" };
+    if (kind === "readonly" || kind === "rules") return { label: "Info", ico: "ℹ️" };
+    if (kind === "help") return { label: "Help", ico: "🆘" };
+    return { label: "", ico: "#" };
+  }
+
   function channelButtonHtml(ch) {
     const on = ch.slug === activeChannelSlug ? "is-active" : "";
     const full = formatChannelLabel(ch);
     const compact = formatChannelLabel(ch, { compact: true });
-    return `<button type="button" class="discord-channel-btn ${on}" data-discord-channel="${escapeHtml(
+    const kind = String(ch.kind || "chat").toLowerCase();
+    const meta = channelKindMeta(ch);
+    const nameOnly = compact.replace(/^[^\s]+\s+/, "").trim() || compact;
+    return `<button type="button" class="discord-channel-btn synk-hub-channel ${on}" data-discord-channel="${escapeHtml(
       ch.slug
-    )}" title="${escapeHtml(full)}"><span class="discord-channel-label is-full">${escapeHtml(
+    )}" data-kind="${escapeHtml(kind)}" title="${escapeHtml(full)}"><span class="synk-hub-channel-ico" aria-hidden="true">${escapeHtml(
+      meta.ico || "#"
+    )}</span><span class="discord-channel-label is-full">${escapeHtml(
       full
     )}</span><span class="discord-channel-label is-compact">${escapeHtml(
-      compact
+      nameOnly || compact
     )}</span></button>`;
   }
 
@@ -2431,20 +2445,32 @@
     });
     const html = [];
     for (const { cat, list } of byCat.values()) {
-      html.push(`<div class="discord-cat">${escapeHtml(cat.name)}</div>`);
+      html.push(`<div class="discord-cat synk-hub-cat">${escapeHtml(cat.name)}</div>`);
       list
         .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))
         .forEach((ch) => html.push(channelButtonHtml(ch)));
     }
     if (loose.length) {
-      html.push(`<div class="discord-cat">CHANNELS</div>`);
+      html.push(`<div class="discord-cat synk-hub-cat">Channels</div>`);
       loose.forEach((ch) => html.push(channelButtonHtml(ch)));
     }
     host.innerHTML = html.join("") || `<p class="muted" style="padding:8px;">No channels yet.</p>`;
     const active = channels.find((c) => c.slug === activeChannelSlug) || channels[0] || null;
     const title = document.getElementById("discord-channel-title");
     const desc = document.getElementById("discord-channel-desc");
-    if (title) title.textContent = active ? formatChannelLabel(active, { compact: true }) : "Synk";
+    const kindEl = document.getElementById("discord-channel-kind");
+    const activeMeta = channelKindMeta(active);
+    if (title) {
+      const label = active ? formatChannelLabel(active, { compact: true }) : "Synk";
+      // Prefer a clean "# Name" title when we have an emoji prefix.
+      const cleaned = String(label || "").replace(/^[^\s]+\s+/, "").trim();
+      title.textContent = cleaned ? `# ${cleaned}` : label || "# Synk";
+    }
+    if (kindEl) {
+      const kindLabel = activeMeta && activeMeta.label ? activeMeta.label : "";
+      kindEl.textContent = kindLabel;
+      kindEl.hidden = !kindLabel;
+    }
     if (desc) {
       const text = (active && (active.description || "")) || "";
       desc.textContent = text;

@@ -409,7 +409,6 @@ async function main() {
 
   let sql = null;
   let previousVersion = "";
-  let previousNotes = "";
   let existingNotesForVersion = "";
 
   if (dbUrl) {
@@ -434,23 +433,19 @@ async function main() {
       // recent is newest-first, so the next row is the prior broadcast.
       if (recent[idx + 1]) {
         previousVersion = String(recent[idx + 1].version || "");
-        previousNotes = String(recent[idx + 1].notes || "");
       }
     } else if (recent[0]) {
       previousVersion = String(recent[0].version || "");
-      previousNotes = String(recent[0].notes || "");
     } else {
       const previous = await getAppUpdateReleaseNotes(sql, "latest");
       if (previous && previous.version && previous.version !== version) {
         previousVersion = previous.version;
-        previousNotes = previous.notes || previous.body || "";
       }
     }
   }
 
   const notes = buildReleaseNotesFromGit(version, {
     previousVersion,
-    previousNotes,
     endRef: looksLikeGitSha(version) ? version : "HEAD",
   });
 
