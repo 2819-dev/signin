@@ -118,16 +118,10 @@
     el.id = "synk-push-banner";
     el.setAttribute("role", "region");
     el.setAttribute("aria-label", "Enable notifications");
-    el.style.cssText =
-      "position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:10000;" +
-      "display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;" +
-      "max-width:min(92vw,420px);padding:12px 14px;border-radius:14px;" +
-      "background:#041A55;color:#fff;font:600 13px/1.35 system-ui,sans-serif;" +
-      "box-shadow:0 12px 32px rgba(0,0,0,.28);";
     el.innerHTML =
       '<span style="flex:1 1 180px;text-align:left;">Turn on notifications so Synk can alert you about updates, messages, and testing shifts</span>' +
-      '<button type="button" id="synk-push-enable" style="border:0;border-radius:999px;padding:8px 12px;background:#fff;color:#041A55;font:700 12px system-ui,sans-serif;cursor:pointer;">Enable</button>' +
-      '<button type="button" id="synk-push-dismiss" style="border:0;border-radius:999px;padding:8px 10px;background:transparent;color:#c9d7ff;font:600 12px system-ui,sans-serif;cursor:pointer;">Dismiss</button>';
+      '<button type="button" id="synk-push-enable">Enable</button>' +
+      '<button type="button" id="synk-push-dismiss">Dismiss</button>';
     document.body.appendChild(el);
     const enableBtn = document.getElementById("synk-push-enable");
     const dismissBtn = document.getElementById("synk-push-dismiss");

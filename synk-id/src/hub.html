@@ -15,9 +15,9 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=rn-reddit1" />
+    <link rel="stylesheet" href="/join.css?v=dark-fix2" />
     <script src="/force-refresh.js" defer></script>
-    <script src="/push-client.js?v=push-badge1" defer></script>
+    <script src="/push-client.js?v=dark-fix2" defer></script>
   
     <style>
       .hub-grid {
@@ -47,6 +47,22 @@
         font-size: 0.86rem;
         line-height: 1.45;
       }
+      html[data-theme="dark"] .hub-tile {
+        background: var(--surface);
+        border-color: var(--line);
+        box-shadow: none;
+      }
+      html[data-theme="dark"] .hub-tile:hover {
+        border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+        box-shadow: 0 8px 24px rgba(0,0,0,.28);
+      }
+      html[data-theme="dark"] .hub-notif-btn,
+      html[data-theme="dark"] .reddit-notif-btn {
+        background: var(--surface);
+        border-color: var(--line);
+        color: var(--ink);
+      }
+
       .reddit-notif-mark {
         transition: background .1s ease, opacity .1s ease;
       }
