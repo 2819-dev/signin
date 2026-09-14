@@ -13,14 +13,14 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v35" />
+    <link rel="stylesheet" href="/join.css?v=community-v36" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v35" defer></script>
+    <script src="/force-refresh.js?v=community-v36" defer></script>
   </head>
   <body class="community-body reddit-body">
     <div id="synk-boot-loader" class="synk-loader-overlay" hidden aria-busy="false" aria-live="polite" aria-label="Loading Synk">
@@ -243,15 +243,36 @@
               </section>
 
               <div id="discord-shell" class="discord-shell synk-hub" hidden>
-                <aside class="discord-channels synk-hub-rail" id="discord-channels" aria-label="Channels"></aside>
+                <button type="button" class="synk-hub-backdrop" id="synk-hub-backdrop" data-synk-channels-close hidden aria-label="Close channels"></button>
+                <aside class="discord-channels synk-hub-rail" id="discord-channels" aria-label="Channels">
+                  <div class="synk-hub-rail-head">
+                    <div class="synk-hub-rail-brand">
+                      <span class="synk-hub-rail-mark" aria-hidden="true">S</span>
+                      <div>
+                        <strong class="synk-hub-rail-title">Synk</strong>
+                        <span class="synk-hub-rail-sub">Official server</span>
+                      </div>
+                    </div>
+                    <button type="button" class="synk-hub-rail-close" data-synk-channels-close aria-label="Close channels">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                  <div class="synk-hub-rail-scroll" id="discord-channel-list"></div>
+                </aside>
                 <div class="discord-main synk-hub-main">
                   <header class="discord-channel-head synk-hub-head" id="discord-channel-head">
-                    <div class="synk-hub-head-top">
-                      <strong id="discord-channel-title"># Lounge</strong>
-                      <span class="synk-hub-kind" id="discord-channel-kind" hidden></span>
+                    <button type="button" class="synk-hub-channels-toggle" id="synk-channels-toggle" aria-label="Open channels" aria-controls="discord-channels" aria-expanded="false">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+                      <span>Channels</span>
+                    </button>
+                    <div class="synk-hub-head-copy">
+                      <div class="synk-hub-head-top">
+                        <strong id="discord-channel-title"># Lounge</strong>
+                        <span class="synk-hub-kind" id="discord-channel-kind" hidden></span>
+                      </div>
+                      <p class="muted synk-hub-desc" id="discord-channel-desc"></p>
+                      <p class="muted discord-channel-hint synk-hub-hint" id="discord-channel-hint" hidden></p>
                     </div>
-                    <p class="muted synk-hub-desc" id="discord-channel-desc"></p>
-                    <p class="muted discord-channel-hint synk-hub-hint" id="discord-channel-hint" hidden></p>
                   </header>
                   <div id="discord-feed-slot" class="synk-hub-feed"></div>
                 </div>
@@ -988,6 +1009,6 @@
 
     <script src="/push-client.js?v=dark-fix2"></script>
     <script src="/image-crop.js?v=crop-v2"></script>
-    <script src="/community.js?v=community-v35"></script>
+    <script src="/community.js?v=community-v36"></script>
   </body>
 </html>

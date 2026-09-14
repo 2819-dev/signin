@@ -2410,13 +2410,28 @@
     return q ? `${href}?${q}` : href;
   }
 
+  function setSynkChannelsOpen(open) {
+    const shell = document.getElementById("discord-shell");
+    const backdrop = document.getElementById("synk-hub-backdrop");
+    const toggle = document.getElementById("synk-channels-toggle");
+    const want = !!open;
+    document.body.classList.toggle("synk-channels-open", want);
+    if (shell) shell.classList.toggle("is-channels-open", want);
+    if (backdrop) backdrop.hidden = !want;
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", want ? "true" : "false");
+      toggle.setAttribute("aria-label", want ? "Close channels" : "Open channels");
+    }
+  }
+
   function renderDiscordChannels(group) {
     const shell = document.getElementById("discord-shell");
-    const host = document.getElementById("discord-channels");
+    const host = document.getElementById("discord-channel-list") || document.getElementById("discord-channels");
     if (!shell || !host) return;
     if (!isDiscordTheme(group)) {
       shell.hidden = true;
       document.body.classList.remove("is-discord-group");
+      setSynkChannelsOpen(false);
       mountFeedStack(false);
       return;
     }
@@ -2454,7 +2469,9 @@
       html.push(`<div class="discord-cat synk-hub-cat">Channels</div>`);
       loose.forEach((ch) => html.push(channelButtonHtml(ch)));
     }
-    host.innerHTML = html.join("") || `<p class="muted" style="padding:8px;">No channels yet.</p>`;
+    host.innerHTML = html.join("") || `<p class="muted synk-hub-empty-channels">No channels yet.</p>`;
+    const railTitle = document.querySelector(".synk-hub-rail-title");
+    if (railTitle && group && group.name) railTitle.textContent = group.name;
     const active = channels.find((c) => c.slug === activeChannelSlug) || channels[0] || null;
     const title = document.getElementById("discord-channel-title");
     const desc = document.getElementById("discord-channel-desc");
@@ -2462,7 +2479,6 @@
     const activeMeta = channelKindMeta(active);
     if (title) {
       const label = active ? formatChannelLabel(active, { compact: true }) : "Synk";
-      // Prefer a clean "# Name" title when we have an emoji prefix.
       const cleaned = String(label || "").replace(/^[^\s]+\s+/, "").trim();
       title.textContent = cleaned ? `# ${cleaned}` : label || "# Synk";
     }
@@ -2486,7 +2502,7 @@
         const kind = String((active && active.kind) || "").toLowerCase();
         if (kind === "suggestions") composerOpen.textContent = "Suggest an idea";
         else if (kind === "announcements") composerOpen.textContent = "Post announcement";
-        else composerOpen.textContent = "Write a post";
+        else composerOpen.textContent = "Message #"+ ((active && active.name) || activeChannelSlug || "channel");
       }
     }
     const feedHint = document.getElementById("discord-channel-hint");
@@ -2508,11 +2524,10 @@
         feedHint.textContent = "";
       }
     }
-    // Keep the active channel chip visible in the mobile scroller.
     try {
       const activeBtn = host.querySelector(".discord-channel-btn.is-active");
       if (activeBtn && typeof activeBtn.scrollIntoView === "function") {
-        activeBtn.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+        activeBtn.scrollIntoView({ block: "nearest", behavior: "smooth" });
       }
     } catch (_) {}
   }
@@ -5869,13 +5884,33 @@ document.addEventListener("click", async (e) => {
   });
 
   document.addEventListener("click", (e) => {
+    const closeBtn = e.target.closest("[data-synk-channels-close]");
+    if (closeBtn) {
+      e.preventDefault();
+      setSynkChannelsOpen(false);
+      return;
+    }
+    const toggle = e.target.closest("#synk-channels-toggle");
+    if (toggle) {
+      e.preventDefault();
+      const open = !document.body.classList.contains("synk-channels-open");
+      setSynkChannelsOpen(open);
+      return;
+    }
     const chBtn = e.target.closest("[data-discord-channel]");
     if (!chBtn) return;
     e.preventDefault();
     const slug = chBtn.getAttribute("data-discord-channel");
     if (!slug || !route.slug) return;
     activeChannelSlug = slug;
+    setSynkChannelsOpen(false);
     navigate({ type: "group", slug: route.slug, username: "", channel: slug }).catch(() => {});
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.body.classList.contains("synk-channels-open")) {
+      setSynkChannelsOpen(false);
+    }
   });
 
   const groupRoleForm = document.getElementById("group-role-form");
