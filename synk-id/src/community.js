@@ -336,7 +336,8 @@
     const { username, label } = authorLabel(author);
     const tag = author && author.pinnedTag ? tagChip(author.pinnedTag, { compact: compactTag }) : "";
     const avatar = withAvatar ? avatarMarkup(author && author.avatarUrl, label, "community-face is-inline") : "";
-    return `<span class="author-with-tag">${avatar}<a class="community-user-link" href="/user/${escapeHtml(username)}">u/${escapeHtml(label)}</a>${tag}</span>`;
+    // Reddit-style public handle is always u/{username}.
+    return `<span class="author-with-tag">${avatar}<a class="community-user-link" href="/user/${escapeHtml(username)}">u/${escapeHtml(username)}</a>${tag}</span>`;
   }
 
   function tagChip(tag, { compact = false, canPin = false } = {}) {
@@ -1620,7 +1621,7 @@
         const comments = Number(post.commentCount) || 0;
         const pid = escapeHtml(String(post.id || ""));
         const media = renderPostMedia(post);
-        const commentLabel = comments === 1 ? "1 Comment" : `${comments} Comments`;
+        const commentLabel = comments === 1 ? "1 comment" : `${comments} comments`;
         const suggestionStatus = String(post.suggestionStatus || "").toLowerCase();
         const isSuggestion =
           suggestionStatus ||
@@ -1707,7 +1708,7 @@
     const vote = Number(post.myVote) || 0;
     const saved = !!post.saved;
     const comments = Number(post.commentCount) || 0;
-    const commentLabel = comments === 1 ? "1 Comment" : `${comments} Comments`;
+    const commentLabel = comments === 1 ? "1 comment" : `${comments} comments`;
     const pid = escapeHtml(String(post.id || ""));
     const media = renderPostMedia(post, { large: true });
     el.innerHTML = `
