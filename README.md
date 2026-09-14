@@ -70,6 +70,12 @@ Then open `http://localhost:8888` (kiosk) and `http://localhost:8888/admin`.
 - Light mode only; the kiosk UI is intentionally minimal.
 
 
+## Separate Synk products
+
+- Synk ID: https://synkid.netlify.app
+- Synk Admin: https://synk-admin.netlify.app
+- **Adding Synk to another app:** see [`AGENTS.md`](./AGENTS.md) and [`integrations/synk/`](./integrations/synk/) (Cursor agents should read these first).
+
 ## Separate Synk Admin site
 
 Synk Admin is deployed as its own Netlify project:

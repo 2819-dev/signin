@@ -149,6 +149,11 @@
   status = 200
 
 [[redirects]]
+  from = "/agents"
+  to = "/docs.html#for-agents"
+  status = 302
+
+[[redirects]]
   from = "/testing"
   to = "/testing.html"
   status = 200

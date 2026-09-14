@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Synk client snippet</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Continue with Synk</h1>
+    <p>Drop this pattern into any site. Replace <code>my-app</code> with your paired app slug.</p>
+    <button type="button" id="continue-synk">Continue with Synk</button>
+    <pre id="log"></pre>
+
+    <script src="https://synkid.netlify.app/sdk.js"></script>
+    <script>
+      const log = (msg) => {
+        document.getElementById("log").textContent += String(msg) + "\n";
+      };
+
+      document.getElementById("continue-synk").addEventListener("click", () => {
+        Synk.signIn({
+          app: "my-app",
+          returnTo: location.href,
+        });
+      });
+
+      (async () => {
+        const pass = Synk.takePassFromUrl();
+        if (!pass) return;
+        log("Got Synk pass — send it to your backend:");
+        log(pass.slice(0, 12) + "…");
+        // await fetch("/api/auth/synk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pass }) });
+      })();
+    </script>
+  </body>
+</html>

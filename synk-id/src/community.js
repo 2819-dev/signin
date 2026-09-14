@@ -1557,7 +1557,7 @@
           <article class="reddit-post ${isSuggestion ? "is-suggestion" : ""}" data-post-id="${pid}">
             <div class="reddit-vote" aria-label="Vote">
               <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
-              <span class="reddit-vote-count">${score}</span>
+              <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${score}</span>
               <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
             </div>
             <div class="reddit-post-main">
@@ -1619,7 +1619,7 @@
       <article class="reddit-post reddit-post-detail-inner" data-post-id="${pid}">
         <div class="reddit-vote">
           <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
-          <span class="reddit-vote-count">${displayScore(post)}</span>
+          <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${displayScore(post)}</span>
           <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
         </div>
         <div class="reddit-post-main">

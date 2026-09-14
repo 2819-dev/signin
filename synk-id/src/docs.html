@@ -15,7 +15,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
-    <link rel="stylesheet" href="/join.css?v=dark-fix2" />
+    <link rel="stylesheet" href="/join.css?v=community-v12" />
     <script src="/force-refresh.js" defer></script>
   </head>
   <body>
@@ -50,6 +50,7 @@
           <a href="#api-keys">Set up an API key</a>
           <a href="#verify-flow">Verify &amp; passes</a>
           <a href="#api-reference">API basics</a>
+          <a href="#for-agents">For AI agents</a>
           <a href="#glossary">Glossary</a>
         </div>
       </nav>
@@ -223,6 +224,43 @@ X-Synk-Key: sk_live_your_key_here
           <li>If a call fails with unauthorized, check for an expired pass or a rotated key.</li>
           <li>Store only what you need after verify (often just your own account id linked to their Synk code).</li>
         </ul>
+      </section>
+
+      <section class="card docs-section" id="for-agents">
+        <p class="section-label">Automation</p>
+        <h2>For Cursor / AI agents</h2>
+        <p>
+          When adding Synk to another product, use the redirect → pass → server consume flow.
+          Do not invent a separate login system for Synk.
+        </p>
+        <ol class="docs-steps">
+          <li>
+            Load the browser SDK:
+            <code>https://synkid.netlify.app/sdk.js</code>
+          </li>
+          <li>
+            Call <code>Synk.signIn({ app: "your-app-slug", returnTo: location.href })</code>.
+          </li>
+          <li>
+            On return, read <code>Synk.takePassFromUrl()</code> and POST the pass to <em>your</em> backend.
+          </li>
+          <li>
+            From your backend, consume the pass:
+            <code>POST /api/synk-pass</code> with header <code>X-Synk-Key: sk_live_…</code>.
+          </li>
+          <li>
+            Create your own session from <code>profile.synkCode</code> / <code>profile.id</code>.
+          </li>
+        </ol>
+        <pre class="docs-code" tabindex="0"><code>&lt;script src="https://synkid.netlify.app/sdk.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  Synk.signIn({ app: "my-app", returnTo: location.href });
+&lt;/script&gt;</code></pre>
+        <div class="docs-callout">
+          <strong>Repo helpers:</strong> <code>AGENTS.md</code>,
+          <code>.cursor/rules/synk-integration.mdc</code>, and
+          <code>integrations/synk/</code> include copy-paste server and client examples.
+        </div>
       </section>
 
       <section class="card docs-section" id="glossary">
