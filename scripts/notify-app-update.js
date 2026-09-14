@@ -21,6 +21,7 @@ const {
   getAppUpdateReleaseNotes,
   isSensitiveReleaseNoteBlock,
   isBetaOnlyReleaseNoteBlock,
+  scrubCopiedPlatformNames,
 } = require("../netlify/functions/lib/synk");
 
 function readVersionFromFile() {
@@ -117,7 +118,7 @@ function buildReleaseNotesFromGit(version, { previousVersion = "", previousNotes
   const beta = [];
 
   for (const row of commits) {
-    const subject = String(row.subject || "").trim();
+    const subject = scrubCopiedPlatformNames(String(row.subject || "").trim());
     if (!subject) continue;
     if (isSensitiveReleaseNoteBlock(subject)) continue;
     if (/^stamp (public )?version\b/i.test(subject)) continue;

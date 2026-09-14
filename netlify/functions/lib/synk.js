@@ -4035,6 +4035,46 @@ async function claimAdminActAsHandoff(sql, { token } = {}) {
 }
 
 
+// Platforms we may copy UX from in chat/commits — never show these names in
+// member-facing release notes or beta agenda titles.
+const COPIED_PLATFORM_NAMES = ["melonly"];
+
+function scrubCopiedPlatformNames(text) {
+  const scrubLine = (line) => {
+    const raw = String(line || "");
+    const marker = raw.match(/^(\s*(?:[-*•+]|\d+[.)])\s+)/);
+    const prefix = marker ? marker[1] : "";
+    let out = marker ? raw.slice(prefix.length) : raw;
+    for (const brand of COPIED_PLATFORM_NAMES) {
+      const escaped = brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      out = out
+        .replace(
+          new RegExp(
+            `\\b(?:like\\s+|inspired\\s+by\\s+|similar\\s+to\\s+|based\\s+on\\s+)?${escaped}(?:[-\\s]?style)?\\b`,
+            "gi"
+          ),
+          ""
+        )
+        .replace(new RegExp(`\\b${escaped}\\b`, "gi"), "");
+    }
+    out = out
+      .replace(/\bas\s{2,}a\b/gi, "as a")
+      .replace(/\bas\s+console\b/gi, "as a console")
+      .replace(/[^\S\n]{2,}/g, " ")
+      .replace(/[^\S\n]+([,.;:!?])/g, "$1")
+      .replace(/\(\s*\)/g, "")
+      .replace(/\b[^\S\n]+-[^\S\n]+\b/g, " ")
+      .trim();
+    if (!out) return prefix ? prefix.trimEnd() : "";
+    return `${prefix}${out}`.replace(/[^\S\n]{2,}/g, " ").trimEnd();
+  };
+  return String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map(scrubLine)
+    .join("\n");
+}
+
 function isSensitiveReleaseNoteBlock(text) {
   return /\b(mod(?:erator)?\s*tools?|admin\s*panel|admin\s*dashboard|admin\s*console|staff(?:-|\s+)only|staff\s*tools?|act[\s-]?as\b|impersonat|synk[- ]?admin|owner\s*tools?|role\s*permissions?|permission\s*matrix|mod\s*queue|staff\s*panel)\b/i.test(
     String(text || "")
@@ -4121,7 +4161,7 @@ function buildReleaseNotesPayload(
   for (const block of splitReleaseNoteBlocks(notes)) {
     const sensitive = isSensitiveReleaseNoteBlock(block);
     const betaOnly = isBetaOnlyReleaseNoteBlock(block);
-    const cleaned = stripReleaseNoteAudienceMarkers(block);
+    const cleaned = scrubCopiedPlatformNames(stripReleaseNoteAudienceMarkers(block));
     if (!cleaned) continue;
 
     if (sensitive && !isStaff) continue;
@@ -4131,7 +4171,7 @@ function buildReleaseNotesPayload(
     if (heading) {
       pushEmbed();
       current = {
-        title: String(heading[2] || "").trim() || "Update",
+        title: scrubCopiedPlatformNames(String(heading[2] || "").trim()) || "Update",
         audience: sensitive ? "staff" : betaOnly ? "beta" : "everyone",
         lines: [],
       };
@@ -4167,7 +4207,7 @@ function buildReleaseNotesPayload(
       }
       return {
         type: sensitive ? "staff" : betaOnly ? "beta" : "text",
-        text: stripReleaseNoteAudienceMarkers(text),
+        text: scrubCopiedPlatformNames(stripReleaseNoteAudienceMarkers(text)),
         staffOnly: sensitive,
         betaOnly,
       };
@@ -4245,10 +4285,12 @@ function memberFacingReleaseNoteLines(text) {
     .filter((block) => !isSensitiveReleaseNoteBlock(block))
     .filter((block) => !isBetaOnlyReleaseNoteBlock(block))
     .map((block) =>
-      stripReleaseNoteAudienceMarkers(block)
-        .replace(/^\s*([-*•+]|\d+[.)])\s+/, "")
-        .replace(/^#+\s*/, "")
-        .trim()
+      scrubCopiedPlatformNames(
+        stripReleaseNoteAudienceMarkers(block)
+          .replace(/^\s*([-*•+]|\d+[.)])\s+/, "")
+          .replace(/^#+\s*/, "")
+          .trim()
+      )
     )
     .filter((line) => line && !/^what'?s new\b/i.test(line));
 }
@@ -4258,10 +4300,12 @@ function betaFacingReleaseNoteLines(text) {
     .filter((block) => !isSensitiveReleaseNoteBlock(block))
     .filter((block) => isBetaOnlyReleaseNoteBlock(block))
     .map((block) =>
-      stripReleaseNoteAudienceMarkers(block)
-        .replace(/^\s*([-*•+]|\d+[.)])\s+/, "")
-        .replace(/^#+\s*/, "")
-        .trim()
+      scrubCopiedPlatformNames(
+        stripReleaseNoteAudienceMarkers(block)
+          .replace(/^\s*([-*•+]|\d+[.)])\s+/, "")
+          .replace(/^#+\s*/, "")
+          .trim()
+      )
     )
     .filter((line) => line && !/^(for\s+)?beta(\s+testers?)?$/i.test(line) && !/^what'?s new\b/i.test(line));
 }
@@ -4550,7 +4594,7 @@ async function ensureBetaAgendaForAppUpdate(sql, { version, body, notes } = {}) 
   const createdIds = [];
 
   for (const line of items) {
-    const title = String(line || "").trim().slice(0, 160);
+    const title = scrubCopiedPlatformNames(String(line || "").trim()).slice(0, 160);
     if (!title) continue;
     const detail = `Update ${short}`.slice(0, 1000);
     const rows = await sql`
@@ -4592,9 +4636,7 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
     .trim()
     .slice(0, 500);
 
-  const releaseNotes = String(notes || "")
-    .trim()
-    .slice(0, 20000);
+  const releaseNotes = scrubCopiedPlatformNames(String(notes || "").trim()).slice(0, 20000);
 
   await ensureAppUpdateBroadcastsTable(sql);
   await sql`
@@ -4747,6 +4789,7 @@ module.exports = {
   getAppUpdateReleaseNotes,
   isSensitiveReleaseNoteBlock,
   isBetaOnlyReleaseNoteBlock,
+  scrubCopiedPlatformNames,
   splitReleaseNoteBlocks,
   memberFacingReleaseNoteLines,
   betaFacingReleaseNoteLines,
