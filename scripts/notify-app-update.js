@@ -92,22 +92,6 @@ function gitCommitSubjectsSince(previousRef, endRef = "HEAD") {
   }
 }
 
-function subjectsFromNotes(notes) {
-  const set = new Set();
-  String(notes || "")
-    .split("\n")
-    .forEach((line) => {
-      const cleaned = String(line || "")
-        .replace(/^\s*([-*•+]|\d+[.)])\s+/, "")
-        .replace(/^#+\s*/, "")
-        .replace(/^\s*\[beta\]\s*/i, "")
-        .trim();
-      if (!cleaned) return;
-      set.add(normalizeCommitSubject(cleaned));
-    });
-  return set;
-}
-
 function finalizeReleaseNoteSentence(text) {
   let out = scrubCopiedPlatformNames(String(text || ""))
     .replace(/\(\s*\)/g, "")
@@ -329,7 +313,7 @@ function isGenericFallbackNotes(notes) {
   return /^##\s*Improvements\s*\n+\s*-\s*Synk update\b/i.test(text);
 }
 
-function buildReleaseNotesFromGit(version, { previousVersion = "", previousNotes = "", endRef = "" } = {}) {
+function buildReleaseNotesFromGit(version, { previousVersion = "", endRef = "" } = {}) {
   const short = String(version || "").slice(0, 10);
   const tip = String(endRef || "").trim() || (looksLikeGitSha(version) ? String(version).trim() : "HEAD");
   let commits = gitCommitSubjectsSince(previousVersion, tip);
