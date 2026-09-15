@@ -3214,7 +3214,7 @@
       const desc = String(channel.description || "").trim();
       if (desc) textEl.textContent = desc;
       else if (meta && meta.tone === "announce") textEl.textContent = "Official announcements from the Synk team.";
-      else if (meta && meta.tone === "suggest") textEl.textContent = "Share product ideas, tag them, and vote. Staff reply with status updates.";
+      else if (meta && meta.tone === "suggest") textEl.textContent = "Share product ideas, tag them, and follow staff status updates.";
       else if (meta && meta.tone === "help") textEl.textContent = "Open a ticket for account, access, billing, or product help. Staff respond here.";
       else if (meta && meta.tone === "rules") textEl.textContent = "Community guidelines for the official Synk server.";
       else textEl.textContent = `This is the start of #${cleaned}. Be respectful and keep the conversation useful.`;
@@ -7664,7 +7664,7 @@ document.addEventListener("click", async (e) => {
         hint.hidden = false;
         hint.textContent = support
           ? "Pick one category so staff can route your ticket quickly."
-          : "Tags help others find and vote on related ideas.";
+          : "Tags help others find related ideas.";
       }
       const tagsHost = document.getElementById("forum-create-tags");
       forumSelectedTags = [];
