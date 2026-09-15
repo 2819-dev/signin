@@ -9743,8 +9743,9 @@ html[data-theme="dark"] body.community-body.is-discord-group .suggestion-status.
   filter: brightness(1.06);
 }
 .synk-hub-forum-create[hidden] { display: none !important; }
-body.is-forum-channel #composer-card,
-body.is-forum-channel .reddit-create {
+/* Forum composer swap is hub-only — never hide create UI on Reddit groups */
+body.community-body.is-discord-group.is-forum-channel #composer-card,
+body.community-body.is-discord-group.is-forum-channel .reddit-create {
   display: none !important;
 }
 .forum-thread-list {
@@ -15585,5 +15586,204 @@ body.community-body.is-discord-group .synk-hub {
   body.community-body.is-discord-group #community-main .community-layout.reddit-layout {
     padding-left: 0 !important;
     padding-right: 0 !important;
+  }
+}
+
+
+/* ==========================================================================
+   Community mode isolation — official Synk hub vs Reddit groups
+   ========================================================================== */
+
+/* Forum UI only inside the official hub Ideas channel */
+body.community-body:not(.is-discord-group) .forum-thread-list,
+body.community-body:not(.is-discord-group) .forum-empty,
+body.community-body:not(.is-discord-group) .forum-create-modal,
+body.community-body:not(.is-discord-group) .synk-hub-forum-create,
+body.community-body:not(.is-forum-channel) .forum-thread-list,
+body.community-body:not(.is-forum-channel) .forum-empty,
+body.community-body:not(.is-forum-channel) .forum-create-modal,
+body.community-body:not(.is-forum-channel) .synk-hub-forum-create {
+  display: none !important;
+}
+
+/* Regular groups keep the classic Reddit community chrome */
+body.community-body:not(.is-discord-group) #view-banner.reddit-community-header:not([hidden]),
+body.community-body:not(.is-discord-group) .reddit-community-header:not([hidden]) {
+  display: block !important;
+}
+body.community-body:not(.is-discord-group) #about-card:not([hidden]),
+body.community-body:not(.is-discord-group) .reddit-right:not([hidden]):not(.is-hidden),
+body.community-body:not(.is-discord-group) .community-right:not([hidden]):not(.is-hidden),
+body.community-body:not(.is-discord-group) #right-rail:not([hidden]):not(.is-hidden) {
+  display: flex !important;
+}
+body.community-body:not(.is-discord-group) #crumbs:not([hidden]) {
+  display: flex !important;
+}
+body.community-body:not(.is-discord-group) #discord-shell,
+body.community-body:not(.is-discord-group) .synk-hub,
+body.community-body:not(.is-discord-group) #synk-hub-manage,
+body.community-body:not(.is-discord-group) .synk-server-settings {
+  display: none !important;
+}
+
+/* Restore Reddit post cards outside the official server */
+body.community-body:not(.is-discord-group) .reddit-post {
+  display: grid !important;
+  grid-template-columns: 40px minmax(0, 1fr) !important;
+  gap: 0 10px !important;
+  margin: 0 0 10px !important;
+  padding: 10px 12px 10px 8px !important;
+  border: 1px solid var(--r-line, #e5e7eb) !important;
+  border-radius: 12px !important;
+  background: var(--r-card, #fff) !important;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--r-ink, #111) 4%, transparent) !important;
+}
+body.community-body:not(.is-discord-group) .reddit-post:hover {
+  border-color: color-mix(in srgb, var(--signal, #1a9aa8) 28%, var(--r-line, #e5e7eb)) !important;
+  background: var(--r-card, #fff) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--shadow, rgba(15,23,42,0.08)) 80%, transparent) !important;
+}
+body.community-body:not(.is-discord-group) .reddit-vote {
+  background: color-mix(in srgb, var(--r-elev, #f6f7f8) 88%, transparent) !important;
+  border-radius: 10px !important;
+  padding: 6px 4px !important;
+}
+body.community-body:not(.is-discord-group) .reddit-post-title {
+  font-size: 1.05rem !important;
+  font-weight: 750 !important;
+  line-height: 1.3 !important;
+  margin: 2px 0 6px !important;
+}
+body.community-body:not(.is-discord-group) .reddit-post-body {
+  font-size: 0.95rem !important;
+  line-height: 1.45 !important;
+  opacity: 1 !important;
+}
+body.community-body:not(.is-discord-group) .feed-stack {
+  padding: 0 !important;
+  gap: 10px !important;
+}
+body.community-body:not(.is-discord-group) .reddit-create,
+body.community-body:not(.is-discord-group) .reddit-sortbar {
+  border-radius: 12px !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+body.community-body:not(.is-discord-group) .reddit-community-header {
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+/* Desktop: keep classic 2-column Reddit layout for everyone except the hub */
+@media (min-width: 1101px) {
+  body.community-body:not(.is-discord-group) #community-main .reddit-layout,
+  body.community-body:not(.is-discord-group) #community-main .community-layout.reddit-layout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 320px !important;
+    gap: 24px !important;
+    align-items: start !important;
+  }
+}
+
+/* Official Synk hub: contained Discord stage, leave the rest of Community alone */
+body.community-body.is-discord-group {
+  --synk-hub-stage-pad: 0px;
+}
+body.community-body.is-discord-group #community-main {
+  padding-bottom: 0;
+}
+body.community-body.is-discord-group .discord-shell,
+body.community-body.is-discord-group .synk-hub {
+  margin: 0;
+  border-radius: 14px;
+  min-height: calc(100dvh - 88px);
+  height: calc(100dvh - 88px);
+  overflow: hidden;
+  isolation: isolate;
+  contain: layout paint;
+}
+body.community-body.is-discord-group .synk-hub-rail {
+  z-index: 3;
+}
+body.community-body.is-discord-group .synk-hub-main {
+  z-index: 1;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--synk-hub-accent) 6%, var(--synk-hub-main)), var(--synk-hub-main) 140px);
+}
+body.community-body.is-discord-group .synk-hub-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--synk-hub-main) 86%, transparent);
+  border-bottom: 1px solid var(--synk-hub-line);
+}
+body.community-body.is-discord-group .synk-hub-feed,
+body.community-body.is-discord-group #discord-feed-slot {
+  padding: 10px 14px 18px;
+  overflow: auto;
+  min-height: 0;
+}
+body.community-body.is-discord-group .feed-stack {
+  gap: 8px;
+  padding: 0;
+}
+/* Hub posts read like chat rows, not Reddit cards */
+body.community-body.is-discord-group .reddit-post {
+  border-radius: 10px !important;
+  border: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--synk-hub-line) 75%, transparent) !important;
+  background: transparent !important;
+  margin: 0 !important;
+  padding: 10px 8px !important;
+  box-shadow: none !important;
+  grid-template-columns: 40px minmax(0, 1fr) !important;
+}
+body.community-body.is-discord-group .reddit-post:hover {
+  background: color-mix(in srgb, var(--synk-hub-ink) 4.5%, transparent) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+body.community-body.is-discord-group .reddit-create,
+body.community-body.is-discord-group .reddit-sortbar {
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+body.community-body.is-discord-group .synk-hub-server-banner-meta {
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+body.community-body.is-discord-group .synk-hub-rail-title {
+  max-width: 100%;
+}
+body.community-body.is-discord-group .synk-hub-server-settings-btn {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* Phone hub: full-bleed; tablet+ keep rounded stage inside community shell */
+@media (max-width: 767px) {
+  body.community-body.is-discord-group .discord-shell,
+  body.community-body.is-discord-group .synk-hub {
+    border-radius: 0 !important;
+    min-height: calc(100dvh - 72px) !important;
+    height: calc(100dvh - 72px) !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  body.community-body:not(.is-discord-group) .reddit-post {
+    border-radius: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+}
+
+@media (min-width: 768px) {
+  body.community-body.is-discord-group .discord-shell,
+  body.community-body.is-discord-group .synk-hub {
+    border: 1px solid var(--synk-hub-line);
+    box-shadow: 0 10px 28px color-mix(in srgb, var(--shadow, rgba(15,23,42,.12)) 70%, transparent);
   }
 }

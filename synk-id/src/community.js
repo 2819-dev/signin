@@ -2152,6 +2152,8 @@
   function activeGroupIsForum() {
     if (route.type !== "group") return false;
     const group = activeGroupDetail || {};
+    // Ideas forum UI is exclusive to the official Synk Discord hub.
+    if (!isDiscordTheme(group)) return false;
     const channels = Array.isArray(group.channels) ? group.channels : [];
     const active = channels.find((c) => c.slug === activeChannelSlug) || null;
     return isSuggestionsChannel(active) || !!(active && active.isForum);
@@ -2959,6 +2961,38 @@
     )}</span><span class="discord-channel-label">${escapeHtml(name)}</span></button>`;
   }
 
+
+  function exitDiscordMode({ persistCollapse = false } = {}) {
+    const shell = document.getElementById("discord-shell");
+    if (shell) {
+      shell.hidden = true;
+      shell.classList.remove("is-channels-open");
+    }
+    document.body.classList.remove(
+      "is-discord-group",
+      "is-forum-channel",
+      "synk-channels-open",
+      "synk-channels-collapsed",
+      "server-settings-open"
+    );
+    const settings = document.getElementById("synk-hub-manage");
+    if (settings) settings.hidden = true;
+    const forumCreate = document.getElementById("synk-hub-forum-create");
+    if (forumCreate) forumCreate.hidden = true;
+    const backdrop = document.getElementById("synk-hub-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    const composerOpen = document.getElementById("composer-open-btn");
+    if (composerOpen && route.type !== "group") {
+      composerOpen.hidden = false;
+      composerOpen.href = "/community/submit";
+      composerOpen.textContent = "What’s on your mind?";
+    }
+    try {
+      setSynkChannelsOpen(false, { persist: persistCollapse });
+    } catch (_) {}
+    mountFeedStack(false);
+  }
+
   function mountFeedStack(intoDiscord) {
     const stack = document.getElementById("feed-stack");
     const slot = document.getElementById("discord-feed-slot");
@@ -3045,10 +3079,7 @@
     const host = document.getElementById("discord-channel-list") || document.getElementById("discord-channels");
     if (!shell || !host) return;
     if (!isDiscordTheme(group)) {
-      shell.hidden = true;
-      document.body.classList.remove("is-discord-group", "synk-channels-open", "synk-channels-collapsed");
-      setSynkChannelsOpen(false, { persist: false });
-      mountFeedStack(false);
+      exitDiscordMode();
       return;
     }
     document.body.classList.add("is-discord-group");
@@ -3365,10 +3396,7 @@
 
 function applyViewState(data) {
     if (route.type !== "group") {
-      const shell = document.getElementById("discord-shell");
-      if (shell) shell.hidden = true;
-      document.body.classList.remove("is-discord-group");
-      mountFeedStack(false);
+      exitDiscordMode();
       const rolesWidget = document.getElementById("group-roles-widget");
       if (rolesWidget) rolesWidget.hidden = true;
       activeChannelSlug = "";
@@ -3410,9 +3438,20 @@ function applyViewState(data) {
     }
 
     const createTop = document.getElementById("create-top-link");
+    const groupForSubmit =
+      route.type === "group" && route.slug
+        ? (data && data.group) ||
+          activeGroupDetail ||
+          (groups || []).find((g) => g && g.slug === route.slug) ||
+          null
+        : null;
+    const submitChannel =
+      route.type === "group" && route.slug && isDiscordTheme(groupForSubmit || { slug: route.slug })
+        ? route.channel || activeChannelSlug || ""
+        : "";
     const submitHref =
       route.type === "group" && route.slug
-        ? submitUrlForGroup(route.slug, route.channel || activeChannelSlug || "")
+        ? submitUrlForGroup(route.slug, submitChannel)
         : "/community/submit";
     if (createTop) createTop.href = submitHref;
     const composerOpenBtn = document.getElementById("composer-open-btn");
@@ -3543,8 +3582,13 @@ function applyViewState(data) {
       const group = data.group || groups.find((g) => g.slug === route.slug) || null;
       activeGroupDetail = group;
       if (group) pushRecent(group);
-      if (data.channel && data.channel.slug) activeChannelSlug = data.channel.slug;
-      else if (route.channel) activeChannelSlug = route.channel;
+      if (isDiscordTheme(group)) {
+        if (data.channel && data.channel.slug) activeChannelSlug = data.channel.slug;
+        else if (route.channel) activeChannelSlug = route.channel;
+      } else {
+        // Reddit groups never inherit Discord channel state from the Synk hub.
+        activeChannelSlug = "";
+      }
       const slug = (group && group.slug) || route.slug || "";
       const name = (group && group.name) || slug;
       const postCount = group && group.postCount != null ? Number(group.postCount) : null;
@@ -3604,10 +3648,7 @@ function applyViewState(data) {
       const jumpInput = document.getElementById("jump-input");
       if (jumpInput && q && document.activeElement !== jumpInput) jumpInput.value = q;
       if (composerCard) composerCard.hidden = true;
-      const discordShell = document.getElementById("discord-shell");
-      if (discordShell) discordShell.hidden = true;
-      document.body.classList.remove("is-discord-group");
-      mountFeedStack(false);
+      exitDiscordMode();
       syncSearchTabs();
       updateAboutRail(data);
       return;
@@ -3634,10 +3675,7 @@ function applyViewState(data) {
       setText("page-head-title", "Your groups");
       setText("page-head-sub", "Communities you’ve joined and more to explore");
       if (composerCard) composerCard.hidden = true;
-      const discordShell = document.getElementById("discord-shell");
-      if (discordShell) discordShell.hidden = true;
-      document.body.classList.remove("is-discord-group");
-      mountFeedStack(false);
+      exitDiscordMode();
       updateAboutRail(data);
       return;
     }
@@ -3695,8 +3733,16 @@ function applyViewState(data) {
         url += `?feed=home&sort=${encodeURIComponent(sort)}`;
       } else if (route.type === "group" && route.slug) {
         url += `?group=${encodeURIComponent(route.slug)}&sort=${encodeURIComponent(sort)}`;
-        const ch = route.channel || activeChannelSlug || "";
-        if (ch) url += `&channel=${encodeURIComponent(ch)}`;
+        // Channel filters belong only to the official Synk Discord hub.
+        const groupHint =
+          (activeGroupDetail && activeGroupDetail.slug === route.slug && activeGroupDetail) ||
+          (groups || []).find((g) => g && g.slug === route.slug) ||
+          null;
+        const hubChannel =
+          route.slug === "synk" || isDiscordTheme(groupHint)
+            ? String(route.channel || activeChannelSlug || "").trim()
+            : "";
+        if (hubChannel) url += `&channel=${encodeURIComponent(hubChannel)}`;
       } else if (route.type === "user" && route.username) {
         url += `?user=${encodeURIComponent(route.username)}&sort=${encodeURIComponent(sort)}`;
         const viewer = actingUsername() || publicUsername || "";
@@ -3737,7 +3783,13 @@ function applyViewState(data) {
         activeGroupJoined = !!data.group.joined;
       }
       if (data.group) activeGroupDetail = data.group;
-      if (data.channel && data.channel.slug) activeChannelSlug = data.channel.slug;
+      if (data.group && isDiscordTheme(data.group) && data.channel && data.channel.slug) {
+        activeChannelSlug = data.channel.slug;
+      } else if (data.group && !isDiscordTheme(data.group)) {
+        activeChannelSlug = "";
+      } else if (data.channel && data.channel.slug) {
+        activeChannelSlug = data.channel.slug;
+      }
       updateInboxBadge();
       applyUsernameState();
       applyStaffState();
