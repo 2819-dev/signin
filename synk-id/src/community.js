@@ -2205,6 +2205,21 @@
     return isForumChannel(activeForumChannel());
   }
 
+  function inDiscordHub(group) {
+    if (document.body.classList.contains("is-discord-group")) return true;
+    const g = group || activeGroupDetail;
+    return isDiscordTheme(g);
+  }
+
+  function authorAvatarSide(author) {
+    const label = String((author && (author.displayName || author.username)) || "Member").trim() || "Member";
+    return `<div class="synk-hub-msg-avatar" aria-hidden="true">${avatarMarkup(
+      author && author.avatarUrl,
+      label,
+      "community-face is-hub-msg"
+    )}</div>`;
+  }
+
   function activeGroupIsSupport() {
     return isSupportChannel(activeForumChannel());
   }
@@ -2311,7 +2326,7 @@
       : `<div class="forum-empty is-suggestions">
         <div class="forum-empty-ico" aria-hidden="true">${ico("lightbulb", 28)}</div>
         <strong>No suggestions yet</strong>
-        <p class="muted">Share a product idea, add tags, and vote. Staff can reply and update status.</p>
+        <p class="muted">Share a product idea, add tags, and follow staff replies.</p>
         <button type="button" class="btn btn-primary btn-compact forum-empty-cta" data-forum-empty-create>New suggestion</button>
       </div>`;
   }
@@ -2335,8 +2350,6 @@
         const author = post.author || {};
         const title = postTitle(post);
         const bodyText = postBodyText(post);
-        const vote = Number(post.myVote) || 0;
-        const score = displayScore(post);
         const comments = Number(post.commentCount) || 0;
         const pid = escapeHtml(String(post.id || ""));
         const status = String(post.suggestionStatus || "open").toLowerCase();
@@ -2347,14 +2360,10 @@
               <span class="forum-ticket-hash">#</span>
               <span class="forum-ticket-code">${escapeHtml(ticketNo)}</span>
             </div>`
-          : `<div class="forum-thread-votes" aria-label="Vote">
-              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
-              <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${score}</span>
-              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
-            </div>`;
+          : "";
         const replyLabel = support ? "Staff update" : "Staff";
         return `
-          <article class="forum-thread ${support ? "is-ticket" : "is-suggestion"} ${post.isPinned ? "is-pinned" : ""} is-${escapeHtml(status)}" data-post-id="${pid}">
+          <article class="forum-thread ${support ? "is-ticket" : "is-suggestion is-no-votes"} ${post.isPinned ? "is-pinned" : ""} is-${escapeHtml(status)}" data-post-id="${pid}">
             ${side}
             <a class="forum-thread-main" href="/community/post/${pid}" data-open-post="${pid}">
               <div class="forum-thread-top">
@@ -2458,16 +2467,25 @@
               <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="open" data-post-id="${pid}">Reopen</button>
             </div>`
           : "";
-        return `
-          <article class="reddit-post ${isSuggestion ? "is-suggestion" : ""} ${isTicket ? "is-ticket" : ""}" data-post-id="${pid}">
-            <div class="reddit-vote" aria-label="Vote">
+        const discordHub = inDiscordHub(post.group || activeGroupDetail);
+        const sideRail = discordHub
+          ? authorAvatarSide(author)
+          : `<div class="reddit-vote" aria-label="Vote">
               <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 20)}</button>
               <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${score}</span>
               <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 20)}</button>
-            </div>
+            </div>`;
+        return `
+          <article class="reddit-post ${discordHub ? "is-hub-msg" : ""} ${isSuggestion ? "is-suggestion" : ""} ${isTicket ? "is-ticket" : ""}" data-post-id="${pid}">
+            ${sideRail}
             <div class="reddit-post-main">
               <div class="reddit-post-meta">
                 ${
+                  discordHub
+                    ? `${renderAuthorLink(author, { withAvatar: false })}
+                <span class="reddit-meta-dot">•</span>
+                <time class="reddit-meta-time">${escapeHtml(formatRelative(post.createdAt))}</time>`
+                    : `${
                   showGroup
                     ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.name || group.slug)}</a>`
                     : `<span class="reddit-sub is-static">Home</span>`
@@ -2476,9 +2494,10 @@
                 <span class="reddit-meta-by">Posted by</span>
                 ${renderAuthorLink(author, { withAvatar: true })}
                 <span class="reddit-meta-dot">•</span>
-                <time class="reddit-meta-time">${escapeHtml(formatRelative(post.createdAt))}</time>
+                <time class="reddit-meta-time">${escapeHtml(formatRelative(post.createdAt))}</time>`
+                }
                 ${
-                  post.channel && post.channel.label
+                  post.channel && post.channel.label && !discordHub
                     ? `<span class="reddit-meta-dot">•</span><span class="reddit-channel-pill">${escapeHtml(
                         formatChannelLabel(post.channel)
                       )}</span>`
@@ -2486,16 +2505,25 @@
                 }
                 ${statusBadge}
               </div>
-              <a class="reddit-post-title-link" href="/community/post/${pid}" data-open-post="${pid}">
+              ${
+                discordHub
+                  ? `${title ? `<div class="synk-hub-msg-title">${escapeHtml(title)}</div>` : ""}
+              ${bodyText ? `<div class="synk-hub-msg-body">${escapeHtml(bodyText)}</div>` : ""}`
+                  : `<a class="reddit-post-title-link" href="/community/post/${pid}" data-open-post="${pid}">
                 <h3 class="reddit-post-title">${escapeHtml(title)}</h3>
               </a>
-              ${bodyText ? `<p class="reddit-post-body">${escapeHtml(truncateText(bodyText, 180))}</p>` : ""}
+              ${bodyText ? `<p class="reddit-post-body">${escapeHtml(truncateText(bodyText, 180))}</p>` : ""}`
+              }
               ${media}
               ${suggestionActions}
               <div class="reddit-post-actions">
                 <a class="reddit-action" href="/community/post/${pid}" data-open-post="${pid}">${ico("comment", 16)} <span>${escapeHtml(commentLabel)}</span></a>
                 <button class="reddit-action" type="button" data-share-post="${pid}">${ico("share", 16)} <span>Share</span></button>
-                <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${ico("bookmark", 16)} <span>${saved ? "Saved" : "Save"}</span></button>
+                ${
+                  discordHub
+                    ? ""
+                    : `<button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${ico("bookmark", 16)} <span>${saved ? "Saved" : "Save"}</span></button>`
+                }
               </div>
             </div>
           </article>
@@ -2589,17 +2617,19 @@
       : reply
         ? `<div class="forum-staff-reply"><strong>${isTicket ? "Staff update" : "Staff"}:</strong> ${escapeHtml(reply)}</div>`
         : "";
-    el.innerHTML = `
-      <article class="reddit-post reddit-post-detail-inner ${isSuggestion ? "is-suggestion" : ""} ${isTicket ? "is-ticket" : ""}" data-post-id="${pid}">
-        <div class="reddit-vote ${isTicket ? "is-ticket-id" : ""}">
-          ${
-            isTicket
-              ? `<div class="forum-thread-ticket-id is-detail" aria-label="Ticket ${escapeHtml(ticketNo)}"><span class="forum-ticket-hash">#</span><span class="forum-ticket-code">${escapeHtml(ticketNo)}</span></div>`
-              : `<button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 20)}</button>
+    const discordHub = inDiscordHub(group);
+    const detailSide = isTicket
+      ? `<div class="forum-thread-ticket-id is-detail" aria-label="Ticket ${escapeHtml(ticketNo)}"><span class="forum-ticket-hash">#</span><span class="forum-ticket-code">${escapeHtml(ticketNo)}</span></div>`
+      : discordHub
+        ? authorAvatarSide(author)
+        : `<div class="reddit-vote" aria-label="Vote">
+          <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 20)}</button>
           <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${displayScore(post)}</span>
-          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 20)}</button>`
-          }
-        </div>
+          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 20)}</button>
+        </div>`;
+    el.innerHTML = `
+      <article class="reddit-post reddit-post-detail-inner ${discordHub ? "is-hub-msg" : ""} ${isSuggestion ? "is-suggestion" : ""} ${isTicket ? "is-ticket" : ""}" data-post-id="${pid}">
+        ${detailSide}
         <div class="reddit-post-main">
           <div class="reddit-post-meta">
             ${
@@ -2643,19 +2673,23 @@
       return;
     }
     if (empty) empty.hidden = true;
+    const discordHub = inDiscordHub((activePost && activePost.group) || activeGroupDetail);
     list.innerHTML = lastComments
       .map((comment) => {
         const author = comment.author || {};
         const username = author.username || "member";
         const vote = Number(comment.myVote) || 0;
         const cid = escapeHtml(String(comment.id || ""));
-        return `
-          <article class="reddit-comment" data-comment-id="${cid}">
-            <div class="reddit-vote reddit-vote-sm" aria-label="Vote">
+        const side = discordHub
+          ? authorAvatarSide(author)
+          : `<div class="reddit-vote reddit-vote-sm" aria-label="Vote">
               <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="comment" data-comment-id="${cid}" aria-label="Upvote">${ico("up", 16)}</button>
               <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${Number(comment.score) || 0}</span>
               <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="comment" data-comment-id="${cid}" aria-label="Downvote">${ico("down", 16)}</button>
-            </div>
+            </div>`;
+        return `
+          <article class="reddit-comment ${discordHub ? "is-hub-msg" : ""}" data-comment-id="${cid}">
+            ${side}
             <div class="reddit-comment-main">
               <div class="reddit-post-meta">
                 ${renderAuthorLink(author, { withAvatar: true })}

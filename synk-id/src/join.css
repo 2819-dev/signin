@@ -9765,6 +9765,147 @@ body.community-body.is-discord-group .reddit-post:hover {
   background: color-mix(in srgb, var(--synk-hub-ink) 3.5%, transparent) !important;
   border-radius: 10px !important;
 }
+
+/* SYNK_HUB_MSG_LAYOUT_V62 */
+body.community-body.is-discord-group .reddit-post.is-hub-msg,
+body.community-body.is-discord-group .reddit-comment.is-hub-msg {
+  display: grid !important;
+  grid-template-columns: 40px minmax(0, 1fr) !important;
+  gap: 10px !important;
+  align-items: start;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+body.community-body.is-discord-group .reddit-post .reddit-vote,
+body.community-body.is-discord-group .reddit-comment .reddit-vote,
+body.community-body.is-discord-group .forum-thread-votes {
+  display: none !important;
+}
+body.community-body.is-discord-group .synk-hub-msg-avatar {
+  width: 40px;
+  padding-top: 2px;
+}
+body.community-body.is-discord-group .community-face.is-hub-msg {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--synk-hub-accent, #1a9aa8) 18%, var(--synk-hub-elev, #f2f3f5));
+  color: var(--synk-hub-ink, #060607);
+  flex: 0 0 auto;
+}
+body.community-body.is-discord-group .community-face.is-hub-msg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+body.community-body.is-discord-group .synk-hub-msg-title {
+  margin: 2px 0 4px;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--synk-hub-ink);
+  word-break: break-word;
+}
+body.community-body.is-discord-group .synk-hub-msg-body {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.45;
+  color: var(--synk-hub-ink);
+  opacity: 0.96;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+body.community-body.is-discord-group .reddit-post-main,
+body.community-body.is-discord-group .reddit-comment-main {
+  min-width: 0 !important;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+body.community-body.is-discord-group .reddit-post-meta,
+body.community-body.is-discord-group .reddit-comment-meta {
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  max-width: 100%;
+}
+body.community-body.is-discord-group .forum-thread.is-suggestion.is-no-votes,
+body.community-body.is-discord-group .forum-thread.is-suggestion.is-no-votes {
+  grid-template-columns: minmax(0, 1fr);
+}
+body.community-body.is-discord-group .forum-filter-bar {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+body.community-body.is-discord-group .forum-filter-tab {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 767px) {
+  body.community-body.is-discord-group .synk-hub,
+  body.community-body.is-discord-group .discord-shell {
+    width: 100% !important;
+    max-width: 100vw !important;
+    overflow: hidden;
+  }
+  body.community-body.is-discord-group .synk-hub-main,
+  body.community-body.is-discord-group .discord-main,
+  body.community-body.is-discord-group .synk-hub-feed,
+  body.community-body.is-discord-group #discord-feed-slot,
+  body.community-body.is-discord-group .feed-stack,
+  body.community-body.is-discord-group #feed {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: hidden;
+  }
+  body.community-body.is-discord-group .reddit-post,
+  body.community-body.is-discord-group .reddit-post.is-hub-msg,
+  body.community-body.is-discord-group .reddit-comment.is-hub-msg {
+    grid-template-columns: 34px minmax(0, 1fr) !important;
+    gap: 8px !important;
+    padding: 10px 2px !important;
+    margin: 0 !important;
+  }
+  body.community-body.is-discord-group .synk-hub-msg-avatar,
+  body.community-body.is-discord-group .community-face.is-hub-msg {
+    width: 34px;
+    height: 34px;
+  }
+  body.community-body.is-discord-group .forum-thread {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body.community-body.is-discord-group .forum-thread.is-ticket {
+    grid-template-columns: 52px minmax(0, 1fr) !important;
+  }
+  body.community-body.is-discord-group .forum-thread-ticket-id {
+    padding: 12px 4px;
+  }
+  body.community-body.is-discord-group .forum-ticket-code {
+    font-size: 0.64rem;
+  }
+  body.community-body.is-discord-group .reddit-post-actions,
+  body.community-body.is-discord-group .reddit-comment-actions {
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  body.community-body.is-discord-group .synk-hub-head-copy,
+  body.community-body.is-discord-group .synk-hub-desc,
+  body.community-body.is-discord-group .synk-hub-hint {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  body.community-body.is-discord-group .synk-hub-channel-hero {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
 body.community-body.is-discord-group .reddit-vote {
   background: transparent !important;
   border: 0 !important;
