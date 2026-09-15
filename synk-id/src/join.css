@@ -16413,3 +16413,141 @@ body.community-body.has-community-tabbar {
     z-index: 25;
   }
 }
+
+/* SYNK_HUB_BUGFIX_V66
+   Deeper mobile polish: immersive hub (no tab bar clash), sticky forum
+   filters, thumb-friendly create FAB, and a create sheet that keeps
+   Post suggestion / Post ticket actions visible. */
+body.community-body.is-discord-group,
+body.community-body.is-dm-chat-open {
+  --community-tabbar-clearance: 0px;
+}
+body.community-body.is-discord-group,
+body.community-body.is-dm-chat-open {
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}
+body.community-body.is-discord-group .community-tabbar,
+body.community-body.is-discord-group #community-tabbar,
+body.community-body.is-dm-chat-open .community-tabbar,
+body.community-body.is-dm-chat-open #community-tabbar {
+  display: none !important;
+}
+
+@media (max-width: 1100px) {
+  /* Full-height hub once the tab bar is out of the way */
+  body.community-body.is-discord-group .discord-shell,
+  body.community-body.is-discord-group .synk-hub {
+    height: calc(100dvh - 56px) !important;
+    min-height: calc(100dvh - 56px) !important;
+    max-height: calc(100dvh - 56px) !important;
+  }
+  body.community-body.is-discord-group .synk-hub-feed,
+  body.community-body.is-discord-group #discord-feed-slot,
+  body.community-body.is-discord-group .feed-stack {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* Forum / support: sticky status chips stay under the channel head */
+  body.community-body.is-discord-group.is-forum-channel .forum-filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 18;
+    margin: 0 0 12px;
+    backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--synk-hub-elev, #fff) 92%, transparent);
+  }
+
+  /* Empty states fill the feed so the CTA isn’t glued to the top */
+  body.community-body.is-discord-group.is-forum-channel .forum-empty {
+    min-height: min(52dvh, 420px);
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 4px;
+    margin: 8px 0 20px;
+    padding: 28px 18px;
+  }
+  body.community-body.is-discord-group.is-forum-channel .forum-empty-cta {
+    margin-top: 16px;
+    min-height: 44px;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  /* Thumb-friendly create FAB — keep the label, float above the home indicator */
+  body.community-body.is-discord-group.is-forum-channel .synk-hub-forum-create:not([hidden]) {
+    position: fixed !important;
+    right: max(14px, env(safe-area-inset-right, 0px));
+    bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    z-index: 90;
+    width: auto !important;
+    min-width: 48px;
+    height: 48px !important;
+    padding: 0 16px 0 14px !important;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px !important;
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.28);
+  }
+  body.community-body.is-discord-group.is-forum-channel .synk-hub-forum-create span {
+    display: inline !important;
+    font-size: 0.9rem;
+    font-weight: 750;
+  }
+  /* Leave room so the last thread isn’t under the FAB */
+  body.community-body.is-discord-group.is-forum-channel .synk-hub-feed,
+  body.community-body.is-discord-group.is-forum-channel #discord-feed-slot,
+  body.community-body.is-discord-group.is-forum-channel .forum-thread-list {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* Create sheet: sticky action row so Post suggestion stays reachable */
+body.community-body .forum-create-modal {
+  z-index: 320;
+}
+body.community-body .forum-create-sheet {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  max-height: min(90dvh, 760px);
+}
+body.community-body .forum-create-head {
+  flex: 0 0 auto;
+  padding: 16px 16px 8px;
+  margin-bottom: 0;
+}
+body.community-body .forum-create-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 16px 0;
+  -webkit-overflow-scrolling: touch;
+}
+body.community-body .forum-create-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 8px -16px 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--synk-hub-line, rgba(0, 0, 0, 0.08));
+  background: color-mix(in srgb, var(--synk-hub-main, #fff) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+body.community-body .forum-create-actions .btn {
+  min-height: 42px;
+}
+@media (max-width: 719px) {
+  body.community-body .forum-create-modal {
+    place-items: end center;
+    padding: 0;
+  }
+  body.community-body .forum-create-sheet {
+    width: 100%;
+    max-height: min(92dvh, 100%);
+    border-radius: 18px 18px 0 0;
+  }
+}

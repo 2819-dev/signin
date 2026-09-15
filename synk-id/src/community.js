@@ -3050,7 +3050,12 @@
     const bar = document.getElementById("community-tabbar");
     if (!bar) return;
     const mobile = !(window.matchMedia && window.matchMedia("(min-width: 1101px)").matches);
-    const show = !!(me && publicUsername && mobile);
+    // Immersive surfaces (official hub + open DM chat) own the screen —
+    // keep the Reddit-style tab bar from covering hub CTAs.
+    const immersive =
+      document.body.classList.contains("is-discord-group") ||
+      document.body.classList.contains("is-dm-chat-open");
+    const show = !!(me && publicUsername && mobile && !immersive);
     bar.hidden = !show;
     document.body.classList.toggle("has-community-tabbar", show);
     const meTab = document.getElementById("tab-me");
@@ -3278,6 +3283,9 @@
       setSynkChannelsOpen(false, { persist: persistCollapse });
     } catch (_) {}
     mountFeedStack(false);
+    try {
+      syncTabBar();
+    } catch (_) {}
   }
 
   function mountFeedStack(intoDiscord) {
@@ -3371,6 +3379,7 @@
     }
     document.body.classList.add("is-discord-group");
     try { syncFeedChrome(); } catch (_) {}
+    try { syncTabBar(); } catch (_) {}
 
     shell.hidden = false;
     mountFeedStack(true);
@@ -5956,6 +5965,9 @@ function applyViewState(data) {
     const shell = document.getElementById("dm-shell");
     if (shell) shell.classList.toggle("is-chat-open", !!open);
     document.body.classList.toggle("is-dm-chat-open", !!open);
+    try {
+      syncTabBar();
+    } catch (_) {}
   }
 
   function setDmNewOpen(open) {
