@@ -2961,6 +2961,53 @@
     )}</span><span class="discord-channel-label">${escapeHtml(name)}</span></button>`;
   }
 
+  function updateSynkHubRailFooter() {
+    const nameEl = document.getElementById("synk-hub-me-name");
+    const subEl = document.getElementById("synk-hub-me-sub");
+    const avatarEl = document.getElementById("synk-hub-me-avatar");
+    if (!nameEl && !avatarEl) return;
+    const label = activeDisplayLabel();
+    const uname = actingUsername();
+    if (nameEl) nameEl.textContent = label || "Member";
+    if (subEl) subEl.textContent = uname ? `@${uname}` : "Online";
+    if (avatarEl) {
+      const url = activeCommunityAvatarUrl();
+      const initial = String(label || uname || "S").trim().slice(0, 1).toUpperCase() || "S";
+      if (url) {
+        avatarEl.classList.add("has-image");
+        avatarEl.innerHTML = `<img src="${escapeHtml(url)}" alt="" />`;
+      } else {
+        avatarEl.classList.remove("has-image");
+        avatarEl.textContent = initial;
+      }
+    }
+  }
+
+  function updateSynkHubChannelHero(channel) {
+    const hero = document.getElementById("synk-hub-channel-hero");
+    if (!hero) return;
+    if (!channel) {
+      hero.hidden = true;
+      return;
+    }
+    const meta = channelKindMeta(channel);
+    const name = formatChannelLabel(channel, { compact: true }) || capitalizeChannelName(channel.slug || "channel");
+    const cleaned = String(name || "").replace(/^[^\s]+\s+/, "").trim() || name || "channel";
+    const titleEl = document.getElementById("synk-hub-channel-hero-title");
+    const textEl = document.getElementById("synk-hub-channel-hero-text");
+    const icoEl = document.getElementById("synk-hub-channel-hero-ico");
+    if (titleEl) titleEl.textContent = `Welcome to #${cleaned}`;
+    if (textEl) {
+      const desc = String(channel.description || "").trim();
+      if (desc) textEl.textContent = desc;
+      else if (meta && meta.tone === "announce") textEl.textContent = "Official announcements from the Synk team.";
+      else if (meta && meta.tone === "suggest") textEl.textContent = "Share product ideas, vote, and follow staff replies.";
+      else if (meta && meta.tone === "rules") textEl.textContent = "Community guidelines for the official Synk server.";
+      else textEl.textContent = `This is the start of #${cleaned}. Be respectful and keep the conversation useful.`;
+    }
+    if (icoEl) icoEl.innerHTML = ico((meta && meta.icon) || "hash", 26);
+    hero.hidden = false;
+  }
 
   function exitDiscordMode({ persistCollapse = false } = {}) {
     const shell = document.getElementById("discord-shell");
@@ -2979,6 +3026,8 @@
     if (settings) settings.hidden = true;
     const forumCreate = document.getElementById("synk-hub-forum-create");
     if (forumCreate) forumCreate.hidden = true;
+    const hero = document.getElementById("synk-hub-channel-hero");
+    if (hero) hero.hidden = true;
     const backdrop = document.getElementById("synk-hub-backdrop");
     if (backdrop) backdrop.hidden = true;
     const composerOpen = document.getElementById("composer-open-btn");
@@ -3216,8 +3265,11 @@
         activeBtn.scrollIntoView({ block: "nearest", behavior: "smooth" });
       }
     } catch (_) {}
+    updateSynkHubRailFooter();
+    updateSynkHubChannelHero(active);
     renderSynkServerManage(group);
   }
+
 
   function canManageSynkServer(group) {
     if (!(group && (group.isOfficial || group.slug === "synk"))) return false;
