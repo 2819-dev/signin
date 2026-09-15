@@ -196,12 +196,19 @@ function normalizeChannelKind(value, slug = "") {
     .toLowerCase();
   if (["announcements", "announcement"].includes(raw)) return "announcements";
   if (["suggestions", "suggestion", "ideas", "idea"].includes(raw)) return "suggestions";
+  if (["support", "ticket", "tickets", "helpdesk"].includes(raw)) return "support";
   if (["readonly", "read-only", "rules", "welcome"].includes(raw)) return "readonly";
   const s = normalizeChannelSlug(slug || raw);
   if (s === "announcements") return "announcements";
   if (s === "suggestions" || s === "ideas") return "suggestions";
+  if (s === "support" || s === "help" || s === "tickets") return "support";
   if (s === "rules" || s === "welcome") return "readonly";
   return "text";
+}
+
+function isForumChannelKind(kind, slug = "") {
+  const normalized = normalizeChannelKind(kind, slug);
+  return normalized === "suggestions" || normalized === "support";
 }
 
 function normalizeSuggestionStatus(value) {
@@ -213,7 +220,28 @@ function normalizeSuggestionStatus(value) {
   if (raw === "deny" || raw === "rejected" || raw === "no") return "denied";
   if (raw === "done" || raw === "shipped" || raw === "already_implemented") return "implemented";
   if (raw === "in_progress" || raw === "in-progress" || raw === "coming") return "planned";
-  if (["open", "planned", "accepted", "implemented", "denied", "closed"].includes(raw)) return raw;
+  if (raw === "waiting" || raw === "waiting_on_user" || raw === "pending") return "waiting";
+  if (raw === "resolved" || raw === "complete" || raw === "completed") return "implemented";
+  if (["open", "planned", "accepted", "implemented", "denied", "closed", "waiting"].includes(raw)) {
+    return raw;
+  }
+  return "";
+}
+
+function normalizeTicketStatus(value) {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  if (raw === "progress" || raw === "in-progress" || raw === "working" || raw === "planned" || raw === "accepted") {
+    return "in_progress";
+  }
+  if (raw === "pending" || raw === "waiting_on_user" || raw === "awaiting") return "waiting";
+  if (raw === "done" || raw === "complete" || raw === "completed" || raw === "fixed" || raw === "implemented") {
+    return "resolved";
+  }
+  if (raw === "deny" || raw === "denied" || raw === "close" || raw === "closed_ticket") return "closed";
+  if (["open", "in_progress", "waiting", "resolved", "closed"].includes(raw)) return raw;
   return "";
 }
 
@@ -226,8 +254,17 @@ const DEFAULT_SUGGESTION_TAGS = [
   { id: "other", label: "Other", color: "#99AAB5" },
 ];
 
-function normalizeSuggestionTags(value) {
-  const allowed = new Map(DEFAULT_SUGGESTION_TAGS.map((t) => [t.id, t]));
+const DEFAULT_TICKET_TAGS = [
+  { id: "account", label: "Account", color: "#5865F2" },
+  { id: "access", label: "Access", color: "#57F287" },
+  { id: "billing", label: "Billing", color: "#FEE75C" },
+  { id: "technical", label: "Technical", color: "#EB459E" },
+  { id: "report", label: "Report", color: "#ED4245" },
+  { id: "other", label: "Other", color: "#99AAB5" },
+];
+
+function normalizeTaggedList(value, allowedList) {
+  const allowed = new Map((allowedList || []).map((t) => [t.id, t]));
   const raw = Array.isArray(value)
     ? value
     : String(value || "")
@@ -250,15 +287,31 @@ function normalizeSuggestionTags(value) {
   return out;
 }
 
+function normalizeSuggestionTags(value) {
+  return normalizeTaggedList(value, DEFAULT_SUGGESTION_TAGS);
+}
+
+function normalizeTicketTags(value) {
+  return normalizeTaggedList(value, DEFAULT_TICKET_TAGS);
+}
+
 function suggestionTagsToIds(tags) {
   return (Array.isArray(tags) ? tags : [])
     .map((t) => String((t && t.id) || t || "").trim().toLowerCase())
     .filter(Boolean);
 }
 
-function mapSuggestionTagsFromRow(row) {
+function mapSuggestionTagsFromRow(row, channelKind = "") {
   const ids = Array.isArray(row && row.suggestion_tags) ? row.suggestion_tags : [];
-  return normalizeSuggestionTags(ids);
+  const kind = normalizeChannelKind(
+    channelKind || (row && row.channel_kind) || "",
+    (row && (row.channel_slug || row.slug)) || ""
+  );
+  if (kind === "support") return normalizeTicketTags(ids);
+  const suggestionTags = normalizeSuggestionTags(ids);
+  if (suggestionTags.length) return suggestionTags;
+  // Fall back so legacy/shared tags still render.
+  return normalizeTicketTags(ids);
 }
 
 function mapCommunityChannel(row) {
@@ -279,7 +332,7 @@ function mapCommunityChannel(row) {
     kind,
     label: formatChannelLabel(emoji, name),
     staffOnlyPost: kind === "announcements" || kind === "readonly",
-    isForum: kind === "suggestions",
+    isForum: kind === "suggestions" || kind === "support",
   };
 }
 
@@ -1641,7 +1694,7 @@ async function ensureOfficialSynkGroup(sql) {
 }
 
 function officialSynkBlueprint() {
-  // Clearer Discord-style sections for the official Synk server.
+  // Professional Discord-style sections for the official Synk server.
   return [
     {
       name: "Information",
@@ -1651,7 +1704,7 @@ function officialSynkBlueprint() {
           name: "Welcome",
           slug: "welcome",
           kind: "readonly",
-          description: "Start here — what Synk Community is and how it works",
+          description: "Start here — how the official Synk server works",
         },
         {
           emoji: "",
@@ -1679,13 +1732,6 @@ function officialSynkBlueprint() {
           kind: "text",
           description: "Everyday conversation with the Synk community",
         },
-        {
-          emoji: "",
-          name: "Help",
-          slug: "help",
-          kind: "text",
-          description: "Ask questions and get support",
-        },
       ],
     },
     {
@@ -1693,22 +1739,35 @@ function officialSynkBlueprint() {
       channels: [
         {
           emoji: "",
-          name: "Ideas",
-          slug: "ideas",
+          name: "Suggestions",
+          slug: "suggestions",
           kind: "suggestions",
-          description: "Forum for product suggestions — pick tags, vote, and staff will reply",
+          description: "Product suggestions — tag, vote, and follow staff replies",
         },
         {
           emoji: "",
           name: "Bugs",
           slug: "bugs",
           kind: "text",
-          description: "Report issues so we can investigate",
+          description: "Report product issues so staff can investigate",
+        },
+      ],
+    },
+    {
+      name: "Support",
+      channels: [
+        {
+          emoji: "",
+          name: "Support",
+          slug: "support",
+          kind: "support",
+          description: "Open a support ticket for account, access, or product help",
         },
       ],
     },
   ];
 }
+
 
 async function upsertOfficialChannel(sql, groupId, channel, categoryId) {
   await sql`
@@ -1746,6 +1805,8 @@ async function syncOfficialSynkLayout(sql, groupId) {
     conversation: "Community",
     community: "Community",
     feedback: "Feedback",
+    support: "Support",
+    help: "Support",
   };
   const existingCats = await sql`
     SELECT id, name, sort_order FROM synk_community_group_categories WHERE group_id = ${groupId}
@@ -1814,8 +1875,10 @@ async function syncOfficialSynkLayout(sql, groupId) {
     introductions: "general",
     info: "welcome",
     updates: "announcements",
-    feedback: "ideas",
-    suggestions: "ideas",
+    feedback: "suggestions",
+    ideas: "suggestions",
+    help: "support",
+    tickets: "support",
   };
   for (const [fromSlug, toSlug] of Object.entries(merges)) {
     const fromId = bySlug[fromSlug];
@@ -1832,14 +1895,17 @@ async function syncOfficialSynkLayout(sql, groupId) {
   }
 
   // Drop obsolete blueprint leftovers that were renamed away (keep staff-added extras).
-  const obsolete = ["lounge", "info"];
-  for (const slug of obsolete) {
+  const obsolete = [
+    { slug: "lounge", fallback: "general" },
+    { slug: "info", fallback: "welcome" },
+    { slug: "help", fallback: "support" },
+  ];
+  for (const item of obsolete) {
+    const slug = item.slug;
     if (blueprintSlugs.has(slug)) continue;
     const id = bySlug[slug];
     if (!id) continue;
-    // Prefer moving any remaining posts into general/welcome before delete.
-    const fallbackSlug = slug === "lounge" ? "general" : "welcome";
-    const fallbackId = bySlug[fallbackSlug];
+    const fallbackId = bySlug[item.fallback];
     if (fallbackId) {
       await sql`
         UPDATE synk_community_posts
@@ -6001,6 +6067,10 @@ module.exports = {
   normalizeChannelKind,
   normalizeSuggestionStatus,
   normalizeSuggestionTags,
+  normalizeTicketTags,
+  normalizeTicketStatus,
+  isForumChannelKind,
+  DEFAULT_TICKET_TAGS,
   suggestionTagsToIds,
   mapSuggestionTagsFromRow,
   DEFAULT_SUGGESTION_TAGS,

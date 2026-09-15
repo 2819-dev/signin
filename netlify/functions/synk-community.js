@@ -34,10 +34,14 @@ const {
   formatChannelLabel,
   normalizeChannelKind,
   normalizeSuggestionStatus,
+  normalizeTicketStatus,
   normalizeSuggestionTags,
+  normalizeTicketTags,
   suggestionTagsToIds,
   mapSuggestionTagsFromRow,
   DEFAULT_SUGGESTION_TAGS,
+  DEFAULT_TICKET_TAGS,
+  isForumChannelKind,
   capitalizeChannelName,
   isCommunityUsernameTaken,
   renameCommunityUsername,
@@ -246,7 +250,10 @@ function mapPost(row) {
   const isPrimary = !primaryUsername || username === primaryUsername;
   const pollOptions = parsePollOptions(row.poll_options);
   const channelKind = normalizeChannelKind(row.channel_kind, row.channel_slug);
-  const suggestionStatus = normalizeSuggestionStatus(row.suggestion_status);
+  const suggestionStatus =
+    channelKind === "support"
+      ? normalizeTicketStatus(row.suggestion_status)
+      : normalizeSuggestionStatus(row.suggestion_status);
   return {
     id: row.id,
     title: derivePostTitle(row),
@@ -269,8 +276,8 @@ function mapPost(row) {
     myVote: row.my_vote == null || row.my_vote === "" ? 0 : Number(row.my_vote) || 0,
     saved: Boolean(row.saved),
     hidden: Boolean(row.hidden),
-    suggestionStatus: suggestionStatus || (channelKind === "suggestions" ? "open" : ""),
-    suggestionTags: mapSuggestionTagsFromRow(row),
+    suggestionStatus: suggestionStatus || (channelKind === "suggestions" || channelKind === "support" ? "open" : ""),
+    suggestionTags: mapSuggestionTagsFromRow(row, channelKind),
     suggestionReply: String(row.suggestion_reply || "").trim(),
     isPinned: Boolean(row.is_pinned),
     createdAt: row.created_at,
@@ -2932,14 +2939,16 @@ if (action === "create-alt") {
           });
         }
       }
-      const suggestionStatus =
-        channel && normalizeChannelKind(channel.kind, channel.slug) === "suggestions"
-          ? "open"
-          : null;
+      const channelKind = channel ? normalizeChannelKind(channel.kind, channel.slug) : "";
+      const isSuggestionThread = channelKind === "suggestions";
+      const isSupportTicket = channelKind === "support";
+      const suggestionStatus = isSuggestionThread || isSupportTicket ? "open" : null;
       const suggestionTags =
         suggestionStatus === "open"
           ? suggestionTagsToIds(
-              normalizeSuggestionTags(body.tags || body.suggestionTags || body.suggestion_tags)
+              isSupportTicket
+                ? normalizeTicketTags(body.tags || body.suggestionTags || body.suggestion_tags || body.ticketTags)
+                : normalizeSuggestionTags(body.tags || body.suggestionTags || body.suggestion_tags)
             )
           : [];
       const rows = await sql`
@@ -3033,17 +3042,7 @@ if (action === "create-alt") {
         return json(403, { error: "Only Synk staff can update suggestions" });
       }
       const postId = String(body.postId || body.id || "").trim();
-      const status = normalizeSuggestionStatus(body.status || body.suggestionStatus);
-      const reply = String(body.reply || body.suggestionReply || body.note || "")
-        .trim()
-        .replace(/\s+/g, " ")
-        .slice(0, 500);
       if (!isUuid(postId)) return json(400, { error: "Invalid post id" });
-      if (!status) {
-        return json(400, {
-          error: "Status must be open, planned, accepted, implemented, denied, or closed",
-        });
-      }
       const rows = await sql`
         SELECT
           p.id,
@@ -3060,8 +3059,24 @@ if (action === "create-alt") {
       `;
       if (!rows[0]) return json(404, { error: "Post not found" });
       const kind = normalizeChannelKind(rows[0].channel_kind, rows[0].channel_slug);
-      if (kind !== "suggestions" && rows[0].suggestion_status == null) {
-        return json(400, { error: "This post is not a suggestion" });
+      if (kind !== "suggestions" && kind !== "support" && rows[0].suggestion_status == null) {
+        return json(400, { error: "This post is not a suggestion or support ticket" });
+      }
+      const status =
+        kind === "support"
+          ? normalizeTicketStatus(body.status || body.suggestionStatus || body.ticketStatus)
+          : normalizeSuggestionStatus(body.status || body.suggestionStatus);
+      const reply = String(body.reply || body.suggestionReply || body.note || "")
+        .trim()
+        .replace(/\s+/g, " ")
+        .slice(0, 500);
+      if (!status) {
+        return json(400, {
+          error:
+            kind === "support"
+              ? "Status must be open, in_progress, waiting, resolved, or closed"
+              : "Status must be open, planned, accepted, implemented, denied, or closed",
+        });
       }
       const updated = await sql`
         UPDATE synk_community_posts
