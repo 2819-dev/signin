@@ -1742,7 +1742,7 @@ function officialSynkBlueprint() {
           name: "Suggestions",
           slug: "suggestions",
           kind: "suggestions",
-          description: "Product suggestions — tag, vote, and follow staff replies",
+          description: "Share product ideas, tag them, and vote — staff update status here",
         },
         {
           emoji: "",
@@ -1761,7 +1761,7 @@ function officialSynkBlueprint() {
           name: "Support",
           slug: "support",
           kind: "support",
-          description: "Open a support ticket for account, access, or product help",
+          description: "Open a ticket for account, access, billing, or product help",
         },
       ],
     },

@@ -13,14 +13,14 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid13" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid13" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v60" />
+    <link rel="stylesheet" href="/join.css?v=community-v61" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v60" defer></script>
+    <script src="/force-refresh.js?v=community-v61" defer></script>
   </head>
   <body class="community-body reddit-body">
     <div id="synk-boot-loader" class="synk-loader-overlay" hidden aria-busy="false" aria-live="polite" aria-label="Loading Synk">
@@ -362,6 +362,7 @@
                     </button>
                   </div>
                   <form id="forum-create-form" class="form forum-create-form">
+                    <p id="forum-create-hint" class="forum-create-hint muted" hidden></p>
                     <div class="field">
                       <label for="forum-create-title-input">Title</label>
                       <input id="forum-create-title-input" type="text" maxlength="120" required placeholder="Short summary of your suggestion" />
@@ -1259,8 +1260,8 @@
       </div>
     </div>
 
-    <script src="/push-client.js?v=community-v60"></script>
+    <script src="/push-client.js?v=community-v61"></script>
     <script src="/image-crop.js?v=crop-v3"></script>
-    <script src="/community.js?v=community-v60"></script>
+    <script src="/community.js?v=community-v61"></script>
   </body>
 </html>

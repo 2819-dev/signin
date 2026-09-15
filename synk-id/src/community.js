@@ -136,7 +136,24 @@
     resolved: "Resolved",
     closed: "Closed",
   };
+  const FORUM_FILTER_SUPPORT = [
+    { id: "active", label: "Active" },
+    { id: "open", label: "Open" },
+    { id: "in_progress", label: "In progress" },
+    { id: "waiting", label: "Waiting" },
+    { id: "resolved", label: "Resolved" },
+    { id: "all", label: "All" },
+  ];
+  const FORUM_FILTER_SUGGESTIONS = [
+    { id: "open", label: "Open" },
+    { id: "planned", label: "Planned" },
+    { id: "accepted", label: "Accepted" },
+    { id: "implemented", label: "Shipped" },
+    { id: "denied", label: "Denied" },
+    { id: "all", label: "All" },
+  ];
   let forumSelectedTags = [];
+  let forumStatusFilter = "active";
 
   let activePersona = "";
   let me = null;
@@ -2202,6 +2219,54 @@
     return activeGroupIsSupport() ? TICKET_TAGS : SUGGESTION_TAGS;
   }
 
+  function shortTicketId(post) {
+    const raw = String((post && post.id) || "").replace(/[^a-zA-Z0-9]/g, "");
+    if (!raw) return "——";
+    return raw.slice(-6).toUpperCase();
+  }
+
+  function defaultForumStatusFilter(support) {
+    return support ? "active" : "open";
+  }
+
+  function ensureForumStatusFilter(support) {
+    const options = support ? FORUM_FILTER_SUPPORT : FORUM_FILTER_SUGGESTIONS;
+    if (!options.some((opt) => opt.id === forumStatusFilter)) {
+      forumStatusFilter = defaultForumStatusFilter(support);
+    }
+  }
+
+  function postMatchesForumFilter(post, filter, support) {
+    const status = String((post && post.suggestionStatus) || "open").toLowerCase();
+    const key = String(filter || "all").toLowerCase();
+    if (key === "all") return true;
+    if (support && key === "active") {
+      return status === "open" || status === "in_progress" || status === "waiting";
+    }
+    if (!support && key === "implemented") {
+      return status === "implemented" || status === "closed";
+    }
+    return status === key;
+  }
+
+  function countForumFilter(posts, filter, support) {
+    return (Array.isArray(posts) ? posts : []).filter((p) => !p.hidden && postMatchesForumFilter(p, filter, support)).length;
+  }
+
+  function renderForumStatusFilters(posts, support) {
+    ensureForumStatusFilter(support);
+    const options = support ? FORUM_FILTER_SUPPORT : FORUM_FILTER_SUGGESTIONS;
+    return `<div class="forum-filter-bar" role="tablist" aria-label="${support ? "Ticket status" : "Suggestion status"}">${options
+      .map((opt) => {
+        const count = countForumFilter(posts, opt.id, support);
+        const on = forumStatusFilter === opt.id ? "is-active" : "";
+        return `<button type="button" class="forum-filter-tab ${on}" role="tab" aria-selected="${on ? "true" : "false"}" data-forum-filter="${escapeHtml(
+          opt.id
+        )}">${escapeHtml(opt.label)}<span class="forum-filter-count">${count}</span></button>`;
+      })
+      .join("")}</div>`;
+  }
+
   function renderSuggestionTagChips(tags) {
     const list = Array.isArray(tags) ? tags : [];
     if (!list.length) return "";
@@ -2228,22 +2293,44 @@
     });
   }
 
-  function renderForumFeed(posts) {
-    const ordered = sortedForumPosts(posts).filter((p) => !p.hidden);
-    if (!ordered.length) {
-      const support = activeGroupIsSupport();
-      feedEl.innerHTML = support
-        ? `<div class="forum-empty">
-        <strong>No support tickets yet</strong>
-        <p class="muted">Open a ticket and Synk staff will follow up here.</p>
-      </div>`
-        : `<div class="forum-empty">
-        <strong>No suggestions yet</strong>
-        <p class="muted">Share a product suggestion. Staff can reply and update status.</p>
+  function renderForumEmptyState(support, { filtered = false } = {}) {
+    if (filtered) {
+      return `<div class="forum-empty is-filtered">
+        <strong>${support ? "No tickets in this view" : "No suggestions in this view"}</strong>
+        <p class="muted">${support ? "Try another status filter, or open a new ticket." : "Try another status filter, or share a new suggestion."}</p>
+        <button type="button" class="btn btn-secondary btn-compact forum-empty-cta" data-forum-empty-create>${support ? "New ticket" : "New suggestion"}</button>
       </div>`;
+    }
+    return support
+      ? `<div class="forum-empty is-support">
+        <div class="forum-empty-ico" aria-hidden="true">${ico("lifeBuoy", 28)}</div>
+        <strong>No support tickets yet</strong>
+        <p class="muted">Describe your issue, pick a category, and Synk staff will follow up here.</p>
+        <button type="button" class="btn btn-primary btn-compact forum-empty-cta" data-forum-empty-create>Open a ticket</button>
+      </div>`
+      : `<div class="forum-empty is-suggestions">
+        <div class="forum-empty-ico" aria-hidden="true">${ico("lightbulb", 28)}</div>
+        <strong>No suggestions yet</strong>
+        <p class="muted">Share a product idea, add tags, and vote. Staff can reply and update status.</p>
+        <button type="button" class="btn btn-primary btn-compact forum-empty-cta" data-forum-empty-create>New suggestion</button>
+      </div>`;
+  }
+
+  function renderForumFeed(posts) {
+    const support = activeGroupIsSupport();
+    ensureForumStatusFilter(support);
+    const all = sortedForumPosts(posts).filter((p) => !p.hidden);
+    const ordered = all.filter((p) => postMatchesForumFilter(p, forumStatusFilter, support));
+    const filters = renderForumStatusFilters(all, support);
+    if (!all.length) {
+      feedEl.innerHTML = `${filters}${renderForumEmptyState(support)}`;
       return;
     }
-    feedEl.innerHTML = `<div class="forum-thread-list">${ordered
+    if (!ordered.length) {
+      feedEl.innerHTML = `${filters}${renderForumEmptyState(support, { filtered: true })}`;
+      return;
+    }
+    feedEl.innerHTML = `${filters}<div class="forum-thread-list ${support ? "is-tickets" : "is-suggestions"}">${ordered
       .map((post) => {
         const author = post.author || {};
         const title = postTitle(post);
@@ -2254,28 +2341,36 @@
         const pid = escapeHtml(String(post.id || ""));
         const status = String(post.suggestionStatus || "open").toLowerCase();
         const reply = String(post.suggestionReply || "").trim();
-        return `
-          <article class="forum-thread ${post.isPinned ? "is-pinned" : ""} is-${escapeHtml(status)}" data-post-id="${pid}">
-            <div class="forum-thread-votes" aria-label="Vote">
+        const ticketNo = shortTicketId(post);
+        const side = support
+          ? `<div class="forum-thread-ticket-id" aria-label="Ticket ${ticketNo}">
+              <span class="forum-ticket-hash">#</span>
+              <span class="forum-ticket-code">${escapeHtml(ticketNo)}</span>
+            </div>`
+          : `<div class="forum-thread-votes" aria-label="Vote">
               <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
               <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${score}</span>
               <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
-            </div>
+            </div>`;
+        const replyLabel = support ? "Staff update" : "Staff";
+        return `
+          <article class="forum-thread ${support ? "is-ticket" : "is-suggestion"} ${post.isPinned ? "is-pinned" : ""} is-${escapeHtml(status)}" data-post-id="${pid}">
+            ${side}
             <a class="forum-thread-main" href="/community/post/${pid}" data-open-post="${pid}">
               <div class="forum-thread-top">
                 ${post.isPinned ? `<span class="forum-pin">Pinned</span>` : ""}
-                <span class="suggestion-status is-${escapeHtml(status)}">${escapeHtml(suggestionStatusLabel(status, { ticket: activeGroupIsSupport() }))}</span>
+                <span class="suggestion-status is-${escapeHtml(status)}">${escapeHtml(suggestionStatusLabel(status, { ticket: support }))}</span>
                 ${renderSuggestionTagChips(post.suggestionTags)}
               </div>
-              <h3 class="forum-thread-title">${escapeHtml(title)}</h3>
-              ${bodyText ? `<p class="forum-thread-preview">${escapeHtml(truncateText(bodyText, 140))}</p>` : ""}
-              ${reply ? `<p class="forum-thread-reply"><strong>Staff:</strong> ${escapeHtml(reply)}</p>` : ""}
+              <h3 class="forum-thread-title">${support ? `<span class="forum-ticket-inline">#${escapeHtml(ticketNo)}</span> ` : ""}${escapeHtml(title)}</h3>
+              ${bodyText ? `<p class="forum-thread-preview">${escapeHtml(truncateText(bodyText, support ? 160 : 140))}</p>` : ""}
+              ${reply ? `<p class="forum-thread-reply"><strong>${replyLabel}:</strong> ${escapeHtml(reply)}</p>` : ""}
               <div class="forum-thread-meta">
                 ${renderAuthorLink(author, { withAvatar: true })}
                 <span class="reddit-meta-dot">•</span>
                 <time>${escapeHtml(formatRelative(post.createdAt))}</time>
                 <span class="reddit-meta-dot">•</span>
-                <span>${comments} reply${comments === 1 ? "" : "ies"}</span>
+                <span>${comments} ${support ? (comments === 1 ? "reply" : "replies") : comments === 1 ? "reply" : "replies"}</span>
               </div>
             </a>
           </article>`;
@@ -2350,14 +2445,21 @@
             )}</span>${renderSuggestionTagChips(post.suggestionTags)}`
           : "";
         const suggestionActions = canModerateSuggestion
-          ? `<div class="suggestion-actions">
+          ? isTicket
+            ? `<div class="suggestion-actions is-ticket">
+              <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="in_progress" data-post-id="${pid}">Working</button>
+              <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="waiting" data-post-id="${pid}">Waiting</button>
+              <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="resolved" data-post-id="${pid}">Resolve</button>
+              <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="open" data-post-id="${pid}">Reopen</button>
+            </div>`
+            : `<div class="suggestion-actions">
               <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="accepted" data-post-id="${pid}">Accept</button>
               <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="denied" data-post-id="${pid}">Deny</button>
               <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="open" data-post-id="${pid}">Reopen</button>
             </div>`
           : "";
         return `
-          <article class="reddit-post ${isSuggestion ? "is-suggestion" : ""}" data-post-id="${pid}">
+          <article class="reddit-post ${isSuggestion ? "is-suggestion" : ""} ${isTicket ? "is-ticket" : ""}" data-post-id="${pid}">
             <div class="reddit-vote" aria-label="Vote">
               <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 20)}</button>
               <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${score}</span>
@@ -2440,20 +2542,28 @@
           suggestionStatusLabel(suggestionStatus || "open", { ticket: !!isTicket })
         )}</span>${renderSuggestionTagChips(post.suggestionTags)}`
       : "";
-    const staffPanel = canModerateSuggestion
-      ? `<div class="forum-staff-panel">
-          <p class="forum-staff-title">${isTicket ? "Ticket response" : "Staff reply"}</p>
-          <div class="forum-staff-presets">
-            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="accepted" data-suggestion-reply="Yes — we'll do this" data-post-id="${pid}">Yes</button>
+    const ticketNo = isTicket ? shortTicketId(post) : "";
+    const staffPresets = isTicket
+      ? `<button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="in_progress" data-suggestion-reply="We're looking into this." data-post-id="${pid}">Working on it</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="waiting" data-suggestion-reply="We need a bit more info from you." data-post-id="${pid}">Need more info</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="resolved" data-suggestion-reply="This should be resolved — reply if you still need help." data-post-id="${pid}">Resolved</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="closed" data-suggestion-reply="Closing this ticket." data-post-id="${pid}">Close</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="open" data-suggestion-reply="" data-post-id="${pid}">Reopen</button>`
+      : `<button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="accepted" data-suggestion-reply="Yes — we'll do this" data-post-id="${pid}">Yes</button>
             <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="denied" data-suggestion-reply="No — not planned" data-post-id="${pid}">No</button>
-            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="implemented" data-suggestion-reply="Already implemented" data-post-id="${pid}">Already implemented</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="implemented" data-suggestion-reply="Already implemented" data-post-id="${pid}">Already shipped</button>
             <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="planned" data-suggestion-reply="Planned" data-post-id="${pid}">Planned</button>
             <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="closed" data-suggestion-reply="Closed" data-post-id="${pid}">Close</button>
-            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="open" data-suggestion-reply="" data-post-id="${pid}">Reopen</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="open" data-suggestion-reply="" data-post-id="${pid}">Reopen</button>`;
+    const staffPanel = canModerateSuggestion
+      ? `<div class="forum-staff-panel ${isTicket ? "is-ticket" : ""}">
+          <p class="forum-staff-title">${isTicket ? "Ticket tools" : "Staff reply"}</p>
+          <div class="forum-staff-presets">
+            ${staffPresets}
           </div>
           <form class="forum-staff-form" data-suggestion-form="${pid}">
             <label class="sr-only" for="suggestion-reply-${pid}">Custom reply</label>
-            <textarea id="suggestion-reply-${pid}" rows="2" maxlength="500" placeholder="Custom reply (optional)…">${escapeHtml(reply)}</textarea>
+            <textarea id="suggestion-reply-${pid}" rows="2" maxlength="500" placeholder="${isTicket ? "Update for the member (optional)…" : "Custom reply (optional)…"}">${escapeHtml(reply)}</textarea>
             <div class="forum-staff-form-actions">
               <select data-suggestion-status-select aria-label="Status">
                 ${
@@ -2471,20 +2581,24 @@
                 <option value="closed" ${suggestionStatus === "closed" ? "selected" : ""}>Closed</option>`
                 }
               </select>
-              <button class="btn btn-primary btn-compact" type="submit">Save reply</button>
+              <button class="btn btn-primary btn-compact" type="submit">${isTicket ? "Save update" : "Save reply"}</button>
               <button class="btn btn-secondary btn-compact" type="button" data-pin-post="${pid}" data-pinned="${post.isPinned ? "0" : "1"}">${post.isPinned ? "Unpin" : "Pin"}</button>
             </div>
           </form>
         </div>`
       : reply
-        ? `<div class="forum-staff-reply"><strong>Staff:</strong> ${escapeHtml(reply)}</div>`
+        ? `<div class="forum-staff-reply"><strong>${isTicket ? "Staff update" : "Staff"}:</strong> ${escapeHtml(reply)}</div>`
         : "";
     el.innerHTML = `
-      <article class="reddit-post reddit-post-detail-inner ${isSuggestion ? "is-suggestion" : ""}" data-post-id="${pid}">
-        <div class="reddit-vote">
-          <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 20)}</button>
+      <article class="reddit-post reddit-post-detail-inner ${isSuggestion ? "is-suggestion" : ""} ${isTicket ? "is-ticket" : ""}" data-post-id="${pid}">
+        <div class="reddit-vote ${isTicket ? "is-ticket-id" : ""}">
+          ${
+            isTicket
+              ? `<div class="forum-thread-ticket-id is-detail" aria-label="Ticket ${escapeHtml(ticketNo)}"><span class="forum-ticket-hash">#</span><span class="forum-ticket-code">${escapeHtml(ticketNo)}</span></div>`
+              : `<button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 20)}</button>
           <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${displayScore(post)}</span>
-          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 20)}</button>
+          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 20)}</button>`
+          }
         </div>
         <div class="reddit-post-main">
           <div class="reddit-post-meta">
@@ -2494,14 +2608,14 @@
                 : `<span class="reddit-sub is-static">Home</span>`
             }
             <span class="reddit-meta-dot">•</span>
-            <span class="reddit-meta-by">Posted by</span>
+            <span class="reddit-meta-by">${isTicket ? "Opened by" : "Posted by"}</span>
             ${renderAuthorLink(author, { withAvatar: true })}
             <span class="reddit-meta-dot">•</span>
             <time class="reddit-meta-time">${escapeHtml(formatRelative(post.createdAt))}</time>
             ${statusBadge}
             ${post.isPinned ? `<span class="forum-pin">Pinned</span>` : ""}
           </div>
-          <h1 class="reddit-post-title reddit-post-title-lg">${escapeHtml(title)}</h1>
+          <h1 class="reddit-post-title reddit-post-title-lg">${isTicket ? `<span class="forum-ticket-inline">#${escapeHtml(ticketNo)}</span> ` : ""}${escapeHtml(title)}</h1>
           ${bodyText ? `<div class="reddit-post-body reddit-post-body-lg">${escapeHtml(bodyText)}</div>` : ""}
           ${media}
           ${staffPanel}
@@ -3066,8 +3180,8 @@
       const desc = String(channel.description || "").trim();
       if (desc) textEl.textContent = desc;
       else if (meta && meta.tone === "announce") textEl.textContent = "Official announcements from the Synk team.";
-      else if (meta && meta.tone === "suggest") textEl.textContent = "Share product suggestions, vote, and follow staff replies.";
-      else if (meta && meta.tone === "help") textEl.textContent = "Open a support ticket and Synk staff will help you here.";
+      else if (meta && meta.tone === "suggest") textEl.textContent = "Share product ideas, tag them, and vote. Staff reply with status updates.";
+      else if (meta && meta.tone === "help") textEl.textContent = "Open a ticket for account, access, billing, or product help. Staff respond here.";
       else if (meta && meta.tone === "rules") textEl.textContent = "Community guidelines for the official Synk server.";
       else textEl.textContent = `This is the start of #${cleaned}. Be respectful and keep the conversation useful.`;
     }
@@ -3293,8 +3407,13 @@
     const forumCreateBtn = document.getElementById("synk-hub-forum-create");
     const isForum = isForumChannel(active);
     const isSupport = isSupportChannel(active);
+    const channelChanged = String(active && active.slug || "") !== String(window.__synkLastForumChannel || "");
     document.body.classList.toggle("is-forum-channel", !!isForum);
     document.body.classList.toggle("is-support-channel", !!isSupport);
+    if (isForum && channelChanged) {
+      forumStatusFilter = defaultForumStatusFilter(!!isSupport);
+    }
+    window.__synkLastForumChannel = active ? active.slug : "";
     if (forumCreateBtn) {
       const allowed = canPostInChannel(active) && isForum;
       forumCreateBtn.hidden = !allowed;
@@ -3327,10 +3446,10 @@
         feedHint.textContent = "Read-only — maintained by Synk staff.";
       } else if (isSupport) {
         feedHint.hidden = false;
-        feedHint.textContent = "Support tickets — open a ticket for account, access, or product help. Staff will reply here.";
+        feedHint.textContent = "Tickets stay here until resolved. Pick a category so staff can route you faster.";
       } else if (kind === "suggestions" || isForum) {
         feedHint.hidden = false;
-        feedHint.textContent = "Suggestions — share product ideas, add tags, and vote. Staff can reply and update status.";
+        feedHint.textContent = "Vote on ideas you care about. Staff mark suggestions as planned, accepted, or shipped.";
       } else {
         feedHint.hidden = true;
         feedHint.textContent = "";
@@ -7484,25 +7603,34 @@ document.addEventListener("click", async (e) => {
       const bodyInput = document.getElementById("forum-create-body");
       const submitBtn = document.getElementById("forum-create-submit");
       const tagsLabel = document.querySelector("#forum-create-modal .forum-create-label");
+      const hint = document.getElementById("forum-create-hint");
+      modal.classList.toggle("is-support", !!support);
+      modal.classList.toggle("is-suggestions", !support);
       if (kicker) kicker.textContent = support ? "Support" : "Suggestions";
       if (heading) heading.textContent = support ? "New support ticket" : "New suggestion";
       if (titleInput) {
         titleInput.value = "";
         titleInput.placeholder = support
-          ? "Short summary of your issue"
-          : "Short summary of your suggestion";
+          ? "e.g. Can’t sign in on mobile"
+          : "e.g. Dark mode for community feed";
       }
       if (bodyInput) {
         bodyInput.value = "";
         bodyInput.placeholder = support
-          ? "What do you need help with? Include useful details."
-          : "What should change, and why?";
+          ? "What happened, what you expected, and any steps to reproduce."
+          : "What should change, who it helps, and why it matters.";
       }
       if (submitBtn) submitBtn.textContent = support ? "Submit ticket" : "Post suggestion";
       if (tagsLabel) {
         tagsLabel.innerHTML = support
-          ? `Category <span class="muted">(pick up to 3)</span>`
-          : `Tags <span class="muted">(pick up to 3)</span>`;
+          ? `Category <span class="muted">(required)</span>`
+          : `Tags <span class="muted">(optional · up to 3)</span>`;
+      }
+      if (hint) {
+        hint.hidden = false;
+        hint.textContent = support
+          ? "Pick one category so staff can route your ticket quickly."
+          : "Tags help others find and vote on related ideas.";
       }
       const tagsHost = document.getElementById("forum-create-tags");
       forumSelectedTags = [];
@@ -7519,11 +7647,13 @@ document.addEventListener("click", async (e) => {
       const status = document.getElementById("forum-create-status");
       if (status) status.textContent = "";
       if (titleInput) titleInput.focus();
+    } else {
+      modal.classList.remove("is-support", "is-suggestions");
     }
   }
 
   document.addEventListener("click", (e) => {
-    if (e.target.closest("#synk-hub-forum-create")) {
+    if (e.target.closest("#synk-hub-forum-create") || e.target.closest("[data-forum-empty-create]")) {
       e.preventDefault();
       setForumCreateOpen(true);
       return;
@@ -7533,14 +7663,27 @@ document.addEventListener("click", async (e) => {
       setForumCreateOpen(false);
       return;
     }
+    const filterBtn = e.target.closest("[data-forum-filter]");
+    if (filterBtn && filterBtn.closest(".forum-filter-bar")) {
+      e.preventDefault();
+      const next = filterBtn.getAttribute("data-forum-filter") || "all";
+      if (next === forumStatusFilter) return;
+      forumStatusFilter = next;
+      renderForumFeed(lastPosts);
+      return;
+    }
     const tagBtn = e.target.closest("[data-forum-tag]");
     if (tagBtn && tagBtn.closest("#forum-create-tags")) {
       e.preventDefault();
       const id = tagBtn.getAttribute("data-forum-tag");
       if (!id) return;
+      const support = activeGroupIsSupport();
+      const maxTags = support ? 1 : 3;
       if (forumSelectedTags.includes(id)) {
         forumSelectedTags = forumSelectedTags.filter((t) => t !== id);
-      } else if (forumSelectedTags.length < 3) {
+      } else if (support) {
+        forumSelectedTags = [id];
+      } else if (forumSelectedTags.length < maxTags) {
         forumSelectedTags = forumSelectedTags.concat(id);
       }
       document.querySelectorAll("#forum-create-tags [data-forum-tag]").forEach((btn) => {
@@ -7558,15 +7701,20 @@ document.addEventListener("click", async (e) => {
       const bodyEl = document.getElementById("forum-create-body");
       const title = titleEl ? titleEl.value.trim() : "";
       const body = bodyEl ? bodyEl.value.trim() : "";
+      const support = activeGroupIsSupport();
       if (title.length < 3) {
-        if (status) status.textContent = activeGroupIsSupport() ? "Add a short ticket title" : "Add a short title";
+        if (status) status.textContent = support ? "Add a short ticket title" : "Add a short title";
         return;
       }
       if (body.length < 3) {
-        if (status) status.textContent = activeGroupIsSupport() ? "Add a few more details" : "Add a bit more detail";
+        if (status) status.textContent = support ? "Add a few more details" : "Add a bit more detail";
         return;
       }
-      if (status) status.textContent = "Posting…";
+      if (support && !forumSelectedTags.length) {
+        if (status) status.textContent = "Pick a category for this ticket";
+        return;
+      }
+      if (status) status.textContent = support ? "Submitting ticket…" : "Posting…";
       try {
         const data = await communityAction({
           action: "post",
@@ -7574,8 +7722,8 @@ document.addEventListener("click", async (e) => {
           title,
           body,
           group: route.slug || "synk",
-          channel: activeChannelSlug || (activeGroupIsSupport() ? "support" : "suggestions"),
-          tags: forumSelectedTags.slice(),
+          channel: activeChannelSlug || (support ? "support" : "suggestions"),
+          tags: forumSelectedTags.slice(0, support ? 1 : 3),
           asUsername: activePersona || (me && me.username) || undefined,
         });
         setForumCreateOpen(false);
@@ -7587,7 +7735,7 @@ document.addEventListener("click", async (e) => {
         } else {
           await loadCommunity();
         }
-        showToast(activeGroupIsSupport() ? "Ticket submitted" : "Suggestion posted");
+        showToast(support ? "Ticket submitted" : "Suggestion posted");
       } catch (err) {
         if (status) status.textContent = err.message || "Could not post";
       }

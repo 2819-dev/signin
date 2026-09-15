@@ -9972,6 +9972,179 @@ body.community-body.is-discord-group.is-forum-channel .community-composer {
   color: var(--synk-hub-ink);
   font-size: 1.05rem;
 }
+.forum-empty-ico {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--synk-hub-accent) 14%, transparent);
+  color: var(--synk-hub-accent-ink);
+}
+.forum-empty.is-support .forum-empty-ico {
+  background: color-mix(in srgb, #0f766e 16%, transparent);
+  color: #0f766e;
+}
+.forum-empty-cta { margin-top: 14px; }
+
+.forum-empty.is-filtered {
+  border-style: solid;
+  background: color-mix(in srgb, var(--synk-hub-elev) 55%, transparent);
+}
+.forum-empty.is-suggestions .forum-empty-ico {
+  background: color-mix(in srgb, #c9a227 16%, transparent);
+  color: #a16207;
+}
+html[data-theme="dark"] .forum-empty.is-suggestions .forum-empty-ico {
+  color: #fbbf24;
+}
+
+.forum-empty p { margin: 0 auto; max-width: 42ch; }
+
+.forum-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 12px;
+  padding: 4px;
+  border: 1px solid var(--synk-hub-line);
+  border-radius: 12px;
+  background: var(--synk-hub-elev);
+}
+.forum-filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--synk-hub-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.forum-filter-tab:hover {
+  background: color-mix(in srgb, var(--synk-hub-ink) 5%, transparent);
+  color: var(--synk-hub-ink);
+}
+.forum-filter-tab.is-active {
+  background: var(--synk-hub-accent-soft);
+  color: var(--synk-hub-accent-ink);
+}
+.forum-filter-count {
+  display: inline-flex;
+  min-width: 1.25rem;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--synk-hub-ink) 8%, transparent);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+.forum-filter-tab.is-active .forum-filter-count {
+  background: color-mix(in srgb, var(--synk-hub-accent) 22%, transparent);
+}
+
+.forum-thread-list,
+.forum-thread-list {
+  display: grid;
+  gap: 10px;
+  padding: 4px 0 18px;
+}
+.forum-thread.is-ticket {
+  grid-template-columns: 64px minmax(0, 1fr);
+  border-left: 3px solid color-mix(in srgb, #0f766e 70%, var(--synk-hub-line));
+}
+.forum-thread.is-ticket.is-in_progress {
+  border-left-color: #f59e0b;
+}
+.forum-thread.is-ticket.is-waiting {
+  border-left-color: #6366f1;
+}
+.forum-thread.is-ticket.is-resolved,
+.forum-thread.is-ticket.is-closed {
+  border-left-color: color-mix(in srgb, #14b8a6 70%, var(--synk-hub-line));
+  opacity: 0.92;
+}
+.forum-thread-ticket-id {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 2px;
+  padding: 14px 6px 12px;
+  background: color-mix(in srgb, #0f766e 8%, var(--synk-hub-main));
+  color: #0f766e;
+  font-variant-numeric: tabular-nums;
+}
+.forum-thread-ticket-id.is-detail,
+.reddit-vote.is-ticket-id {
+  padding-top: 4px;
+  background: transparent;
+}
+.forum-ticket-hash {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+.forum-ticket-code {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  text-align: center;
+  word-break: break-all;
+}
+.forum-ticket-inline {
+  color: #0f766e;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+html[data-theme="dark"] .forum-thread-ticket-id,
+html[data-theme="dark"] .forum-ticket-inline {
+  color: #5eead4;
+}
+html[data-theme="dark"] .forum-thread-ticket-id {
+  background: color-mix(in srgb, #14b8a6 12%, var(--synk-hub-main));
+}
+body.community-body.is-support-channel .forum-filter-tab.is-active {
+  background: color-mix(in srgb, #0f766e 16%, transparent);
+  color: #0f766e;
+}
+html[data-theme="dark"] body.community-body.is-support-channel .forum-filter-tab.is-active {
+  color: #5eead4;
+}
+
+.forum-create-hint {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--synk-hub-accent) 10%, transparent);
+  color: var(--synk-hub-muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+.forum-create-modal.is-support .forum-create-hint {
+  background: color-mix(in srgb, #0f766e 12%, transparent);
+}
+.forum-create-modal.is-support .forum-create-kicker {
+  color: #0f766e;
+}
+html[data-theme="dark"] .forum-create-modal.is-support .forum-create-kicker {
+  color: #5eead4;
+}
+.forum-staff-panel.is-ticket {
+  border-color: color-mix(in srgb, #0f766e 35%, var(--synk-hub-line));
+  background: color-mix(in srgb, #0f766e 6%, var(--synk-hub-elev));
+}
+.suggestion-actions.is-ticket .btn {
+  border-color: color-mix(in srgb, #0f766e 28%, var(--synk-hub-line));
+}
+
 .forum-staff-panel {
   margin-top: 10px;
   padding: 12px;
@@ -15741,12 +15914,16 @@ body.community-body.is-discord-group .synk-hub {
    Community mode isolation — official Synk hub vs Reddit groups
    ========================================================================== */
 
-/* Forum UI only inside the official hub Ideas channel */
+/* Forum UI only inside the official hub Ideas/Support channels */
 body.community-body:not(.is-discord-group) .forum-thread-list,
+body.community-body:not(.is-discord-group) .forum-thread-list,
+body.community-body:not(.is-discord-group) .forum-filter-bar,
 body.community-body:not(.is-discord-group) .forum-empty,
 body.community-body:not(.is-discord-group) .forum-create-modal,
 body.community-body:not(.is-discord-group) .synk-hub-forum-create,
 body.community-body:not(.is-forum-channel) .forum-thread-list,
+body.community-body:not(.is-forum-channel) .forum-thread-list,
+body.community-body:not(.is-forum-channel) .forum-filter-bar,
 body.community-body:not(.is-forum-channel) .forum-empty,
 body.community-body:not(.is-forum-channel) .forum-create-modal,
 body.community-body:not(.is-forum-channel) .synk-hub-forum-create {
