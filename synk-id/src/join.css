@@ -16353,3 +16353,63 @@ body.community-body.is-discord-group #feed {
     display: none !important;
   }
 }
+
+/* SYNK_HUB_BUGFIX_V65
+   Bottom tab bar was covering hub CTAs (New suggestion / New ticket),
+   empty-state actions, and the create-sheet submit row on phones. */
+body.community-body {
+  --community-tabbar-clearance: 0px;
+}
+body.community-body.has-community-tabbar {
+  --community-tabbar-clearance: calc(58px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 641px) and (max-width: 1100px) {
+  /* Floating tablet tab bar sits above the home indicator */
+  body.community-body.has-community-tabbar {
+    --community-tabbar-clearance: calc(78px + env(safe-area-inset-bottom, 0px));
+  }
+}
+@media (min-width: 1101px) {
+  body.community-body.has-community-tabbar {
+    --community-tabbar-clearance: 0px;
+  }
+}
+
+@media (max-width: 1100px) {
+  /* Hub is a fixed viewport — shrink it so the tab bar doesn't overlay content */
+  body.community-body.is-discord-group.has-community-tabbar .discord-shell,
+  body.community-body.is-discord-group.has-community-tabbar .synk-hub {
+    height: calc(100dvh - 56px - var(--community-tabbar-clearance)) !important;
+    min-height: calc(100dvh - 56px - var(--community-tabbar-clearance)) !important;
+    max-height: calc(100dvh - 56px - var(--community-tabbar-clearance)) !important;
+  }
+
+  body.community-body.is-discord-group.has-community-tabbar .synk-hub-feed,
+  body.community-body.is-discord-group.has-community-tabbar #discord-feed-slot,
+  body.community-body.is-discord-group.has-community-tabbar .feed-stack {
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  body.community-body.has-community-tabbar .forum-empty,
+  body.community-body.has-community-tabbar .forum-thread-list {
+    padding-bottom: 12px;
+    margin-bottom: 8px;
+  }
+
+  /* Create sheet must sit above the tab bar (tab bar z-index is ~200–230) */
+  body.community-body.has-community-tabbar .forum-create-modal {
+    z-index: 320 !important;
+    padding-bottom: calc(12px + var(--community-tabbar-clearance)) !important;
+    align-items: end;
+  }
+  body.community-body.has-community-tabbar .forum-create-sheet {
+    max-height: calc(88dvh - var(--community-tabbar-clearance)) !important;
+    margin-bottom: 0;
+  }
+
+  /* Keep sticky hub header create button reachable above the bar area */
+  body.community-body.is-discord-group.has-community-tabbar .synk-hub-head,
+  body.community-body.is-discord-group.has-community-tabbar .synk-hub-channel-bar {
+    z-index: 25;
+  }
+}
