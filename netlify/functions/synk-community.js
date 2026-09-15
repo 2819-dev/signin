@@ -3393,20 +3393,41 @@ if (action === "create-alt") {
       }
       let bannerUrl = body.bannerUrl;
       if (body.clearBanner || body.removeBanner) bannerUrl = "";
-      else if (body.imageData || body.bannerData || body.data) {
+      else if (body.bannerData || body.bannerImageData) {
         try {
-          bannerUrl = await saveCommunityBanner(
-            event,
-            body.imageData || body.bannerData || body.data
-          );
+          bannerUrl = await saveCommunityBanner(event, body.bannerData || body.bannerImageData);
         } catch (err) {
           return json(err.statusCode || 400, { error: err.message || "Unable to save banner" });
         }
+      } else if (body.imageData || body.data) {
+        // Legacy: imageData alone was used for banners before icon uploads existed.
+        if (!(body.iconData || body.iconImageData || body.clearIcon || body.removeIcon || body.iconUrl != null)) {
+          try {
+            bannerUrl = await saveCommunityBanner(event, body.imageData || body.data);
+          } catch (err) {
+            return json(err.statusCode || 400, { error: err.message || "Unable to save banner" });
+          }
+        }
       }
+
+      let iconUrl = body.iconUrl;
+      if (body.clearIcon || body.removeIcon) iconUrl = "";
+      else if (body.iconData || body.iconImageData || body.icon) {
+        try {
+          iconUrl = await saveCommunityAvatar(
+            event,
+            body.iconData || body.iconImageData || body.icon
+          );
+        } catch (err) {
+          return json(err.statusCode || 400, { error: err.message || "Unable to save icon" });
+        }
+      }
+
       const result = await updateCommunityGroup(sql, group.id, {
         name: body.name,
         description: body.description != null ? body.description : body.about,
         bannerUrl,
+        iconUrl,
       });
       if (!result.ok) return json(400, { error: result.error || "Could not update group" });
       const hydrated = await hydrateCommunityGroup(sql, result.group);

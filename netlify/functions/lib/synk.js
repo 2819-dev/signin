@@ -161,6 +161,7 @@ function mapCommunityGroup(row) {
     description: row.description || "",
     theme,
     isOfficial: row.is_official === true,
+    iconUrl: row.icon_url || "",
     bannerUrl: row.banner_url || "",
     createdBy: row.created_by || null,
     createdAt: row.created_at,
@@ -793,6 +794,7 @@ async function ensureSynkCommunityExtras(sql) {
   await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'standard'`;
   await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS is_official BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS banner_url TEXT`;
+  await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS icon_url TEXT`;
   await sql`
     CREATE TABLE IF NOT EXISTS synk_community_group_categories (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1543,7 +1545,7 @@ async function ensureOfficialSynkGroup(sql) {
 
   let group = null;
   const existing = await sql`
-    SELECT id, slug, name, description, theme, is_official, banner_url, created_by, created_at, updated_at
+    SELECT id, slug, name, description, theme, is_official, banner_url, icon_url, created_by, created_at, updated_at
     FROM synk_community_groups
     WHERE slug = 'synk' OR is_official = TRUE
     ORDER BY CASE WHEN slug = 'synk' THEN 0 ELSE 1 END
@@ -1551,12 +1553,11 @@ async function ensureOfficialSynkGroup(sql) {
   `;
   if (existing[0]) {
     group = existing[0];
+    // Keep staff-customized name / description / media — only enforce official shell flags.
     await sql`
       UPDATE synk_community_groups
       SET
         slug = 'synk',
-        name = 'Synk',
-        description = 'Official Synk — product updates, community chat, and feedback.',
         theme = 'discord',
         is_official = TRUE,
         updated_at = NOW()
@@ -2145,6 +2146,8 @@ async function listCommunityGroups(sql) {
       g.description,
       g.theme,
       g.is_official,
+      g.banner_url,
+      g.icon_url,
       g.created_by,
       g.created_at,
       g.updated_at,
@@ -2174,7 +2177,7 @@ async function findCommunityGroup(sql, { id, slug } = {}) {
   const groupSlug = normalizeGroupSlug(slug);
   if (groupId) {
     const rows = await sql`
-      SELECT id, slug, name, description, theme, is_official, banner_url, created_by, created_at, updated_at
+      SELECT id, slug, name, description, theme, is_official, banner_url, icon_url, created_by, created_at, updated_at
       FROM synk_community_groups
       WHERE id = ${groupId}
       LIMIT 1
@@ -2183,7 +2186,7 @@ async function findCommunityGroup(sql, { id, slug } = {}) {
   }
   if (groupSlug) {
     const rows = await sql`
-      SELECT id, slug, name, description, theme, is_official, banner_url, created_by, created_at, updated_at
+      SELECT id, slug, name, description, theme, is_official, banner_url, icon_url, created_by, created_at, updated_at
       FROM synk_community_groups
       WHERE slug = ${groupSlug}
       LIMIT 1
@@ -5706,11 +5709,11 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
 }
 
 
-async function updateCommunityGroup(sql, groupId, { name, description, bannerUrl } = {}) {
+async function updateCommunityGroup(sql, groupId, { name, description, bannerUrl, iconUrl } = {}) {
   const id = String(groupId || "").trim();
   if (!id) return { ok: false, error: "Group required" };
   const existing = await sql`
-    SELECT id, slug, name, description, theme, is_official, banner_url, created_by, created_at, updated_at
+    SELECT id, slug, name, description, theme, is_official, banner_url, icon_url, created_by, created_at, updated_at
     FROM synk_community_groups
     WHERE id = ${id}
     LIMIT 1
@@ -5727,15 +5730,23 @@ async function updateCommunityGroup(sql, groupId, { name, description, bannerUrl
     else if (/^https:\/\//i.test(raw) || raw.startsWith("/api/")) nextBanner = raw.slice(0, 700);
     else return { ok: false, error: "Banner must be an https URL or uploaded image" };
   }
+  let nextIcon = existing[0].icon_url || "";
+  if (iconUrl !== undefined) {
+    const raw = String(iconUrl || "").trim();
+    if (!raw) nextIcon = "";
+    else if (/^https:\/\//i.test(raw) || raw.startsWith("/api/")) nextIcon = raw.slice(0, 700);
+    else return { ok: false, error: "Icon must be an https URL or uploaded image" };
+  }
   const rows = await sql`
     UPDATE synk_community_groups
     SET
       name = ${nextName},
       description = ${nextDescription},
       banner_url = ${nextBanner},
+      icon_url = ${nextIcon},
       updated_at = NOW()
     WHERE id = ${id}
-    RETURNING id, slug, name, description, theme, is_official, banner_url, created_by, created_at, updated_at
+    RETURNING id, slug, name, description, theme, is_official, banner_url, icon_url, created_by, created_at, updated_at
   `;
   return { ok: true, group: mapCommunityGroup(rows[0]) };
 }

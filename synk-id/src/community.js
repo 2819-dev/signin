@@ -146,6 +146,8 @@
   let activeGroupJoined = false;
   let activeChannelSlug = "";
   let activeGroupDetail = null;
+  let pendingServerIconData = "";
+  let clearServerIcon = false;
   /** @type {Map<string, { at: number, data: any }>} */
   const routePayloadCache = new Map();
   const ROUTE_CACHE_TTL_MS = 90_000;
@@ -3062,10 +3064,7 @@
       }
     }
     const railMark = document.getElementById("synk-hub-rail-mark") || document.querySelector(".synk-hub-rail-mark");
-    if (railMark) {
-      const initial = String((group && (group.name || group.slug)) || "S").trim().slice(0, 1).toUpperCase() || "S";
-      railMark.textContent = initial;
-    }
+    if (railMark) paintServerIcon(railMark, group);
     const bannerArt = document.getElementById("synk-hub-server-banner-art");
     if (bannerArt) {
       const custom = String((group && (group.bannerUrl || group.coverUrl || group.banner)) || "").trim();
@@ -3197,17 +3196,69 @@
     if (resetBtn) resetBtn.hidden = false;
   }
 
+  function paintServerIcon(el, group) {
+    if (!el) return;
+    const name = String((group && (group.name || group.slug)) || "S");
+    const initial = name.trim().slice(0, 1).toUpperCase() || "S";
+    const iconUrl = String((group && (group.iconUrl || group.avatarUrl || "")) || "").trim();
+    if (iconUrl) {
+      el.classList.add("has-image");
+      el.innerHTML = `<img src="${escapeHtml(iconUrl)}" alt="" />`;
+    } else {
+      el.classList.remove("has-image");
+      el.textContent = initial;
+    }
+  }
+
+  function setServerSettingsOpen(open, tab) {
+    const panel = document.getElementById("synk-hub-manage");
+    if (!panel) return;
+    panel.hidden = !open;
+    document.body.classList.toggle("server-settings-open", !!open);
+    if (open) {
+      if (tab) setServerSettingsTab(tab);
+      pendingServerIconData = "";
+      clearServerIcon = false;
+      const iconFile = document.getElementById("synk-hub-icon-file");
+      if (iconFile) iconFile.value = "";
+      renderSynkServerManage(activeGroupDetail);
+    }
+  }
+
+  function setServerSettingsTab(tab) {
+    const key = String(tab || "overview").toLowerCase() === "channels" ? "channels" : "overview";
+    document.querySelectorAll("[data-server-settings-tab]").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.getAttribute("data-server-settings-tab") === key);
+    });
+    document.querySelectorAll("[data-server-settings-panel]").forEach((panel) => {
+      const on = panel.getAttribute("data-server-settings-panel") === key;
+      panel.hidden = !on;
+      panel.classList.toggle("is-active", on);
+    });
+  }
+
   function renderSynkServerManage(group) {
     const panel = document.getElementById("synk-hub-manage");
     const list = document.getElementById("synk-hub-channel-admin-list");
     const bannerUrl = document.getElementById("synk-hub-banner-url");
-    if (!panel) return;
+    const settingsBtn = document.getElementById("synk-hub-server-settings-btn");
     const allowed = canManageSynkServer(group);
-    panel.hidden = !allowed;
-    if (!allowed) return;
+    if (settingsBtn) settingsBtn.hidden = !allowed;
+    if (!panel) return;
+    if (!allowed) {
+      if (!panel.hidden) setServerSettingsOpen(false);
+      return;
+    }
+    const titleEl = document.getElementById("synk-server-settings-title");
+    if (titleEl) titleEl.textContent = (group && group.name) || "Server";
+    const nameEl = document.getElementById("synk-hub-server-name");
+    const descEl = document.getElementById("synk-hub-server-desc");
+    if (nameEl && document.activeElement !== nameEl) nameEl.value = String((group && group.name) || "");
+    if (descEl && document.activeElement !== descEl) descEl.value = String((group && group.description) || "");
     if (bannerUrl && document.activeElement !== bannerUrl) {
       bannerUrl.value = String((group && (group.bannerUrl || group.coverUrl || "")) || "");
     }
+    paintServerIcon(document.getElementById("synk-hub-icon-preview"), group);
     const channels = Array.isArray(group && group.channels) ? group.channels.slice() : [];
     channels.sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0));
     if (list) {
@@ -4882,6 +4933,144 @@ function applyViewState(data) {
   }));
 
   
+
+  const serverSettingsBtn = document.getElementById("synk-hub-server-settings-btn");
+  if (serverSettingsBtn) {
+    serverSettingsBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (!canManageSynkServer(activeGroupDetail)) return;
+      setServerSettingsOpen(true, "overview");
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-server-settings-close]")) {
+      e.preventDefault();
+      setServerSettingsOpen(false);
+      return;
+    }
+    const tabBtn = e.target.closest("[data-server-settings-tab]");
+    if (tabBtn) {
+      e.preventDefault();
+      setServerSettingsTab(tabBtn.getAttribute("data-server-settings-tab"));
+      return;
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.body.classList.contains("server-settings-open")) {
+      setServerSettingsOpen(false);
+    }
+  });
+
+  const serverIconFile = document.getElementById("synk-hub-icon-file");
+  if (serverIconFile) {
+    serverIconFile.addEventListener("change", async () => {
+      const file = serverIconFile.files && serverIconFile.files[0];
+      const status = document.getElementById("synk-hub-overview-status");
+      if (!file) return;
+      try {
+        if (!String(file.type || "").startsWith("image/")) throw new Error("Choose an image file");
+        const dataUrl = await cropImageFile(file, {
+          shape: "square",
+          title: "Crop server icon",
+          hint: "Drag to reposition. Zoom to scale. Icons look best when they fill the square.",
+          outputWidth: 512,
+          outputHeight: 512,
+          maxWidth: 512,
+          maxHeight: 512,
+          mime: "image/jpeg",
+          quality: 0.92,
+        });
+        if (!dataUrl) {
+          serverIconFile.value = "";
+          return;
+        }
+        pendingServerIconData = dataUrl;
+        clearServerIcon = false;
+        const preview = document.getElementById("synk-hub-icon-preview");
+        if (preview) {
+          preview.classList.add("has-image");
+          preview.innerHTML = `<img src="${dataUrl}" alt="" />`;
+        }
+        if (status) status.textContent = "Icon ready — click Save changes.";
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not crop icon";
+        serverIconFile.value = "";
+      }
+    });
+  }
+  const serverIconClear = document.getElementById("synk-hub-icon-clear");
+  if (serverIconClear) {
+    serverIconClear.addEventListener("click", () => {
+      pendingServerIconData = "";
+      clearServerIcon = true;
+      const preview = document.getElementById("synk-hub-icon-preview");
+      paintServerIcon(preview, { name: (document.getElementById("synk-hub-server-name") || {}).value || "S" });
+      const file = document.getElementById("synk-hub-icon-file");
+      if (file) file.value = "";
+      const status = document.getElementById("synk-hub-overview-status");
+      if (status) status.textContent = "Icon will be removed when you save.";
+    });
+  }
+
+  const overviewForm = document.getElementById("synk-hub-overview-form");
+  if (overviewForm) {
+    overviewForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("synk-hub-overview-status");
+      const nameEl = document.getElementById("synk-hub-server-name");
+      const descEl = document.getElementById("synk-hub-server-desc");
+      const fileInput = document.getElementById("synk-hub-banner-file");
+      const urlInput = document.getElementById("synk-hub-banner-url");
+      if (status) status.textContent = "Saving…";
+      try {
+        if (!canManageSynkServer(activeGroupDetail)) throw new Error("Staff only");
+        const payload = {
+          action: "update-group",
+          group: "synk",
+          groupId: activeGroupDetail && activeGroupDetail.id,
+          name: nameEl ? nameEl.value : "",
+          description: descEl ? descEl.value : "",
+        };
+        if (clearServerIcon) payload.clearIcon = true;
+        else if (pendingServerIconData) payload.iconData = pendingServerIconData;
+
+        const file = fileInput && fileInput.files && fileInput.files[0];
+        if (file) {
+          if (!String(file.type || "").startsWith("image/")) throw new Error("Choose an image file for the banner");
+          payload.imageData = await cropImageFile(file, BANNER_CROP);
+          if (!payload.imageData) {
+            if (status) status.textContent = "";
+            return;
+          }
+        } else if (urlInput && String(urlInput.value || "").trim()) {
+          payload.bannerUrl = String(urlInput.value || "").trim();
+        }
+
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...hubHeaders() },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not save server settings");
+        pendingServerIconData = "";
+        clearServerIcon = false;
+        if (fileInput) fileInput.value = "";
+        const iconFile = document.getElementById("synk-hub-icon-file");
+        if (iconFile) iconFile.value = "";
+        activeGroupDetail = data.group || activeGroupDetail;
+        const idx = groups.findIndex((g) => g.slug === (activeGroupDetail && activeGroupDetail.slug));
+        if (idx >= 0) groups[idx] = { ...groups[idx], ...activeGroupDetail };
+        renderDiscordChannels(activeGroupDetail);
+        renderSynkServerManage(activeGroupDetail);
+        if (status) status.textContent = "Saved.";
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not save";
+      }
+    });
+  }
+
+
   const synkBannerForm = document.getElementById("synk-hub-banner-form");
   if (synkBannerForm) {
     synkBannerForm.addEventListener("submit", async (e) => {
@@ -4927,8 +5116,10 @@ function applyViewState(data) {
   const synkBannerClear = document.getElementById("synk-hub-banner-clear");
   if (synkBannerClear) {
     synkBannerClear.addEventListener("click", async () => {
-      const status = document.getElementById("synk-hub-banner-status");
-      if (status) status.textContent = "Clearing…";
+      const status =
+        document.getElementById("synk-hub-overview-status") ||
+        document.getElementById("synk-hub-banner-status");
+      if (status) status.textContent = "Clearing banner…";
       try {
         if (!canManageSynkServer(activeGroupDetail)) throw new Error("Staff only");
         const res = await fetch("/api/synk-community", {
@@ -4945,9 +5136,12 @@ function applyViewState(data) {
         if (!res.ok) throw new Error(data.error || "Could not clear banner");
         const urlInput = document.getElementById("synk-hub-banner-url");
         if (urlInput) urlInput.value = "";
+        const fileInput = document.getElementById("synk-hub-banner-file");
+        if (fileInput) fileInput.value = "";
         if (status) status.textContent = "Banner cleared.";
         activeGroupDetail = data.group || activeGroupDetail;
         renderDiscordChannels(activeGroupDetail);
+        renderSynkServerManage(activeGroupDetail);
       } catch (err) {
         if (status) status.textContent = err.message || "Could not clear banner";
       }
@@ -5095,8 +5289,7 @@ function applyViewState(data) {
         : [];
       const channel = channels.find((c) => String(c.id) === String(id));
       fillSynkChannelForm(channel);
-      const panel = document.getElementById("synk-hub-manage");
-      if (panel) panel.open = true;
+      setServerSettingsOpen(true, "channels");
       return;
     }
     const delBtn = e.target.closest("[data-synk-delete-channel]");
