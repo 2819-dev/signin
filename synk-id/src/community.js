@@ -2985,18 +2985,59 @@
     return q ? `${href}?${q}` : href;
   }
 
-  function setSynkChannelsOpen(open) {
+  function isSynkChannelsPhone() {
+    try {
+      return !!(window.matchMedia && window.matchMedia("(max-width: 767px)").matches);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function setSynkChannelsOpen(open, opts = {}) {
     const shell = document.getElementById("discord-shell");
     const backdrop = document.getElementById("synk-hub-backdrop");
     const toggle = document.getElementById("synk-channels-toggle");
     const want = !!open;
-    document.body.classList.toggle("synk-channels-open", want);
-    if (shell) shell.classList.toggle("is-channels-open", want);
-    if (backdrop) backdrop.hidden = !want;
+    const phone = isSynkChannelsPhone();
+    const persist = opts.persist !== false;
+    if (phone) {
+      document.body.classList.toggle("synk-channels-open", want);
+      document.body.classList.remove("synk-channels-collapsed");
+      if (shell) shell.classList.toggle("is-channels-open", want);
+      if (backdrop) backdrop.hidden = !want;
+    } else {
+      // Tablet/desktop: rail is open by default; collapse is opt-in.
+      document.body.classList.toggle("synk-channels-collapsed", !want);
+      document.body.classList.remove("synk-channels-open");
+      if (shell) shell.classList.remove("is-channels-open");
+      if (backdrop) backdrop.hidden = true;
+      if (persist) {
+        try {
+          localStorage.setItem("synk-hub-channels-collapsed", want ? "0" : "1");
+        } catch (_) {}
+      }
+    }
     if (toggle) {
       toggle.setAttribute("aria-expanded", want ? "true" : "false");
-      toggle.setAttribute("aria-label", want ? "Close channels" : "Open channels");
+      toggle.setAttribute("aria-label", want ? "Hide channels" : "Show channels");
     }
+  }
+
+  function syncSynkChannelsForViewport() {
+    if (!document.body.classList.contains("is-discord-group")) {
+      document.body.classList.remove("synk-channels-open", "synk-channels-collapsed");
+      return;
+    }
+    if (isSynkChannelsPhone()) {
+      // Keep drawer closed unless the user already opened it.
+      if (!document.body.classList.contains("synk-channels-open")) setSynkChannelsOpen(false);
+      return;
+    }
+    let collapsed = false;
+    try {
+      collapsed = localStorage.getItem("synk-hub-channels-collapsed") === "1";
+    } catch (_) {}
+    setSynkChannelsOpen(!collapsed);
   }
 
   function renderDiscordChannels(group) {
@@ -3005,14 +3046,15 @@
     if (!shell || !host) return;
     if (!isDiscordTheme(group)) {
       shell.hidden = true;
-      document.body.classList.remove("is-discord-group");
-      setSynkChannelsOpen(false);
+      document.body.classList.remove("is-discord-group", "synk-channels-open", "synk-channels-collapsed");
+      setSynkChannelsOpen(false, { persist: false });
       mountFeedStack(false);
       return;
     }
     document.body.classList.add("is-discord-group");
     shell.hidden = false;
     mountFeedStack(true);
+    syncSynkChannelsForViewport();
     const categories = Array.isArray(group.categories) ? group.categories.slice() : [];
     categories.sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0));
     const channels = Array.isArray(group.channels) ? group.channels.slice() : [];
@@ -7355,7 +7397,9 @@ document.addEventListener("click", async (e) => {
     const toggle = e.target.closest("#synk-channels-toggle");
     if (toggle) {
       e.preventDefault();
-      const open = !document.body.classList.contains("synk-channels-open");
+      const open = isSynkChannelsPhone()
+        ? !document.body.classList.contains("synk-channels-open")
+        : document.body.classList.contains("synk-channels-collapsed");
       setSynkChannelsOpen(open);
       return;
     }
@@ -7365,9 +7409,16 @@ document.addEventListener("click", async (e) => {
     const slug = chBtn.getAttribute("data-discord-channel");
     if (!slug || !route.slug) return;
     activeChannelSlug = slug;
-    setSynkChannelsOpen(false);
+    if (isSynkChannelsPhone()) setSynkChannelsOpen(false);
     navigate({ type: "group", slug: route.slug, username: "", channel: slug }).catch(() => {});
   });
+
+  try {
+    const synkChannelsMq = window.matchMedia("(max-width: 767px)");
+    const onSynkChannelsMq = () => syncSynkChannelsForViewport();
+    if (synkChannelsMq.addEventListener) synkChannelsMq.addEventListener("change", onSynkChannelsMq);
+    else if (synkChannelsMq.addListener) synkChannelsMq.addListener(onSynkChannelsMq);
+  } catch (_) {}
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
