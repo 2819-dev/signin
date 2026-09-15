@@ -1197,7 +1197,16 @@
     if (path === "/community/submit") return { type: "submit", slug: "", username: "" };
     if (path === "/community/mod" || path === "/community/mod-tools") return { type: "mod", slug: "", username: "" };
     if (path === "/community/popular") return { type: "popular", slug: "", username: "" };
-    if (path === "/community/inbox") return { type: "inbox", slug: "", username: "" };
+    if (path === "/community/inbox") {
+      const params = new URLSearchParams(location.search || "");
+      const tabRaw = String(params.get("tab") || "").trim().toLowerCase();
+      const tab =
+        tabRaw === "messages" || tabRaw === "dms" || tabRaw === "dm"
+          ? "messages"
+          : "notifications";
+      const dm = String(params.get("dm") || "").trim().toLowerCase();
+      return { type: "inbox", slug: "", username: "", tab, dm };
+    }
     if (path === "/community/groups") return { type: "groups", slug: "", username: "" };
     if (path === "/community/search") {
       const params = new URLSearchParams(location.search || "");
@@ -1230,7 +1239,15 @@
     if (next.type === "submit") return "/community/submit";
     if (next.type === "mod") return "/community/mod";
     if (next.type === "popular") return "/community/popular";
-    if (next.type === "inbox") return "/community/inbox";
+    if (next.type === "inbox") {
+      const params = new URLSearchParams();
+      const tab = next.tab || inboxTab;
+      if (tab === "messages") params.set("tab", "messages");
+      const dm = String(next.dm || (tab === "messages" ? activeDmUser : "") || "").trim();
+      if (dm) params.set("dm", dm);
+      const qs = params.toString();
+      return qs ? `/community/inbox?${qs}` : "/community/inbox";
+    }
     if (next.type === "groups") return "/community/groups";
     if (next.type === "search") {
       const params = new URLSearchParams();
@@ -1372,6 +1389,10 @@
 
     // Instant chrome + cached content — never wait on the network to flip views.
     paintRouteShell(next, cached);
+
+    try {
+      syncMessageNotifSuppress();
+    } catch (_) {}
 
     // Background refresh. Soft = keep current paint / skip skeletons, still fetch real data.
     loadCommunity({ soft: !!(cached || shellOnly) }).catch(() => {});
@@ -4345,9 +4366,24 @@ function applyViewState(data) {
 
   window.addEventListener("popstate", () => {
     route = parseRoute();
+    if (route.type === "inbox") {
+      inboxTab = route.tab === "messages" ? "messages" : "notifications";
+      if (route.dm) activeDmUser = String(route.dm || "").trim().toLowerCase();
+    }
     const cached = readRouteCache(route);
     paintRouteShell(route, cached);
+    syncMessageNotifSuppress();
     loadCommunity({ soft: !!cached || !!me }).catch(() => {});
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    syncMessageNotifSuppress();
+  });
+  window.addEventListener("focus", () => {
+    syncMessageNotifSuppress();
+  });
+  window.addEventListener("blur", () => {
+    syncMessageNotifSuppress();
   });
 
   async function saveUsername(username, statusEl) {
@@ -5909,7 +5945,7 @@ function applyViewState(data) {
 
   async function openNotifications() {
     inboxTab = "notifications";
-    navigate({ type: "inbox", slug: "", username: "" }).catch(() => {});
+    navigate({ type: "inbox", slug: "", username: "", tab: "notifications" }).catch(() => {});
     setInboxTab("notifications");
   }
 
@@ -5940,7 +5976,7 @@ function applyViewState(data) {
 
   async function openMessages() {
     inboxTab = "messages";
-    navigate({ type: "inbox", slug: "", username: "" }).catch(() => {});
+    navigate({ type: "inbox", slug: "", username: "", tab: "messages" }).catch(() => {});
     setInboxTab("messages");
     setDmChatOpen(!!activeDmUser);
     loadDmThreads()
@@ -5953,10 +5989,24 @@ function applyViewState(data) {
     if (!target) return;
     inboxTab = "messages";
     activeDmUser = target;
-    await navigate({ type: "inbox", slug: "", username: "" });
+    await navigate({ type: "inbox", slug: "", username: "", tab: "messages", dm: target });
     setInboxTab("messages");
     await loadDmThreads();
     await openDmThread(target);
+  }
+
+  function syncMessageNotifSuppress() {
+    const active =
+      route &&
+      route.type === "inbox" &&
+      inboxTab === "messages" &&
+      document.visibilityState === "visible";
+    if (window.SynkPush && window.SynkPush.setViewingMessages) {
+      window.SynkPush.setViewingMessages(!!active);
+    }
+    if (active && window.SynkPush && window.SynkPush.dismissMessageNotifications) {
+      window.SynkPush.dismissMessageNotifications().catch(() => {});
+    }
   }
 
   function setInboxTab(tab) {
@@ -5981,6 +6031,19 @@ function applyViewState(data) {
     } else {
       setDmChatOpen(!!activeDmUser);
     }
+    // Keep the URL in sync so deep links + the SW can see Messages is open.
+    if (route && route.type === "inbox") {
+      const next = {
+        ...route,
+        tab: inboxTab,
+        dm: inboxTab === "messages" ? activeDmUser || route.dm || "" : "",
+      };
+      route = next;
+      try {
+        history.replaceState(next, "", routeUrl(next));
+      } catch (_) {}
+    }
+    syncMessageNotifSuppress();
   }
 
   function renderDmThreads(threads) {
@@ -6918,6 +6981,15 @@ function applyViewState(data) {
             if (localAppUpdateNotified) return;
             localAppUpdateNotified = true;
           }
+          const kind = normalizeNotifKind(note.kind);
+          // Skip DM toasts while the user is actively in Messages.
+          if (
+            (kind === "dm" || kind === "message") &&
+            window.SynkPush.isViewingMessages &&
+            window.SynkPush.isViewingMessages()
+          ) {
+            return;
+          }
           window.SynkPush.maybeLocalNotify(note);
         });
       } else {
@@ -7198,12 +7270,50 @@ function applyViewState(data) {
     }
   }
 
+  async function applyNotificationReadResult(data) {
+    if (!data || !Array.isArray(data.notifications)) return;
+    const notes = collapseAppUpdateNotes(data.notifications);
+    lastNotifications = notes;
+    renderNotifPanel(notes);
+    if (route.type === "inbox" && inboxTab === "notifications") {
+      renderInbox(notes);
+    }
+    if (typeof data.unreadCount === "number") {
+      unreadCount = data.unreadCount;
+      updateInboxBadge();
+    }
+  }
+
+  async function clearAppUpdateNotificationFromEl(el) {
+    const row = el && el.closest ? el.closest("[data-notif-id], [data-inbox-id]") : null;
+    const noteId = row
+      ? row.getAttribute("data-notif-id") || row.getAttribute("data-inbox-id") || ""
+      : "";
+    try {
+      let data;
+      if (noteId && !String(noteId).startsWith("friend-req-")) {
+        data = await communityAction({ action: "mark-read", ids: [noteId] });
+      } else {
+        data = await communityAction({
+          action: "mark-read",
+          kinds: ["app_update", "app_updated", "update"],
+        });
+      }
+      await applyNotificationReadResult(data);
+      localAppUpdateNotified = false;
+      try {
+        setNotifOpen(false);
+      } catch (_) {}
+    } catch (_) {}
+  }
+
 document.addEventListener("click", async (e) => {
     const releaseBtn = e.target.closest("[data-notif-release-notes]");
     if (releaseBtn) {
       e.preventDefault();
       e.stopPropagation();
       const version = releaseBtn.getAttribute("data-version") || "";
+      clearAppUpdateNotificationFromEl(releaseBtn).catch(() => {});
       openReleaseNotesModal(version).catch(() => {});
       return;
     }
@@ -7216,6 +7326,7 @@ document.addEventListener("click", async (e) => {
     if (refreshBtn) {
       e.preventDefault();
       e.stopPropagation();
+      await clearAppUpdateNotificationFromEl(refreshBtn);
       try {
         if (window.synkForceRefresh) window.synkForceRefresh();
         else location.reload();
@@ -7982,8 +8093,13 @@ document.addEventListener("click", async (e) => {
   const session = readSession();
   hubToken = (session && session.hubSession && session.hubSession.token) || "";
   route = parseRoute();
+  if (route.type === "inbox") {
+    inboxTab = route.tab === "messages" ? "messages" : "notifications";
+    if (route.dm) activeDmUser = String(route.dm || "").trim().toLowerCase();
+  }
   const bootUrl = routeUrl(route) + (route.type === "submit" && location.search ? location.search : "");
   history.replaceState(route, "", bootUrl);
+  syncMessageNotifSuppress();
   if (!session || !hubToken) {
     lockedCard.hidden = false;
     hideSynkBootLoader();

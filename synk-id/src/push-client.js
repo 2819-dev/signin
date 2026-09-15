@@ -89,6 +89,7 @@
       ...subscription.toJSON(),
     });
     setPref("on");
+    syncClientStateToWorker();
     return { ok: true, subscription };
   }
 
@@ -153,6 +154,7 @@
 
     try {
       await registerWorker();
+      syncClientStateToWorker();
     } catch (_) {}
 
     if (Notification.permission === "granted") {
@@ -193,6 +195,77 @@
     return { ok: false, reason: "banner" };
   }
 
+  let viewingMessages = false;
+
+  function syncClientStateToWorker() {
+    try {
+      if (!("serviceWorker" in navigator)) return;
+      const controller = navigator.serviceWorker.controller;
+      if (!controller) return;
+      const activelyViewing =
+        !!viewingMessages && document.visibilityState === "visible";
+      controller.postMessage({
+        type: "synk-client-state",
+        viewingMessages: activelyViewing,
+      });
+    } catch (_) {}
+  }
+
+  /**
+   * Tell the service worker whether this tab is actively on Messages so DM
+   * pushes can be suppressed while the user is already reading chats.
+   */
+  function setViewingMessages(active) {
+    viewingMessages = !!active;
+    syncClientStateToWorker();
+  }
+
+  function isViewingMessages() {
+    return !!viewingMessages && document.visibilityState === "visible";
+  }
+
+  async function dismissMessageNotifications() {
+    if (!supportsPush()) return false;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (!reg || typeof reg.getNotifications !== "function") return false;
+      const notes = await reg.getNotifications();
+      let closed = 0;
+      for (const note of notes) {
+        const type = String((note.data && note.data.type) || "").toLowerCase();
+        const tag = String(note.tag || "").toLowerCase();
+        if (
+          type === "dm" ||
+          type === "message" ||
+          tag.startsWith("dm-") ||
+          tag.startsWith("local-dm-") ||
+          tag.startsWith("local-message-") ||
+          tag === "synk-dm"
+        ) {
+          try {
+            note.close();
+            closed += 1;
+          } catch (_) {}
+        }
+      }
+      return closed > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  try {
+    document.addEventListener("visibilitychange", () => {
+      syncClientStateToWorker();
+    });
+    window.addEventListener("focus", () => {
+      syncClientStateToWorker();
+    });
+    window.addEventListener("blur", () => {
+      syncClientStateToWorker();
+    });
+  } catch (_) {}
+
   /**
    * Foreground fallback when permission is granted: show a local notification
    * for newly arrived inbox items (used by pollers).
@@ -201,11 +274,14 @@
     if (!supportsPush() || Notification.permission !== "granted") return;
     if (document.visibilityState === "visible") return;
     const kind = String((note && note.kind) || "").toLowerCase().replace(/-/g, "_");
+    const isDm = kind === "dm" || kind === "message";
+    // Belt-and-suspenders: never toast DMs while Messages is the active view.
+    if (isDm && viewingMessages) return;
     const actor = String((note && (note.actorUsername || note.actor)) || "Someone");
     const isAppUpdate = kind === "app_update" || kind === "app_updated" || kind === "update";
     const title = isAppUpdate
       ? "App updated"
-      : kind === "dm" || kind === "message"
+      : isDm
         ? "New message"
         : kind === "friend_request"
           ? "Friend request"
@@ -216,7 +292,7 @@
     ).slice(0, 180);
     const url = isAppUpdate
       ? "/community/inbox"
-      : kind === "dm" || kind === "message"
+      : isDm
         ? `/community/inbox?tab=messages&dm=${encodeURIComponent(actor)}`
         : "/community/inbox";
     try {
@@ -227,7 +303,7 @@
         renotify: !isAppUpdate,
         icon: "/apple-touch-icon.png",
         badge: "/apple-touch-icon.png",
-        data: { url },
+        data: { url, type: isDm ? "dm" : isAppUpdate ? "app_update" : kind || "notification" },
       });
       n.onclick = () => {
         try {
@@ -279,6 +355,10 @@
     disablePush,
     bootstrapPush,
     maybeLocalNotify,
+    setViewingMessages,
+    isViewingMessages,
+    dismissMessageNotifications,
+    syncClientStateToWorker,
     setAppBadge,
     clearAppBadge,
     watchInstallPrompt,

@@ -7,6 +7,19 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+/** clientId -> { viewingMessages: boolean } */
+const clientState = new Map();
+
+self.addEventListener("message", (event) => {
+  const data = event && event.data;
+  if (!data || data.type !== "synk-client-state") return;
+  const source = event.source;
+  if (!source || !source.id) return;
+  clientState.set(source.id, {
+    viewingMessages: !!data.viewingMessages,
+  });
+});
+
 function buildOptions(data) {
   const type = String(data.type || "notification");
   const tag = String(data.tag || (type === "dm" || type === "message" ? "synk-dm" : "synk-notification"));
@@ -35,6 +48,41 @@ function buildOptions(data) {
   };
 }
 
+function clientLooksLikeMessages(client) {
+  if (!client) return false;
+  const state = clientState.get(client.id);
+  if (state && state.viewingMessages) return true;
+  try {
+    const url = new URL(client.url);
+    if (!url.pathname.includes("/community/inbox")) return false;
+    const tab = String(url.searchParams.get("tab") || "").toLowerCase();
+    if (tab === "messages" || tab === "dms" || tab === "dm") return true;
+    if (url.searchParams.has("dm")) return true;
+  } catch (_) {}
+  return false;
+}
+
+async function shouldSuppressDmNotification() {
+  try {
+    const windows = await self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true,
+    });
+    return windows.some((client) => client.focused && clientLooksLikeMessages(client));
+  } catch (_) {
+    return false;
+  }
+}
+
+async function setBadgeFromPayload(data) {
+  try {
+    if (!(self.navigator && typeof self.navigator.setAppBadge === "function")) return;
+    const badgeCount = Number(data.badgeCount || data.badge || 1);
+    const n = Number.isFinite(badgeCount) && badgeCount > 0 ? Math.min(99, Math.round(badgeCount)) : 1;
+    await self.navigator.setAppBadge(n);
+  } catch (_) {}
+}
+
 self.addEventListener("push", (event) => {
   let data = {
     title: "Synk",
@@ -50,17 +98,21 @@ self.addEventListener("push", (event) => {
     }
   } catch (_) {}
 
+  const type = String(data.type || "notification").toLowerCase();
+  const isDm = type === "dm" || type === "message";
   const title = data.title || "Synk";
-  const badgeCount = Number(data.badgeCount || data.badge || 1);
-  event.waitUntil((async () => {
-    await self.registration.showNotification(title, buildOptions(data));
-    try {
-      if (self.navigator && typeof self.navigator.setAppBadge === "function") {
-        const n = Number.isFinite(badgeCount) && badgeCount > 0 ? Math.min(99, Math.round(badgeCount)) : 1;
-        await self.navigator.setAppBadge(n);
+
+  event.waitUntil(
+    (async () => {
+      if (isDm && (await shouldSuppressDmNotification())) {
+        // User is actively in Messages — update badge only, no toast.
+        await setBadgeFromPayload(data);
+        return;
       }
-    } catch (_) {}
-  })());
+      await self.registration.showNotification(title, buildOptions(data));
+      await setBadgeFromPayload(data);
+    })()
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {

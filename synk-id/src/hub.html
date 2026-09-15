@@ -15,15 +15,15 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v37" />
+    <link rel="stylesheet" href="/join.css?v=community-v64" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v37" defer></script>
-    <script src="/push-client.js?v=community-v37" defer></script>
+    <script src="/force-refresh.js?v=community-v64" defer></script>
+    <script src="/push-client.js?v=community-v64" defer></script>
     <script src="/image-crop.js?v=crop-v3"></script>
   
     <style>
@@ -694,7 +694,8 @@
             const meta = describeHubNotification(note);
             const unread = !note.readAt;
             const actions = renderHubNotifActions(meta);
-            return `<div class="reddit-notif-row ${unread ? "is-unread" : ""}">
+            const nid = escapeHubHtml(String(note.id || ""));
+            return `<div class="reddit-notif-row ${unread ? "is-unread" : ""}" data-hub-notif-id="${nid}">
               <div class="reddit-notif-copy">
                 <strong class="reddit-notif-title">${escapeHubHtml(meta.title)}</strong>
                 <p class="reddit-notif-desc">${escapeHubHtml(meta.description)}</p>
@@ -703,6 +704,31 @@
             </div>`;
           })
           .join("");
+      }
+
+      async function clearHubAppUpdateFromEl(el) {
+        const session = readSession();
+        if (!session) return;
+        const row = el && el.closest ? el.closest("[data-hub-notif-id]") : null;
+        const noteId = row ? row.getAttribute("data-hub-notif-id") || "" : "";
+        hubNotifSeq += 1;
+        const seq = hubNotifSeq;
+        try {
+          const payload = noteId
+            ? { action: "mark-read", ids: [noteId] }
+            : { action: "mark-read", kinds: ["app_update", "app_updated", "update"] };
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: hubHeaders(session),
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Unable to clear notification");
+          if (seq !== hubNotifSeq) return;
+          renderHubNotifications(Array.isArray(data.notifications) ? data.notifications : []);
+          setHubNotifDot(typeof data.unreadCount === "number" ? data.unreadCount : 0);
+          setHubNotifOpen(false);
+        } catch (_) {}
       }
 
 
@@ -986,7 +1012,7 @@
         if (e.key === "Escape") closeReleaseNotesModal();
       });
 
-      document.addEventListener("click", (e) => {
+      document.addEventListener("click", async (e) => {
         if (e.target.closest("[data-release-notes-close]")) {
           closeReleaseNotesModal();
           return;
@@ -995,12 +1021,14 @@
         if (notesBtn) {
           e.preventDefault();
           const version = notesBtn.getAttribute("data-version") || "";
+          clearHubAppUpdateFromEl(notesBtn).catch(() => {});
           openReleaseNotesModal(version).catch(() => {});
           return;
         }
         const refreshBtn = e.target.closest("[data-hub-notif-refresh]");
         if (refreshBtn) {
           e.preventDefault();
+          await clearHubAppUpdateFromEl(refreshBtn);
           try {
             if (window.synkForceRefresh) window.synkForceRefresh();
             else location.reload();

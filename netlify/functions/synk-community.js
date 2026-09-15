@@ -3703,6 +3703,16 @@ if (action === "create-alt") {
       const ids = Array.isArray(body.ids)
         ? body.ids.map((id) => String(id || "").trim()).filter((id) => isUuid(id))
         : [];
+      const kinds = Array.isArray(body.kinds)
+        ? body.kinds
+            .map((k) =>
+              String(k || "")
+                .trim()
+                .toLowerCase()
+                .replace(/-/g, "_")
+            )
+            .filter(Boolean)
+        : [];
       if (ids.length) {
         // Single/selected notifications: mark read (keep history).
         await sql`
@@ -3710,6 +3720,15 @@ if (action === "create-alt") {
           SET read_at = NOW()
           WHERE synk_profile_id = ${auth.profile.id}
             AND id = ANY(${ids}::uuid[])
+            AND read_at IS NULL
+        `;
+      } else if (kinds.length) {
+        // Kind-scoped clear (e.g. app_update after viewing release notes / refresh).
+        await sql`
+          UPDATE synk_community_notifications
+          SET read_at = NOW()
+          WHERE synk_profile_id = ${auth.profile.id}
+            AND lower(replace(kind, '-', '_')) = ANY(${kinds}::text[])
             AND read_at IS NULL
         `;
       } else {
