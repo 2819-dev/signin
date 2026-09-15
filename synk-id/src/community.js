@@ -1069,8 +1069,10 @@
     const tab = onSearch ? String(route.tab || "all") : "all";
     const postCount = Array.isArray(lastPosts) ? lastPosts.filter((p) => p && !p.hidden).length : 0;
     const onHomeLike = route.type === "home" || route.type === "popular";
+    const inHub = document.body.classList.contains("is-discord-group") || inDiscordHub(activeGroupDetail);
     if (sortHost) {
-      if (onSearch) sortHost.hidden = tab !== "all" && tab !== "popular";
+      if (inHub) sortHost.hidden = true;
+      else if (onSearch) sortHost.hidden = tab !== "all" && tab !== "popular";
       else if (onHomeLike && postCount === 0) sortHost.hidden = true;
       else if (route.type === "groups" || route.type === "inbox" || route.type === "settings" || route.type === "submit" || route.type === "mod") sortHost.hidden = true;
       else sortHost.hidden = false;
@@ -2363,7 +2365,7 @@
           : "";
         const replyLabel = support ? "Staff update" : "Staff";
         return `
-          <article class="forum-thread ${support ? "is-ticket" : "is-suggestion is-no-votes"} ${post.isPinned ? "is-pinned" : ""} is-${escapeHtml(status)}" data-post-id="${pid}">
+          <article class="forum-thread ${support ? "is-ticket" : "is-suggestion is-no-votes"} ${post.isPinned ? "is-pinned" : ""} ${side ? "" : "is-single"} is-${escapeHtml(status)}" data-post-id="${pid}">
             ${side}
             <a class="forum-thread-main" href="/community/post/${pid}" data-open-post="${pid}">
               <div class="forum-thread-top">
@@ -2467,7 +2469,7 @@
               <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="open" data-post-id="${pid}">Reopen</button>
             </div>`
           : "";
-        const discordHub = inDiscordHub(post.group || activeGroupDetail);
+        const discordHub = !!(document.body.classList.contains("is-discord-group") || inDiscordHub(post.group || activeGroupDetail));
         const sideRail = discordHub
           ? authorAvatarSide(author)
           : `<div class="reddit-vote" aria-label="Vote">
@@ -2617,7 +2619,7 @@
       : reply
         ? `<div class="forum-staff-reply"><strong>${isTicket ? "Staff update" : "Staff"}:</strong> ${escapeHtml(reply)}</div>`
         : "";
-    const discordHub = inDiscordHub(group);
+    const discordHub = !!(document.body.classList.contains("is-discord-group") || inDiscordHub(group));
     const detailSide = isTicket
       ? `<div class="forum-thread-ticket-id is-detail" aria-label="Ticket ${escapeHtml(ticketNo)}"><span class="forum-ticket-hash">#</span><span class="forum-ticket-code">${escapeHtml(ticketNo)}</span></div>`
       : discordHub
@@ -2673,7 +2675,7 @@
       return;
     }
     if (empty) empty.hidden = true;
-    const discordHub = inDiscordHub((activePost && activePost.group) || activeGroupDetail);
+    const discordHub = !!(document.body.classList.contains("is-discord-group") || inDiscordHub((activePost && activePost.group) || activeGroupDetail));
     list.innerHTML = lastComments
       .map((comment) => {
         const author = comment.author || {};
@@ -3347,6 +3349,8 @@
       return;
     }
     document.body.classList.add("is-discord-group");
+    try { syncFeedChrome(); } catch (_) {}
+
     shell.hidden = false;
     mountFeedStack(true);
     syncSynkChannelsForViewport();

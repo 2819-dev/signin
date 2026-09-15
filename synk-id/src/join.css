@@ -16155,3 +16155,201 @@ body.community-body.is-discord-group .synk-hub-forum-create {
 body.community-body.is-discord-group .synk-hub-forum-create[hidden] {
   display: none !important;
 }
+
+/* SYNK_HUB_BUGFIX_V63
+   Bug fixes only: collapse dead vote columns, stop Reddit chrome bleed,
+   and repair mobile overflow in the official Synk hub. */
+body.community-body.is-discord-group #sort-tabs,
+body.community-body.is-discord-group .reddit-sortbar.reddit-sortbar-pills,
+body.community-body.is-discord-group #page-head {
+  display: none !important;
+}
+
+/* Never leave an empty vote gutter in the hub */
+body.community-body.is-discord-group .reddit-post > .reddit-vote,
+body.community-body.is-discord-group .reddit-comment > .reddit-vote,
+body.community-body.is-discord-group .forum-thread-votes {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+body.community-body.is-discord-group .reddit-post,
+body.community-body.is-discord-group .reddit-post.is-hub-msg,
+body.community-body.is-discord-group .reddit-comment.is-hub-msg {
+  display: grid !important;
+  grid-template-columns: 40px minmax(0, 1fr) !important;
+  gap: 10px !important;
+  align-items: start !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--synk-hub-line, #d4d7dc) 70%, transparent) !important;
+  box-shadow: none !important;
+  padding: 10px 8px !important;
+  margin: 0 !important;
+}
+
+/* If a post somehow still has a hidden vote node and no avatar, don't reserve the column */
+body.community-body.is-discord-group .reddit-post:not(:has(> .synk-hub-msg-avatar)):not(:has(> .forum-thread-ticket-id)) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+body.community-body.is-discord-group .reddit-post:has(> .reddit-vote):not(:has(> .synk-hub-msg-avatar)) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+body.community-body.is-discord-group .synk-hub-msg-avatar {
+  width: 40px;
+  height: 40px;
+  padding: 0 !important;
+}
+body.community-body.is-discord-group .community-face.is-hub-msg {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+}
+body.community-body.is-discord-group .reddit-post-main,
+body.community-body.is-discord-group .reddit-comment-main,
+body.community-body.is-discord-group .forum-thread-main {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+body.community-body.is-discord-group .reddit-post-meta,
+body.community-body.is-discord-group .reddit-post-actions,
+body.community-body.is-discord-group .synk-hub-msg-title,
+body.community-body.is-discord-group .synk-hub-msg-body {
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+}
+body.community-body.is-discord-group .synk-hub-msg-body {
+  white-space: pre-wrap;
+}
+
+/* Suggestions: no empty left rail */
+body.community-body.is-discord-group .forum-thread.is-suggestion,
+body.community-body.is-discord-group .forum-thread.is-no-votes,
+body.community-body.is-discord-group .forum-thread.is-single {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+body.community-body.is-discord-group .forum-thread.is-ticket {
+  grid-template-columns: 56px minmax(0, 1fr) !important;
+}
+body.community-body.is-discord-group .forum-thread {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+body.community-body.is-discord-group .forum-filter-bar {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+
+/* Keep hub shell from horizontal overflow */
+body.community-body.is-discord-group,
+body.community-body.is-discord-group #community-main,
+body.community-body.is-discord-group .community-layout,
+body.community-body.is-discord-group .reddit-layout,
+body.community-body.is-discord-group .community-main-col,
+body.community-body.is-discord-group .reddit-main {
+  overflow-x: hidden !important;
+  max-width: 100vw !important;
+}
+body.community-body.is-discord-group .discord-shell,
+body.community-body.is-discord-group .synk-hub {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+body.community-body.is-discord-group .synk-hub-main,
+body.community-body.is-discord-group .discord-main,
+body.community-body.is-discord-group .synk-hub-feed,
+body.community-body.is-discord-group #discord-feed-slot,
+body.community-body.is-discord-group .feed-stack,
+body.community-body.is-discord-group #feed {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+@media (max-width: 767px) {
+  body.community-body.is-discord-group .discord-shell,
+  body.community-body.is-discord-group .synk-hub {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    height: calc(100dvh - 56px) !important;
+    min-height: calc(100dvh - 56px) !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+  }
+  body.community-body.is-discord-group .synk-hub-main,
+  body.community-body.is-discord-group .discord-main {
+    height: 100% !important;
+    min-height: 0 !important;
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+  }
+  body.community-body.is-discord-group .synk-hub-channel-hero {
+    display: none !important; /* saves vertical space; header already explains channel */
+  }
+  body.community-body.is-discord-group .synk-hub-feed,
+  body.community-body.is-discord-group #discord-feed-slot {
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 10px calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body.community-body.is-discord-group .feed-stack {
+    padding: 0 !important;
+    gap: 8px !important;
+  }
+  body.community-body.is-discord-group .reddit-post,
+  body.community-body.is-discord-group .reddit-post.is-hub-msg,
+  body.community-body.is-discord-group .reddit-comment.is-hub-msg {
+    grid-template-columns: 32px minmax(0, 1fr) !important;
+    gap: 8px !important;
+    padding: 10px 2px !important;
+  }
+  body.community-body.is-discord-group .synk-hub-msg-avatar,
+  body.community-body.is-discord-group .community-face.is-hub-msg {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  body.community-body.is-discord-group .forum-thread.is-ticket {
+    grid-template-columns: 48px minmax(0, 1fr) !important;
+  }
+  body.community-body.is-discord-group .forum-thread.is-suggestion,
+  body.community-body.is-discord-group .forum-thread.is-no-votes,
+  body.community-body.is-discord-group .forum-thread.is-single {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body.community-body.is-discord-group .reddit-create,
+  body.community-body.is-discord-group #composer-card {
+    margin: 0 !important;
+    border-radius: 12px !important;
+  }
+  body.community-body.is-discord-group .synk-hub-head {
+    padding: 10px 12px !important;
+  }
+  body.community-body.is-discord-group .synk-hub-desc,
+  body.community-body.is-discord-group .synk-hub-hint,
+  body.community-body.is-discord-group #discord-channel-desc,
+  body.community-body.is-discord-group #discord-channel-hint {
+    display: none !important;
+  }
+}
