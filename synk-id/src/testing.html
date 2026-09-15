@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6f8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Synk early access testing console." />
+    <title>Synk — Testing</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
+    <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
+    <script src="/theme.js?v=theme1"></script>
+    <link rel="stylesheet" href="/join.css?v=community-v51" />
+    <script src="/session.js?v=stay-v1"></script>
+    <script src="/force-refresh.js?v=community-v51" defer></script>
+    <script src="/push-client.js?v=community-v51" defer></script>
+  </head>
+  <body class="testing-page testing-melonly">
+    <div class="tm-app">
+      <aside class="tm-sidebar" aria-label="Testing navigation">
+        <a class="tm-brand" href="/hub">
+          <img src="/synk-logo.svg?v=circles2" alt="" width="28" height="28" />
+          <span>
+            <strong>Testing</strong>
+            <small>Early access</small>
+          </span>
+        </a>
+
+        <nav class="tm-nav" aria-label="Sections">
+          <button class="tm-nav-btn is-active" type="button" data-tab="overview">Overview</button>
+          <button class="tm-nav-btn" type="button" data-tab="session">Session</button>
+          <button class="tm-nav-btn" type="button" data-tab="checklist">
+            Checklist
+            <span class="tm-count" id="checklist-count" hidden>0</span>
+          </button>
+          <button class="tm-nav-btn" type="button" data-tab="feedback">Feedback</button>
+        </nav>
+
+        <div class="tm-sidebar-foot">
+          <div class="tm-chip" id="session-chip">
+            <span class="tm-chip-dot" aria-hidden="true"></span>
+            <div>
+              <strong id="chip-label">Offline</strong>
+              <small id="chip-meta">Not in a session</small>
+            </div>
+          </div>
+          <a class="tm-link" href="/hub">← Hub</a>
+          <a class="tm-link" href="/community">Community</a>
+        </div>
+      </aside>
+
+      <div class="tm-main">
+        <header class="tm-topbar">
+          <div>
+            <p class="tm-kicker">Early access console</p>
+            <h1 id="page-title">Overview</h1>
+          </div>
+          <div class="tm-top-actions">
+            <div class="tm-clock" aria-live="polite">
+              <span>Local</span>
+              <strong id="live-time">—</strong>
+            </div>
+            <button class="btn btn-primary btn-compact" type="button" id="start-btn">Start session</button>
+            <button class="btn btn-secondary btn-compact" type="button" id="end-btn" hidden>End session</button>
+          </div>
+        </header>
+
+        <section class="card tm-gate" id="locked" hidden>
+          <p class="section-label">Session</p>
+          <h2>Sign in to open Testing</h2>
+          <p class="muted">This console is for members with the Beta tester tag.</p>
+          <div class="btn-row" style="margin-top:14px;">
+            <a class="btn btn-primary" href="/verify?autostart=1">Sign in</a>
+            <a class="btn btn-secondary" href="/hub">Back to hub</a>
+          </div>
+        </section>
+
+        <section class="card tm-gate" id="denied" hidden>
+          <p class="section-label">Access</p>
+          <h2>Beta testers only</h2>
+          <p class="muted">If you were invited to test, ask an owner to assign the Beta tester tag.</p>
+          <div class="btn-row" style="margin-top:14px;">
+            <a class="btn btn-secondary" href="/hub">Back to hub</a>
+          </div>
+        </section>
+
+        <section class="tm-workspace" id="workspace" hidden>
+          <p class="tm-status" id="status" role="status">Loading…</p>
+
+          <section class="tm-panel is-active" data-panel="overview">
+            <div class="tm-grid tm-grid-hero">
+              <article class="tm-card tm-card-accent">
+                <div class="tm-card-head">
+                  <div>
+                    <p class="tm-label">Live session</p>
+                    <h2 id="overview-title">Not started</h2>
+                  </div>
+                  <span class="tm-pill" id="overview-pill">Offline</span>
+                </div>
+                <p class="muted" id="overview-copy">
+                  Start a session to unlock the checklist and begin reviewing the current update.
+                </p>
+                <div class="tm-stats">
+                  <div>
+                    <span>Started</span>
+                    <strong id="overview-started">—</strong>
+                  </div>
+                  <div>
+                    <span>Update</span>
+                    <strong id="overview-version">—</strong>
+                  </div>
+                </div>
+              </article>
+
+              <article class="tm-card">
+                <div class="tm-card-head">
+                  <div>
+                    <p class="tm-label">Progress</p>
+                    <h2>Current update</h2>
+                  </div>
+                </div>
+                <div class="tm-progress">
+                  <div class="tm-ring" id="progress-ring" style="--tm-progress:0">
+                    <strong id="progress-pct">0%</strong>
+                  </div>
+                  <div>
+                    <p id="progress-label">Loading update status…</p>
+                    <p class="muted" id="progress-sub">Checklist completion for this release.</p>
+                    <button class="btn btn-primary btn-compact" type="button" id="complete-btn" hidden>
+                      Mark update complete
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div class="tm-grid tm-grid-two">
+              <article class="tm-card">
+                <div class="tm-card-head"><h2>Quick actions</h2></div>
+                <div class="tm-actions">
+                  <button class="tm-action" type="button" data-jump="session">
+                    <strong>Manage session</strong>
+                    <span>Start or end your review session</span>
+                  </button>
+                  <button class="tm-action" type="button" data-jump="checklist">
+                    <strong>Open checklist</strong>
+                    <span>Work through this update’s items</span>
+                  </button>
+                  <button class="tm-action" type="button" data-jump="feedback">
+                    <strong>Send feedback</strong>
+                    <span>Report bugs or note improvements</span>
+                  </button>
+                </div>
+              </article>
+
+              <article class="tm-card">
+                <div class="tm-card-head">
+                  <h2>Checklist snapshot</h2>
+                  <button class="tm-text-btn" type="button" data-jump="checklist">View all</button>
+                </div>
+                <div id="overview-agenda" class="tm-list"></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="tm-panel" data-panel="session" hidden>
+            <article class="tm-card">
+              <div class="tm-card-head">
+                <div>
+                  <p class="tm-label">Controls</p>
+                  <h2>Session desk</h2>
+                </div>
+                <span class="tm-pill" id="session-pill">Offline</span>
+              </div>
+              <p class="muted" id="session-copy">
+                Sessions keep checklist actions locked until you are actively reviewing.
+              </p>
+              <div class="btn-row" style="margin:14px 0;">
+                <button class="btn btn-primary" type="button" id="session-start-btn">Start session</button>
+                <button class="btn btn-secondary" type="button" id="session-end-btn" hidden>End session</button>
+              </div>
+              <dl class="tm-meta">
+                <div><dt>Status</dt><dd id="session-status">Inactive</dd></div>
+                <div><dt>Started at</dt><dd id="session-started">—</dd></div>
+                <div><dt>Current update</dt><dd id="session-version">—</dd></div>
+                <div><dt>Next update</dt><dd id="session-next">—</dd></div>
+              </dl>
+            </article>
+          </section>
+
+          <section class="tm-panel" data-panel="checklist" hidden>
+            <article class="tm-card">
+              <div class="tm-card-head">
+                <div>
+                  <p class="tm-label">Agenda</p>
+                  <h2>Review checklist</h2>
+                  <p class="muted" id="agenda-copy">Items to verify for the update currently in early access.</p>
+                </div>
+                <button class="btn btn-primary btn-compact" type="button" id="complete-btn-2" hidden>
+                  Mark complete
+                </button>
+              </div>
+              <div id="agenda" class="tm-list" aria-live="polite"></div>
+            </article>
+          </section>
+
+          <section class="tm-panel" data-panel="feedback" hidden>
+            <div class="tm-grid tm-grid-two">
+              <article class="tm-card">
+                <div class="tm-card-head">
+                  <div>
+                    <p class="tm-label">Compose</p>
+                    <h2>Start a conversation</h2>
+                  </div>
+                </div>
+                <p class="muted">Share bugs, improvements, or anything unclear. Staff can reply here in chat.</p>
+                <form id="feedback-form" class="form">
+                  <div class="field">
+                    <label for="feedback-body">Your note</label>
+                    <textarea id="feedback-body" rows="5" maxlength="2000" required placeholder="The new sidebar felt clearer, but the top bar still jumps on iPhone…"></textarea>
+                  </div>
+                  <p id="feedback-status" class="muted" style="font-size:0.85rem;"></p>
+                  <button class="btn btn-primary btn-compact" type="submit">Send feedback</button>
+                </form>
+              </article>
+              <article class="tm-card">
+                <div class="tm-card-head"><h2>Conversations</h2></div>
+                <div id="feedback-list" class="tm-feedback-list" aria-live="polite"></div>
+              </article>
+            </div>
+          </section>
+        </section>
+      </div>
+    </div>
+
+    <nav class="tm-mobile-nav" aria-label="Testing tabs">
+      <button class="tm-mobile-btn is-active" type="button" data-tab="overview">Overview</button>
+      <button class="tm-mobile-btn" type="button" data-tab="session">Session</button>
+      <button class="tm-mobile-btn" type="button" data-tab="checklist">Checklist</button>
+      <button class="tm-mobile-btn" type="button" data-tab="feedback">Feedback</button>
+    </nav>
+
+    <script>
+      const STORAGE_KEY = "synk_member_session";
+      const TITLES = {
+        overview: "Overview",
+        session: "Session",
+        checklist: "Checklist",
+        feedback: "Feedback",
+      };
+
+      const ui = {
+        locked: document.getElementById("locked"),
+        denied: document.getElementById("denied"),
+        workspace: document.getElementById("workspace"),
+        status: document.getElementById("status"),
+        pageTitle: document.getElementById("page-title"),
+        liveTime: document.getElementById("live-time"),
+        startBtn: document.getElementById("start-btn"),
+        endBtn: document.getElementById("end-btn"),
+        sessionStartBtn: document.getElementById("session-start-btn"),
+        sessionEndBtn: document.getElementById("session-end-btn"),
+        completeBtn: document.getElementById("complete-btn"),
+        completeBtn2: document.getElementById("complete-btn-2"),
+        agenda: document.getElementById("agenda"),
+        agendaCopy: document.getElementById("agenda-copy"),
+        overviewAgenda: document.getElementById("overview-agenda"),
+        feedbackForm: document.getElementById("feedback-form"),
+        feedbackBody: document.getElementById("feedback-body"),
+        feedbackStatus: document.getElementById("feedback-status"),
+        feedbackList: document.getElementById("feedback-list"),
+        checklistCount: document.getElementById("checklist-count"),
+        sessionChip: document.getElementById("session-chip"),
+        chipLabel: document.getElementById("chip-label"),
+        chipMeta: document.getElementById("chip-meta"),
+      };
+
+      let state = {
+        tab: "overview",
+        clock: { clockedIn: false },
+        progress: {},
+        agenda: [],
+        feedback: [],
+      };
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function cleanDetail(detail) {
+        return String(detail || "")
+          .replace(/<!--\s*synk-update:[^>]*-->/gi, "")
+          .trim();
+      }
+
+      function shortVersion(ver) {
+        const value = String(ver || "").trim();
+        if (!value) return "";
+        return value.length > 10 ? value.slice(0, 7) : value;
+      }
+
+      function readSession() {
+        if (window.SynkSession) return window.SynkSession.readSession();
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          const data = JSON.parse(raw);
+          if (!data || !data.hubSession || !data.hubSession.token) return null;
+          const expiresAt = Number(data.expiresAt) || 0;
+          if (expiresAt && Date.now() > expiresAt) return null;
+          return data;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function hubHeaders() {
+        const session = readSession();
+        return {
+          "Content-Type": "application/json",
+          "X-Synk-Hub-Session": session.hubSession.token,
+        };
+      }
+
+      function setTab(tab) {
+        const next = TITLES[tab] ? tab : "overview";
+        state.tab = next;
+        ui.pageTitle.textContent = TITLES[next];
+        document.querySelectorAll("[data-tab]").forEach((btn) => {
+          btn.classList.toggle("is-active", btn.getAttribute("data-tab") === next);
+        });
+        document.querySelectorAll("[data-panel]").forEach((panel) => {
+          const active = panel.getAttribute("data-panel") === next;
+          panel.hidden = !active;
+          panel.classList.toggle("is-active", active);
+        });
+      }
+
+      function tickClock() {
+        ui.liveTime.textContent = new Date().toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        });
+      }
+
+      function setSessionButtons(on) {
+        ui.startBtn.hidden = on;
+        ui.endBtn.hidden = !on;
+        ui.sessionStartBtn.hidden = on;
+        ui.sessionEndBtn.hidden = !on;
+        document.body.classList.toggle("tm-on-session", on);
+        ui.sessionChip.classList.toggle("is-on", on);
+      }
+
+      function renderSession(clock, progress) {
+        const on = !!(clock && clock.clockedIn);
+        setSessionButtons(on);
+        const started = on && clock.clockedInAt ? new Date(clock.clockedInAt).toLocaleString() : "—";
+        const version = shortVersion(progress && progress.currentVersion) || "None";
+        const next = shortVersion(progress && progress.nextVersion) || "None";
+
+        ui.chipLabel.textContent = on ? "In session" : "Offline";
+        ui.chipMeta.textContent = on ? `Started ${started}` : "Not in a session";
+
+        const overviewPill = document.getElementById("overview-pill");
+        overviewPill.textContent = on ? "Live" : "Offline";
+        overviewPill.classList.toggle("is-on", on);
+        document.getElementById("overview-title").textContent = on ? "Session active" : "Not started";
+        document.getElementById("overview-copy").textContent = on
+          ? "You’re reviewing this update. Work the checklist, send feedback, then mark the update complete."
+          : "Start a session to unlock the checklist and begin reviewing the current update.";
+        document.getElementById("overview-started").textContent = started;
+        document.getElementById("overview-version").textContent = version;
+
+        const sessionPill = document.getElementById("session-pill");
+        sessionPill.textContent = on ? "Live" : "Offline";
+        sessionPill.classList.toggle("is-on", on);
+        document.getElementById("session-copy").textContent = on
+          ? "Your session is active. Checklist items are unlocked while you review."
+          : "Sessions keep checklist actions locked until you are actively reviewing.";
+        document.getElementById("session-status").textContent = on ? "Active" : "Inactive";
+        document.getElementById("session-started").textContent = started;
+        document.getElementById("session-version").textContent = version;
+        document.getElementById("session-next").textContent = next;
+      }
+
+      function renderProgress(progress) {
+        const current = progress && progress.currentVersion;
+        const next = progress && progress.nextVersion;
+        const caughtUp = !!(progress && progress.caughtUp);
+        const done = Number(progress && progress.updateDoneCount) || 0;
+        const total = Number(progress && progress.updateItemCount) || 0;
+        const pct = total > 0 ? Math.round((done / total) * 100) : caughtUp ? 100 : 0;
+
+        document.getElementById("progress-ring").style.setProperty("--tm-progress", String(pct));
+        document.getElementById("progress-pct").textContent = `${pct}%`;
+
+        const canComplete = !!(progress && progress.canCompleteAgenda);
+        ui.completeBtn.hidden = !canComplete;
+        ui.completeBtn2.hidden = !canComplete;
+
+        if (caughtUp && !current) {
+          document.getElementById("progress-label").textContent =
+            "You’re caught up. No active update checklist right now.";
+          document.getElementById("progress-sub").textContent =
+            "When the next update ships, it will show up here automatically.";
+          ui.agendaCopy.textContent =
+            "Nothing is queued right now. Checklist items appear when staff publish them.";
+          return;
+        }
+
+        const verLabel = shortVersion(current) || "current update";
+        document.getElementById("progress-label").textContent = total
+          ? `Update ${verLabel} — ${done} of ${total} complete`
+          : `Update ${verLabel} is ready for review`;
+        document.getElementById("progress-sub").textContent = next
+          ? `Up next: ${shortVersion(next)}`
+          : "Finish this checklist to stay current.";
+        ui.agendaCopy.textContent =
+          "Work through these items, then mark the update complete to continue.";
+      }
+
+      function agendaItemHtml(item, on, compact) {
+        const detail = cleanDetail(item.detail);
+        return `
+          <label class="tm-item ${item.done ? "is-done" : ""} ${on ? "" : "is-locked"} ${compact ? "is-compact" : ""}">
+            <input type="checkbox" data-agenda-id="${escapeHtml(item.id)}" ${item.done ? "checked" : ""} ${on ? "" : "disabled"} />
+            <span>
+              <strong>${escapeHtml(item.title)}</strong>
+              ${!compact && detail ? `<small class="muted">${escapeHtml(detail)}</small>` : ""}
+            </span>
+          </label>`;
+      }
+
+      function renderAgenda(items, on) {
+        const pending = items.filter((item) => !item.done).length;
+        ui.checklistCount.hidden = pending <= 0;
+        ui.checklistCount.textContent = String(pending);
+
+        if (!items.length) {
+          const empty = `
+            <div class="tm-empty">
+              <strong>Checklist is clear</strong>
+              <p class="muted">Nothing is queued yet. Check back after the next update.</p>
+            </div>`;
+          ui.agenda.innerHTML = empty;
+          ui.overviewAgenda.innerHTML = empty;
+          return;
+        }
+
+        ui.agenda.innerHTML = items.map((item) => agendaItemHtml(item, on, false)).join("");
+        ui.overviewAgenda.innerHTML = items
+          .slice(0, 4)
+          .map((item) => agendaItemHtml(item, on, true))
+          .join("");
+      }
+
+      function renderFeedback(items) {
+        if (!items.length) {
+          ui.feedbackList.innerHTML = '<p class="muted">No conversations yet. Send a note to start one.</p>';
+          return;
+        }
+        ui.feedbackList.innerHTML = items
+          .map((thread) => {
+            const when = thread.updatedAt || thread.createdAt
+              ? new Date(thread.updatedAt || thread.createdAt).toLocaleString()
+              : "";
+            const messages = Array.isArray(thread.messages) && thread.messages.length
+              ? thread.messages
+              : [{ body: thread.body, isMine: true, isStaff: false, createdAt: thread.createdAt }];
+            const bubbles = messages
+              .map((m) => {
+                const mine = !!m.isMine;
+                const label = m.isStaff ? "Staff" : mine ? "You" : (m.authorDisplayName || m.authorUsername || "Member");
+                const stamp = m.createdAt ? new Date(m.createdAt).toLocaleString() : "";
+                return `
+                  <div class="tm-fb-msg ${mine ? "is-mine" : "is-theirs"}">
+                    <div class="tm-fb-bubble">
+                      <span class="tm-fb-who">${escapeHtml(label)}</span>
+                      <p>${escapeHtml(m.body)}</p>
+                      ${stamp ? `<time class="muted">${escapeHtml(stamp)}</time>` : ""}
+                    </div>
+                  </div>`;
+              })
+              .join("");
+            return `
+              <div class="tm-feedback tm-feedback-thread" data-thread-id="${escapeHtml(thread.id)}">
+                <div class="tm-feedback-meta muted">Updated ${escapeHtml(when || "—")}</div>
+                <div class="tm-fb-chat">${bubbles}</div>
+                <form class="tm-fb-reply form" data-reply-thread="${escapeHtml(thread.id)}">
+                  <div class="field">
+                    <label class="sr-only" for="reply-${escapeHtml(thread.id)}">Reply</label>
+                    <textarea id="reply-${escapeHtml(thread.id)}" rows="2" maxlength="2000" required placeholder="Reply to staff…"></textarea>
+                  </div>
+                  <div class="tm-fb-reply-row">
+                    <p class="muted tm-fb-reply-status" aria-live="polite"></p>
+                    <button class="btn btn-secondary btn-compact" type="submit">Reply</button>
+                  </div>
+                </form>
+              </div>`;
+          })
+          .join("");
+      }
+
+      async function postAction(action, payload) {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({ action, ...(payload || {}) }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        return data;
+      }
+
+      async function loadDashboard() {
+        const session = readSession();
+        ui.locked.hidden = !!session;
+        ui.denied.hidden = true;
+        ui.workspace.hidden = !session;
+        if (!session) return;
+
+        ui.status.textContent = "Loading console…";
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: hubHeaders(),
+            body: JSON.stringify({ action: "beta-dashboard" }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.status === 403) {
+            ui.workspace.hidden = true;
+            ui.denied.hidden = false;
+            return;
+          }
+          if (!res.ok) throw new Error(data.error || "Could not load testing");
+
+          state.clock = data.clock || { clockedIn: false };
+          state.progress = data.progress || {};
+          state.agenda = data.agenda || [];
+          state.feedback = data.feedback || [];
+
+          ui.status.textContent = "Early access console";
+          try {
+            if (window.SynkPush && session.hubSession && session.hubSession.token) {
+              const headers = {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + session.hubSession.token,
+              };
+              window.SynkPush.bootstrapPush(headers, { offerBanner: true }).catch(() => {});
+              if (window.SynkPush.watchInstallPrompt) {
+                window.SynkPush.watchInstallPrompt(() => headers);
+              }
+            }
+          } catch (_) {}
+
+          renderSession(state.clock, state.progress);
+          renderProgress(state.progress);
+          renderAgenda(state.agenda, !!(state.clock && state.clock.clockedIn));
+          renderFeedback(state.feedback);
+        } catch (err) {
+          ui.status.textContent = err.message || "Could not load testing";
+        }
+      }
+
+      async function startSession() {
+        ui.startBtn.disabled = true;
+        ui.sessionStartBtn.disabled = true;
+        try {
+          await postAction("beta-clock-in");
+          await loadDashboard();
+          setTab("checklist");
+        } catch (err) {
+          ui.status.textContent = err.message || "Could not start session";
+        } finally {
+          ui.startBtn.disabled = false;
+          ui.sessionStartBtn.disabled = false;
+        }
+      }
+
+      async function endSession() {
+        ui.endBtn.disabled = true;
+        ui.sessionEndBtn.disabled = true;
+        try {
+          await postAction("beta-clock-out");
+          await loadDashboard();
+        } catch (err) {
+          ui.status.textContent = err.message || "Could not end session";
+        } finally {
+          ui.endBtn.disabled = false;
+          ui.sessionEndBtn.disabled = false;
+        }
+      }
+
+      async function completeUpdate() {
+        if (!confirm("Mark this update complete and move to the next one?")) return;
+        ui.completeBtn.disabled = true;
+        ui.completeBtn2.disabled = true;
+        try {
+          const data = await postAction("beta-complete-agenda");
+          if (data.caughtUp) ui.status.textContent = "Update complete — you’re caught up for now.";
+          else if (data.nextVersion)
+            ui.status.textContent = `Update complete — now reviewing ${shortVersion(data.nextVersion)}.`;
+          else ui.status.textContent = "Update complete.";
+          await loadDashboard();
+        } catch (err) {
+          ui.status.textContent = err.message || "Could not complete update";
+        } finally {
+          ui.completeBtn.disabled = false;
+          ui.completeBtn2.disabled = false;
+        }
+      }
+
+      async function onAgendaChange(e) {
+        const input = e.target.closest("[data-agenda-id]");
+        if (!input) return;
+        const itemId = input.getAttribute("data-agenda-id");
+        const done = !!input.checked;
+        input.disabled = true;
+        try {
+          await postAction("beta-toggle-agenda", { itemId, done });
+          const row = input.closest(".tm-item");
+          if (row) row.classList.toggle("is-done", done);
+          await loadDashboard();
+        } catch (err) {
+          input.checked = !done;
+          ui.status.textContent = err.message || "Could not update checklist";
+        } finally {
+          input.disabled = !(state.clock && state.clock.clockedIn);
+        }
+      }
+
+      document.querySelectorAll("[data-tab]").forEach((btn) => {
+        btn.addEventListener("click", () => setTab(btn.getAttribute("data-tab")));
+      });
+      document.querySelectorAll("[data-jump]").forEach((btn) => {
+        btn.addEventListener("click", () => setTab(btn.getAttribute("data-jump")));
+      });
+      ui.startBtn.addEventListener("click", startSession);
+      ui.sessionStartBtn.addEventListener("click", startSession);
+      ui.endBtn.addEventListener("click", endSession);
+      ui.sessionEndBtn.addEventListener("click", endSession);
+      ui.completeBtn.addEventListener("click", completeUpdate);
+      ui.completeBtn2.addEventListener("click", completeUpdate);
+      ui.agenda.addEventListener("change", onAgendaChange);
+      ui.overviewAgenda.addEventListener("change", onAgendaChange);
+      ui.feedbackForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        ui.feedbackStatus.textContent = "Sending…";
+        try {
+          await postAction("beta-send-feedback", { body: ui.feedbackBody.value });
+          ui.feedbackBody.value = "";
+          ui.feedbackStatus.textContent = "Sent — thank you";
+          await loadDashboard();
+          setTab("feedback");
+        } catch (err) {
+          ui.feedbackStatus.textContent = err.message || "Could not send";
+        }
+      });
+
+      ui.feedbackList.addEventListener("submit", async (e) => {
+        const form = e.target.closest("form[data-reply-thread]");
+        if (!form) return;
+        e.preventDefault();
+        const threadId = form.getAttribute("data-reply-thread");
+        const textarea = form.querySelector("textarea");
+        const status = form.querySelector(".tm-fb-reply-status");
+        const btn = form.querySelector('button[type="submit"]');
+        if (!threadId || !textarea) return;
+        const body = textarea.value;
+        if (status) status.textContent = "Sending…";
+        if (btn) btn.disabled = true;
+        try {
+          await postAction("beta-reply-feedback", { threadId, body });
+          textarea.value = "";
+          if (status) status.textContent = "Sent";
+          await loadDashboard();
+          setTab("feedback");
+        } catch (err) {
+          if (status) status.textContent = err.message || "Could not reply";
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      });
+
+      tickClock();
+      setInterval(tickClock, 30000);
+      setTab("overview");
+      loadDashboard();
+    </script>
+    <script src="/support-chat.js?v=support4" defer></script>
+  </body>
+</html>

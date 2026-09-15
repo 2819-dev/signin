@@ -50,11 +50,19 @@ exports.handler = async (event) => {
     const store = getStore("kiosk-media");
     const id = randomUUID();
     const key = `synk-${id}`;
+    const purpose = String(body.purpose || "").trim().toLowerCase();
+    const makePublic =
+      body.public === true ||
+      purpose === "public" ||
+      purpose === "place-logo" ||
+      purpose === "place";
     await store.set(key, buffer, {
       metadata: {
         contentType,
         updatedAt: new Date().toISOString(),
         fileName: String(body.fileName || "").slice(0, 120),
+        purpose: purpose || (makePublic ? "place-logo" : ""),
+        access: makePublic ? "public" : "private",
       },
     });
 
@@ -63,6 +71,7 @@ exports.handler = async (event) => {
       url: `/api/synk-image?id=${encodeURIComponent(id)}&v=${Date.now()}`,
       contentType,
       bytes: buffer.length,
+      public: makePublic,
     });
   } catch (err) {
     console.error(err);

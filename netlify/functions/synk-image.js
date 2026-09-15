@@ -1,8 +1,32 @@
 "use strict";
 
 const { getStore, connectLambda } = require("@netlify/blobs");
-const { json, requireSynkAdmin } = require("./lib/db");
+const { getSql, json, requireSynkAdmin } = require("./lib/db");
 const { verifyMediaToken } = require("./lib/synk-admin-auth");
+
+async function isPlaceLogo(id) {
+  try {
+    const sql = getSql();
+    const needle = `%id=${id}%`;
+    const rows = await sql`
+      SELECT 1
+      FROM synk_places
+      WHERE logo_url ILIKE ${needle}
+      LIMIT 1
+    `;
+    return Boolean(rows[0]);
+  } catch (err) {
+    console.error("place logo lookup failed", err);
+    return false;
+  }
+}
+
+function isPublicMetadata(metadata) {
+  if (!metadata || typeof metadata !== "object") return false;
+  const access = String(metadata.access || "").toLowerCase();
+  const purpose = String(metadata.purpose || "").toLowerCase();
+  return access === "public" || purpose === "place-logo" || purpose === "public";
+}
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
@@ -18,19 +42,6 @@ exports.handler = async (event) => {
     return json(400, { error: "Valid id is required" });
   }
 
-  const token = event.queryStringParameters && event.queryStringParameters.token;
-  let allowed = false;
-  if (token && verifyMediaToken(token, id)) {
-    allowed = true;
-  } else {
-    const auth = await requireSynkAdmin(event);
-    allowed = auth.ok;
-  }
-
-  if (!allowed) {
-    return json(401, { error: "Unauthorized" });
-  }
-
   try {
     connectLambda(event);
     const store = getStore("kiosk-media");
@@ -40,15 +51,36 @@ exports.handler = async (event) => {
       return json(404, { error: "Image not found" });
     }
 
-    const contentType =
-      (result.metadata && result.metadata.contentType) || "image/jpeg";
+    const metadata = result.metadata || {};
+    const token = event.queryStringParameters && event.queryStringParameters.token;
+    let allowed = false;
+    let cacheControl = "private, max-age=300";
+
+    if (token && verifyMediaToken(token, id)) {
+      allowed = true;
+    } else if (isPublicMetadata(metadata)) {
+      allowed = true;
+      cacheControl = "public, max-age=86400";
+    } else if (await isPlaceLogo(id)) {
+      allowed = true;
+      cacheControl = "public, max-age=86400";
+    } else {
+      const auth = await requireSynkAdmin(event);
+      allowed = auth.ok;
+    }
+
+    if (!allowed) {
+      return json(401, { error: "Unauthorized" });
+    }
+
+    const contentType = metadata.contentType || "image/jpeg";
     const buffer = Buffer.from(result.data);
 
     return {
       statusCode: 200,
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "private, max-age=300",
+        "Cache-Control": cacheControl,
         "X-Content-Type-Options": "nosniff",
       },
       body: buffer.toString("base64"),

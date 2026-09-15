@@ -70,7 +70,7 @@
             </div>
             <div class="admin-header-actions">
               <button class="btn btn-secondary btn-compact" type="button" id="notify-btn">
-                Enable alerts
+                Enable notifications
               </button>
             </div>
           </header>
@@ -232,7 +232,7 @@
         </div>
 
         <section class="settings-card" id="synk-members-settings">
-          <h2>When they verify</h2>
+          <h2>When a member verifies</h2>
           <p class="muted" style="margin: 0 0 12px;">
             Set auto deny, auto accept, or refill their name. App default:
             <strong id="synk-app-default-label">Require approval</strong>
@@ -261,7 +261,7 @@
         <section class="settings-card" id="display-settings">
           <h2>Choose a mode</h2>
           <p class="muted" style="margin: 0 0 12px;">
-            Pick what the tablet shows. Modes with settings need “Show on tablet” to apply.
+            Choose what the tablet displays. Modes with settings require “Show on tablet” to apply.
           </p>
 
           <div class="mode-grid mode-grid-cards" id="display-mode-grid" role="radiogroup" aria-label="Display mode">
@@ -409,7 +409,7 @@
           </div>
 
           <p class="muted" id="display-mode-hint" style="margin: 12px 0 0; font-size: 0.85rem;">
-            Pick a mode to take over the tablet screen.
+            Select a mode to display on the tablet.
           </p>
         </section>
       </div>
@@ -635,7 +635,7 @@
           displayDirtyHint.textContent = "";
           return;
         }
-        displayDirtyHint.textContent = `Selected ${modeLabel(drafting)} — tap “Show on tablet” to apply.`;
+        displayDirtyHint.textContent = `Selected ${modeLabel(drafting)} — choose “Show on tablet” to apply.`;
       }
 
       function setAdminPane(pane) {
@@ -1570,7 +1570,7 @@
             await decline(id, reason);
           }
         } catch (err) {
-          showToast(err.message || "Something went wrong");
+          showToast(err.message || "An unexpected error occurred");
           btn.disabled = false;
         }
       });
@@ -1982,7 +1982,7 @@
                   </div>
                 </div>
                 <label class="field" style="margin:0;">
-                  <span class="muted" style="font-size:0.78rem;">When they verify</span>
+                  <span class="muted" style="font-size:0.78rem;">When a member verifies</span>
                   <select data-synk-action="policy">
                     <option value="default" ${selected === "default" ? "selected" : ""}>Use app default (${escapeHtml(synkPolicyLabel(synkAppDefault))})</option>
                     <option value="autofill" ${selected === "autofill" ? "selected" : ""}>Refill name</option>
