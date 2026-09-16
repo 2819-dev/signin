@@ -1742,14 +1742,8 @@ function officialSynkBlueprint() {
           name: "Suggestions",
           slug: "suggestions",
           kind: "suggestions",
-          description: "Share product ideas, tag them, and vote — staff update status here",
-        },
-        {
-          emoji: "",
-          name: "Bugs",
-          slug: "bugs",
-          kind: "text",
-          description: "Report product issues so staff can investigate",
+          description:
+            "Share product ideas and bug reports. Everyone can upvote — staff mark Approved or Denied.",
         },
       ],
     },
@@ -1758,10 +1752,11 @@ function officialSynkBlueprint() {
       channels: [
         {
           emoji: "",
-          name: "Support",
+          name: "Community Support",
           slug: "support",
           kind: "support",
-          description: "Open a ticket for account, access, billing, or product help",
+          description:
+            "Ask the Synk community for help. For official account or billing support, use Support in Hub.",
         },
       ],
     },
@@ -1877,6 +1872,8 @@ async function syncOfficialSynkLayout(sql, groupId) {
     updates: "announcements",
     feedback: "suggestions",
     ideas: "suggestions",
+    bugs: "suggestions",
+    bug: "suggestions",
     help: "support",
     tickets: "support",
   };
@@ -1899,6 +1896,8 @@ async function syncOfficialSynkLayout(sql, groupId) {
     { slug: "lounge", fallback: "general" },
     { slug: "info", fallback: "welcome" },
     { slug: "help", fallback: "support" },
+    { slug: "bugs", fallback: "suggestions" },
+    { slug: "bug", fallback: "suggestions" },
   ];
   for (const item of obsolete) {
     const slug = item.slug;

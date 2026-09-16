@@ -123,7 +123,7 @@
   const SUGGESTION_STATUS_LABELS = {
     open: "Open",
     planned: "Planned",
-    accepted: "Accepted",
+    accepted: "Approved",
     implemented: "Implemented",
     denied: "Denied",
     closed: "Closed",
@@ -139,7 +139,7 @@
   const FORUM_FILTER_SUPPORT = [
     { id: "active", label: "Active" },
     { id: "open", label: "Open" },
-    { id: "in_progress", label: "In progress" },
+    { id: "in_progress", label: "Helping" },
     { id: "waiting", label: "Waiting" },
     { id: "resolved", label: "Resolved" },
     { id: "all", label: "All" },
@@ -147,7 +147,7 @@
   const FORUM_FILTER_SUGGESTIONS = [
     { id: "open", label: "Open" },
     { id: "planned", label: "Planned" },
-    { id: "accepted", label: "Accepted" },
+    { id: "accepted", label: "Approved" },
     { id: "implemented", label: "Shipped" },
     { id: "denied", label: "Denied" },
     { id: "all", label: "All" },
@@ -2345,22 +2345,22 @@
   function renderForumEmptyState(support, { filtered = false } = {}) {
     if (filtered) {
       return `<div class="forum-empty is-filtered">
-        <strong>${support ? "No tickets in this view" : "No suggestions in this view"}</strong>
-        <p class="muted">${support ? "Try another status filter, or open a new ticket." : "Try another status filter, or share a new suggestion."}</p>
-        <button type="button" class="btn btn-secondary btn-compact forum-empty-cta" data-forum-empty-create>${support ? "New ticket" : "New suggestion"}</button>
+        <strong>${support ? "No posts in this view" : "No suggestions in this view"}</strong>
+        <p class="muted">${support ? "Try another filter, or ask the community a new question." : "Try another status filter, or share a new suggestion."}</p>
+        <button type="button" class="btn btn-secondary btn-compact forum-empty-cta" data-forum-empty-create>${support ? "Ask for help" : "New suggestion"}</button>
       </div>`;
     }
     return support
       ? `<div class="forum-empty is-support">
         <div class="forum-empty-ico" aria-hidden="true">${ico("lifeBuoy", 28)}</div>
-        <strong>No support tickets yet</strong>
-        <p class="muted">Describe your issue, pick a category, and Synk staff will follow up here.</p>
-        <button type="button" class="btn btn-primary btn-compact forum-empty-cta" data-forum-empty-create>Open a ticket</button>
+        <strong>Community Support</strong>
+        <p class="muted">Ask the Synk community for help — anyone can reply. For official account or billing support, use <a href="/hub">Support in Hub</a>.</p>
+        <button type="button" class="btn btn-primary btn-compact forum-empty-cta" data-forum-empty-create>Ask for help</button>
       </div>`
       : `<div class="forum-empty is-suggestions">
         <div class="forum-empty-ico" aria-hidden="true">${ico("lightbulb", 28)}</div>
         <strong>No suggestions yet</strong>
-        <p class="muted">Share a product idea, add tags, and follow staff replies.</p>
+        <p class="muted">Share a product idea or bug report, then upvote ones you care about. Staff mark Approved or Denied.</p>
         <button type="button" class="btn btn-primary btn-compact forum-empty-cta" data-forum-empty-create>New suggestion</button>
       </div>`;
   }
@@ -2379,7 +2379,7 @@
       feedEl.innerHTML = `${filters}${renderForumEmptyState(support, { filtered: true })}`;
       return;
     }
-    feedEl.innerHTML = `${filters}<div class="forum-thread-list ${support ? "is-tickets" : "is-suggestions"}">${ordered
+    feedEl.innerHTML = `${filters}<div class="forum-thread-list ${support ? "is-tickets is-community-support" : "is-suggestions"}">${ordered
       .map((post) => {
         const author = post.author || {};
         const title = postTitle(post);
@@ -2389,15 +2389,21 @@
         const status = String(post.suggestionStatus || "open").toLowerCase();
         const reply = String(post.suggestionReply || "").trim();
         const ticketNo = shortTicketId(post);
+        const vote = Number(post.myVote) || 0;
+        const score = displayScore(post);
         const side = support
-          ? `<div class="forum-thread-ticket-id" aria-label="Ticket ${ticketNo}">
+          ? `<div class="forum-thread-ticket-id" aria-label="Post ${ticketNo}">
               <span class="forum-ticket-hash">#</span>
               <span class="forum-ticket-code">${escapeHtml(ticketNo)}</span>
             </div>`
-          : "";
-        const replyLabel = support ? "Staff update" : "Staff";
+          : `<div class="forum-thread-votes" aria-label="Vote">
+              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
+              <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${score}</span>
+              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
+            </div>`;
+        const replyLabel = support ? "Update" : "Staff";
         return `
-          <article class="forum-thread ${support ? "is-ticket" : "is-suggestion is-no-votes"} ${post.isPinned ? "is-pinned" : ""} ${side ? "" : "is-single"} is-${escapeHtml(status)}" data-post-id="${pid}">
+          <article class="forum-thread ${support ? "is-ticket is-community-support" : "is-suggestion"} ${post.isPinned ? "is-pinned" : ""} is-${escapeHtml(status)}" data-post-id="${pid}">
             ${side}
             <a class="forum-thread-main" href="/community/post/${pid}" data-open-post="${pid}">
               <div class="forum-thread-top">
@@ -2501,7 +2507,7 @@
               <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="open" data-post-id="${pid}">Reopen</button>
             </div>`
             : `<div class="suggestion-actions">
-              <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="accepted" data-post-id="${pid}">Accept</button>
+              <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="accepted" data-post-id="${pid}">Approve</button>
               <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="denied" data-post-id="${pid}">Deny</button>
               <button class="btn btn-secondary btn-compact" type="button" data-suggestion-status="open" data-post-id="${pid}">Reopen</button>
             </div>`
@@ -2616,15 +2622,15 @@
             <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="resolved" data-suggestion-reply="This should be resolved — reply if you still need help." data-post-id="${pid}">Resolved</button>
             <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="closed" data-suggestion-reply="Closing this ticket." data-post-id="${pid}">Close</button>
             <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="open" data-suggestion-reply="" data-post-id="${pid}">Reopen</button>`
-      : `<button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="accepted" data-suggestion-reply="Yes — we'll do this" data-post-id="${pid}">Yes</button>
-            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="denied" data-suggestion-reply="No — not planned" data-post-id="${pid}">No</button>
+      : `<button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="accepted" data-suggestion-reply="Yes — we'll do this" data-post-id="${pid}">Approve</button>
+            <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="denied" data-suggestion-reply="No — not planned" data-post-id="${pid}">Deny</button>
             <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="implemented" data-suggestion-reply="Already implemented" data-post-id="${pid}">Already shipped</button>
             <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="planned" data-suggestion-reply="Planned" data-post-id="${pid}">Planned</button>
             <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="closed" data-suggestion-reply="Closed" data-post-id="${pid}">Close</button>
             <button type="button" class="btn btn-secondary btn-compact" data-suggestion-status="open" data-suggestion-reply="" data-post-id="${pid}">Reopen</button>`;
     const staffPanel = canModerateSuggestion
       ? `<div class="forum-staff-panel ${isTicket ? "is-ticket" : ""}">
-          <p class="forum-staff-title">${isTicket ? "Ticket tools" : "Staff reply"}</p>
+          <p class="forum-staff-title">${isTicket ? "Staff tools" : "Staff review"}</p>
           <div class="forum-staff-presets">
             ${staffPresets}
           </div>
@@ -2642,7 +2648,7 @@
                 <option value="closed" ${suggestionStatus === "closed" ? "selected" : ""}>Closed</option>`
                     : `<option value="open" ${suggestionStatus === "open" ? "selected" : ""}>Open</option>
                 <option value="planned" ${suggestionStatus === "planned" ? "selected" : ""}>Planned</option>
-                <option value="accepted" ${suggestionStatus === "accepted" ? "selected" : ""}>Accepted</option>
+                <option value="accepted" ${suggestionStatus === "accepted" ? "selected" : ""}>Approved</option>
                 <option value="implemented" ${suggestionStatus === "implemented" ? "selected" : ""}>Implemented</option>
                 <option value="denied" ${suggestionStatus === "denied" ? "selected" : ""}>Denied</option>
                 <option value="closed" ${suggestionStatus === "closed" ? "selected" : ""}>Closed</option>`
@@ -2657,15 +2663,18 @@
         ? `<div class="forum-staff-reply"><strong>${isTicket ? "Staff update" : "Staff"}:</strong> ${escapeHtml(reply)}</div>`
         : "";
     const discordHub = !!(document.body.classList.contains("is-discord-group") || inDiscordHub(group));
-    const detailSide = isTicket
-      ? `<div class="forum-thread-ticket-id is-detail" aria-label="Ticket ${escapeHtml(ticketNo)}"><span class="forum-ticket-hash">#</span><span class="forum-ticket-code">${escapeHtml(ticketNo)}</span></div>`
-      : discordHub
-        ? authorAvatarSide(author)
-        : `<div class="reddit-vote" aria-label="Vote">
+    const voteRail = `<div class="reddit-vote forum-thread-votes is-detail" aria-label="Vote">
           <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 20)}</button>
           <span class="reddit-vote-count ${vote === 1 ? "is-up" : vote === -1 ? "is-down" : ""}">${displayScore(post)}</span>
           <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 20)}</button>
         </div>`;
+    const detailSide = isTicket
+      ? `<div class="forum-thread-ticket-id is-detail" aria-label="Post ${escapeHtml(ticketNo)}"><span class="forum-ticket-hash">#</span><span class="forum-ticket-code">${escapeHtml(ticketNo)}</span></div>`
+      : isSuggestion
+        ? voteRail
+        : discordHub
+          ? authorAvatarSide(author)
+          : voteRail;
     el.innerHTML = `
       <article class="reddit-post reddit-post-detail-inner ${discordHub ? "is-hub-msg" : ""} ${isSuggestion ? "is-suggestion" : ""} ${isTicket ? "is-ticket" : ""}" data-post-id="${pid}">
         ${detailSide}
@@ -3180,7 +3189,7 @@
       return { label: "Suggestions", icon: "lightbulb", tone: "suggest" };
     }
     if (kind === "support" || slug === "support" || slug === "help" || slug === "tickets") {
-      return { label: "Support tickets", icon: "lifeBuoy", tone: "help" };
+      return { label: "Community Support", icon: "lifeBuoy", tone: "help" };
     }
     if (slug === "rules" || kind === "rules") {
       return { label: "Rules", icon: "scroll", tone: "rules" };
@@ -3258,8 +3267,8 @@
       const desc = String(channel.description || "").trim();
       if (desc) textEl.textContent = desc;
       else if (meta && meta.tone === "announce") textEl.textContent = "Official announcements from the Synk team.";
-      else if (meta && meta.tone === "suggest") textEl.textContent = "Share product ideas, tag them, and follow staff status updates.";
-      else if (meta && meta.tone === "help") textEl.textContent = "Open a ticket for account, access, billing, or product help. Staff respond here.";
+      else if (meta && meta.tone === "suggest") textEl.textContent = "Share product ideas and bug reports. Everyone can upvote — staff mark Approved or Denied.";
+      else if (meta && meta.tone === "help") textEl.textContent = "Ask the Synk community for help. For official account or billing support, use Support in Hub.";
       else if (meta && meta.tone === "rules") textEl.textContent = "Community guidelines for the official Synk server.";
       else textEl.textContent = `This is the start of #${cleaned}. Be respectful and keep the conversation useful.`;
     }
@@ -3503,8 +3512,8 @@
       forumCreateBtn.hidden = !allowed;
       if (allowed) {
         const label = forumCreateBtn.querySelector("span");
-        if (label) label.textContent = isSupport ? "New ticket" : "New suggestion";
-        forumCreateBtn.setAttribute("aria-label", isSupport ? "New ticket" : "New suggestion");
+        if (label) label.textContent = isSupport ? "Ask for help" : "New suggestion";
+        forumCreateBtn.setAttribute("aria-label", isSupport ? "Ask for help" : "New suggestion");
       }
     }
     if (composerOpen && route.slug) {
@@ -3530,10 +3539,12 @@
         feedHint.textContent = "Read-only — maintained by Synk staff.";
       } else if (isSupport) {
         feedHint.hidden = false;
-        feedHint.textContent = "Tickets stay here until resolved. Pick a category so staff can route you faster.";
+        feedHint.innerHTML =
+          'Community help — anyone can reply. Need official Synk support? Use <a href="/hub">Support in Hub</a>.';
       } else if (kind === "suggestions" || isForum) {
         feedHint.hidden = false;
-        feedHint.textContent = "Vote on ideas you care about. Staff mark suggestions as planned, accepted, or shipped.";
+        feedHint.textContent =
+          "Ideas and bug reports live here. Everyone can upvote — only staff can mark Approved or Denied.";
       } else {
         feedHint.hidden = true;
         feedHint.textContent = "";
@@ -7535,6 +7546,7 @@ document.addEventListener("click", async (e) => {
     const voteBtn = e.target.closest("[data-vote]");
     if (voteBtn) {
       e.preventDefault();
+      e.stopPropagation();
       const targetType = voteBtn.getAttribute("data-target-type") || "post";
       const postId = voteBtn.getAttribute("data-post-id");
       const commentId = voteBtn.getAttribute("data-comment-id");
@@ -7799,31 +7811,31 @@ document.addEventListener("click", async (e) => {
       const hint = document.getElementById("forum-create-hint");
       modal.classList.toggle("is-support", !!support);
       modal.classList.toggle("is-suggestions", !support);
-      if (kicker) kicker.textContent = support ? "Support" : "Suggestions";
-      if (heading) heading.textContent = support ? "New support ticket" : "New suggestion";
+      if (kicker) kicker.textContent = support ? "Community Support" : "Suggestions";
+      if (heading) heading.textContent = support ? "Ask for help" : "New suggestion";
       if (titleInput) {
         titleInput.value = "";
         titleInput.placeholder = support
-          ? "e.g. Can’t sign in on mobile"
+          ? "e.g. How do I change my username?"
           : "e.g. Dark mode for community feed";
       }
       if (bodyInput) {
         bodyInput.value = "";
         bodyInput.placeholder = support
-          ? "What happened, what you expected, and any steps to reproduce."
-          : "What should change, who it helps, and why it matters.";
+          ? "What do you need help with? The community can jump in. For account or billing issues, use Support in Hub."
+          : "What should change (or what’s broken), who it helps, and why it matters.";
       }
-      if (submitBtn) submitBtn.textContent = support ? "Submit ticket" : "Post suggestion";
+      if (submitBtn) submitBtn.textContent = support ? "Post question" : "Post suggestion";
       if (tagsLabel) {
         tagsLabel.innerHTML = support
-          ? `Category <span class="muted">(required)</span>`
-          : `Tags <span class="muted">(optional · up to 3)</span>`;
+          ? `Category <span class="muted">(helps people find it)</span>`
+          : `Tags <span class="muted">(optional · up to 3 · use Bugfix for bugs)</span>`;
       }
       if (hint) {
         hint.hidden = false;
-        hint.textContent = support
-          ? "Pick one category so staff can route your ticket quickly."
-          : "Tags help others find related ideas.";
+        hint.innerHTML = support
+          ? 'Anyone in the community can reply. Need official Synk help? Open <a href="/hub">Support in Hub</a>.'
+          : "Everyone can upvote. Only Synk staff can mark Approved or Denied.";
       }
       const tagsHost = document.getElementById("forum-create-tags");
       forumSelectedTags = [];

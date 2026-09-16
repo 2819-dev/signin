@@ -3039,7 +3039,7 @@ if (action === "create-alt") {
 
     if (action === "set-suggestion-status") {
       if (!isCommunityStaffRole(role)) {
-        return json(403, { error: "Only Synk staff can update suggestions" });
+        return json(403, { error: "Only Synk staff can mark suggestions Approved or Denied" });
       }
       const postId = String(body.postId || body.id || "").trim();
       if (!isUuid(postId)) return json(400, { error: "Invalid post id" });
