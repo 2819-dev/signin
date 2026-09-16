@@ -16551,3 +16551,164 @@ body.community-body .forum-create-actions .btn {
     border-radius: 18px 18px 0 0;
   }
 }
+
+/* Don’t let the FAB fight the create sheet or channel drawer */
+body.community-body.forum-create-open .synk-hub-forum-create,
+body.community-body.synk-channels-open .synk-hub-forum-create,
+body.community-body.server-settings-open .synk-hub-forum-create {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* SYNK_HUB_BUGFIX_V67
+   Continue revising: cleaner forum cards, compact mobile header,
+   scrollable status filters, sticky message composer, ticket chip polish. */
+.forum-ticket-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #0f766e 14%, transparent);
+  color: #0f766e;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+html[data-theme="dark"] .forum-ticket-chip {
+  color: #5eead4;
+  background: color-mix(in srgb, #14b8a6 16%, transparent);
+}
+
+body.community-body.is-discord-group.is-forum-channel .forum-thread {
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--synk-hub-elev) 92%, var(--synk-hub-main));
+}
+body.community-body.is-discord-group.is-forum-channel .forum-thread-main {
+  padding: 14px 14px 12px;
+  gap: 8px;
+}
+body.community-body.is-discord-group.is-forum-channel .forum-thread-title {
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+body.community-body.is-discord-group.is-forum-channel .forum-thread-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+body.community-body.is-discord-group.is-forum-channel .forum-thread-list {
+  gap: 12px;
+}
+body.community-body.is-discord-group.is-forum-channel .forum-thread.is-ticket .forum-ticket-chip {
+  display: none; /* desktop/tablet: left rail already shows the id */
+}
+
+/* Status filters: one-line swipe strip */
+body.community-body.is-discord-group.is-forum-channel .forum-filter-bar {
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 28px), transparent 100%);
+}
+body.community-body.is-discord-group.is-forum-channel .forum-filter-bar::-webkit-scrollbar {
+  display: none;
+}
+body.community-body.is-discord-group.is-forum-channel .forum-filter-tab {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* Sticky message composer in text channels */
+body.community-body.is-discord-group:not(.is-forum-channel) #composer-card,
+body.community-body.is-discord-group:not(.is-forum-channel) .community-composer.reddit-create {
+  position: sticky;
+  bottom: 0;
+  z-index: 24;
+  margin: 8px 0 0 !important;
+  border-radius: 14px 14px 0 0 !important;
+  box-shadow: 0 -8px 24px color-mix(in srgb, var(--synk-hub-ink) 10%, transparent) !important;
+  backdrop-filter: blur(10px);
+}
+
+/* Staff tools wrap cleanly on phones */
+body.community-body.is-discord-group .forum-staff-presets,
+body.community-body.is-discord-group .suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+body.community-body.is-discord-group .forum-staff-presets .btn,
+body.community-body.is-discord-group .suggestion-actions .btn {
+  min-height: 40px;
+}
+
+@media (max-width: 860px) {
+  /* Compact hub header — create lives on the FAB */
+  body.community-body.is-discord-group.is-forum-channel .synk-hub-head-actions {
+    display: none !important;
+  }
+  body.community-body.is-discord-group .synk-hub-channels-toggle span {
+    display: none;
+  }
+  body.community-body.is-discord-group .synk-hub-channels-toggle {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+  body.community-body.is-discord-group .synk-hub-kind {
+    display: none !important;
+  }
+  body.community-body.is-discord-group .synk-hub-head {
+    gap: 10px;
+    padding: 10px 12px !important;
+  }
+  body.community-body.is-discord-group #discord-channel-title {
+    font-size: 1rem;
+  }
+
+  /* Tickets: drop the left ID rail on narrow phones; show chip in meta instead */
+  body.community-body.is-discord-group .forum-thread.is-ticket {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body.community-body.is-discord-group .forum-thread.is-ticket .forum-thread-ticket-id {
+    display: none !important;
+  }
+  body.community-body.is-discord-group.is-forum-channel .forum-thread.is-ticket .forum-ticket-chip {
+    display: inline-flex !important;
+  }
+
+  body.community-body.is-discord-group.is-forum-channel .forum-thread-main {
+    padding: 12px !important;
+  }
+  body.community-body.is-discord-group.is-forum-channel .forum-thread-title {
+    font-size: 1rem;
+  }
+
+  /* Composer sticky above safe area */
+  body.community-body.is-discord-group:not(.is-forum-channel) #composer-card,
+  body.community-body.is-discord-group:not(.is-forum-channel) .community-composer.reddit-create {
+    bottom: env(safe-area-inset-bottom, 0px);
+    margin-bottom: 0 !important;
+  }
+
+  /* Suggestion/ticket detail: keep content clear of edges */
+  body.community-body.is-discord-group .reddit-post-detail-inner.is-suggestion,
+  body.community-body.is-discord-group .reddit-post-detail-inner.is-ticket {
+    padding: 12px !important;
+    border-radius: 14px !important;
+    background: var(--synk-hub-elev) !important;
+    border: 1px solid var(--synk-hub-line) !important;
+  }
+}
+
+@media (min-width: 861px) {
+  body.community-body.is-discord-group.is-forum-channel .forum-thread.is-ticket .forum-ticket-chip {
+    display: none !important;
+  }
+}

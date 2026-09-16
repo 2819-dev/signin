@@ -2394,15 +2394,20 @@
                 <span class="suggestion-status is-${escapeHtml(status)}">${escapeHtml(suggestionStatusLabel(status, { ticket: support }))}</span>
                 ${renderSuggestionTagChips(post.suggestionTags)}
               </div>
-              <h3 class="forum-thread-title">${support ? `<span class="forum-ticket-inline">#${escapeHtml(ticketNo)}</span> ` : ""}${escapeHtml(title)}</h3>
+              <h3 class="forum-thread-title">${escapeHtml(title)}</h3>
               ${bodyText ? `<p class="forum-thread-preview">${escapeHtml(truncateText(bodyText, support ? 160 : 140))}</p>` : ""}
               ${reply ? `<p class="forum-thread-reply"><strong>${replyLabel}:</strong> ${escapeHtml(reply)}</p>` : ""}
               <div class="forum-thread-meta">
+                ${
+                  support
+                    ? `<span class="forum-ticket-chip" aria-hidden="true">#${escapeHtml(ticketNo)}</span><span class="reddit-meta-dot">•</span>`
+                    : ""
+                }
                 ${renderAuthorLink(author, { withAvatar: true })}
                 <span class="reddit-meta-dot">•</span>
                 <time>${escapeHtml(formatRelative(post.createdAt))}</time>
                 <span class="reddit-meta-dot">•</span>
-                <span>${comments} ${support ? (comments === 1 ? "reply" : "replies") : comments === 1 ? "reply" : "replies"}</span>
+                <span>${comments} ${comments === 1 ? "reply" : "replies"}</span>
               </div>
             </a>
           </article>`;
