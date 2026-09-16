@@ -6871,7 +6871,7 @@ body.reddit-nav-open #left-nav,
 }
 .menu-persona-switch {
   position: relative;
-  z-index: 40;
+  z-index: 20;
 }
 .menu-persona-btn {
   width: 100%;
@@ -15264,6 +15264,7 @@ body.community-body .menu-profile-wrap {
 }
 body.community-body .menu-profile-card-shell {
   position: relative;
+  z-index: 2;
 }
 body.community-body .menu-profile-card-shell .settings-profile-card {
   margin: 0;
@@ -15284,8 +15285,12 @@ body.community-body .menu-presence {
   top: 14px;
   width: 56px;
   height: 56px;
-  z-index: 8;
+  /* Must stack above Switch account so the status dot stays tappable */
+  z-index: 60;
   pointer-events: none;
+}
+body.community-body .menu-presence.is-open {
+  z-index: 80;
 }
 body.community-body .menu-presence-btn {
   pointer-events: auto;
@@ -15331,6 +15336,11 @@ body.community-body .menu-presence-menu {
   display: grid;
   gap: 2px;
   z-index: 60;
+}
+/* When portaled to <body>, keep it above the drawer / Switch account row */
+body.community-body > .menu-presence-menu {
+  z-index: 5000 !important;
+  position: fixed !important;
 }
 body.community-body .menu-presence-menu[hidden] {
   display: none !important;
@@ -16494,6 +16504,10 @@ body.community-body.is-dm-chat-open #community-tabbar {
     font-size: 0.9rem;
     font-weight: 750;
   }
+  body.community-body.is-discord-group.is-support-channel .synk-hub-forum-create:not([hidden]) {
+    background: #0f766e;
+    box-shadow: 0 14px 32px color-mix(in srgb, #0f766e 35%, rgba(15, 23, 42, 0.2));
+  }
   /* Leave room so the last thread isn’t under the FAB */
   body.community-body.is-discord-group.is-forum-channel .synk-hub-feed,
   body.community-body.is-discord-group.is-forum-channel #discord-feed-slot,
@@ -16596,6 +16610,7 @@ body.community-body.is-discord-group.is-forum-channel .forum-thread-title {
 body.community-body.is-discord-group.is-forum-channel .forum-thread-preview {
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

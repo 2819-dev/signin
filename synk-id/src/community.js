@@ -1525,6 +1525,12 @@
       menu.style.top = "";
       menu.style.minWidth = "";
       menu.style.zIndex = "";
+      // Return the menu to its original host so layout stays intact.
+      if (wrap && menu.parentElement !== wrap) {
+        try {
+          wrap.appendChild(menu);
+        } catch (_) {}
+      }
     }
     if (btn) btn.setAttribute("aria-expanded", "false");
     if (wrap) wrap.classList.remove("is-open");
@@ -1536,9 +1542,14 @@
     const menu = document.getElementById("menu-presence-menu");
     if (!menu || !btn) return;
     syncMenuPresenceUi(activeAccountProfile().presenceStatus || presenceStatus);
+    // Portal out of the sliding left-nav (transform + overflow) so Switch
+    // account can never cover the status picker.
+    try {
+      if (menu.parentElement !== document.body) document.body.appendChild(menu);
+    } catch (_) {}
     menu.hidden = false;
     const rect = btn.getBoundingClientRect();
-    const menuWidth = Math.max(188, rect.width + 140);
+    const menuWidth = Math.max(196, Math.min(240, rect.width + 160));
     let left = rect.left;
     if (left + menuWidth > window.innerWidth - 8) {
       left = Math.max(8, window.innerWidth - menuWidth - 8);
@@ -1548,7 +1559,7 @@
     menu.style.left = `${Math.round(left)}px`;
     menu.style.top = `${Math.round(top)}px`;
     menu.style.minWidth = `${menuWidth}px`;
-    menu.style.zIndex = "400";
+    menu.style.zIndex = "5000";
     // If it would hang off the bottom, flip above the button.
     const menuRect = menu.getBoundingClientRect();
     if (menuRect.bottom > window.innerHeight - 8) {
@@ -5845,11 +5856,27 @@ function applyViewState(data) {
     });
   }
   document.addEventListener("click", (e) => {
-    if (!menuPresenceWrap || menuPresenceWrap.contains(e.target)) return;
+    if (!menuPresenceWrap) return;
+    const menu = document.getElementById("menu-presence-menu");
+    const onTrigger = menuPresenceWrap.contains(e.target);
+    const onMenu = !!(menu && menu.contains(e.target));
+    if (onTrigger || onMenu) return;
     closeMenuPresenceMenu();
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeMenuPresenceMenu();
+  });
+  window.addEventListener(
+    "scroll",
+    () => {
+      const menu = document.getElementById("menu-presence-menu");
+      if (menu && !menu.hidden) closeMenuPresenceMenu();
+    },
+    true
+  );
+  window.addEventListener("resize", () => {
+    const menu = document.getElementById("menu-presence-menu");
+    if (menu && !menu.hidden) closeMenuPresenceMenu();
   });
 
   if (dmForm) {
