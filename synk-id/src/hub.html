@@ -15,15 +15,15 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid12" />
     <script src="/theme.js?v=theme1"></script>
-    <link rel="stylesheet" href="/join.css?v=community-v64" />
+    <link rel="stylesheet" href="/join.css?v=community-v70" />
     <script src="/session.js?v=stay-v1"></script>
     <script src="/synk-loader.js?v=loader-v3"></script>
     <script>
       // Only reveal the boot loader if this page is still waiting.
       try { if (window.SynkLoader) window.SynkLoader.show({ label: "Loading Synk" }); } catch (_) {}
     </script>
-    <script src="/force-refresh.js?v=community-v64" defer></script>
-    <script src="/push-client.js?v=community-v64" defer></script>
+    <script src="/force-refresh.js?v=community-v70" defer></script>
+    <script src="/push-client.js?v=community-v70" defer></script>
     <script src="/image-crop.js?v=crop-v3"></script>
   
     <style>
@@ -264,9 +264,9 @@
             <strong>Places</strong>
             <span>Browse locations that welcome Synk members.</span>
           </a>
-          <a class="hub-tile" href="/testing" id="hub-testing-tile" hidden>
-            <strong>Early access</strong>
-            <span>Preview upcoming changes and share thoughtful feedback.</span>
+          <a class="hub-tile" href="https://staffhub.bhswebsite.org/" id="hub-testing-tile" hidden target="_blank" rel="noopener noreferrer">
+            <strong>Staff Hub</strong>
+            <span>Early access shifts, checklists, and feedback live in Staff Hub.</span>
           </a>
         </div>
       </section>
@@ -529,15 +529,24 @@
         return k === "app_update" || k === "app_updated" || k === "update";
       }
 
+      function isHubTestingShiftKind(kind) {
+        const k = String(kind || "").trim().toLowerCase().replace(/-/g, "_");
+        return k === "testing_shift" || k === "beta_shift" || k === "testing_agenda";
+      }
+
+      const STAFF_HUB_URL = "https://staffhub.bhswebsite.org/";
+
       function collapseHubAppUpdateNotes(notes) {
         const list = Array.isArray(notes) ? notes.slice() : [];
         const kept = [];
         let appUpdate = null;
+        let shiftUpdate = null;
         for (const note of list) {
           if (isHubAppUpdateKind(note && note.kind)) {
             if (!appUpdate) {
               appUpdate = {
                 ...note,
+                kind: "app_update",
                 title: note.title || "App updated",
                 description:
                   note.description ||
@@ -558,6 +567,36 @@
                 if (note.description || note.body) {
                   appUpdate.description = note.description || note.body;
                   appUpdate.body = note.body || note.description;
+                }
+              }
+            }
+            continue;
+          }
+          if (isHubTestingShiftKind(note && note.kind)) {
+            if (!shiftUpdate) {
+              shiftUpdate = {
+                ...note,
+                kind: "testing_shift",
+                title: note.title || "Early access shift",
+                description:
+                  note.description ||
+                  note.body ||
+                  "A new testing shift is ready. Open Staff Hub to start your session.",
+                body:
+                  note.body ||
+                  note.description ||
+                  "A new testing shift is ready. Open Staff Hub to start your session.",
+              };
+              kept.push(shiftUpdate);
+            } else {
+              if (shiftUpdate.readAt && !note.readAt) shiftUpdate.readAt = null;
+              if (!shiftUpdate.version && note.version) shiftUpdate.version = note.version;
+              if (new Date(note.createdAt || 0) > new Date(shiftUpdate.createdAt || 0)) {
+                shiftUpdate.createdAt = note.createdAt;
+                if (note.version) shiftUpdate.version = note.version;
+                if (note.description || note.body) {
+                  shiftUpdate.description = note.description || note.body;
+                  shiftUpdate.body = note.body || note.description;
                 }
               }
             }
@@ -618,7 +657,7 @@
           description = description || `${actor} sent you a message.`;
         } else if (kind === "testing_shift" || kind === "beta_shift" || kind === "testing_agenda") {
           title = title || "Early access shift";
-          description = description || "A new testing shift is ready. Open Testing to start your session.";
+          description = description || "A new testing shift is ready. Open Staff Hub to start your session.";
         } else if (kind === "app_update" || kind === "app_updated" || kind === "update") {
           title = title || "App updated";
           description = description || "Synk was updated. Refresh to get the latest.";
@@ -629,15 +668,15 @@
         if (description && !/[.!?]$/.test(description)) description += ".";
         const actions = [];
         if (kind === "testing_shift" || kind === "beta_shift" || kind === "testing_agenda") {
-          actions.push({ type: "open", label: "Open Testing", href: "/testing", primary: true });
+          actions.push({ type: "open", label: "Open Staff Hub", href: STAFF_HUB_URL, primary: true });
         } else if (kind === "app_update" || kind === "app_updated" || kind === "update") {
           actions.push({ type: "refresh", label: "Refresh", primary: true });
           actions.push({ type: "release-notes", label: "Release notes", primary: false, version: note && note.version });
           if (hubBetaTester) {
             actions.push({
               type: "open",
-              label: "Open testing portal",
-              href: "/testing",
+              label: "Open Staff Hub",
+              href: STAFF_HUB_URL,
               primary: false,
             });
           }
@@ -673,7 +712,11 @@
               return `<button class="${cls}" type="button" data-hub-notif-release-notes="1" data-version="${version}">${escapeHubHtml(action.label || "Release notes")}</button>`;
             }
             if (action.href) {
-              return `<a class="${cls}" href="${escapeHubHtml(action.href)}">${escapeHubHtml(action.label || "Open")}</a>`;
+              const external = /^https?:\/\//i.test(String(action.href || ""));
+              const extra = external
+                ? ` target="_blank" rel="noopener noreferrer" data-hub-notif-staff-hub="1"`
+                : "";
+              return `<a class="${cls}" href="${escapeHubHtml(action.href)}"${extra}>${escapeHubHtml(action.label || "Open")}</a>`;
             }
             return "";
           })
@@ -711,12 +754,22 @@
         if (!session) return;
         const row = el && el.closest ? el.closest("[data-hub-notif-id]") : null;
         const noteId = row ? row.getAttribute("data-hub-notif-id") || "" : "";
+        const note =
+          (hubNotifCache || []).find((n) => String(n.id) === String(noteId)) || null;
         hubNotifSeq += 1;
         const seq = hubNotifSeq;
         try {
-          const payload = noteId
-            ? { action: "mark-read", ids: [noteId] }
-            : { action: "mark-read", kinds: ["app_update", "app_updated", "update"] };
+          let payload;
+          if (noteId) {
+            payload = { action: "mark-read", ids: [noteId] };
+          } else if (note && isHubTestingShiftKind(note.kind)) {
+            payload = {
+              action: "mark-read",
+              kinds: ["testing_shift", "beta_shift", "testing_agenda"],
+            };
+          } else {
+            payload = { action: "mark-read", kinds: ["app_update", "app_updated", "update"] };
+          }
           const res = await fetch("/api/synk-community", {
             method: "POST",
             headers: hubHeaders(session),
@@ -1016,6 +1069,10 @@
         if (e.target.closest("[data-release-notes-close]")) {
           closeReleaseNotesModal();
           return;
+        }
+        const staffHubBtn = e.target.closest("[data-hub-notif-staff-hub]");
+        if (staffHubBtn) {
+          clearHubAppUpdateFromEl(staffHubBtn).catch(() => {});
         }
         const notesBtn = e.target.closest("[data-hub-notif-release-notes]");
         if (notesBtn) {

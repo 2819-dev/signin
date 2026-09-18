@@ -155,13 +155,15 @@
 
 [[redirects]]
   from = "/testing"
-  to = "/testing.html"
-  status = 200
+  to = "https://staffhub.bhswebsite.org/"
+  status = 302
+  force = true
 
 [[redirects]]
   from = "/testing/*"
-  to = "/testing.html"
-  status = 200
+  to = "https://staffhub.bhswebsite.org/"
+  status = 302
+  force = true
 
 [[redirects]]
   from = "/info"

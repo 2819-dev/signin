@@ -394,7 +394,7 @@ function notificationCopy({ kind, actorUsername, body }) {
       description:
         body && String(body).trim()
           ? String(body).trim()
-          : "A new testing shift is ready. Open Testing to start your session.",
+          : "A new testing shift is ready. Open Staff Hub to start your session.",
     };
   }
   return {
@@ -461,7 +461,7 @@ function mePayload(auth, role, alts = [], tags = [], pinnedTag = null) {
 
 async function getUnreadCount(sql, profileId) {
   if (!profileId) return 0;
-  await coalesceAppUpdateNotifications(sql, profileId);
+  await coalesceConsolidatedNotifications(sql, profileId);
   const rows = await sql`
     SELECT COUNT(*)::int AS count
     FROM synk_community_notifications
@@ -489,20 +489,38 @@ async function markGroupsJoined(sql, groups, profileId) {
   }));
 }
 
-async function coalesceAppUpdateNotifications(sql, profileId) {
-  if (!profileId) return;
+const APP_UPDATE_KINDS = ["app_update", "app_updated", "update"];
+const TESTING_SHIFT_KINDS = ["testing_shift", "beta_shift", "testing_agenda"];
+
+function normalizeNotifKindKey(kind) {
+  return String(kind || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+}
+
+function isAppUpdateKind(kind) {
+  return APP_UPDATE_KINDS.includes(normalizeNotifKindKey(kind));
+}
+
+function isTestingShiftKind(kind) {
+  return TESTING_SHIFT_KINDS.includes(normalizeNotifKindKey(kind));
+}
+
+async function coalesceKindFamily(sql, profileId, kinds) {
+  if (!profileId || !Array.isArray(kinds) || !kinds.length) return;
   try {
     await sql`
       DELETE FROM synk_community_notifications
       WHERE synk_profile_id = ${profileId}
-        AND kind IN ('app_update', 'app_updated', 'update')
+        AND lower(replace(kind, '-', '_')) = ANY(${kinds}::text[])
         AND id NOT IN (
           SELECT id
           FROM (
             SELECT id
             FROM synk_community_notifications
             WHERE synk_profile_id = ${profileId}
-              AND kind IN ('app_update', 'app_updated', 'update')
+              AND lower(replace(kind, '-', '_')) = ANY(${kinds}::text[])
             ORDER BY
               CASE WHEN read_at IS NULL THEN 0 ELSE 1 END,
               created_at DESC,
@@ -514,16 +532,24 @@ async function coalesceAppUpdateNotifications(sql, profileId) {
   } catch (_) {}
 }
 
-function collapseAppUpdateNotes(notes) {
+async function coalesceConsolidatedNotifications(sql, profileId) {
+  await coalesceKindFamily(sql, profileId, APP_UPDATE_KINDS);
+  await coalesceKindFamily(sql, profileId, TESTING_SHIFT_KINDS);
+}
+
+// Keep one app-update row and one early-access shift row in the inbox UI.
+function collapseConsolidatedNotes(notes) {
   const list = Array.isArray(notes) ? notes.slice() : [];
   const kept = [];
   let appUpdate = null;
+  let shiftUpdate = null;
   for (const note of list) {
-    const kind = String((note && note.kind) || "").toLowerCase().replace(/-/g, "_");
-    if (kind === "app_update" || kind === "app_updated" || kind === "update") {
+    const kind = normalizeNotifKindKey(note && note.kind);
+    if (isAppUpdateKind(kind)) {
       if (!appUpdate) {
         appUpdate = {
           ...note,
+          kind: "app_update",
           title: note.title || "App updated",
           description:
             note.description ||
@@ -536,12 +562,7 @@ function collapseAppUpdateNotes(notes) {
         };
         kept.push(appUpdate);
       } else {
-        // Prefer unread + newest version metadata when collapsing older rows.
-        if (!appUpdate.readAt && note.readAt) {
-          /* keep unread */
-        } else if (appUpdate.readAt && !note.readAt) {
-          appUpdate.readAt = null;
-        }
+        if (appUpdate.readAt && !note.readAt) appUpdate.readAt = null;
         if (!appUpdate.version && note.version) appUpdate.version = note.version;
         if (new Date(note.createdAt || 0) > new Date(appUpdate.createdAt || 0)) {
           appUpdate.createdAt = note.createdAt;
@@ -554,15 +575,49 @@ function collapseAppUpdateNotes(notes) {
       }
       continue;
     }
+    if (isTestingShiftKind(kind)) {
+      if (!shiftUpdate) {
+        shiftUpdate = {
+          ...note,
+          kind: "testing_shift",
+          title: note.title || "Early access shift",
+          description:
+            note.description ||
+            note.body ||
+            "A new testing shift is ready. Open Staff Hub to start your session.",
+          body:
+            note.body ||
+            note.description ||
+            "A new testing shift is ready. Open Staff Hub to start your session.",
+        };
+        kept.push(shiftUpdate);
+      } else {
+        if (shiftUpdate.readAt && !note.readAt) shiftUpdate.readAt = null;
+        if (!shiftUpdate.version && note.version) shiftUpdate.version = note.version;
+        if (new Date(note.createdAt || 0) > new Date(shiftUpdate.createdAt || 0)) {
+          shiftUpdate.createdAt = note.createdAt;
+          if (note.version) shiftUpdate.version = note.version;
+          if (note.description || note.body) {
+            shiftUpdate.description = note.description || note.body;
+            shiftUpdate.body = note.body || note.description;
+          }
+        }
+      }
+      continue;
+    }
     kept.push(note);
   }
   kept.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   return kept;
 }
 
+// Back-compat alias used by older call sites / tests.
+const collapseAppUpdateNotes = collapseConsolidatedNotes;
+const coalesceAppUpdateNotifications = coalesceConsolidatedNotifications;
+
 async function loadNotifications(sql, profileId, { limit = 50, username = "" } = {}) {
   const capped = Math.min(Math.max(Number(limit) || 50, 1), 100);
-  await coalesceAppUpdateNotifications(sql, profileId);
+  await coalesceConsolidatedNotifications(sql, profileId);
   const rows = await sql`
     SELECT
       id,
@@ -578,7 +633,7 @@ async function loadNotifications(sql, profileId, { limit = 50, username = "" } =
     ORDER BY created_at DESC
     LIMIT ${capped}
   `;
-  const notes = collapseAppUpdateNotes(rows.map(mapNotification));
+  const notes = collapseConsolidatedNotes(rows.map(mapNotification));
 
   // Surface pending friend requests even if a row was missed.
   const meName = normalizePublicUsername(username);
@@ -4597,7 +4652,7 @@ if (action === "create-alt") {
           shiftNotify = await notifyBetaTestersOfShift(sql, {
             version: updateVersion || "",
             title: "Early access shift",
-            body: `New checklist item: ${title}. Open Testing to start your session.`,
+            body: `New checklist item: ${title}. Open Staff Hub to start your session.`,
             createInbox: true,
           });
         } catch (err) {

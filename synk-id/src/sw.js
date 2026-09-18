@@ -25,17 +25,22 @@ function buildOptions(data) {
   const tag = String(data.tag || (type === "dm" || type === "message" ? "synk-dm" : "synk-notification"));
   const isDm = type === "dm" || type === "message";
   const isAppUpdate = tag === "app-update" || type === "app_update" || type === "update";
+  const isShift =
+    tag === "testing-shift" ||
+    type === "testing_shift" ||
+    type === "beta_shift" ||
+    type === "testing_agenda";
   return {
-    body: data.body || (isDm ? "New message" : "New notification"),
-    tag,
-    // Same-tag app updates should replace quietly instead of stacking alerts.
-    renotify: isAppUpdate ? false : true,
+    body: data.body || (isDm ? "New message" : isShift ? "Early access shift" : "New notification"),
+    tag: isShift ? "testing-shift" : tag,
+    // Same-tag app updates / shifts should replace quietly instead of stacking alerts.
+    renotify: isAppUpdate || isShift ? false : true,
     requireInteraction: false,
     silent: false,
     lang: "en",
     icon: "/apple-touch-icon.png",
     badge: "/apple-touch-icon.png",
-    vibrate: isAppUpdate ? [] : isDm ? [70, 40, 70] : [120, 60, 120],
+    vibrate: isAppUpdate || isShift ? [] : isDm ? [70, 40, 70] : [120, 60, 120],
     timestamp: Date.now(),
     data: {
       url: data.url || "/hub",
@@ -122,6 +127,7 @@ self.addEventListener("notificationclick", (event) => {
 
   const targetUrl =
     (event.notification.data && event.notification.data.url) || "/hub";
+  const isExternal = /^https?:\/\//i.test(String(targetUrl || ""));
 
   event.waitUntil(
     (async () => {
@@ -130,6 +136,15 @@ self.addEventListener("notificationclick", (event) => {
           await self.navigator.clearAppBadge();
         }
       } catch (_) {}
+
+      // External destinations (e.g. Staff Hub) always open in their own window.
+      if (isExternal) {
+        if (self.clients.openWindow) {
+          await self.clients.openWindow(targetUrl);
+        }
+        return;
+      }
+
       const allClients = await self.clients.matchAll({
         type: "window",
         includeUncontrolled: true,

@@ -242,8 +242,8 @@ function notificationPushPayload({ kind, actorUsername, body, postId = null, url
   if (k === "testing_shift" || k === "beta_shift" || k === "testing_agenda") {
     return {
       title: "Early access shift",
-      body: text || "A new testing shift is ready. Open Testing to start your session.",
-      url: String(url || "/testing").slice(0, 300),
+      body: text || "A new testing shift is ready. Open Staff Hub to start your session.",
+      url: String(url || "https://staffhub.bhswebsite.org/").slice(0, 300),
       tag: "testing-shift",
       type: "testing_shift",
       badgeCount: 1,

@@ -2768,16 +2768,25 @@
     return k === "app_update" || k === "app_updated" || k === "update";
   }
 
-  // Belt-and-suspenders: keep a single release-note row in the inbox UI.
+  function isTestingShiftKind(kind) {
+    const k = normalizeNotifKind(kind);
+    return k === "testing_shift" || k === "beta_shift" || k === "testing_agenda";
+  }
+
+  const STAFF_HUB_URL = "https://staffhub.bhswebsite.org/";
+
+  // Belt-and-suspenders: keep a single release-note row and a single shift row.
   function collapseAppUpdateNotes(notes) {
     const list = Array.isArray(notes) ? notes.slice() : [];
     const kept = [];
     let appUpdate = null;
+    let shiftUpdate = null;
     for (const note of list) {
       if (isAppUpdateKind(note && note.kind)) {
         if (!appUpdate) {
           appUpdate = {
             ...note,
+            kind: "app_update",
             title: note.title || "App updated",
             description:
               note.description ||
@@ -2798,6 +2807,36 @@
             if (note.description || note.body) {
               appUpdate.description = note.description || note.body;
               appUpdate.body = note.body || note.description;
+            }
+          }
+        }
+        continue;
+      }
+      if (isTestingShiftKind(note && note.kind)) {
+        if (!shiftUpdate) {
+          shiftUpdate = {
+            ...note,
+            kind: "testing_shift",
+            title: note.title || "Early access shift",
+            description:
+              note.description ||
+              note.body ||
+              "A new testing shift is ready. Open Staff Hub to start your session.",
+            body:
+              note.body ||
+              note.description ||
+              "A new testing shift is ready. Open Staff Hub to start your session.",
+          };
+          kept.push(shiftUpdate);
+        } else {
+          if (shiftUpdate.readAt && !note.readAt) shiftUpdate.readAt = null;
+          if (!shiftUpdate.version && note.version) shiftUpdate.version = note.version;
+          if (new Date(note.createdAt || 0) > new Date(shiftUpdate.createdAt || 0)) {
+            shiftUpdate.createdAt = note.createdAt;
+            if (note.version) shiftUpdate.version = note.version;
+            if (note.description || note.body) {
+              shiftUpdate.description = note.description || note.body;
+              shiftUpdate.body = note.body || note.description;
             }
           }
         }
@@ -2834,6 +2873,10 @@
     } else if (kind === "dm" || kind === "message") {
       title = title || "New message";
       description = description || `${actor} sent you a message.`;
+    } else if (isTestingShiftKind(kind)) {
+      title = title || "Early access shift";
+      description =
+        description || "A new testing shift is ready. Open Staff Hub to start your session.";
     } else if (kind === "app_update" || kind === "app_updated" || kind === "update") {
       title = title || "App updated";
       description =
@@ -2845,13 +2888,15 @@
     // Ensure sentence punctuation for short system sentences.
     if (description && !/[.!?]$/.test(description)) description += ".";
     const actions = [];
-    if (kind === "app_update" || kind === "app_updated" || kind === "update") {
+    if (isTestingShiftKind(kind)) {
+      actions.push({ type: "staff-hub", label: "Open Staff Hub", primary: true });
+    } else if (kind === "app_update" || kind === "app_updated" || kind === "update") {
       actions.push({ type: "refresh", label: "Refresh", primary: true });
       actions.push({ type: "release-notes", label: "Release notes", primary: false });
       if (isCurrentUserBetaTester()) {
         actions.push({
-          type: "testing-portal",
-          label: "Open testing portal",
+          type: "staff-hub",
+          label: "Open Staff Hub",
           primary: false,
         });
       }
@@ -2904,8 +2949,8 @@
           const version = escapeHtml(String((note && note.version) || ""));
           return `<button class="${cls}" type="button" data-notif-release-notes="1" data-version="${version}">${escapeHtml(action.label || "Release notes")}</button>`;
         }
-        if (action.type === "testing-portal") {
-          return `<a class="${cls}" href="/testing">${escapeHtml(action.label || "Open testing portal")}</a>`;
+        if (action.type === "staff-hub" || action.type === "testing-portal") {
+          return `<a class="${cls}" href="${escapeHtml(STAFF_HUB_URL)}" target="_blank" rel="noopener noreferrer" data-notif-staff-hub="1">${escapeHtml(action.label || "Open Staff Hub")}</a>`;
         }
         return "";
       })
@@ -6539,27 +6584,69 @@ function applyViewState(data) {
       if (!body || !activeDmUser) return;
       const sendBtn = document.getElementById("dm-compose-send");
       if (sendBtn) sendBtn.disabled = true;
+      const targetUser = activeDmUser;
       try {
         if (editingDmMessageId) {
-          await communityAction({
+          const data = await communityAction({
             action: "dm-edit",
             messageId: editingDmMessageId,
             body,
           });
           clearDmEditMode();
           if (input) input.value = "";
+          if (data && data.message) {
+            const mid = String(data.message.id || editingDmMessageId);
+            activeDmMessages = (activeDmMessages || []).map((m) =>
+              String(m.id) === mid ? { ...m, ...data.message } : m
+            );
+            renderDmMessages(activeDmMessages, { otherUser: targetUser, preserveScroll: true });
+          } else {
+            await openDmThread(targetUser);
+          }
           showToast("Message updated");
+          loadDmThreads().catch(() => {});
         } else {
-          await communityAction({
-            action: "dm-send",
-            username: activeDmUser,
-            threadId: activeDmThreadId || undefined,
+          const optimisticId = `local-${Date.now()}`;
+          const optimistic = {
+            id: optimisticId,
             body,
-          });
+            senderUsername: publicUsername || "",
+            createdAt: new Date().toISOString(),
+            canEdit: true,
+            canUnsend: true,
+            reactions: [],
+            pending: true,
+          };
           if (input) input.value = "";
+          activeDmMessages = [...(activeDmMessages || []), optimistic];
+          renderDmMessages(activeDmMessages, { otherUser: targetUser });
+          try {
+            const data = await communityAction({
+              action: "dm-send",
+              username: targetUser,
+              threadId: activeDmThreadId || undefined,
+              body,
+            });
+            if (data && data.message) {
+              activeDmMessages = (activeDmMessages || []).map((m) =>
+                String(m.id) === optimisticId ? { ...data.message } : m
+              );
+              if (data.thread && data.thread.id) {
+                activeDmThreadId = data.thread.id;
+              }
+              renderDmMessages(activeDmMessages, { otherUser: targetUser, preserveScroll: true });
+            } else {
+              activeDmMessages = (activeDmMessages || []).filter((m) => String(m.id) !== optimisticId);
+              await openDmThread(targetUser);
+            }
+            loadDmThreads().catch(() => {});
+          } catch (err) {
+            activeDmMessages = (activeDmMessages || []).filter((m) => String(m.id) !== optimisticId);
+            renderDmMessages(activeDmMessages, { otherUser: targetUser, preserveScroll: true });
+            if (input && !input.value) input.value = body;
+            throw err;
+          }
         }
-        await openDmThread(activeDmUser);
-        await loadDmThreads();
       } catch (err) {
         showToast(err.message || (editingDmMessageId ? "Unable to edit message." : "Message could not be sent. Please try again."));
       } finally {
@@ -6588,6 +6675,9 @@ function applyViewState(data) {
         : "Delete this message for you only? The other person will still see it.";
     if (!window.confirm(confirmText)) return;
     closeDmMessageSheet();
+    const prev = (activeDmMessages || []).slice();
+    activeDmMessages = prev.filter((m) => String(m.id) !== String(messageId));
+    renderDmMessages(activeDmMessages, { otherUser: activeDmUser, preserveScroll: true });
     try {
       const result = await communityAction({
         action: "dm-delete",
@@ -6599,11 +6689,10 @@ function applyViewState(data) {
         if (input) input.value = "";
       }
       showToast(result.mode === "unsend" ? "Message deleted" : "Deleted for you");
-      if (activeDmUser) {
-        await openDmThread(activeDmUser);
-        await loadDmThreads();
-      }
+      loadDmThreads().catch(() => {});
     } catch (err) {
+      activeDmMessages = prev;
+      renderDmMessages(activeDmMessages, { otherUser: activeDmUser, preserveScroll: true });
       showToast(err.message || "Could not delete message.");
     }
   }
@@ -7010,6 +7099,7 @@ function applyViewState(data) {
   let seenNotifIds = new Set();
   let notifWatchReady = false;
   let localAppUpdateNotified = false;
+  let localShiftNotified = false;
 
   async function refreshNotifications({ open = false } = {}) {
     const seq = ++notifSeq;
@@ -7031,10 +7121,14 @@ function applyViewState(data) {
           const id = String((note && note.id) || "");
           if (!id || seenNotifIds.has(id) || note.readAt) return;
           seenNotifIds.add(id);
-          // Don't stack local alerts for the same unread release note.
+          // Don't stack local alerts for the same unread release note / shift.
           if (isAppUpdateKind(note.kind)) {
             if (localAppUpdateNotified) return;
             localAppUpdateNotified = true;
+          }
+          if (isTestingShiftKind(note.kind)) {
+            if (localShiftNotified) return;
+            localShiftNotified = true;
           }
           const kind = normalizeNotifKind(note.kind);
           // Skip DM toasts while the user is actively in Messages.
@@ -7053,6 +7147,9 @@ function applyViewState(data) {
           if (id) seenNotifIds.add(id);
           if (isAppUpdateKind(note && note.kind) && !note.readAt) {
             localAppUpdateNotified = true;
+          }
+          if (isTestingShiftKind(note && note.kind) && !note.readAt) {
+            localShiftNotified = true;
           }
         });
         notifWatchReady = true;
@@ -7344,10 +7441,21 @@ function applyViewState(data) {
     const noteId = row
       ? row.getAttribute("data-notif-id") || row.getAttribute("data-inbox-id") || ""
       : "";
+    const kindHint = row
+      ? normalizeNotifKind(
+          (notifCache.concat(lastNotifications || []).find((n) => String(n.id) === String(noteId)) || {})
+            .kind
+        )
+      : "";
     try {
       let data;
       if (noteId && !String(noteId).startsWith("friend-req-")) {
         data = await communityAction({ action: "mark-read", ids: [noteId] });
+      } else if (isTestingShiftKind(kindHint)) {
+        data = await communityAction({
+          action: "mark-read",
+          kinds: ["testing_shift", "beta_shift", "testing_agenda"],
+        });
       } else {
         data = await communityAction({
           action: "mark-read",
@@ -7356,6 +7464,7 @@ function applyViewState(data) {
       }
       await applyNotificationReadResult(data);
       localAppUpdateNotified = false;
+      localShiftNotified = false;
       try {
         setNotifOpen(false);
       } catch (_) {}
@@ -7363,6 +7472,11 @@ function applyViewState(data) {
   }
 
 document.addEventListener("click", async (e) => {
+    const staffHubBtn = e.target.closest("[data-notif-staff-hub]");
+    if (staffHubBtn) {
+      clearAppUpdateNotificationFromEl(staffHubBtn).catch(() => {});
+      // Let the link open Staff Hub in a new tab.
+    }
     const releaseBtn = e.target.closest("[data-notif-release-notes]");
     if (releaseBtn) {
       e.preventDefault();

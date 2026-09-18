@@ -5399,8 +5399,8 @@ async function notifyBetaTestersOfShift(
   const notifBody = String(
     body ||
       (short
-        ? `A new testing shift is ready for update ${short}. Open Testing to start your session.`
-        : "A new testing shift is ready. Open Testing to start your session.")
+        ? `A new testing shift is ready for update ${short}. Open Staff Hub to start your session.`
+        : "A new testing shift is ready. Open Staff Hub to start your session.")
   )
     .trim()
     .slice(0, 500);
@@ -5446,7 +5446,7 @@ async function notifyBetaTestersOfShift(
         kind: "testing_shift",
         actorUsername: "synk",
         body: notifBody,
-        url: "/testing",
+        url: "https://staffhub.bhswebsite.org/",
       })
     );
   } catch (err) {
@@ -5715,8 +5715,8 @@ async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
       title: "Early access shift",
       body:
         Number(agenda && agenda.created) > 0
-          ? `A new testing shift is ready for update ${short}. Open Testing to start your session.`
-          : `Synk update ${short} is live for early access review. Open Testing when you are ready.`,
+          ? `A new testing shift is ready for update ${short}. Open Staff Hub to start your session.`
+          : `Synk update ${short} is live for early access review. Open Staff Hub when you are ready.`,
       createInbox: true,
     });
   } catch (err) {

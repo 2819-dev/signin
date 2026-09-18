@@ -279,36 +279,50 @@
     if (isDm && viewingMessages) return;
     const actor = String((note && (note.actorUsername || note.actor)) || "Someone");
     const isAppUpdate = kind === "app_update" || kind === "app_updated" || kind === "update";
+    const isShift =
+      kind === "testing_shift" || kind === "beta_shift" || kind === "testing_agenda";
     const title = isAppUpdate
       ? "App updated"
-      : isDm
-        ? "New message"
-        : kind === "friend_request"
-          ? "Friend request"
-          : "Notification";
+      : isShift
+        ? "Early access shift"
+        : isDm
+          ? "New message"
+          : kind === "friend_request"
+            ? "Friend request"
+            : "Notification";
     const body = String(
       (note && (note.body || note.description)) ||
-        (isAppUpdate ? "Synk was updated. Open release notes for what’s new." : `${actor} sent you a notification.`)
+        (isAppUpdate
+          ? "Synk was updated. Open release notes for what’s new."
+          : isShift
+            ? "A new testing shift is ready. Open Staff Hub to start your session."
+            : `${actor} sent you a notification.`)
     ).slice(0, 180);
     const url = isAppUpdate
       ? "/community/inbox"
-      : isDm
-        ? `/community/inbox?tab=messages&dm=${encodeURIComponent(actor)}`
-        : "/community/inbox";
+      : isShift
+        ? "https://staffhub.bhswebsite.org/"
+        : isDm
+          ? `/community/inbox?tab=messages&dm=${encodeURIComponent(actor)}`
+          : "/community/inbox";
     try {
       const n = new Notification(title, {
         body,
-        // Stable tag so repeated app updates replace instead of stacking.
-        tag: isAppUpdate ? "app-update" : `local-${kind || "note"}-${actor}`,
-        renotify: !isAppUpdate,
+        // Stable tag so repeated app updates / shifts replace instead of stacking.
+        tag: isAppUpdate ? "app-update" : isShift ? "testing-shift" : `local-${kind || "note"}-${actor}`,
+        renotify: !(isAppUpdate || isShift),
         icon: "/apple-touch-icon.png",
         badge: "/apple-touch-icon.png",
-        data: { url, type: isDm ? "dm" : isAppUpdate ? "app_update" : kind || "notification" },
+        data: {
+          url,
+          type: isDm ? "dm" : isAppUpdate ? "app_update" : isShift ? "testing_shift" : kind || "notification",
+        },
       });
       n.onclick = () => {
         try {
           window.focus();
-          window.location.href = url;
+          if (/^https?:\/\//i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
+          else window.location.href = url;
         } catch (_) {}
         n.close();
       };
