@@ -151,16 +151,237 @@ function normalizeCommunityRole(value) {
 
 function mapCommunityGroup(row) {
   if (!row) return null;
+  const isOfficial = row.is_official === true || row.slug === "synk";
+  // Discord shell is reserved for the official Synk group only.
+  const theme = isOfficial ? "discord" : "standard";
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
     description: row.description || "",
+    theme,
+    isOfficial: row.is_official === true,
+    iconUrl: row.icon_url || "",
+    bannerUrl: row.banner_url || "",
     createdBy: row.created_by || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     postCount: row.post_count != null ? Number(row.post_count) : undefined,
+    memberCount: row.member_count != null ? Number(row.member_count) : undefined,
+    categories: Array.isArray(row.categories) ? row.categories : undefined,
+    channels: Array.isArray(row.channels) ? row.channels : undefined,
+    roles: Array.isArray(row.roles) ? row.roles : undefined,
+    tags: Array.isArray(row.tags) ? row.tags : undefined,
   };
+}
+
+function formatChannelLabel(emoji, name) {
+  const e = String(emoji || "").trim();
+  const n = capitalizeChannelName(name);
+  if (e && n) return `${e} | ${n}`;
+  return n || e || "channel";
+}
+
+function capitalizeChannelName(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  // Keep ALL-CAPS category-style names as-is; otherwise Title-case first letter.
+  if (raw === raw.toUpperCase() && /[A-Z]/.test(raw)) return raw;
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function normalizeChannelKind(value, slug = "") {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (["announcements", "announcement"].includes(raw)) return "announcements";
+  if (["suggestions", "suggestion", "ideas", "idea"].includes(raw)) return "suggestions";
+  if (["support", "ticket", "tickets", "helpdesk"].includes(raw)) return "support";
+  if (["readonly", "read-only", "rules", "welcome"].includes(raw)) return "readonly";
+  const s = normalizeChannelSlug(slug || raw);
+  if (s === "announcements") return "announcements";
+  if (s === "suggestions" || s === "ideas") return "suggestions";
+  if (s === "support" || s === "help" || s === "tickets") return "support";
+  if (s === "rules" || s === "welcome") return "readonly";
+  return "text";
+}
+
+function isForumChannelKind(kind, slug = "") {
+  const normalized = normalizeChannelKind(kind, slug);
+  return normalized === "suggestions" || normalized === "support";
+}
+
+function normalizeSuggestionStatus(value) {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  if (raw === "approve" || raw === "approved" || raw === "yes") return "accepted";
+  if (raw === "deny" || raw === "rejected" || raw === "no") return "denied";
+  if (raw === "done" || raw === "shipped" || raw === "already_implemented") return "implemented";
+  if (raw === "in_progress" || raw === "in-progress" || raw === "coming") return "planned";
+  if (raw === "waiting" || raw === "waiting_on_user" || raw === "pending") return "waiting";
+  if (raw === "resolved" || raw === "complete" || raw === "completed") return "implemented";
+  if (["open", "planned", "accepted", "implemented", "denied", "closed", "waiting"].includes(raw)) {
+    return raw;
+  }
+  return "";
+}
+
+function normalizeTicketStatus(value) {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  if (raw === "progress" || raw === "in-progress" || raw === "working" || raw === "planned" || raw === "accepted") {
+    return "in_progress";
+  }
+  if (raw === "pending" || raw === "waiting_on_user" || raw === "awaiting") return "waiting";
+  if (raw === "done" || raw === "complete" || raw === "completed" || raw === "fixed" || raw === "implemented") {
+    return "resolved";
+  }
+  if (raw === "deny" || raw === "denied" || raw === "close" || raw === "closed_ticket") return "closed";
+  if (["open", "in_progress", "waiting", "resolved", "closed"].includes(raw)) return raw;
+  return "";
+}
+
+const DEFAULT_SUGGESTION_TAGS = [
+  { id: "feature", label: "Feature", color: "#57F287" },
+  { id: "ui", label: "UI", color: "#5865F2" },
+  { id: "mobile", label: "Mobile", color: "#FEE75C" },
+  { id: "performance", label: "Performance", color: "#EB459E" },
+  { id: "bugfix", label: "Bugfix", color: "#ED4245" },
+  { id: "other", label: "Other", color: "#99AAB5" },
+];
+
+const DEFAULT_TICKET_TAGS = [
+  { id: "account", label: "Account", color: "#5865F2" },
+  { id: "access", label: "Access", color: "#57F287" },
+  { id: "billing", label: "Billing", color: "#FEE75C" },
+  { id: "technical", label: "Technical", color: "#EB459E" },
+  { id: "report", label: "Report", color: "#ED4245" },
+  { id: "other", label: "Other", color: "#99AAB5" },
+];
+
+function normalizeTaggedList(value, allowedList) {
+  const allowed = new Map((allowedList || []).map((t) => [t.id, t]));
+  const raw = Array.isArray(value)
+    ? value
+    : String(value || "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    const id = String(item && item.id != null ? item.id : item)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "")
+      .slice(0, 32);
+    if (!id || seen.has(id) || !allowed.has(id)) continue;
+    seen.add(id);
+    out.push(allowed.get(id));
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+function normalizeSuggestionTags(value) {
+  return normalizeTaggedList(value, DEFAULT_SUGGESTION_TAGS);
+}
+
+function normalizeTicketTags(value) {
+  return normalizeTaggedList(value, DEFAULT_TICKET_TAGS);
+}
+
+function suggestionTagsToIds(tags) {
+  return (Array.isArray(tags) ? tags : [])
+    .map((t) => String((t && t.id) || t || "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function mapSuggestionTagsFromRow(row, channelKind = "") {
+  const ids = Array.isArray(row && row.suggestion_tags) ? row.suggestion_tags : [];
+  const kind = normalizeChannelKind(
+    channelKind || (row && row.channel_kind) || "",
+    (row && (row.channel_slug || row.slug)) || ""
+  );
+  if (kind === "support") return normalizeTicketTags(ids);
+  const suggestionTags = normalizeSuggestionTags(ids);
+  if (suggestionTags.length) return suggestionTags;
+  // Fall back so legacy/shared tags still render.
+  return normalizeTicketTags(ids);
+}
+
+function mapCommunityChannel(row) {
+  if (!row) return null;
+  const emoji = String(row.emoji || "").trim();
+  const name = capitalizeChannelName(row.name || row.slug || "");
+  const slug = row.slug;
+  const kind = normalizeChannelKind(row.kind, slug);
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    categoryId: row.category_id || null,
+    emoji,
+    name,
+    slug,
+    description: row.description || "",
+    sortOrder: Number(row.sort_order) || 0,
+    kind,
+    label: formatChannelLabel(emoji, name),
+    staffOnlyPost: kind === "announcements" || kind === "readonly",
+    isForum: kind === "suggestions" || kind === "support",
+  };
+}
+
+function mapCommunityCategory(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    name: String(row.name || "").trim(),
+    sortOrder: Number(row.sort_order) || 0,
+  };
+}
+
+function mapCommunityGroupRole(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    name: String(row.name || "").trim(),
+    color: String(row.color || "#94a3b8").trim() || "#94a3b8",
+    sortOrder: Number(row.sort_order) || 0,
+    memberCount: row.member_count != null ? Number(row.member_count) : undefined,
+  };
+}
+
+function normalizeRoleName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 32);
+}
+
+function normalizeRoleColor(value) {
+  const raw = String(value || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+    const r = raw.slice(1);
+    return `#${r[0]}${r[0]}${r[1]}${r[1]}${r[2]}${r[2]}`.toLowerCase();
+  }
+  return "#94a3b8";
+}
+
+function normalizeChannelSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
 }
 
 async function ensureSynkCommunityExtras(sql) {
@@ -269,6 +490,28 @@ async function ensureSynkCommunityExtras(sql) {
     CREATE INDEX IF NOT EXISTS synk_community_tags_created_idx
     ON synk_community_tags (created_at DESC)
   `;
+  await sql`ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS icon_url TEXT`;
+  await sql`ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS learn_more_enabled BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS learn_more_page_id UUID`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_info_pages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      slug TEXT NOT NULL,
+      title TEXT NOT NULL,
+      summary TEXT NOT NULL DEFAULT '',
+      hero_image_url TEXT NOT NULL DEFAULT '',
+      blocks JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS synk_info_pages_slug_idx ON synk_info_pages (slug)`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_info_pages_updated_idx ON synk_info_pages (updated_at DESC)`;
+
+  await ensureBetaTestingTables(sql);
+
 
   await sql`
     CREATE TABLE IF NOT EXISTS synk_community_profile_tags (
@@ -290,6 +533,8 @@ async function ensureSynkCommunityExtras(sql) {
   `;
 
   await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS pinned_tag_id UUID`;
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS display_name TEXT`;
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT`;
   try {
     await sql`
       ALTER TABLE synk_community_profiles
@@ -301,6 +546,8 @@ async function ensureSynkCommunityExtras(sql) {
   }
 
   await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS pinned_tag_id UUID`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS display_name TEXT`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS avatar_url TEXT`;
   try {
     await sql`
       ALTER TABLE synk_community_alt_accounts
@@ -330,6 +577,20 @@ async function ensureSynkCommunityExtras(sql) {
     ON synk_community_username_tags (tag_id)
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_group_tags (
+      group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+      tag_id UUID NOT NULL REFERENCES synk_community_tags(id) ON DELETE CASCADE,
+      assigned_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (group_id, tag_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_group_tags_tag_idx
+    ON synk_community_group_tags (tag_id)
+  `;
+
   // Migrate legacy profile-scoped tags into username-scoped tags.
   await sql`
     INSERT INTO synk_community_username_tags (public_username, tag_id, assigned_by, created_at)
@@ -340,8 +601,338 @@ async function ensureSynkCommunityExtras(sql) {
     ON CONFLICT (public_username, tag_id) DO NOTHING
   `;
 
+  // Post fields for typed posts, scoring, and polls.
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS title TEXT`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS post_type TEXT NOT NULL DEFAULT 'text'`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS link_url TEXT`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS image_url TEXT`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS score INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS poll_options JSONB`;
+  await sql`ALTER TABLE synk_community_posts ALTER COLUMN body SET DEFAULT ''`;
+  try {
+    await sql`ALTER TABLE synk_community_posts ALTER COLUMN body DROP NOT NULL`;
+  } catch (_) {
+    // Already nullable or unsupported.
+  }
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_posts_score_created_idx
+    ON synk_community_posts (score DESC, created_at DESC)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_comments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      parent_id UUID REFERENCES synk_community_comments(id) ON DELETE CASCADE,
+      author_username TEXT,
+      body TEXT NOT NULL,
+      score INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_comments_post_created_idx
+    ON synk_community_comments (post_id, created_at ASC)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_comments_parent_idx
+    ON synk_community_comments (parent_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_votes (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      target_type TEXT NOT NULL,
+      target_id UUID NOT NULL,
+      value SMALLINT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, target_type, target_id),
+      CONSTRAINT synk_community_votes_type_chk CHECK (target_type IN ('post', 'comment')),
+      CONSTRAINT synk_community_votes_value_chk CHECK (value IN (-1, 1))
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_votes_target_idx
+    ON synk_community_votes (target_type, target_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_saves (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, post_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_saves_profile_created_idx
+    ON synk_community_saves (synk_profile_id, created_at DESC)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_hides (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, post_id)
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_memberships (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, group_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_memberships_group_idx
+    ON synk_community_memberships (group_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_poll_votes (
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      option_index INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (post_id, synk_profile_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_poll_votes_post_idx
+    ON synk_community_poll_votes (post_id, option_index)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_notifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      actor_username TEXT,
+      post_id UUID REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      comment_id UUID REFERENCES synk_community_comments(id) ON DELETE CASCADE,
+      body TEXT NOT NULL DEFAULT '',
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_notifications_profile_created_idx
+    ON synk_community_notifications (synk_profile_id, created_at DESC)
+  `;
+
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS bio TEXT`;
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS dm_policy TEXT NOT NULL DEFAULT 'friends'`;
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS presence_status TEXT NOT NULL DEFAULT 'online'`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS bio TEXT`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS dm_policy TEXT NOT NULL DEFAULT 'friends'`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS presence_status TEXT NOT NULL DEFAULT 'online'`;
+  await sql`
+    UPDATE synk_community_profiles
+    SET dm_policy = 'friends'
+    WHERE dm_policy IS NULL
+       OR btrim(dm_policy) = ''
+       OR lower(dm_policy) NOT IN ('friends', 'nobody', 'everyone')
+  `;
+  await sql`
+    UPDATE synk_community_alt_accounts
+    SET dm_policy = 'friends'
+    WHERE dm_policy IS NULL
+       OR btrim(dm_policy) = ''
+       OR lower(dm_policy) NOT IN ('friends', 'nobody', 'everyone')
+  `;
+  await sql`
+    UPDATE synk_community_profiles
+    SET presence_status = 'online'
+    WHERE presence_status IS NULL
+       OR btrim(presence_status) = ''
+       OR lower(presence_status) NOT IN ('online', 'idle', 'dnd', 'offline')
+  `;
+  await sql`
+    UPDATE synk_community_alt_accounts
+    SET presence_status = 'online'
+    WHERE presence_status IS NULL
+       OR btrim(presence_status) = ''
+       OR lower(presence_status) NOT IN ('online', 'idle', 'dnd', 'offline')
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_friendships (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      requester_username TEXT NOT NULL,
+      addressee_username TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT synk_community_friendships_status_chk
+        CHECK (status IN ('pending', 'accepted')),
+      UNIQUE (requester_username, addressee_username)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_friendships_addressee_idx
+    ON synk_community_friendships (addressee_username)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_friendships_requester_idx
+    ON synk_community_friendships (requester_username)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_follows (
+      follower_username TEXT NOT NULL,
+      following_username TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (follower_username, following_username),
+      CONSTRAINT synk_community_follows_self_chk
+        CHECK (follower_username <> following_username)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_follows_following_idx
+    ON synk_community_follows (following_username)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_follows_follower_idx
+    ON synk_community_follows (follower_username)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_dm_threads (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_a TEXT NOT NULL,
+      user_b TEXT NOT NULL,
+      last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_a, user_b)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_dm_threads_user_a_idx
+    ON synk_community_dm_threads (user_a)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_dm_threads_user_b_idx
+    ON synk_community_dm_threads (user_b)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_dm_threads_last_message_idx
+    ON synk_community_dm_threads (last_message_at DESC)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_dm_messages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      thread_id UUID NOT NULL REFERENCES synk_community_dm_threads(id) ON DELETE CASCADE,
+      sender_username TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_dm_messages_thread_created_idx
+    ON synk_community_dm_messages (thread_id, created_at ASC)
+  `;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS unsent_at TIMESTAMPTZ`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS deleted_for_sender BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS deleted_for_recipient BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS edit_history JSONB NOT NULL DEFAULT '[]'::jsonb`;
+  await sql`ALTER TABLE synk_community_dm_messages ADD COLUMN IF NOT EXISTS reactions JSONB NOT NULL DEFAULT '{}'::jsonb`;
+
+  await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'standard'`;
+  await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS is_official BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS banner_url TEXT`;
+  await sql`ALTER TABLE synk_community_groups ADD COLUMN IF NOT EXISTS icon_url TEXT`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_group_categories (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_group_categories_group_idx
+    ON synk_community_group_categories (group_id, sort_order ASC)
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_group_channels (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+      category_id UUID REFERENCES synk_community_group_categories(id) ON DELETE SET NULL,
+      emoji TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`ALTER TABLE synk_community_group_channels ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'text'`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS suggestion_status TEXT`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS suggestion_tags TEXT[] NOT NULL DEFAULT '{}'`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS suggestion_reply TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_community_group_channels_group_slug_idx
+    ON synk_community_group_channels (group_id, slug)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_group_channels_group_idx
+    ON synk_community_group_channels (group_id, sort_order ASC)
+  `;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS channel_id UUID`;
+  try {
+    await sql`
+      ALTER TABLE synk_community_posts
+      ADD CONSTRAINT synk_community_posts_channel_id_fkey
+      FOREIGN KEY (channel_id) REFERENCES synk_community_group_channels(id) ON DELETE SET NULL
+    `;
+  } catch (_) {}
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_posts_channel_created_idx
+    ON synk_community_posts (channel_id, created_at DESC)
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_group_roles (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT '#94a3b8',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS synk_community_group_roles_group_name_idx
+    ON synk_community_group_roles (group_id, lower(name))
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_group_roles_group_idx
+    ON synk_community_group_roles (group_id, sort_order ASC)
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_group_role_members (
+      role_id UUID NOT NULL REFERENCES synk_community_group_roles(id) ON DELETE CASCADE,
+      username TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (role_id, username)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_group_role_members_username_idx
+    ON synk_community_group_role_members (username)
+  `;
+
   await ensureCommunityOwner(sql);
-  await ensureDefaultCommunityGroup(sql);
+  await ensureOfficialSynkGroup(sql);
 }
 
 async function isCommunityUsernameTaken(sql, username, { exceptProfileId = null, exceptAltId = null } = {}) {
@@ -364,10 +955,46 @@ async function isCommunityUsernameTaken(sql, username, { exceptProfileId = null,
   return false;
 }
 
+/**
+ * Rename a community username everywhere it is referenced.
+ * Used for both primary profiles and alt accounts so alts can be managed like regular accounts.
+ */
+async function renameCommunityUsername(sql, fromUsername, toUsername) {
+  const from = normalizePublicUsername(fromUsername);
+  const to = normalizePublicUsername(toUsername);
+  if (!from || !to) {
+    return { ok: false, error: "Invalid username" };
+  }
+  if (from === to) return { ok: true, username: to, unchanged: true };
+
+  await sql`UPDATE synk_community_posts SET author_username = ${to} WHERE author_username = ${from}`;
+  await sql`UPDATE synk_community_comments SET author_username = ${to} WHERE author_username = ${from}`;
+  await sql`UPDATE synk_community_username_tags SET public_username = ${to} WHERE public_username = ${from}`;
+  await sql`UPDATE synk_community_follows SET follower_username = ${to} WHERE follower_username = ${from}`;
+  await sql`UPDATE synk_community_follows SET following_username = ${to} WHERE following_username = ${from}`;
+  await sql`UPDATE synk_community_friendships SET requester_username = ${to} WHERE requester_username = ${from}`;
+  await sql`UPDATE synk_community_friendships SET addressee_username = ${to} WHERE addressee_username = ${from}`;
+  await sql`UPDATE synk_community_dm_threads SET user_a = ${to} WHERE user_a = ${from}`;
+  await sql`UPDATE synk_community_dm_threads SET user_b = ${to} WHERE user_b = ${from}`;
+  await sql`UPDATE synk_community_dm_messages SET sender_username = ${to} WHERE sender_username = ${from}`;
+  await sql`
+    UPDATE synk_community_notifications
+    SET actor_username = ${to}
+    WHERE actor_username = ${from}
+  `.catch(() => null);
+  await sql`
+    UPDATE synk_community_group_role_members
+    SET username = ${to}
+    WHERE username = ${from}
+  `.catch(() => null);
+
+  return { ok: true, username: to };
+}
+
 async function listOwnerAltAccounts(sql, ownerProfileId) {
   if (!ownerProfileId) return [];
   const rows = await sql`
-    SELECT id, owner_synk_profile_id, public_username, label, created_at, updated_at
+    SELECT id, owner_synk_profile_id, public_username, label, display_name, avatar_url, bio, dm_policy, presence_status, created_at, updated_at
     FROM synk_community_alt_accounts
     WHERE owner_synk_profile_id = ${ownerProfileId}
     ORDER BY created_at ASC
@@ -376,6 +1003,11 @@ async function listOwnerAltAccounts(sql, ownerProfileId) {
     id: row.id,
     username: row.public_username,
     label: row.label || "",
+    displayName: String(row.display_name || "").trim(),
+    avatarUrl: String(row.avatar_url || "").trim(),
+    bio: normalizeBio(row.bio),
+    dmPolicy: normalizeDmPolicy(row.dm_policy),
+    presenceStatus: normalizePresenceStatus(row.presence_status),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     isAlt: true,
@@ -434,11 +1066,13 @@ async function findCommunityPublicProfile(sql, username) {
     SELECT
       c.synk_profile_id,
       c.public_username,
+      c.display_name,
+      c.avatar_url,
+      c.bio,
+      c.dm_policy,
       c.created_at,
-      p.name,
       s.role
     FROM synk_community_profiles c
-    JOIN synk_profiles p ON p.id = c.synk_profile_id
     LEFT JOIN synk_community_staff s ON s.synk_profile_id = c.synk_profile_id
     WHERE c.public_username = ${name}
     LIMIT 1
@@ -454,7 +1088,10 @@ async function findCommunityPublicProfile(sql, username) {
     const pinnedTag = tags.find((tag) => tag.pinned) || null;
     return {
       username: primary[0].public_username,
-      name: primary[0].name || "",
+      displayName: String(primary[0].display_name || "").trim(),
+      avatarUrl: String(primary[0].avatar_url || "").trim(),
+      bio: normalizeBio(primary[0].bio),
+      dmPolicy: normalizeDmPolicy(primary[0].dm_policy),
       role: normalizeCommunityRole(primary[0].role),
       isAlt: false,
       joinedAt: primary[0].created_at,
@@ -465,7 +1102,7 @@ async function findCommunityPublicProfile(sql, username) {
   }
 
   const alt = await sql`
-    SELECT id, public_username, label, created_at
+    SELECT id, public_username, label, display_name, avatar_url, bio, dm_policy, created_at
     FROM synk_community_alt_accounts
     WHERE public_username = ${name}
     LIMIT 1
@@ -480,7 +1117,10 @@ async function findCommunityPublicProfile(sql, username) {
   const pinnedTag = tags.find((tag) => tag.pinned) || null;
   return {
     username: alt[0].public_username,
-    name: alt[0].label || "",
+    displayName: String(alt[0].display_name || "").trim() || String(alt[0].label || "").trim(),
+    avatarUrl: String(alt[0].avatar_url || "").trim(),
+    bio: normalizeBio(alt[0].bio),
+    dmPolicy: normalizeDmPolicy(alt[0].dm_policy),
     role: null,
     isAlt: true,
     joinedAt: alt[0].created_at,
@@ -531,17 +1171,129 @@ function mapCommunityTag(row, { pinned = false } = {}) {
     slug: row.slug,
     description: row.description || "",
     color: row.color || "#6366f1",
+    iconUrl: row.icon_url || null,
+    learnMoreEnabled: row.learn_more_enabled === true,
+    learnMorePageId: row.learn_more_page_id || null,
+    learnMorePageSlug: row.learn_more_page_slug || row.info_page_slug || null,
+    learnMorePageTitle: row.learn_more_page_title || row.info_page_title || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     pinned: Boolean(pinned || row.pinned),
   };
 }
 
+function mapInfoPage(row, { includeBlocks = true } = {}) {
+  if (!row) return null;
+  let blocks = [];
+  try {
+    const raw = row.blocks;
+    blocks = Array.isArray(raw) ? raw : typeof raw === "string" ? JSON.parse(raw || "[]") : [];
+  } catch (_) {
+    blocks = [];
+  }
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    summary: row.summary || "",
+    heroImageUrl: row.hero_image_url || "",
+    blocks: includeBlocks ? blocks : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function normalizePageSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function normalizePageTitle(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 120);
+}
+
+function normalizePageBlocks(value) {
+  const list = Array.isArray(value) ? value : [];
+  const out = [];
+  for (const item of list.slice(0, 40)) {
+    if (!item || typeof item !== "object") continue;
+    const type = String(item.type || "").trim().toLowerCase();
+    if (type === "heading") {
+      const text = String(item.text || "").trim().slice(0, 160);
+      if (text) out.push({ type: "heading", text });
+    } else if (type === "paragraph" || type === "text") {
+      const text = String(item.text || "").trim().slice(0, 4000);
+      if (text) out.push({ type: "paragraph", text });
+    } else if (type === "image") {
+      const url = String(item.url || item.src || "").trim().slice(0, 800);
+      if (!url) continue;
+      if (!(url.startsWith("/api/") || /^https?:\/\//i.test(url))) continue;
+      out.push({ type: "image", url, alt: String(item.alt || "").trim().slice(0, 120) });
+    }
+  }
+  return out;
+}
+
+async function listInfoPages(sql) {
+  const rows = await sql`
+    SELECT id, slug, title, summary, hero_image_url, blocks, created_at, updated_at
+    FROM synk_info_pages
+    ORDER BY updated_at DESC
+    LIMIT 200
+  `;
+  return rows.map((row) => mapInfoPage(row));
+}
+
+async function findInfoPage(sql, { id, slug } = {}) {
+  const pageId = String(id || "").trim();
+  const pageSlug = normalizePageSlug(slug);
+  if (pageId) {
+    const rows = await sql`
+      SELECT id, slug, title, summary, hero_image_url, blocks, created_at, updated_at
+      FROM synk_info_pages WHERE id = ${pageId} LIMIT 1
+    `;
+    return mapInfoPage(rows[0]);
+  }
+  if (pageSlug) {
+    const rows = await sql`
+      SELECT id, slug, title, summary, hero_image_url, blocks, created_at, updated_at
+      FROM synk_info_pages WHERE slug = ${pageSlug} LIMIT 1
+    `;
+    return mapInfoPage(rows[0]);
+  }
+  return null;
+}
+
+function isBetaTesterTag(tag) {
+  if (!tag) return false;
+  const slug = String(tag.slug || "").toLowerCase();
+  const name = String(tag.name || "").toLowerCase();
+  return (
+    slug === "beta-tester" ||
+    slug === "beta_tester" ||
+    slug === "betatester" ||
+    slug.includes("beta-tester") ||
+    name.includes("beta tester")
+  );
+}
+
 async function listCommunityTags(sql) {
   const rows = await sql`
-    SELECT id, name, slug, description, color, created_by, created_at, updated_at
-    FROM synk_community_tags
-    ORDER BY name ASC
+    SELECT
+      t.id, t.name, t.slug, t.description, t.color, t.icon_url,
+      t.learn_more_enabled, t.learn_more_page_id, t.created_by, t.created_at, t.updated_at,
+      p.slug AS learn_more_page_slug,
+      p.title AS learn_more_page_title
+    FROM synk_community_tags t
+    LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
+    ORDER BY t.name ASC
   `;
   return rows.map((row) => mapCommunityTag(row));
 }
@@ -551,18 +1303,28 @@ async function findCommunityTag(sql, { id, slug } = {}) {
   const tagSlug = normalizeTagSlug(slug);
   if (tagId) {
     const rows = await sql`
-      SELECT id, name, slug, description, color, created_by, created_at, updated_at
-      FROM synk_community_tags
-      WHERE id = ${tagId}
+      SELECT
+        t.id, t.name, t.slug, t.description, t.color, t.icon_url,
+        t.learn_more_enabled, t.learn_more_page_id, t.created_by, t.created_at, t.updated_at,
+        p.slug AS learn_more_page_slug,
+        p.title AS learn_more_page_title
+      FROM synk_community_tags t
+      LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
+      WHERE t.id = ${tagId}
       LIMIT 1
     `;
     return mapCommunityTag(rows[0]);
   }
   if (tagSlug) {
     const rows = await sql`
-      SELECT id, name, slug, description, color, created_by, created_at, updated_at
-      FROM synk_community_tags
-      WHERE slug = ${tagSlug}
+      SELECT
+        t.id, t.name, t.slug, t.description, t.color, t.icon_url,
+        t.learn_more_enabled, t.learn_more_page_id, t.created_by, t.created_at, t.updated_at,
+        p.slug AS learn_more_page_slug,
+        p.title AS learn_more_page_title
+      FROM synk_community_tags t
+      LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
+      WHERE t.slug = ${tagSlug}
       LIMIT 1
     `;
     return mapCommunityTag(rows[0]);
@@ -579,6 +1341,7 @@ async function listProfileTags(sql, profileId) {
       t.slug,
       t.description,
       t.color,
+      t.icon_url,
       t.created_at,
       t.updated_at,
       CASE WHEN c.pinned_tag_id = t.id THEN TRUE ELSE FALSE END AS pinned
@@ -596,7 +1359,7 @@ async function listProfileTags(sql, profileId) {
 async function getPinnedTagForProfile(sql, profileId) {
   if (!profileId) return null;
   const rows = await sql`
-    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.icon_url, t.created_at, t.updated_at
     FROM synk_community_profiles c
     JOIN synk_community_tags t ON t.id = c.pinned_tag_id
     WHERE c.synk_profile_id = ${profileId}
@@ -615,14 +1378,20 @@ async function listUsernameTags(sql, username) {
       t.slug,
       t.description,
       t.color,
+      t.icon_url,
+      t.learn_more_enabled,
+      t.learn_more_page_id,
       t.created_at,
       t.updated_at,
+      p.slug AS learn_more_page_slug,
+      p.title AS learn_more_page_title,
       CASE
         WHEN COALESCE(c.pinned_tag_id, a.pinned_tag_id) = t.id THEN TRUE
         ELSE FALSE
       END AS pinned
     FROM synk_community_username_tags ut
     JOIN synk_community_tags t ON t.id = ut.tag_id
+    LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
     LEFT JOIN synk_community_profiles c ON c.public_username = ut.public_username
     LEFT JOIN synk_community_alt_accounts a ON a.public_username = ut.public_username
     WHERE ut.public_username = ${name}
@@ -637,7 +1406,7 @@ async function getPinnedTagForUsername(sql, username) {
   const name = normalizePublicUsername(username);
   if (!name) return null;
   const primary = await sql`
-    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.icon_url, t.created_at, t.updated_at
     FROM synk_community_profiles c
     JOIN synk_community_tags t ON t.id = c.pinned_tag_id
     WHERE c.public_username = ${name}
@@ -645,7 +1414,7 @@ async function getPinnedTagForUsername(sql, username) {
   `;
   if (primary[0]) return mapCommunityTag(primary[0], { pinned: true });
   const alt = await sql`
-    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.icon_url, t.created_at, t.updated_at
     FROM synk_community_alt_accounts a
     JOIN synk_community_tags t ON t.id = a.pinned_tag_id
     WHERE a.public_username = ${name}
@@ -667,6 +1436,7 @@ async function getPinnedTagsByUsernames(sql, usernames) {
       t.slug,
       t.description,
       t.color,
+      t.icon_url,
       t.created_at,
       t.updated_at
     FROM (
@@ -820,45 +1590,571 @@ async function ensureCommunityOwner(sql) {
   return visionId;
 }
 
-async function ensureDefaultCommunityGroup(sql) {
-  const existing = await sql`
-    SELECT id, slug FROM synk_community_groups WHERE slug = 'general' LIMIT 1
+async function ensureOfficialSynkGroup(sql) {
+  const owner = await sql`
+    SELECT synk_profile_id FROM synk_community_staff WHERE role = 'owner' LIMIT 1
   `;
-  let groupId = existing[0] && existing[0].id;
-  if (!groupId) {
-    const owner = await sql`
-      SELECT synk_profile_id FROM synk_community_staff WHERE role = 'owner' LIMIT 1
+  const createdBy = owner[0] ? owner[0].synk_profile_id : null;
+
+  let group = null;
+  const existing = await sql`
+    SELECT id, slug, name, description, theme, is_official, banner_url, icon_url, created_by, created_at, updated_at
+    FROM synk_community_groups
+    WHERE slug = 'synk' OR is_official = TRUE
+    ORDER BY CASE WHEN slug = 'synk' THEN 0 ELSE 1 END
+    LIMIT 1
+  `;
+  if (existing[0]) {
+    group = existing[0];
+    // Keep staff-customized name / description / media — only enforce official shell flags.
+    await sql`
+      UPDATE synk_community_groups
+      SET
+        slug = 'synk',
+        theme = 'discord',
+        is_official = TRUE,
+        updated_at = NOW()
+      WHERE id = ${group.id}
     `;
-    const createdBy = owner[0] ? owner[0].synk_profile_id : null;
+  } else {
     try {
       const created = await sql`
-        INSERT INTO synk_community_groups (slug, name, description, created_by)
+        INSERT INTO synk_community_groups (slug, name, description, theme, is_official, created_by)
         VALUES (
-          'general',
-          'General',
-          'The main Synk Community group. Admins can create more groups.',
+          'synk',
+          'Synk',
+          'Official Synk — product updates, community chat, and feedback.',
+          'discord',
+          TRUE,
           ${createdBy}
         )
-        RETURNING id
+        RETURNING id, slug, name, description, theme, is_official, created_by, created_at, updated_at
       `;
-      groupId = created[0].id;
+      group = created[0];
     } catch (err) {
       if (!(String(err.message || "").includes("unique") || err.code === "23505")) throw err;
       const again = await sql`
-        SELECT id FROM synk_community_groups WHERE slug = 'general' LIMIT 1
+        SELECT id, slug, name, description, theme, is_official, created_by, created_at, updated_at
+        FROM synk_community_groups
+        WHERE slug = 'synk'
+        LIMIT 1
       `;
-      groupId = again[0] && again[0].id;
+      group = again[0] || null;
+      if (group) {
+        await sql`
+          UPDATE synk_community_groups
+          SET theme = 'discord', is_official = TRUE, updated_at = NOW()
+          WHERE id = ${group.id}
+        `;
+      }
+    }
+  }
+  if (!group) return null;
+
+  await syncOfficialSynkLayout(sql, group.id);
+  await purgeLegacyCommunityGroups(sql, group.id);
+
+  // Default roles (no icons — badges stay separate).
+  const roleCount = await sql`
+    SELECT COUNT(*)::int AS count FROM synk_community_group_roles WHERE group_id = ${group.id}
+  `;
+  if (!(Number(roleCount[0] && roleCount[0].count) > 0)) {
+    const defaults = [
+      { name: "Member", color: "#94a3b8", sort: 0 },
+      { name: "Moderator", color: "#22c55e", sort: 1 },
+      { name: "Admin", color: "#f59e0b", sort: 2 },
+    ];
+    for (const role of defaults) {
+      try {
+        await sql`
+          INSERT INTO synk_community_group_roles (group_id, name, color, sort_order)
+          VALUES (${group.id}, ${role.name}, ${role.color}, ${role.sort})
+        `;
+      } catch (err) {
+        if (!(String(err.message || "").includes("unique") || err.code === "23505")) throw err;
+      }
     }
   }
 
-  if (groupId) {
+  await sql`
+    UPDATE synk_community_posts
+    SET group_id = ${group.id}
+    WHERE group_id IS NULL
+  `;
+
+  // Non-official groups never use the Discord shell.
+  await sql`
+    UPDATE synk_community_groups
+    SET theme = 'standard', updated_at = NOW()
+    WHERE COALESCE(is_official, FALSE) = FALSE
+      AND slug <> 'synk'
+      AND lower(theme) = 'discord'
+  `;
+  return group.id;
+}
+
+function officialSynkBlueprint() {
+  // Professional Discord-style sections for the official Synk server.
+  return [
+    {
+      name: "Information",
+      channels: [
+        {
+          emoji: "",
+          name: "Welcome",
+          slug: "welcome",
+          kind: "readonly",
+          description: "Start here — how the official Synk server works",
+        },
+        {
+          emoji: "",
+          name: "Announcements",
+          slug: "announcements",
+          kind: "announcements",
+          description: "Official product updates from the Synk team",
+        },
+        {
+          emoji: "",
+          name: "Rules",
+          slug: "rules",
+          kind: "readonly",
+          description: "Community guidelines everyone follows",
+        },
+      ],
+    },
+    {
+      name: "Community",
+      channels: [
+        {
+          emoji: "",
+          name: "General",
+          slug: "general",
+          kind: "text",
+          description: "Everyday conversation with the Synk community",
+        },
+      ],
+    },
+    {
+      name: "Feedback",
+      channels: [
+        {
+          emoji: "",
+          name: "Suggestions",
+          slug: "suggestions",
+          kind: "suggestions",
+          description:
+            "Share product ideas and bug reports. Everyone can upvote — staff mark Approved or Denied.",
+        },
+      ],
+    },
+    {
+      name: "Support",
+      channels: [
+        {
+          emoji: "",
+          name: "Community Support",
+          slug: "support",
+          kind: "support",
+          description:
+            "Ask the Synk community for help. For official account or billing support, use Support in Hub.",
+        },
+      ],
+    },
+  ];
+}
+
+
+async function upsertOfficialChannel(sql, groupId, channel, categoryId) {
+  await sql`
+    INSERT INTO synk_community_group_channels (
+      group_id, category_id, emoji, name, slug, description, kind, sort_order
+    )
+    VALUES (
+      ${groupId},
+      ${categoryId},
+      ${channel.emoji || ""},
+      ${channel.name},
+      ${channel.slug},
+      ${channel.description || ""},
+      ${channel.kind || "text"},
+      ${Number(channel.sortOrder) || 0}
+    )
+    ON CONFLICT (group_id, slug) DO UPDATE SET
+      category_id = EXCLUDED.category_id,
+      emoji = EXCLUDED.emoji,
+      name = EXCLUDED.name,
+      description = EXCLUDED.description,
+      kind = EXCLUDED.kind,
+      sort_order = EXCLUDED.sort_order
+  `;
+}
+
+async function syncOfficialSynkLayout(sql, groupId) {
+  if (!groupId) return;
+  const blueprint = officialSynkBlueprint();
+
+  // Rename legacy category labels onto the new Information / Community / Feedback map.
+  const categoryAliases = {
+    "start here": "Information",
+    information: "Information",
+    conversation: "Community",
+    community: "Community",
+    feedback: "Feedback",
+    support: "Support",
+    help: "Support",
+  };
+  const existingCats = await sql`
+    SELECT id, name, sort_order FROM synk_community_group_categories WHERE group_id = ${groupId}
+  `;
+  for (const row of existingCats) {
+    const key = String(row.name || "").trim().toLowerCase();
+    const nextName = categoryAliases[key];
+    if (nextName && nextName !== row.name) {
+      await sql`
+        UPDATE synk_community_group_categories
+        SET name = ${nextName}
+        WHERE id = ${row.id}
+      `;
+      row.name = nextName;
+    }
+  }
+
+  const refreshedCats = await sql`
+    SELECT id, name FROM synk_community_group_categories WHERE group_id = ${groupId}
+  `;
+  const catByName = new Map(
+    refreshedCats.map((row) => [String(row.name || "").trim().toLowerCase(), row.id])
+  );
+
+  // Ensure blueprint categories exist with stable sort order.
+  for (let i = 0; i < blueprint.length; i += 1) {
+    const cat = blueprint[i];
+    const key = String(cat.name || "").trim().toLowerCase();
+    if (!key) continue;
+    if (catByName.has(key)) {
+      await sql`
+        UPDATE synk_community_group_categories
+        SET sort_order = ${i}, name = ${cat.name}
+        WHERE id = ${catByName.get(key)}
+      `;
+      continue;
+    }
+    const created = await sql`
+      INSERT INTO synk_community_group_categories (group_id, name, sort_order)
+      VALUES (${groupId}, ${cat.name}, ${i})
+      RETURNING id, name
+    `;
+    catByName.set(key, created[0].id);
+  }
+
+  // Force-apply blueprint channels (names, kinds, order, categories).
+  let sort = 0;
+  const blueprintSlugs = new Set();
+  for (const cat of blueprint) {
+    const categoryId = catByName.get(String(cat.name || "").trim().toLowerCase()) || null;
+    for (const ch of cat.channels) {
+      blueprintSlugs.add(ch.slug);
+      await upsertOfficialChannel(sql, groupId, { ...ch, sortOrder: sort }, categoryId);
+      sort += 1;
+    }
+  }
+
+  // Merge legacy slugs into the new defaults.
+  const rows = await sql`
+    SELECT id, slug FROM synk_community_group_channels WHERE group_id = ${groupId}
+  `;
+  const bySlug = {};
+  for (const row of rows) bySlug[row.slug] = row.id;
+  const merges = {
+    lounge: "general",
+    introductions: "general",
+    info: "welcome",
+    updates: "announcements",
+    feedback: "suggestions",
+    ideas: "suggestions",
+    bugs: "suggestions",
+    bug: "suggestions",
+    help: "support",
+    tickets: "support",
+  };
+  for (const [fromSlug, toSlug] of Object.entries(merges)) {
+    const fromId = bySlug[fromSlug];
+    const toId = bySlug[toSlug];
+    if (!fromId || !toId || fromId === toId) continue;
     await sql`
       UPDATE synk_community_posts
-      SET group_id = ${groupId}
-      WHERE group_id IS NULL
+      SET channel_id = ${toId}
+      WHERE group_id = ${groupId}
+        AND channel_id = ${fromId}
     `;
+    await sql`DELETE FROM synk_community_group_channels WHERE id = ${fromId}`;
+    delete bySlug[fromSlug];
   }
-  return groupId;
+
+  // Drop obsolete blueprint leftovers that were renamed away (keep staff-added extras).
+  const obsolete = [
+    { slug: "lounge", fallback: "general" },
+    { slug: "info", fallback: "welcome" },
+    { slug: "help", fallback: "support" },
+    { slug: "bugs", fallback: "suggestions" },
+    { slug: "bug", fallback: "suggestions" },
+  ];
+  for (const item of obsolete) {
+    const slug = item.slug;
+    if (blueprintSlugs.has(slug)) continue;
+    const id = bySlug[slug];
+    if (!id) continue;
+    const fallbackId = bySlug[item.fallback];
+    if (fallbackId) {
+      await sql`
+        UPDATE synk_community_posts
+        SET channel_id = ${fallbackId}
+        WHERE group_id = ${groupId}
+          AND channel_id = ${id}
+      `;
+    }
+    await sql`DELETE FROM synk_community_group_channels WHERE id = ${id}`;
+  }
+}
+
+async function purgeLegacyCommunityGroups(sql, synkGroupId) {
+  if (!synkGroupId) return;
+  const lounge = await sql`
+    SELECT id FROM synk_community_group_channels
+    WHERE group_id = ${synkGroupId}
+      AND slug IN ('general', 'lounge')
+    ORDER BY CASE WHEN slug = 'general' THEN 0 ELSE 1 END
+    LIMIT 1
+  `;
+  const loungeId = lounge[0] ? lounge[0].id : null;
+  const legacy = await sql`
+    SELECT id, slug
+    FROM synk_community_groups
+    WHERE id <> ${synkGroupId}
+      AND COALESCE(is_official, FALSE) = FALSE
+  `;
+  for (const row of legacy) {
+    if (loungeId) {
+      await sql`
+        UPDATE synk_community_posts
+        SET group_id = ${synkGroupId}, channel_id = ${loungeId}
+        WHERE group_id = ${row.id}
+      `;
+    } else {
+      await sql`
+        UPDATE synk_community_posts
+        SET group_id = ${synkGroupId}, channel_id = NULL
+        WHERE group_id = ${row.id}
+      `;
+    }
+    await sql`DELETE FROM synk_community_groups WHERE id = ${row.id}`;
+  }
+}
+
+async function listGroupTags(sql, groupId) {
+  if (!groupId) return [];
+  const rows = await sql`
+    SELECT
+      t.id, t.name, t.slug, t.description, t.color, t.icon_url,
+      t.learn_more_enabled, t.learn_more_page_id, t.created_at, t.updated_at,
+      p.slug AS learn_more_page_slug,
+      p.title AS learn_more_page_title
+    FROM synk_community_group_tags gt
+    JOIN synk_community_tags t ON t.id = gt.tag_id
+    LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
+    WHERE gt.group_id = ${groupId}
+    ORDER BY t.name ASC
+  `;
+  return rows.map((row) => mapCommunityTag(row));
+}
+
+async function listTagsByGroupIds(sql, groupIds) {
+  const ids = Array.from(new Set((groupIds || []).filter(Boolean)));
+  if (!ids.length) return {};
+  const rows = await sql`
+    SELECT
+      gt.group_id,
+      t.id, t.name, t.slug, t.description, t.color, t.icon_url,
+      t.learn_more_enabled, t.learn_more_page_id, t.created_at, t.updated_at,
+      p.slug AS learn_more_page_slug,
+      p.title AS learn_more_page_title
+    FROM synk_community_group_tags gt
+    JOIN synk_community_tags t ON t.id = gt.tag_id
+    LEFT JOIN synk_info_pages p ON p.id = t.learn_more_page_id
+    WHERE gt.group_id = ANY(${ids})
+    ORDER BY t.name ASC
+  `;
+  const out = {};
+  for (const row of rows) {
+    const key = row.group_id;
+    if (!out[key]) out[key] = [];
+    out[key].push(mapCommunityTag(row));
+  }
+  return out;
+}
+
+async function assignGroupTag(sql, groupId, tagId, assignedBy = null) {
+  if (!groupId || !tagId) return false;
+  await sql`
+    INSERT INTO synk_community_group_tags (group_id, tag_id, assigned_by)
+    VALUES (${groupId}, ${tagId}, ${assignedBy})
+    ON CONFLICT (group_id, tag_id) DO NOTHING
+  `;
+  return true;
+}
+
+async function unassignGroupTag(sql, groupId, tagId) {
+  if (!groupId || !tagId) return false;
+  await sql`
+    DELETE FROM synk_community_group_tags
+    WHERE group_id = ${groupId}
+      AND tag_id = ${tagId}
+  `;
+  return true;
+}
+
+async function listGroupCategories(sql, groupId) {
+  if (!groupId) return [];
+  const rows = await sql`
+    SELECT id, group_id, name, sort_order
+    FROM synk_community_group_categories
+    WHERE group_id = ${groupId}
+    ORDER BY sort_order ASC, name ASC
+  `;
+  return rows.map(mapCommunityCategory);
+}
+
+async function listGroupChannels(sql, groupId) {
+  if (!groupId) return [];
+  const rows = await sql`
+    SELECT id, group_id, category_id, emoji, name, slug, description, kind, sort_order
+    FROM synk_community_group_channels
+    WHERE group_id = ${groupId}
+    ORDER BY sort_order ASC, name ASC
+  `;
+  return rows.map(mapCommunityChannel);
+}
+
+async function findGroupChannel(sql, { id, groupId, slug } = {}) {
+  const channelId = String(id || "").trim();
+  const gId = String(groupId || "").trim();
+  const channelSlug = normalizeChannelSlug(slug);
+  if (channelId) {
+    const rows = await sql`
+      SELECT id, group_id, category_id, emoji, name, slug, description, kind, sort_order
+      FROM synk_community_group_channels
+      WHERE id = ${channelId}
+      LIMIT 1
+    `;
+    return mapCommunityChannel(rows[0]);
+  }
+  if (gId && channelSlug) {
+    const rows = await sql`
+      SELECT id, group_id, category_id, emoji, name, slug, description, kind, sort_order
+      FROM synk_community_group_channels
+      WHERE group_id = ${gId} AND slug = ${channelSlug}
+      LIMIT 1
+    `;
+    return mapCommunityChannel(rows[0]);
+  }
+  return null;
+}
+
+async function listGroupRoles(sql, groupId) {
+  if (!groupId) return [];
+  const rows = await sql`
+    SELECT
+      r.id,
+      r.group_id,
+      r.name,
+      r.color,
+      r.sort_order,
+      COUNT(m.username)::int AS member_count
+    FROM synk_community_group_roles r
+    LEFT JOIN synk_community_group_role_members m ON m.role_id = r.id
+    WHERE r.group_id = ${groupId}
+    GROUP BY r.id
+    ORDER BY r.sort_order ASC, r.name ASC
+  `;
+  return rows.map(mapCommunityGroupRole);
+}
+
+async function hydrateCommunityGroup(sql, group) {
+  if (!group) return null;
+  const [categories, channels, roles, tags, members] = await Promise.all([
+    listGroupCategories(sql, group.id),
+    listGroupChannels(sql, group.id),
+    listGroupRoles(sql, group.id),
+    listGroupTags(sql, group.id),
+    sql`SELECT COUNT(*)::int AS count FROM synk_community_memberships WHERE group_id = ${group.id}`,
+  ]);
+  return {
+    ...group,
+    categories,
+    channels,
+    roles,
+    tags,
+    memberCount: Number(members[0] && members[0].count) || 0,
+  };
+}
+
+async function createGroupRole(sql, groupId, { name, color, sortOrder = 0 } = {}) {
+  const roleName = normalizeRoleName(name);
+  if (!roleName) return { ok: false, error: "Role name required" };
+  try {
+    const rows = await sql`
+      INSERT INTO synk_community_group_roles (group_id, name, color, sort_order)
+      VALUES (${groupId}, ${roleName}, ${normalizeRoleColor(color)}, ${Number(sortOrder) || 0})
+      RETURNING id, group_id, name, color, sort_order
+    `;
+    return { ok: true, role: mapCommunityGroupRole(rows[0]) };
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      return { ok: false, error: "A role with that name already exists" };
+    }
+    throw err;
+  }
+}
+
+async function updateGroupRole(sql, roleId, groupId, { name, color, sortOrder } = {}) {
+  const id = String(roleId || "").trim();
+  if (!id) return { ok: false, error: "Role required" };
+  const existing = await sql`
+    SELECT id, group_id, name, color, sort_order
+    FROM synk_community_group_roles
+    WHERE id = ${id} AND group_id = ${groupId}
+    LIMIT 1
+  `;
+  if (!existing[0]) return { ok: false, error: "Role not found" };
+  const nextName = name != null ? normalizeRoleName(name) : existing[0].name;
+  if (!nextName) return { ok: false, error: "Role name required" };
+  const nextColor = color != null ? normalizeRoleColor(color) : existing[0].color;
+  const nextSort = sortOrder != null ? Number(sortOrder) || 0 : existing[0].sort_order;
+  try {
+    const rows = await sql`
+      UPDATE synk_community_group_roles
+      SET name = ${nextName}, color = ${nextColor}, sort_order = ${nextSort}, updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING id, group_id, name, color, sort_order
+    `;
+    return { ok: true, role: mapCommunityGroupRole(rows[0]) };
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      return { ok: false, error: "A role with that name already exists" };
+    }
+    throw err;
+  }
+}
+
+async function deleteGroupRole(sql, roleId, groupId) {
+  const id = String(roleId || "").trim();
+  if (!id) return { ok: false, error: "Role required" };
+  const deleted = await sql`
+    DELETE FROM synk_community_group_roles
+    WHERE id = ${id} AND group_id = ${groupId}
+    RETURNING id
+  `;
+  return { ok: true, deleted: deleted.length > 0 };
 }
 
 async function getCommunityStaffRole(sql, profileId) {
@@ -906,24 +2202,39 @@ async function listCommunityStaff(sql) {
 }
 
 async function listCommunityGroups(sql) {
+  await ensureOfficialSynkGroup(sql);
   const rows = await sql`
     SELECT
       g.id,
       g.slug,
       g.name,
       g.description,
+      g.theme,
+      g.is_official,
+      g.banner_url,
+      g.icon_url,
       g.created_by,
       g.created_at,
       g.updated_at,
-      COUNT(p.id)::int AS post_count
+      COUNT(DISTINCT p.id)::int AS post_count,
+      COUNT(DISTINCT mem.synk_profile_id)::int AS member_count
     FROM synk_community_groups g
     LEFT JOIN synk_community_posts p ON p.group_id = g.id
+    LEFT JOIN synk_community_memberships mem ON mem.group_id = g.id
     GROUP BY g.id
     ORDER BY
-      CASE g.slug WHEN 'general' THEN 0 ELSE 1 END,
+      CASE WHEN g.is_official THEN 0 WHEN g.slug = 'synk' THEN 0 ELSE 1 END,
       g.name ASC
   `;
-  return rows.map(mapCommunityGroup);
+  const groups = rows.map(mapCommunityGroup);
+  const tagsByGroup = await listTagsByGroupIds(
+    sql,
+    groups.map((g) => g && g.id).filter(Boolean)
+  );
+  return groups.map((group) => ({
+    ...group,
+    tags: tagsByGroup[group.id] || [],
+  }));
 }
 
 async function findCommunityGroup(sql, { id, slug } = {}) {
@@ -931,7 +2242,7 @@ async function findCommunityGroup(sql, { id, slug } = {}) {
   const groupSlug = normalizeGroupSlug(slug);
   if (groupId) {
     const rows = await sql`
-      SELECT id, slug, name, description, created_by, created_at, updated_at
+      SELECT id, slug, name, description, theme, is_official, banner_url, icon_url, created_by, created_at, updated_at
       FROM synk_community_groups
       WHERE id = ${groupId}
       LIMIT 1
@@ -940,7 +2251,7 @@ async function findCommunityGroup(sql, { id, slug } = {}) {
   }
   if (groupSlug) {
     const rows = await sql`
-      SELECT id, slug, name, description, created_by, created_at, updated_at
+      SELECT id, slug, name, description, theme, is_official, banner_url, icon_url, created_by, created_at, updated_at
       FROM synk_community_groups
       WHERE slug = ${groupSlug}
       LIMIT 1
@@ -1076,13 +2387,44 @@ async function ensureSynkCoreTables(sql) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       expires_at TIMESTAMPTZ NOT NULL,
-      revoked_at TIMESTAMPTZ
+      revoked_at TIMESTAMPTZ,
+      stay_signed_in BOOLEAN NOT NULL DEFAULT TRUE
     )
   `;
+  await sql`ALTER TABLE synk_hub_sessions ADD COLUMN IF NOT EXISTS stay_signed_in BOOLEAN NOT NULL DEFAULT TRUE`;
   await sql`
     CREATE INDEX IF NOT EXISTS synk_hub_sessions_profile_idx
     ON synk_hub_sessions (synk_profile_id, revoked_at, expires_at DESC)
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_admin_act_as_tokens (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      token_hash TEXT NOT NULL UNIQUE,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      hub_session_token TEXT NOT NULL,
+      hub_expires_at TIMESTAMPTZ NOT NULL,
+      admin_username TEXT NOT NULL DEFAULT '',
+      next_path TEXT NOT NULL DEFAULT '/hub',
+      expires_at TIMESTAMPTZ NOT NULL,
+      consumed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS synk_admin_act_as_expires_idx ON synk_admin_act_as_tokens (expires_at)`;
+  await sql`ALTER TABLE synk_admin_act_as_tokens ADD COLUMN IF NOT EXISTS hub_session_token TEXT`;
+  await sql`ALTER TABLE synk_admin_act_as_tokens ADD COLUMN IF NOT EXISTS hub_expires_at TIMESTAMPTZ`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_app_update_broadcasts (
+      version TEXT PRIMARY KEY,
+      body TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      notified_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`ALTER TABLE synk_app_update_broadcasts ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS synk_community_profiles (
@@ -1153,8 +2495,29 @@ async function ensureSynkCoreTables(sql) {
   await sql`ALTER TABLE synk_business_accounts ADD COLUMN IF NOT EXISTS product_summary TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE synk_apps ADD COLUMN IF NOT EXISTS product_type TEXT NOT NULL DEFAULT 'custom'`;
 
+  await ensureSynkPlacesTable(sql);
   await ensureSynkAppMemberPolicies(sql);
   await seedVisitorSignInBusiness(sql);
+}
+
+async function ensureSynkPlacesTable(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_places (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      website_url TEXT NOT NULL DEFAULT '',
+      logo_url TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_places_enabled_sort_idx
+    ON synk_places (enabled, sort_order ASC, name ASC)
+  `;
 }
 
 async function ensureSynkAppMemberPolicies(sql) {
@@ -1878,20 +3241,23 @@ async function requireSynkApp(sql, event, body = {}) {
   return { ok: false, error: "Unauthorized Synk app" };
 }
 
-async function issueHubSession(sql, { profileId, staySignedIn = true }) {
+async function issueHubSession(sql, { profileId, staySignedIn = true, ttlMs: ttlMsOverride = null } = {}) {
   const token = mintPassToken();
   const tokenHash = hashToken(token);
-  const ttlMs = staySignedIn ? HUB_SESSION_TTL_MS : HUB_SESSION_SHORT_TTL_MS;
+  const stay = staySignedIn !== false;
+  const ttlMs = Number.isFinite(Number(ttlMsOverride)) && Number(ttlMsOverride) > 0
+    ? Math.min(Math.round(Number(ttlMsOverride)), HUB_SESSION_TTL_MS)
+    : (stay ? HUB_SESSION_TTL_MS : HUB_SESSION_SHORT_TTL_MS);
   const expiresAt = new Date(Date.now() + ttlMs).toISOString();
   await sql`
-    INSERT INTO synk_hub_sessions (synk_profile_id, token_hash, expires_at)
-    VALUES (${profileId}, ${tokenHash}, ${expiresAt}::timestamptz)
+    INSERT INTO synk_hub_sessions (synk_profile_id, token_hash, expires_at, stay_signed_in)
+    VALUES (${profileId}, ${tokenHash}, ${expiresAt}::timestamptz, ${stay})
   `;
   return {
     token,
     expiresAt,
     ttlSeconds: Math.round(ttlMs / 1000),
-    staySignedIn: Boolean(staySignedIn),
+    staySignedIn: stay,
   };
 }
 
@@ -1915,9 +3281,9 @@ async function requireHubSession(sql, event, body = {}) {
   if (!token) return { ok: false, status: 401, error: "Sign in to Synk first" };
   const tokenHash = hashToken(token);
   const rows = await sql`
-    SELECT s.id, s.synk_profile_id, s.expires_at, s.revoked_at,
+    SELECT s.id, s.synk_profile_id, s.expires_at, s.revoked_at, s.stay_signed_in,
            p.synk_code, p.name, p.photo_url, p.enabled,
-           c.public_username
+           c.public_username, c.display_name, c.avatar_url, c.bio, c.dm_policy, c.presence_status
     FROM synk_hub_sessions s
     JOIN synk_profiles p ON p.id = s.synk_profile_id
     LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.id
@@ -1934,18 +3300,1033 @@ async function requireHubSession(sql, event, body = {}) {
   if (row.enabled === false) {
     return { ok: false, status: 403, error: "This Synk membership is paused" };
   }
-  await sql`UPDATE synk_hub_sessions SET last_seen_at = NOW() WHERE id = ${row.id}`;
+  const staySignedIn = row.stay_signed_in !== false;
+  let expiresAt = row.expires_at;
+  // Stay-signed-in sessions slide forward on activity so reopen keeps working.
+  if (staySignedIn) {
+    expiresAt = new Date(Date.now() + HUB_SESSION_TTL_MS).toISOString();
+    await sql`
+      UPDATE synk_hub_sessions
+      SET last_seen_at = NOW(), expires_at = ${expiresAt}::timestamptz
+      WHERE id = ${row.id}
+    `;
+  } else {
+    await sql`UPDATE synk_hub_sessions SET last_seen_at = NOW() WHERE id = ${row.id}`;
+  }
   return {
     ok: true,
     sessionId: row.id,
+    expiresAt,
+    staySignedIn,
     profile: {
       id: row.synk_profile_id,
       synkCode: row.synk_code,
       name: row.name,
       photoUrl: row.photo_url || "",
       publicUsername: row.public_username || "",
+      displayName: String(row.display_name || "").trim(),
+      avatarUrl: String(row.avatar_url || "").trim(),
+      bio: normalizeBio(row.bio),
+      dmPolicy: normalizeDmPolicy(row.dm_policy),
+      presenceStatus: normalizePresenceStatus(row.presence_status),
     },
   };
+}
+
+function normalizeDisplayName(value) {
+  const cleaned = String(value || "")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 40);
+  if (!cleaned) return "";
+  if (!/^[\p{L}\p{N} .'_\-]+$/u.test(cleaned)) {
+    const err = new Error("Display name can use letters, numbers, spaces, and . ' _ -");
+    err.code = "INVALID_DISPLAY_NAME";
+    throw err;
+  }
+  return cleaned;
+}
+
+function normalizeBio(value) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .trim()
+    .slice(0, 280);
+}
+
+function normalizeDmPolicy(value) {
+  const policy = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (policy === "nobody" || policy === "everyone" || policy === "friends") return policy;
+  return "friends";
+}
+
+function normalizePresenceStatus(value) {
+  const status = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (status === "idle" || status === "away") return "idle";
+  if (status === "dnd" || status === "do_not_disturb" || status === "do-not-disturb") {
+    return "dnd";
+  }
+  if (status === "offline" || status === "invisible") return "offline";
+  if (status === "online") return "online";
+  return "online";
+}
+
+function normalizeDmBody(value) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .trim()
+    .slice(0, 1000);
+}
+
+function orderedDmPair(a, b) {
+  const left = normalizePublicUsername(a);
+  const right = normalizePublicUsername(b);
+  if (!left || !right) return null;
+  return left < right ? [left, right] : [right, left];
+}
+
+async function communityUsernameExists(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return false;
+  const primary = await sql`
+    SELECT 1 FROM synk_community_profiles WHERE public_username = ${name} LIMIT 1
+  `;
+  if (primary[0]) return true;
+  const alt = await sql`
+    SELECT 1 FROM synk_community_alt_accounts WHERE public_username = ${name} LIMIT 1
+  `;
+  return Boolean(alt[0]);
+}
+
+async function getDmPolicyForUsername(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return "friends";
+  const primary = await sql`
+    SELECT dm_policy FROM synk_community_profiles WHERE public_username = ${name} LIMIT 1
+  `;
+  if (primary[0]) return normalizeDmPolicy(primary[0].dm_policy);
+  const alt = await sql`
+    SELECT dm_policy FROM synk_community_alt_accounts WHERE public_username = ${name} LIMIT 1
+  `;
+  if (alt[0]) return normalizeDmPolicy(alt[0].dm_policy);
+  return "friends";
+}
+
+async function getDisplayNamesByUsernames(sql, usernames) {
+  const names = Array.from(
+    new Set((usernames || []).map((u) => normalizePublicUsername(u)).filter(Boolean))
+  );
+  if (!names.length) return {};
+  const rows = await sql`
+    SELECT public_username, display_name
+    FROM (
+      SELECT public_username, display_name
+      FROM synk_community_profiles
+      WHERE public_username = ANY(${names})
+      UNION ALL
+      SELECT public_username, display_name
+      FROM synk_community_alt_accounts
+      WHERE public_username = ANY(${names})
+    ) x
+  `;
+  const out = {};
+  for (const row of rows) {
+    const dn = String(row.display_name || "").trim();
+    if (dn) out[row.public_username] = dn;
+  }
+  return out;
+}
+
+async function setDisplayNameForUsername(sql, username, displayName, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  let next = "";
+  try {
+    next = normalizeDisplayName(displayName);
+  } catch (err) {
+    return { ok: false, error: err.message || "Invalid display name" };
+  }
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET display_name = ${next || null}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, display_name
+  `;
+  if (primary[0]) {
+    return { ok: true, username: primary[0].public_username, displayName: String(primary[0].display_name || "").trim() };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET display_name = ${next || null}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, display_name
+  `;
+  if (alt[0]) {
+    return { ok: true, username: alt[0].public_username, displayName: String(alt[0].display_name || "").trim() };
+  }
+  return { ok: false, error: "Profile not found" };
+}
+
+async function setBioForUsername(sql, username, bio, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  const next = normalizeBio(bio);
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET bio = ${next || null}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, bio
+  `;
+  if (primary[0]) {
+    return { ok: true, username: primary[0].public_username, bio: normalizeBio(primary[0].bio) };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET bio = ${next || null}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, bio
+  `;
+  if (alt[0]) {
+    return { ok: true, username: alt[0].public_username, bio: normalizeBio(alt[0].bio) };
+  }
+  return { ok: false, error: "Profile not found" };
+}
+
+async function setDmPolicyForUsername(sql, username, policy, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  const next = normalizeDmPolicy(policy);
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET dm_policy = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, dm_policy
+  `;
+  if (primary[0]) {
+    return {
+      ok: true,
+      username: primary[0].public_username,
+      dmPolicy: normalizeDmPolicy(primary[0].dm_policy),
+    };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET dm_policy = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, dm_policy
+  `;
+  if (alt[0]) {
+    return {
+      ok: true,
+      username: alt[0].public_username,
+      dmPolicy: normalizeDmPolicy(alt[0].dm_policy),
+    };
+  }
+  return { ok: false, error: "Profile not found" };
+}
+
+async function getPresenceByUsernames(sql, usernames) {
+  const names = Array.from(
+    new Set((usernames || []).map((u) => normalizePublicUsername(u)).filter(Boolean))
+  );
+  if (!names.length) return {};
+  const rows = await sql`
+    SELECT public_username, presence_status
+    FROM (
+      SELECT public_username, presence_status
+      FROM synk_community_profiles
+      WHERE public_username = ANY(${names})
+      UNION ALL
+      SELECT public_username, presence_status
+      FROM synk_community_alt_accounts
+      WHERE public_username = ANY(${names})
+    ) x
+  `;
+  const out = {};
+  for (const row of rows) {
+    out[row.public_username] = normalizePresenceStatus(row.presence_status);
+  }
+  return out;
+}
+
+async function setPresenceForUsername(sql, username, status, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  const next = normalizePresenceStatus(status);
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET presence_status = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, presence_status
+  `;
+  if (primary[0]) {
+    return {
+      ok: true,
+      username: primary[0].public_username,
+      presenceStatus: normalizePresenceStatus(primary[0].presence_status),
+    };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET presence_status = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, presence_status
+  `;
+  if (alt[0]) {
+    return {
+      ok: true,
+      username: alt[0].public_username,
+      presenceStatus: normalizePresenceStatus(alt[0].presence_status),
+    };
+  }
+  return { ok: false, error: "Profile not found" };
+}
+
+async function getFriendship(sql, a, b) {
+  const left = normalizePublicUsername(a);
+  const right = normalizePublicUsername(b);
+  if (!left || !right || left === right) return null;
+  const rows = await sql`
+    SELECT requester_username, addressee_username, status
+    FROM synk_community_friendships
+    WHERE (requester_username = ${left} AND addressee_username = ${right})
+       OR (requester_username = ${right} AND addressee_username = ${left})
+    LIMIT 1
+  `;
+  if (!rows[0]) return null;
+  const row = rows[0];
+  if (row.status === "accepted") {
+    return { status: "accepted", direction: "accepted" };
+  }
+  if (row.requester_username === left) {
+    return { status: "pending", direction: "outgoing" };
+  }
+  return { status: "pending", direction: "incoming" };
+}
+
+async function listFriends(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return [];
+  const rows = await sql`
+    SELECT CASE
+             WHEN requester_username = ${name} THEN addressee_username
+             ELSE requester_username
+           END AS friend_username
+    FROM synk_community_friendships
+    WHERE status = 'accepted'
+      AND (requester_username = ${name} OR addressee_username = ${name})
+    ORDER BY friend_username ASC
+  `;
+  return rows.map((row) => row.friend_username);
+}
+
+async function requestFriendship(sql, fromUsername, toUsername) {
+  const from = normalizePublicUsername(fromUsername);
+  const to = normalizePublicUsername(toUsername);
+  if (!from || !to) return { ok: false, error: "Username required" };
+  if (from === to) return { ok: false, error: "You cannot friend yourself" };
+  if (!(await communityUsernameExists(sql, to))) {
+    return { ok: false, error: "User not found" };
+  }
+  const existing = await getFriendship(sql, from, to);
+  if (existing) {
+    if (existing.status === "accepted") {
+      return { ok: false, error: "Already friends", friendship: existing };
+    }
+    if (existing.direction === "outgoing") {
+      return { ok: false, error: "Friend request already sent", friendship: existing };
+    }
+    if (existing.direction === "incoming") {
+      return respondFriendship(sql, from, to, true);
+    }
+  }
+  try {
+    await sql`
+      INSERT INTO synk_community_friendships (requester_username, addressee_username, status)
+      VALUES (${from}, ${to}, 'pending')
+    `;
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      const again = await getFriendship(sql, from, to);
+      if (again) return { ok: true, friendship: again };
+    }
+    throw err;
+  }
+  return {
+    ok: true,
+    friendship: { status: "pending", direction: "outgoing" },
+  };
+}
+
+async function respondFriendship(sql, actorUsername, otherUsername, accept) {
+  const actor = normalizePublicUsername(actorUsername);
+  const other = normalizePublicUsername(otherUsername);
+  if (!actor || !other) return { ok: false, error: "Username required" };
+  if (actor === other) return { ok: false, error: "Invalid friendship" };
+  const rows = await sql`
+    SELECT id, requester_username, addressee_username, status
+    FROM synk_community_friendships
+    WHERE requester_username = ${other}
+      AND addressee_username = ${actor}
+      AND status = 'pending'
+    LIMIT 1
+  `;
+  if (!rows[0]) return { ok: false, error: "No pending friend request" };
+  if (!accept) {
+    await sql`DELETE FROM synk_community_friendships WHERE id = ${rows[0].id}`;
+    return { ok: true, friendship: null };
+  }
+  const updated = await sql`
+    UPDATE synk_community_friendships
+    SET status = 'accepted', updated_at = NOW()
+    WHERE id = ${rows[0].id}
+    RETURNING requester_username, addressee_username, status
+  `;
+  return {
+    ok: true,
+    friendship: { status: "accepted", direction: "accepted" },
+    row: updated[0] || null,
+  };
+}
+
+async function removeFriendship(sql, a, b) {
+  const left = normalizePublicUsername(a);
+  const right = normalizePublicUsername(b);
+  if (!left || !right || left === right) return { ok: false, error: "Username required" };
+  const deleted = await sql`
+    DELETE FROM synk_community_friendships
+    WHERE (requester_username = ${left} AND addressee_username = ${right})
+       OR (requester_username = ${right} AND addressee_username = ${left})
+    RETURNING id
+  `;
+  return { ok: true, removed: deleted.length > 0 };
+}
+
+async function isFollowing(sql, followerUsername, followingUsername) {
+  const follower = normalizePublicUsername(followerUsername);
+  const following = normalizePublicUsername(followingUsername);
+  if (!follower || !following || follower === following) return false;
+  const rows = await sql`
+    SELECT 1
+    FROM synk_community_follows
+    WHERE follower_username = ${follower}
+      AND following_username = ${following}
+    LIMIT 1
+  `;
+  return Boolean(rows[0]);
+}
+
+async function getFollowCounts(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { followers: 0, following: 0 };
+  const rows = await sql`
+    SELECT
+      (SELECT COUNT(*)::int FROM synk_community_follows WHERE following_username = ${name}) AS followers,
+      (SELECT COUNT(*)::int FROM synk_community_follows WHERE follower_username = ${name}) AS following
+  `;
+  return {
+    followers: Number((rows[0] && rows[0].followers) || 0),
+    following: Number((rows[0] && rows[0].following) || 0),
+  };
+}
+
+async function listFollowers(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return [];
+  const rows = await sql`
+    SELECT follower_username AS username
+    FROM synk_community_follows
+    WHERE following_username = ${name}
+    ORDER BY created_at DESC, follower_username ASC
+  `;
+  return rows.map((row) => row.username);
+}
+
+async function listFollowing(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return [];
+  const rows = await sql`
+    SELECT following_username AS username
+    FROM synk_community_follows
+    WHERE follower_username = ${name}
+    ORDER BY created_at DESC, following_username ASC
+  `;
+  return rows.map((row) => row.username);
+}
+
+async function followUser(sql, followerUsername, followingUsername) {
+  const follower = normalizePublicUsername(followerUsername);
+  const following = normalizePublicUsername(followingUsername);
+  if (!follower || !following) return { ok: false, error: "Username required" };
+  if (follower === following) return { ok: false, error: "You cannot follow yourself" };
+  if (!(await communityUsernameExists(sql, following))) {
+    return { ok: false, error: "User not found" };
+  }
+  await sql`
+    INSERT INTO synk_community_follows (follower_username, following_username)
+    VALUES (${follower}, ${following})
+    ON CONFLICT DO NOTHING
+  `;
+  const counts = await getFollowCounts(sql, following);
+  return {
+    ok: true,
+    following: true,
+    followerCount: counts.followers,
+    followingCount: counts.following,
+  };
+}
+
+async function unfollowUser(sql, followerUsername, followingUsername) {
+  const follower = normalizePublicUsername(followerUsername);
+  const following = normalizePublicUsername(followingUsername);
+  if (!follower || !following) return { ok: false, error: "Username required" };
+  await sql`
+    DELETE FROM synk_community_follows
+    WHERE follower_username = ${follower}
+      AND following_username = ${following}
+  `;
+  const counts = await getFollowCounts(sql, following);
+  return {
+    ok: true,
+    following: false,
+    followerCount: counts.followers,
+    followingCount: counts.following,
+  };
+}
+
+async function canDm(sql, fromUsername, toUsername) {
+  const from = normalizePublicUsername(fromUsername);
+  const to = normalizePublicUsername(toUsername);
+  if (!from || !to || from === to) return false;
+  if (!(await communityUsernameExists(sql, to))) return false;
+  const policy = await getDmPolicyForUsername(sql, to);
+  if (policy === "nobody") return false;
+  if (policy === "everyone") return true;
+  const friendship = await getFriendship(sql, from, to);
+  return Boolean(friendship && friendship.status === "accepted");
+}
+
+function mapDmThread(row, viewerUsername) {
+  if (!row) return null;
+  const viewer = normalizePublicUsername(viewerUsername);
+  const otherUser = row.user_a === viewer ? row.user_b : row.user_a;
+  return {
+    id: row.id,
+    userA: row.user_a,
+    userB: row.user_b,
+    otherUser,
+    lastBody: row.last_body != null ? String(row.last_body) : "",
+    lastMessageAt: row.last_message_at,
+    createdAt: row.created_at,
+  };
+}
+
+const DM_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👏", "🎉"];
+
+function parseDmEditHistory(value) {
+  if (!value) return [];
+  let raw = value;
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value);
+    } catch (_) {
+      return [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => ({
+      body: String((entry && entry.body) || "").slice(0, 2000),
+      at: (entry && (entry.at || entry.editedAt || entry.edited_at)) || null,
+    }))
+    .filter((entry) => entry.body);
+}
+
+function parseDmReactions(value) {
+  if (!value) return {};
+  let raw = value;
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value);
+    } catch (_) {
+      return {};
+    }
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [emoji, users] of Object.entries(raw)) {
+    const key = String(emoji || "").trim();
+    if (!key || !DM_REACTION_EMOJIS.includes(key)) continue;
+    const list = Array.isArray(users)
+      ? users
+          .map((u) => normalizePublicUsername(u))
+          .filter(Boolean)
+      : [];
+    const unique = Array.from(new Set(list));
+    if (unique.length) out[key] = unique;
+  }
+  return out;
+}
+
+function mapDmReactions(reactionsMap, viewerUsername = "") {
+  const viewer = normalizePublicUsername(viewerUsername);
+  return Object.entries(reactionsMap || {})
+    .map(([emoji, users]) => {
+      const list = Array.isArray(users) ? users : [];
+      return {
+        emoji,
+        count: list.length,
+        me: Boolean(viewer && list.includes(viewer)),
+        users: list,
+      };
+    })
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => {
+      const ai = DM_REACTION_EMOJIS.indexOf(a.emoji);
+      const bi = DM_REACTION_EMOJIS.indexOf(b.emoji);
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    });
+}
+
+function mapDmMessage(row, viewerUsername = "") {
+  if (!row) return null;
+  const viewer = normalizePublicUsername(viewerUsername);
+  const sender = normalizePublicUsername(row.sender_username);
+  const mine = Boolean(viewer && sender && viewer === sender);
+  const readAt = row.read_at || null;
+  const editedAt = row.edited_at || null;
+  const editHistory = parseDmEditHistory(row.edit_history);
+  const reactionsMap = parseDmReactions(row.reactions);
+  return {
+    id: row.id,
+    threadId: row.thread_id,
+    senderUsername: sender || row.sender_username,
+    body: row.body,
+    createdAt: row.created_at,
+    editedAt,
+    readAt,
+    isEdited: Boolean(editedAt) || editHistory.length > 0,
+    isRead: Boolean(readAt),
+    canEdit: mine && !row.unsent_at,
+    canDelete: Boolean(viewer) && !row.unsent_at,
+    canUnsend: mine && !readAt && !row.unsent_at,
+    deleteMode: mine ? (readAt ? "for-me" : "unsend") : "for-me",
+    editHistory,
+    reactions: mapDmReactions(reactionsMap, viewer),
+    reactionEmojis: DM_REACTION_EMOJIS.slice(),
+  };
+}
+
+async function getOrCreateDmThread(sql, a, b) {
+  const pair = orderedDmPair(a, b);
+  if (!pair) return { ok: false, error: "Username required" };
+  const [userA, userB] = pair;
+  if (userA === userB) return { ok: false, error: "Cannot message yourself" };
+  const existing = await sql`
+    SELECT id, user_a, user_b, last_message_at, created_at
+    FROM synk_community_dm_threads
+    WHERE user_a = ${userA} AND user_b = ${userB}
+    LIMIT 1
+  `;
+  if (existing[0]) {
+    return { ok: true, thread: mapDmThread({ ...existing[0], last_body: "" }, a) };
+  }
+  try {
+    const created = await sql`
+      INSERT INTO synk_community_dm_threads (user_a, user_b)
+      VALUES (${userA}, ${userB})
+      RETURNING id, user_a, user_b, last_message_at, created_at
+    `;
+    return { ok: true, thread: mapDmThread({ ...created[0], last_body: "" }, a) };
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      const again = await sql`
+        SELECT id, user_a, user_b, last_message_at, created_at
+        FROM synk_community_dm_threads
+        WHERE user_a = ${userA} AND user_b = ${userB}
+        LIMIT 1
+      `;
+      if (again[0]) return { ok: true, thread: mapDmThread({ ...again[0], last_body: "" }, a) };
+    }
+    throw err;
+  }
+}
+
+async function listDmThreads(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return [];
+  const rows = await sql`
+    SELECT
+      t.id,
+      t.user_a,
+      t.user_b,
+      t.last_message_at,
+      t.created_at,
+      (
+        SELECT m.body
+        FROM synk_community_dm_messages m
+        WHERE m.thread_id = t.id
+          AND m.unsent_at IS NULL
+          AND NOT (
+            CASE
+              WHEN m.sender_username = ${name} THEN COALESCE(m.deleted_for_sender, FALSE)
+              ELSE COALESCE(m.deleted_for_recipient, FALSE)
+            END
+          )
+        ORDER BY m.created_at DESC
+        LIMIT 1
+      ) AS last_body
+    FROM synk_community_dm_threads t
+    WHERE t.user_a = ${name} OR t.user_b = ${name}
+    ORDER BY t.last_message_at DESC
+  `;
+  const threads = rows.map((row) => mapDmThread(row, name));
+  const others = threads.map((t) => t.otherUser).filter(Boolean);
+  const [names, avatars, presence] = await Promise.all([
+    getDisplayNamesByUsernames(sql, others),
+    getAvatarsByUsernames(sql, others),
+    getPresenceByUsernames(sql, others),
+  ]);
+  return threads.map((t) => ({
+    ...t,
+    otherDisplayName: names[t.otherUser] || "",
+    otherAvatarUrl: avatars[t.otherUser] || "",
+    otherPresence: presence[t.otherUser] || "offline",
+  }));
+}
+
+async function getDmThreadById(sql, threadId, username) {
+  const id = String(threadId || "").trim();
+  const name = normalizePublicUsername(username);
+  if (!id || !name) return null;
+  const rows = await sql`
+    SELECT
+      t.id,
+      t.user_a,
+      t.user_b,
+      t.last_message_at,
+      t.created_at,
+      (
+        SELECT m.body
+        FROM synk_community_dm_messages m
+        WHERE m.thread_id = t.id
+          AND m.unsent_at IS NULL
+          AND NOT (
+            CASE
+              WHEN m.sender_username = ${name} THEN COALESCE(m.deleted_for_sender, FALSE)
+              ELSE COALESCE(m.deleted_for_recipient, FALSE)
+            END
+          )
+        ORDER BY m.created_at DESC
+        LIMIT 1
+      ) AS last_body
+    FROM synk_community_dm_threads t
+    WHERE t.id = ${id}
+      AND (t.user_a = ${name} OR t.user_b = ${name})
+    LIMIT 1
+  `;
+  return rows[0] ? mapDmThread(rows[0], name) : null;
+}
+
+async function listDmMessages(sql, threadId, username) {
+  const id = String(threadId || "").trim();
+  const name = normalizePublicUsername(username);
+  if (!id || !name) return { ok: false, error: "Thread required", messages: [] };
+  const thread = await getDmThreadById(sql, id, name);
+  if (!thread) return { ok: false, error: "Thread not found", messages: [] };
+
+  // Opening a thread marks the other person's messages as read.
+  await sql`
+    UPDATE synk_community_dm_messages
+    SET read_at = NOW()
+    WHERE thread_id = ${id}
+      AND sender_username <> ${name}
+      AND read_at IS NULL
+      AND unsent_at IS NULL
+      AND COALESCE(deleted_for_recipient, FALSE) = FALSE
+  `;
+
+  const rows = await sql`
+    SELECT
+      id,
+      thread_id,
+      sender_username,
+      body,
+      created_at,
+      edited_at,
+      read_at,
+      unsent_at,
+      deleted_for_sender,
+      deleted_for_recipient,
+      edit_history,
+      reactions
+    FROM synk_community_dm_messages
+    WHERE thread_id = ${id}
+      AND unsent_at IS NULL
+      AND NOT (
+        CASE
+          WHEN sender_username = ${name} THEN COALESCE(deleted_for_sender, FALSE)
+          ELSE COALESCE(deleted_for_recipient, FALSE)
+        END
+      )
+    ORDER BY created_at ASC
+  `;
+  const other = thread.otherUser || "";
+  const [names, avatars, presence] = await Promise.all([
+    getDisplayNamesByUsernames(sql, other ? [other] : []),
+    getAvatarsByUsernames(sql, other ? [other] : []),
+    getPresenceByUsernames(sql, other ? [other] : []),
+  ]);
+  return {
+    ok: true,
+    thread: {
+      ...thread,
+      otherDisplayName: names[other] || "",
+      otherAvatarUrl: avatars[other] || "",
+      otherPresence: presence[other] || "offline",
+    },
+    messages: rows.map((row) => mapDmMessage(row, name)),
+  };
+}
+
+async function sendDm(sql, fromUsername, toUsername, body) {
+  const from = normalizePublicUsername(fromUsername);
+  const to = normalizePublicUsername(toUsername);
+  if (!from || !to) return { ok: false, error: "Username required" };
+  if (from === to) return { ok: false, error: "Cannot message yourself" };
+  const text = normalizeDmBody(body);
+  if (!text) return { ok: false, error: "Message required" };
+  if (!(await canDm(sql, from, to))) {
+    return { ok: false, error: "You cannot message this user" };
+  }
+  const threadResult = await getOrCreateDmThread(sql, from, to);
+  if (!threadResult.ok) return threadResult;
+  const threadId = threadResult.thread.id;
+  const inserted = await sql`
+    INSERT INTO synk_community_dm_messages (thread_id, sender_username, body)
+    VALUES (${threadId}, ${from}, ${text})
+    RETURNING
+      id, thread_id, sender_username, body, created_at,
+      edited_at, read_at, unsent_at, deleted_for_sender, deleted_for_recipient, edit_history, reactions
+  `;
+  const updated = await sql`
+    UPDATE synk_community_dm_threads
+    SET last_message_at = ${inserted[0].created_at}
+    WHERE id = ${threadId}
+    RETURNING id, user_a, user_b, last_message_at, created_at
+  `;
+  return {
+    ok: true,
+    message: mapDmMessage(inserted[0], from),
+    thread: mapDmThread({ ...updated[0], last_body: text }, from),
+  };
+}
+
+async function editDmMessage(sql, messageId, username, body) {
+  const id = String(messageId || "").trim();
+  const name = normalizePublicUsername(username);
+  const text = normalizeDmBody(body);
+  if (!id || !name) return { ok: false, error: "Message required" };
+  if (!text) return { ok: false, error: "Message required" };
+
+  const rows = await sql`
+    SELECT
+      m.id,
+      m.thread_id,
+      m.sender_username,
+      m.body,
+      m.created_at,
+      m.edited_at,
+      m.read_at,
+      m.unsent_at,
+      m.deleted_for_sender,
+      m.deleted_for_recipient,
+      m.edit_history,
+      m.reactions,
+      t.user_a,
+      t.user_b
+    FROM synk_community_dm_messages m
+    JOIN synk_community_dm_threads t ON t.id = m.thread_id
+    WHERE m.id = ${id}
+      AND (t.user_a = ${name} OR t.user_b = ${name})
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return { ok: false, error: "Message not found" };
+  if (normalizePublicUsername(row.sender_username) !== name) {
+    return { ok: false, error: "You can only edit your own messages" };
+  }
+  if (row.unsent_at) return { ok: false, error: "Message was deleted" };
+  if (row.deleted_for_sender) return { ok: false, error: "Message was deleted" };
+  if (String(row.body || "") === text) {
+    return { ok: true, message: mapDmMessage(row, name) };
+  }
+
+  const nextHistory = [
+    ...parseDmEditHistory(row.edit_history),
+    { body: String(row.body || ""), at: new Date().toISOString() },
+  ].slice(-20);
+
+  const updated = await sql`
+    UPDATE synk_community_dm_messages
+    SET
+      body = ${text},
+      edited_at = NOW(),
+      edit_history = ${JSON.stringify(nextHistory)}::jsonb
+    WHERE id = ${id}
+    RETURNING
+      id, thread_id, sender_username, body, created_at,
+      edited_at, read_at, unsent_at, deleted_for_sender, deleted_for_recipient, edit_history, reactions
+  `;
+  return { ok: true, message: mapDmMessage(updated[0], name) };
+}
+
+async function deleteDmMessage(sql, messageId, username) {
+  const id = String(messageId || "").trim();
+  const name = normalizePublicUsername(username);
+  if (!id || !name) return { ok: false, error: "Message required" };
+
+  const rows = await sql`
+    SELECT
+      m.id,
+      m.thread_id,
+      m.sender_username,
+      m.body,
+      m.created_at,
+      m.edited_at,
+      m.read_at,
+      m.unsent_at,
+      m.deleted_for_sender,
+      m.deleted_for_recipient,
+      m.edit_history,
+      m.reactions,
+      t.user_a,
+      t.user_b
+    FROM synk_community_dm_messages m
+    JOIN synk_community_dm_threads t ON t.id = m.thread_id
+    WHERE m.id = ${id}
+      AND (t.user_a = ${name} OR t.user_b = ${name})
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return { ok: false, error: "Message not found" };
+  if (row.unsent_at) return { ok: true, mode: "unsend", message: null };
+
+  const sender = normalizePublicUsername(row.sender_username);
+  const mine = sender === name;
+
+  if (!mine) {
+    // Recipient can only hide the message for themselves.
+    await sql`
+      UPDATE synk_community_dm_messages
+      SET deleted_for_recipient = TRUE
+      WHERE id = ${id}
+    `;
+    return { ok: true, mode: "for-me", message: null };
+  }
+
+  if (!row.read_at) {
+    await sql`
+      UPDATE synk_community_dm_messages
+      SET
+        unsent_at = NOW(),
+        body = '',
+        edit_history = '[]'::jsonb,
+        reactions = '{}'::jsonb
+      WHERE id = ${id}
+    `;
+    return { ok: true, mode: "unsend", message: null };
+  }
+
+  await sql`
+    UPDATE synk_community_dm_messages
+    SET deleted_for_sender = TRUE
+    WHERE id = ${id}
+  `;
+  return { ok: true, mode: "for-me", message: null };
+}
+
+async function reactDmMessage(sql, messageId, username, emoji) {
+  const id = String(messageId || "").trim();
+  const name = normalizePublicUsername(username);
+  const reaction = String(emoji || "").trim();
+  if (!id || !name) return { ok: false, error: "Message required" };
+  if (!DM_REACTION_EMOJIS.includes(reaction)) {
+    return { ok: false, error: "Unsupported reaction" };
+  }
+
+  const rows = await sql`
+    SELECT
+      m.id,
+      m.thread_id,
+      m.sender_username,
+      m.body,
+      m.created_at,
+      m.edited_at,
+      m.read_at,
+      m.unsent_at,
+      m.deleted_for_sender,
+      m.deleted_for_recipient,
+      m.edit_history,
+      m.reactions,
+      t.user_a,
+      t.user_b
+    FROM synk_community_dm_messages m
+    JOIN synk_community_dm_threads t ON t.id = m.thread_id
+    WHERE m.id = ${id}
+      AND (t.user_a = ${name} OR t.user_b = ${name})
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return { ok: false, error: "Message not found" };
+  if (row.unsent_at) return { ok: false, error: "Message was deleted" };
+  const sender = normalizePublicUsername(row.sender_username);
+  const hiddenForViewer =
+    sender === name
+      ? Boolean(row.deleted_for_sender)
+      : Boolean(row.deleted_for_recipient);
+  if (hiddenForViewer) return { ok: false, error: "Message was deleted" };
+
+  const reactions = parseDmReactions(row.reactions);
+  const current = Array.isArray(reactions[reaction]) ? reactions[reaction].slice() : [];
+  const idx = current.indexOf(name);
+  if (idx >= 0) current.splice(idx, 1);
+  else current.push(name);
+  if (current.length) reactions[reaction] = current;
+  else delete reactions[reaction];
+
+  const updated = await sql`
+    UPDATE synk_community_dm_messages
+    SET reactions = ${JSON.stringify(reactions)}::jsonb
+    WHERE id = ${id}
+    RETURNING
+      id, thread_id, sender_username, body, created_at,
+      edited_at, read_at, unsent_at, deleted_for_sender, deleted_for_recipient, edit_history, reactions
+  `;
+  return { ok: true, message: mapDmMessage(updated[0], name) };
+}
+
+function friendshipViewerStatus(friendship) {
+  if (!friendship) return "none";
+  if (friendship.status === "accepted") return "friends";
+  if (friendship.direction === "outgoing") return "pending_out";
+  if (friendship.direction === "incoming") return "pending_in";
+  return "none";
 }
 
 function normalizePublicUsername(value) {
@@ -1986,6 +4367,1587 @@ function mapBusinessDevice(row) {
   };
 }
 
+
+async function getAvatarsByUsernames(sql, usernames) {
+  const names = Array.from(
+    new Set((usernames || []).map((u) => normalizePublicUsername(u)).filter(Boolean))
+  );
+  if (!names.length) return {};
+  const rows = await sql`
+    SELECT public_username, avatar_url
+    FROM (
+      SELECT public_username, avatar_url
+      FROM synk_community_profiles
+      WHERE public_username = ANY(${names})
+      UNION ALL
+      SELECT public_username, avatar_url
+      FROM synk_community_alt_accounts
+      WHERE public_username = ANY(${names})
+    ) x
+  `;
+  const out = {};
+  for (const row of rows) {
+    const url = String(row.avatar_url || "").trim();
+    if (url) out[row.public_username] = url;
+  }
+  return out;
+}
+
+async function setAvatarForUsername(sql, username, avatarUrl, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  const next = String(avatarUrl || "").trim() || null;
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET avatar_url = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, avatar_url
+  `;
+  if (primary[0]) {
+    return { ok: true, username: primary[0].public_username, avatarUrl: String(primary[0].avatar_url || "").trim() };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET avatar_url = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, avatar_url
+  `;
+  if (alt[0]) {
+    return { ok: true, username: alt[0].public_username, avatarUrl: String(alt[0].avatar_url || "").trim() };
+  }
+  return { ok: false, error: "Profile not found" };
+}
+
+async function updateSynkProfilePhoto(sql, profileId, photoUrl) {
+  const url = String(photoUrl || "").trim();
+  if (!profileId || !url) return { ok: false, error: "Photo required" };
+  const rows = await sql`
+    UPDATE synk_profiles
+    SET photo_url = ${url}, updated_at = NOW()
+    WHERE id = ${profileId}
+    RETURNING id, photo_url
+  `;
+  if (!rows[0]) return { ok: false, error: "Profile not found" };
+  return { ok: true, photoUrl: rows[0].photo_url || "" };
+}
+
+
+const ADMIN_ACT_AS_TTL_MS = 60 * 60 * 1000; // 1 hour acting session
+const ADMIN_ACT_AS_HANDOFF_TTL_MS = 2 * 60 * 1000; // 2 minutes to open the link
+
+function normalizeActAsNextPath(value) {
+  const raw = String(value || "/hub").trim() || "/hub";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/hub";
+  if (raw.includes("://")) return "/hub";
+  return raw.slice(0, 200);
+}
+
+async function createAdminActAsHandoff(sql, {
+  profileId,
+  adminUsername = "",
+  nextPath = "/hub",
+  synkIdOrigin = "",
+} = {}) {
+  await ensureSynkCoreTables(sql);
+  const profileRows = await sql`
+    SELECT id, synk_code, name, photo_url, enabled
+    FROM synk_profiles
+    WHERE id = ${profileId}
+    LIMIT 1
+  `;
+  const profile = profileRows[0];
+  if (!profile) {
+    const err = new Error("Member not found");
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+  if (profile.enabled === false) {
+    const err = new Error("This membership is paused — enable it before acting as them");
+    err.code = "DISABLED";
+    throw err;
+  }
+
+  const hubSession = await issueHubSession(sql, {
+    profileId: profile.id,
+    staySignedIn: false,
+    ttlMs: ADMIN_ACT_AS_TTL_MS,
+  });
+
+  const handoffToken = mintPassToken();
+  const handoffHash = hashToken(handoffToken);
+  const handoffExpiresAt = new Date(Date.now() + ADMIN_ACT_AS_HANDOFF_TTL_MS).toISOString();
+  const next = normalizeActAsNextPath(nextPath);
+  const adminName = String(adminUsername || "").trim().slice(0, 80);
+
+  await sql`
+    INSERT INTO synk_admin_act_as_tokens (
+      token_hash, synk_profile_id, hub_session_token, hub_expires_at, admin_username, next_path, expires_at
+    )
+    VALUES (
+      ${handoffHash},
+      ${profile.id},
+      ${hubSession.token},
+      ${hubSession.expiresAt}::timestamptz,
+      ${adminName},
+      ${next},
+      ${handoffExpiresAt}::timestamptz
+    )
+  `;
+
+  await logSynkEvent(sql, {
+    eventType: "admin_act_as_start",
+    profileId: profile.id,
+    detail: `${adminName || "admin"} → ${profile.synk_code || profile.id}`,
+  });
+
+  const origin = String(synkIdOrigin || process.env.SYNK_ID_ORIGIN || "https://synkid.netlify.app")
+    .trim()
+    .replace(/\/$/, "");
+  const url = `${origin}/act-as?token=${encodeURIComponent(handoffToken)}&next=${encodeURIComponent(next)}`;
+
+  return {
+    url,
+    expiresAt: hubSession.expiresAt,
+    handoffExpiresAt,
+    profile: {
+      id: profile.id,
+      name: profile.name,
+      synkCode: profile.synk_code,
+      photoUrl: profile.photo_url || "",
+    },
+    nextPath: next,
+  };
+}
+
+async function claimAdminActAsHandoff(sql, { token } = {}) {
+  await ensureSynkCoreTables(sql);
+  const handoffToken = String(token || "").trim();
+  if (!handoffToken) {
+    const err = new Error("Missing act-as token");
+    err.code = "BAD_TOKEN";
+    throw err;
+  }
+  const handoffHash = hashToken(handoffToken);
+  const rows = await sql`
+    SELECT
+      t.id,
+      t.synk_profile_id,
+      t.hub_session_token,
+      t.hub_expires_at,
+      t.admin_username,
+      t.next_path,
+      t.expires_at,
+      t.consumed_at,
+      p.synk_code,
+      p.name,
+      p.photo_url,
+      p.enabled
+    FROM synk_admin_act_as_tokens t
+    JOIN synk_profiles p ON p.id = t.synk_profile_id
+    WHERE t.token_hash = ${handoffHash}
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) {
+    const err = new Error("This act-as link is invalid or already used");
+    err.code = "BAD_TOKEN";
+    throw err;
+  }
+  if (row.consumed_at) {
+    const err = new Error("This act-as link was already used");
+    err.code = "USED";
+    throw err;
+  }
+  if (new Date(row.expires_at).getTime() <= Date.now()) {
+    const err = new Error("This act-as link expired — start again from Synk Admin");
+    err.code = "EXPIRED";
+    throw err;
+  }
+  if (row.enabled === false) {
+    const err = new Error("This membership is paused");
+    err.code = "DISABLED";
+    throw err;
+  }
+  if (!row.hub_session_token || new Date(row.hub_expires_at).getTime() <= Date.now()) {
+    const err = new Error("The act-as session expired — start again from Synk Admin");
+    err.code = "EXPIRED";
+    throw err;
+  }
+
+  const hubTokenPlain = String(row.hub_session_token || "");
+  const consumed = await sql`
+    UPDATE synk_admin_act_as_tokens
+    SET consumed_at = NOW(), hub_session_token = ''
+    WHERE id = ${row.id} AND consumed_at IS NULL
+    RETURNING id
+  `;
+  if (!consumed[0]) {
+    const err = new Error("This act-as link was already used");
+    err.code = "USED";
+    throw err;
+  }
+
+  await logSynkEvent(sql, {
+    eventType: "admin_act_as_claim",
+    profileId: row.synk_profile_id,
+    detail: `${String(row.admin_username || "admin").slice(0, 40)} claimed ${row.synk_code || row.synk_profile_id}`,
+  });
+
+  const hubExpiresAt = new Date(row.hub_expires_at).toISOString();
+  const ttlSeconds = Math.max(60, Math.round((new Date(row.hub_expires_at).getTime() - Date.now()) / 1000));
+
+  return {
+    profile: {
+      id: row.synk_profile_id,
+      name: row.name,
+      synkCode: row.synk_code,
+      photoUrl: row.photo_url || "",
+    },
+    hubSession: {
+      token: hubTokenPlain,
+      expiresAt: hubExpiresAt,
+      ttlSeconds,
+      staySignedIn: false,
+    },
+    actAs: {
+      adminUsername: row.admin_username || "",
+      expiresAt: hubExpiresAt,
+    },
+    nextPath: normalizeActAsNextPath(row.next_path),
+    expiresAt: new Date(row.hub_expires_at).getTime(),
+  };
+}
+
+
+// Platforms/products we may copy UX from in chat/commits — never show these
+// names in member-facing release notes or beta agenda titles.
+const COPIED_PLATFORM_NAMES = [
+  "melonly",
+  "reddit",
+  "discord",
+  "slack",
+  "notion",
+  "linear",
+  "figma",
+  "twitter",
+  "instagram",
+  "tiktok",
+  "facebook",
+  "messenger",
+  "whatsapp",
+  "telegram",
+  "snapchat",
+  "pinterest",
+  "linkedin",
+  "youtube",
+  "twitch",
+  "spotify",
+  "beeper",
+  "imessage",
+  "threads",
+  "mastodon",
+];
+
+function scrubCopiedPlatformNames(text) {
+  const scrubLine = (line) => {
+    const raw = String(line || "");
+    const marker = raw.match(/^(\s*(?:[-*•+]|\d+[.)])\s+)/);
+    const prefix = marker ? marker[1] : "";
+    let out = marker ? raw.slice(prefix.length) : raw;
+
+    // Generic inspiration phrasing: "like Brand", "Brand-style", "copy Brand", etc.
+    out = out
+      .replace(
+        /\b(?:like|inspired\s+by|similar\s+to|based\s+on|modeled\s+after|copied\s+from|copy(?:ing)?)\s+[A-Z][\w.+-]{1,40}\b/g,
+        ""
+      )
+      .replace(/\b[A-Z][\w.+-]{1,40}(?:-|\s)?style\b/g, "");
+
+    for (const brand of COPIED_PLATFORM_NAMES) {
+      const escaped = brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      out = out
+        .replace(
+          new RegExp(
+            `\\b(?:like\\s+|inspired\\s+by\\s+|similar\\s+to\\s+|based\\s+on\\s+|modeled\\s+after\\s+|copied\\s+from\\s+|copy(?:ing)?\\s+)?${escaped}(?:[-\\s]?style)?\\b`,
+            "gi"
+          ),
+          ""
+        )
+        .replace(new RegExp(`\\b${escaped}\\b`, "gi"), "");
+    }
+    out = out
+      .replace(/\bas\s{2,}a\b/gi, "as a")
+      .replace(/\bas\s+console\b/gi, "as a console")
+      .replace(/[^\S\n]{2,}/g, " ")
+      .replace(/[^\S\n]+([,.;:!?])/g, "$1")
+      .replace(/\(\s*\)/g, "")
+      .replace(/\b[^\S\n]+-[^\S\n]+\b/g, " ")
+      .replace(/\b(?:with|and|as|for|to|a|an|the)\s*$/i, "")
+      .trim();
+    if (!out) return prefix ? prefix.trimEnd() : "";
+    return `${prefix}${out}`.replace(/[^\S\n]{2,}/g, " ").trimEnd();
+  };
+  return String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map(scrubLine)
+    .join("\n");
+}
+
+function isSensitiveReleaseNoteBlock(text) {
+  return /\b(mod(?:erator)?\s*tools?|admin\s*panel|admin\s*dashboard|admin\s*console|staff(?:-|\s+)only|staff\s*tools?|act[\s-]?as\b|impersonat|synk[- ]?admin|owner\s*tools?|role\s*permissions?|permission\s*matrix|mod\s*queue|staff\s*panel)\b/i.test(
+    String(text || "")
+  );
+}
+
+function isBetaOnlyReleaseNoteBlock(text) {
+  const value = String(text || "");
+  if (/<!--\s*beta(?:-only)?\s*-->/i.test(value)) return true;
+  if (/^\s*#{1,3}\s*(for\s+)?beta(\s+testers?)?\b/i.test(value)) return true;
+  if (/^\s*(?:[-*•+]|\d+[.)])\s*\[beta\]\b/i.test(value)) return true;
+  if (/^\s*\[beta\]\b/i.test(value)) return true;
+  if (/^\s*(?:[-*•+]|\d+[.)])\s*beta(?:\s+testers?)?\s*[:—-]/i.test(value)) return true;
+  return /\b(beta\s+tester(?:s)?\s+only|testers?\s+only|clock[\s-]?in(?:\s+system)?|complete\s+agenda|testing\s+agenda|beta\s+testing\s+portal)\b/i.test(
+    value
+  );
+}
+
+function stripReleaseNoteAudienceMarkers(text) {
+  return String(text || "")
+    .replace(/<!--\s*beta(?:-only)?\s*-->/gi, "")
+    .replace(/^\s*\[beta\]\s*/i, "")
+    .replace(/^(\s*(?:[-*•+]|\d+[.)])\s*)\[beta\]\s*/i, "$1")
+    .trim();
+}
+
+function splitReleaseNoteBlocks(text) {
+  const lines = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n");
+  const blocks = [];
+  let para = [];
+  let betaSection = false;
+  const flushPara = () => {
+    const value = para.join("\n").trim();
+    if (value) blocks.push(betaSection ? `${value}\n<!--beta-only-->` : value);
+    para = [];
+  };
+  for (const line of lines) {
+    const heading = String(line || "").match(/^\s*(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushPara();
+      betaSection = /^(for\s+)?beta(\s+testers?)?\b/i.test(String(heading[2] || "").trim());
+      blocks.push(betaSection ? `${String(line).trim()}\n<!--beta-only-->` : String(line).trim());
+      continue;
+    }
+    if (/^\s*([-*•+]|\d+[.)])\s+/.test(line)) {
+      flushPara();
+      const item = String(line).trim();
+      blocks.push(betaSection ? `${item}\n<!--beta-only-->` : item);
+      continue;
+    }
+    if (!String(line).trim()) {
+      flushPara();
+      continue;
+    }
+    para.push(line);
+  }
+  flushPara();
+  return blocks;
+}
+
+function buildReleaseNotesPayload(
+  rawNotes,
+  { isStaff = false, isBetaTester = false, version = "", body = "", createdAt = null } = {}
+) {
+  const notes = String(rawNotes || "").trim() || String(body || "").trim();
+  const embeds = [];
+  let current = {
+    title: "What's new",
+    audience: "everyone",
+    lines: [],
+  };
+  const pushEmbed = () => {
+    if (!current.lines.length && current.title === "What's new" && embeds.length) return;
+    if (!current.lines.length && embeds.length) return;
+    embeds.push({
+      title: current.title,
+      audience: current.audience,
+      markdown: current.lines.join("\n").trim(),
+    });
+  };
+
+  for (const block of splitReleaseNoteBlocks(notes)) {
+    const sensitive = isSensitiveReleaseNoteBlock(block);
+    const betaOnly = isBetaOnlyReleaseNoteBlock(block);
+    const cleaned = scrubCopiedPlatformNames(stripReleaseNoteAudienceMarkers(block));
+    if (!cleaned) continue;
+
+    if (sensitive && !isStaff) continue;
+    if (betaOnly && !isBetaTester && !isStaff) continue;
+
+    const heading = cleaned.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      pushEmbed();
+      current = {
+        title: scrubCopiedPlatformNames(String(heading[2] || "").trim()) || "Update",
+        audience: sensitive ? "staff" : betaOnly ? "beta" : "everyone",
+        lines: [],
+      };
+      continue;
+    }
+
+    if (sensitive) current.audience = "staff";
+    else if (betaOnly && current.audience === "everyone") current.audience = "beta";
+    current.lines.push(cleaned);
+  }
+  pushEmbed();
+
+  const visibleEmbeds = embeds.filter((embed) => {
+    if (!embed.markdown && embeds.length > 1) return false;
+    if (embed.audience === "staff" && !isStaff) return false;
+    if (embed.audience === "beta" && !isBetaTester && !isStaff) return false;
+    return true;
+  });
+
+  const blocks = splitReleaseNoteBlocks(notes)
+    .map((text) => {
+      const sensitive = isSensitiveReleaseNoteBlock(text);
+      const betaOnly = isBetaOnlyReleaseNoteBlock(text);
+      if (sensitive && !isStaff) {
+        return {
+          type: "staff-only",
+          message:
+            "This part may contain sensitive information and is only available to staff.",
+        };
+      }
+      if (betaOnly && !isBetaTester && !isStaff) {
+        return null;
+      }
+      return {
+        type: sensitive ? "staff" : betaOnly ? "beta" : "text",
+        text: scrubCopiedPlatformNames(stripReleaseNoteAudienceMarkers(text)),
+        staffOnly: sensitive,
+        betaOnly,
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    version: String(version || ""),
+    createdAt: createdAt || null,
+    isStaff: !!isStaff,
+    isBetaTester: !!isBetaTester,
+    hasStaffOnlyContent: splitReleaseNoteBlocks(notes).some((t) =>
+      isSensitiveReleaseNoteBlock(t)
+    ),
+    hasBetaOnlyContent: splitReleaseNoteBlocks(notes).some((t) =>
+      isBetaOnlyReleaseNoteBlock(t)
+    ),
+    embeds: visibleEmbeds,
+    blocks,
+    // Full raw notes only for staff.
+    notes: isStaff ? notes : undefined,
+  };
+}
+
+async function ensureAppUpdateBroadcastsTable(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_app_update_broadcasts (
+      version TEXT PRIMARY KEY,
+      body TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      notified_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`ALTER TABLE synk_app_update_broadcasts ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''`;
+}
+
+async function getAppUpdateReleaseNotes(sql, version) {
+  const ver = String(version || "")
+    .trim()
+    .slice(0, 120);
+  await ensureAppUpdateBroadcastsTable(sql);
+  if (!ver || ver === "latest") {
+    const rows = await sql`
+      SELECT version, body, notes, created_at
+      FROM synk_app_update_broadcasts
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    if (!rows[0]) return null;
+    return {
+      version: rows[0].version,
+      body: String(rows[0].body || ""),
+      notes: String(rows[0].notes || ""),
+      createdAt: rows[0].created_at || null,
+    };
+  }
+  const rows = await sql`
+    SELECT version, body, notes, created_at
+    FROM synk_app_update_broadcasts
+    WHERE version = ${ver}
+    LIMIT 1
+  `;
+  if (!rows[0]) return null;
+  return {
+    version: rows[0].version,
+    body: String(rows[0].body || ""),
+    notes: String(rows[0].notes || ""),
+    createdAt: rows[0].created_at || null,
+  };
+}
+
+function isReleaseNoteSectionHeading(line) {
+  return /^(what'?s\s+new|new|improvements?|fixes?|updates?|for\s+beta\s+testers?|testing|staff(?:\s+notes)?)\b/i.test(
+    String(line || "").trim()
+  );
+}
+
+function memberFacingReleaseNoteLines(text) {
+  return splitReleaseNoteBlocks(text)
+    .filter((block) => !isSensitiveReleaseNoteBlock(block))
+    .filter((block) => !isBetaOnlyReleaseNoteBlock(block))
+    .filter((block) => /^\s*([-*•+]|\d+[.)])\s+/.test(String(block || "")))
+    .map((block) =>
+      scrubCopiedPlatformNames(
+        stripReleaseNoteAudienceMarkers(block)
+          .replace(/^\s*([-*•+]|\d+[.)])\s+/, "")
+          .replace(/^#+\s*/, "")
+          .trim()
+      )
+    )
+    .filter((line) => line && !isReleaseNoteSectionHeading(line) && !/^what'?s new\b/i.test(line));
+}
+
+function betaFacingReleaseNoteLines(text) {
+  return splitReleaseNoteBlocks(text)
+    .filter((block) => !isSensitiveReleaseNoteBlock(block))
+    .filter((block) => isBetaOnlyReleaseNoteBlock(block))
+    .filter(
+      (block) =>
+        /^\s*([-*•+]|\d+[.)])\s+/.test(String(block || "")) ||
+        /^\s*\[beta\]\b/i.test(String(block || ""))
+    )
+    .map((block) =>
+      scrubCopiedPlatformNames(
+        stripReleaseNoteAudienceMarkers(block)
+          .replace(/^\s*([-*•+]|\d+[.)])\s+/, "")
+          .replace(/^#+\s*/, "")
+          .trim()
+      )
+    )
+    .filter(
+      (line) =>
+        line &&
+        !isReleaseNoteSectionHeading(line) &&
+        !/^(for\s+)?beta(\s+testers?)?$/i.test(line) &&
+        !/^what'?s new\b/i.test(line)
+    );
+}
+
+async function clearAllBetaAgendaItems(sql) {
+  await ensureBetaTestingTables(sql);
+  const deleted = await sql`DELETE FROM synk_beta_agenda_items RETURNING id`;
+  await sql`DELETE FROM synk_beta_update_completions`;
+  return { cleared: deleted.length };
+}
+
+async function ensureBetaTestingTables(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_agenda_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      title TEXT NOT NULL,
+      detail TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`ALTER TABLE synk_beta_agenda_items ADD COLUMN IF NOT EXISTS update_version TEXT`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_agenda_active_idx ON synk_beta_agenda_items (active, sort_order ASC, created_at ASC)`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_agenda_update_version_idx ON synk_beta_agenda_items (update_version, sort_order ASC, created_at ASC)`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_agenda_checks (
+      agenda_item_id UUID NOT NULL REFERENCES synk_beta_agenda_items(id) ON DELETE CASCADE,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (agenda_item_id, synk_profile_id)
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_feedback (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`ALTER TABLE synk_beta_feedback ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_created_idx ON synk_beta_feedback (created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_profile_idx ON synk_beta_feedback (synk_profile_id, created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_updated_idx ON synk_beta_feedback (updated_at DESC)`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_feedback_messages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      thread_id UUID NOT NULL REFERENCES synk_beta_feedback(id) ON DELETE CASCADE,
+      author_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_feedback_messages_thread_idx ON synk_beta_feedback_messages (thread_id, created_at ASC)`;
+
+  // One-time backfill: legacy feedback rows become the first chat message.
+  try {
+    await sql`
+      INSERT INTO synk_beta_feedback_messages (thread_id, author_profile_id, body, created_at)
+      SELECT f.id, f.synk_profile_id, f.body, f.created_at
+      FROM synk_beta_feedback f
+      WHERE NOT EXISTS (
+        SELECT 1 FROM synk_beta_feedback_messages m WHERE m.thread_id = f.id
+      )
+        AND COALESCE(btrim(f.body), '') <> ''
+    `;
+  } catch (_) {
+    /* ignore backfill race during first migrate */
+  }
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_tester_clock (
+      synk_profile_id UUID PRIMARY KEY REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      clocked_in_at TIMESTAMPTZ,
+      clocked_out_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_beta_update_completions (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      update_version TEXT NOT NULL,
+      completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, update_version)
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS synk_beta_update_completions_profile_idx ON synk_beta_update_completions (synk_profile_id, completed_at DESC)`;
+}
+
+async function getBetaTesterClock(sql, profileId) {
+  const rows = await sql`
+    SELECT clocked_in_at, clocked_out_at, updated_at
+    FROM synk_beta_tester_clock
+    WHERE synk_profile_id = ${profileId}
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row || !row.clocked_in_at) {
+    return {
+      clockedIn: false,
+      clockedInAt: null,
+      clockedOutAt: row && row.clocked_out_at ? row.clocked_out_at : null,
+    };
+  }
+  return {
+    clockedIn: true,
+    clockedInAt: row.clocked_in_at,
+    clockedOutAt: null,
+  };
+}
+
+function mapBetaFeedbackMessage(row, { viewerProfileId, threadOwnerId }) {
+  const authorId = row.author_profile_id;
+  const isMine = String(authorId) === String(viewerProfileId);
+  const isStaff = String(authorId) !== String(threadOwnerId);
+  return {
+    id: row.id,
+    body: row.body,
+    createdAt: row.created_at,
+    authorProfileId: authorId,
+    authorUsername: row.author_username || null,
+    authorDisplayName: row.author_display_name || null,
+    isMine,
+    isStaff,
+  };
+}
+
+async function listBetaFeedbackMessagesForThreads(sql, threadIds) {
+  const ids = (threadIds || []).filter(Boolean);
+  if (!ids.length) return new Map();
+  const rows = await sql`
+    SELECT
+      m.id,
+      m.thread_id,
+      m.author_profile_id,
+      m.body,
+      m.created_at,
+      COALESCE(cp.public_username, '') AS author_username,
+      COALESCE(NULLIF(btrim(cp.display_name), ''), cp.public_username, '') AS author_display_name
+    FROM synk_beta_feedback_messages m
+    LEFT JOIN synk_community_profiles cp ON cp.synk_profile_id = m.author_profile_id
+    WHERE m.thread_id = ANY(${ids}::uuid[])
+    ORDER BY m.created_at ASC
+  `;
+  const map = new Map();
+  for (const row of rows) {
+    const key = String(row.thread_id);
+    const list = map.get(key) || [];
+    list.push(row);
+    map.set(key, list);
+  }
+  return map;
+}
+
+async function listBetaFeedbackThreads(sql, { profileId = null, limit = 50, viewerProfileId } = {}) {
+  await ensureBetaTestingTables(sql);
+  const take = Math.max(1, Math.min(200, Number(limit) || 50));
+  const threads = profileId
+    ? await sql`
+        SELECT
+          f.id,
+          f.synk_profile_id,
+          f.body,
+          f.created_at,
+          f.updated_at,
+          COALESCE(cp.public_username, '') AS author_username,
+          COALESCE(NULLIF(btrim(cp.display_name), ''), cp.public_username, '') AS author_display_name
+        FROM synk_beta_feedback f
+        LEFT JOIN synk_community_profiles cp ON cp.synk_profile_id = f.synk_profile_id
+        WHERE f.synk_profile_id = ${profileId}
+        ORDER BY COALESCE(f.updated_at, f.created_at) DESC, f.created_at DESC
+        LIMIT ${take}
+      `
+    : await sql`
+        SELECT
+          f.id,
+          f.synk_profile_id,
+          f.body,
+          f.created_at,
+          f.updated_at,
+          COALESCE(cp.public_username, '') AS author_username,
+          COALESCE(NULLIF(btrim(cp.display_name), ''), cp.public_username, '') AS author_display_name
+        FROM synk_beta_feedback f
+        LEFT JOIN synk_community_profiles cp ON cp.synk_profile_id = f.synk_profile_id
+        ORDER BY COALESCE(f.updated_at, f.created_at) DESC, f.created_at DESC
+        LIMIT ${take}
+      `;
+
+  const viewer = viewerProfileId || profileId;
+  const msgMap = await listBetaFeedbackMessagesForThreads(
+    sql,
+    threads.map((t) => t.id)
+  );
+
+  return threads.map((t) => {
+    const rawMessages = msgMap.get(String(t.id)) || [];
+    let messages = rawMessages.map((m) =>
+      mapBetaFeedbackMessage(m, {
+        viewerProfileId: viewer,
+        threadOwnerId: t.synk_profile_id,
+      })
+    );
+    if (!messages.length && String(t.body || "").trim()) {
+      messages = [
+        {
+          id: `${t.id}-legacy`,
+          body: t.body,
+          createdAt: t.created_at,
+          authorProfileId: t.synk_profile_id,
+          authorUsername: t.author_username || null,
+          authorDisplayName: t.author_display_name || null,
+          isMine: String(t.synk_profile_id) === String(viewer),
+          isStaff: false,
+        },
+      ];
+    }
+    const last = messages[messages.length - 1];
+    return {
+      id: t.id,
+      body: t.body,
+      createdAt: t.created_at,
+      updatedAt: t.updated_at || t.created_at,
+      authorProfileId: t.synk_profile_id,
+      authorUsername: t.author_username || null,
+      authorDisplayName: t.author_display_name || null,
+      preview: last ? last.body : t.body,
+      messageCount: messages.length,
+      messages,
+    };
+  });
+}
+
+async function createBetaFeedbackThread(sql, { profileId, bodyText }) {
+  await ensureBetaTestingTables(sql);
+  const rows = await sql`
+    INSERT INTO synk_beta_feedback (synk_profile_id, body, updated_at)
+    VALUES (${profileId}, ${bodyText}, NOW())
+    RETURNING id, body, created_at, updated_at, synk_profile_id
+  `;
+  const thread = rows[0];
+  await sql`
+    INSERT INTO synk_beta_feedback_messages (thread_id, author_profile_id, body, created_at)
+    VALUES (${thread.id}, ${profileId}, ${bodyText}, ${thread.created_at})
+  `;
+  const listed = await listBetaFeedbackThreads(sql, {
+    profileId,
+    limit: 50,
+    viewerProfileId: profileId,
+  });
+  const matched = listed.find((t) => String(t.id) === String(thread.id));
+  if (matched) return matched;
+  return {
+    id: thread.id,
+    body: thread.body,
+    createdAt: thread.created_at,
+    updatedAt: thread.updated_at || thread.created_at,
+    authorProfileId: thread.synk_profile_id,
+    authorUsername: null,
+    authorDisplayName: null,
+    preview: thread.body,
+    messageCount: 1,
+    messages: [
+      {
+        id: `${thread.id}-first`,
+        body: thread.body,
+        createdAt: thread.created_at,
+        authorProfileId: profileId,
+        authorUsername: null,
+        authorDisplayName: null,
+        isMine: true,
+        isStaff: false,
+      },
+    ],
+  };
+}
+
+async function replyBetaFeedbackThread(sql, { threadId, authorProfileId, bodyText, viewerProfileId, isStaff }) {
+  await ensureBetaTestingTables(sql);
+  const threads = await sql`
+    SELECT id, synk_profile_id, body, created_at, updated_at
+    FROM synk_beta_feedback
+    WHERE id = ${threadId}
+    LIMIT 1
+  `;
+  const thread = threads[0];
+  if (!thread) {
+    const err = new Error("Feedback thread not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  const ownsThread = String(thread.synk_profile_id) === String(authorProfileId);
+  if (!ownsThread && !isStaff) {
+    const err = new Error("You can only reply to your own feedback");
+    err.statusCode = 403;
+    throw err;
+  }
+  await sql`
+    INSERT INTO synk_beta_feedback_messages (thread_id, author_profile_id, body)
+    VALUES (${thread.id}, ${authorProfileId}, ${bodyText})
+  `;
+  await sql`
+    UPDATE synk_beta_feedback
+    SET updated_at = NOW()
+    WHERE id = ${thread.id}
+  `;
+  const listed = await listBetaFeedbackThreads(sql, {
+    profileId: isStaff && !ownsThread ? null : thread.synk_profile_id,
+    limit: isStaff && !ownsThread ? 200 : 50,
+    viewerProfileId: viewerProfileId || authorProfileId,
+  });
+  const matched = listed.find((t) => String(t.id) === String(thread.id));
+  if (matched) return matched;
+  // Staff reply on someone else's thread — re-fetch just this thread's messages
+  const one = await sql`
+    SELECT
+      f.id,
+      f.synk_profile_id,
+      f.body,
+      f.created_at,
+      f.updated_at,
+      COALESCE(cp.public_username, '') AS author_username,
+      COALESCE(NULLIF(btrim(cp.display_name), ''), cp.public_username, '') AS author_display_name
+    FROM synk_beta_feedback f
+    LEFT JOIN synk_community_profiles cp ON cp.synk_profile_id = f.synk_profile_id
+    WHERE f.id = ${thread.id}
+    LIMIT 1
+  `;
+  const msgMap = await listBetaFeedbackMessagesForThreads(sql, [thread.id]);
+  const row = one[0];
+  const messages = (msgMap.get(String(thread.id)) || []).map((m) =>
+    mapBetaFeedbackMessage(m, {
+      viewerProfileId: viewerProfileId || authorProfileId,
+      threadOwnerId: row.synk_profile_id,
+    })
+  );
+  const last = messages[messages.length - 1];
+  return {
+    id: row.id,
+    body: row.body,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
+    authorProfileId: row.synk_profile_id,
+    authorUsername: row.author_username || null,
+    authorDisplayName: row.author_display_name || null,
+    preview: last ? last.body : row.body,
+    messageCount: messages.length,
+    messages,
+  };
+}
+
+async function listBetaUpdateVersions(sql) {
+  const rows = await sql`
+    SELECT update_version AS version, MIN(created_at) AS first_seen
+    FROM synk_beta_agenda_items
+    WHERE active = TRUE
+      AND update_version IS NOT NULL
+      AND btrim(update_version) <> ''
+    GROUP BY update_version
+    ORDER BY MIN(created_at) ASC, update_version ASC
+  `;
+  return rows.map((row) => ({
+    version: String(row.version || ""),
+    firstSeen: row.first_seen || null,
+  }));
+}
+
+async function resolveBetaCurrentUpdate(sql, profileId) {
+  const versions = await listBetaUpdateVersions(sql);
+  if (!versions.length) {
+    return {
+      currentVersion: null,
+      nextVersion: null,
+      completedVersions: [],
+      pendingVersions: [],
+      caughtUp: true,
+    };
+  }
+  const doneRows = await sql`
+    SELECT update_version, completed_at
+    FROM synk_beta_update_completions
+    WHERE synk_profile_id = ${profileId}
+  `;
+  const completed = new Set(doneRows.map((r) => String(r.update_version || "")));
+  const pending = versions.filter((v) => !completed.has(v.version));
+  const current = pending[0] || null;
+  const next = pending[1] || null;
+  return {
+    currentVersion: current ? current.version : null,
+    nextVersion: next ? next.version : null,
+    completedVersions: versions.filter((v) => completed.has(v.version)).map((v) => v.version),
+    pendingVersions: pending.map((v) => v.version),
+    caughtUp: !current,
+  };
+}
+
+async function listBetaTesterProfileIds(sql) {
+  await ensureSynkCoreTables(sql);
+  const rows = await sql`
+    SELECT DISTINCT profile_id
+    FROM (
+      SELECT c.synk_profile_id AS profile_id
+      FROM synk_community_username_tags ut
+      JOIN synk_community_tags t ON t.id = ut.tag_id
+      JOIN synk_community_profiles c ON lower(c.public_username) = lower(ut.public_username)
+      WHERE lower(coalesce(t.slug, '')) IN ('beta-tester', 'beta_tester', 'betatester')
+         OR lower(coalesce(t.slug, '')) LIKE '%beta-tester%'
+         OR lower(coalesce(t.name, '')) LIKE '%beta tester%'
+      UNION
+      SELECT pt.synk_profile_id AS profile_id
+      FROM synk_community_profile_tags pt
+      JOIN synk_community_tags t ON t.id = pt.tag_id
+      WHERE lower(coalesce(t.slug, '')) IN ('beta-tester', 'beta_tester', 'betatester')
+         OR lower(coalesce(t.slug, '')) LIKE '%beta-tester%'
+         OR lower(coalesce(t.name, '')) LIKE '%beta tester%'
+      UNION
+      SELECT a.owner_synk_profile_id AS profile_id
+      FROM synk_community_username_tags ut
+      JOIN synk_community_tags t ON t.id = ut.tag_id
+      JOIN synk_community_alt_accounts a ON lower(a.public_username) = lower(ut.public_username)
+      WHERE a.owner_synk_profile_id IS NOT NULL
+        AND (
+          lower(coalesce(t.slug, '')) IN ('beta-tester', 'beta_tester', 'betatester')
+          OR lower(coalesce(t.slug, '')) LIKE '%beta-tester%'
+          OR lower(coalesce(t.name, '')) LIKE '%beta tester%'
+        )
+    ) beta_profiles
+    WHERE profile_id IS NOT NULL
+  `;
+  return rows.map((row) => String(row.profile_id)).filter(Boolean);
+}
+
+async function notifyBetaTestersOfShift(
+  sql,
+  { version = "", title = "", body = "", createInbox = true } = {}
+) {
+  await ensureSynkCoreTables(sql);
+  const profileIds = await listBetaTesterProfileIds(sql);
+  if (!profileIds.length) {
+    return { ok: true, notified: 0, pushSent: 0, skipped: true, reason: "no-beta-testers" };
+  }
+
+  const ver = String(version || "").trim().slice(0, 120);
+  const short = ver ? (ver.length > 10 ? ver.slice(0, 7) : ver) : "";
+  const notifTitle = String(title || "Early access shift").trim().slice(0, 120);
+  const notifBody = String(
+    body ||
+      (short
+        ? `A new testing shift is ready for update ${short}. Open Staff Hub to start your session.`
+        : "A new testing shift is ready. Open Staff Hub to start your session.")
+  )
+    .trim()
+    .slice(0, 500);
+  const storedBody = ver ? `${notifBody}\n\n<!--synk-version:${ver}-->` : notifBody;
+
+  let notified = 0;
+  if (createInbox) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS synk_community_notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        actor_username TEXT,
+        post_id UUID,
+        comment_id UUID,
+        body TEXT NOT NULL DEFAULT '',
+        read_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+    const inserted = await sql`
+      INSERT INTO synk_community_notifications (
+        synk_profile_id, kind, actor_username, body
+      )
+      SELECT
+        x.profile_id,
+        'testing_shift',
+        'synk',
+        ${storedBody}
+      FROM unnest(${profileIds}::uuid[]) AS x(profile_id)
+      RETURNING id
+    `;
+    notified = inserted.length;
+  }
+
+  let push = { sent: 0, removed: 0 };
+  try {
+    const { notifySynkProfiles, notificationPushPayload } = require("./synk-push");
+    push = await notifySynkProfiles(
+      sql,
+      profileIds,
+      notificationPushPayload({
+        kind: "testing_shift",
+        actorUsername: "synk",
+        body: notifBody,
+        url: "https://staffhub.bhswebsite.org/",
+      })
+    );
+  } catch (err) {
+    console.error("notifyBetaTestersOfShift push failed:", err);
+  }
+
+  return {
+    ok: true,
+    notified,
+    pushSent: Number(push && push.sent) || 0,
+    pushRemoved: Number(push && push.removed) || 0,
+    betaTesters: profileIds.length,
+    version: ver || null,
+    title: notifTitle,
+  };
+}
+
+async function ensureBetaAgendaForAppUpdate(sql, { version, body, notes } = {}) {
+  const ver = String(version || "")
+    .trim()
+    .slice(0, 120);
+  if (!ver) return { created: 0, skipped: true };
+
+  await ensureBetaTestingTables(sql);
+
+  const existing = await sql`
+    SELECT id
+    FROM synk_beta_agenda_items
+    WHERE update_version = ${ver}
+      AND active = TRUE
+    LIMIT 1
+  `;
+  if (existing[0]) {
+    return { created: 0, already: true, version: ver, agendaItemId: existing[0].id };
+  }
+
+  const short = ver.length > 10 ? ver.slice(0, 7) : ver;
+  const betaLines = betaFacingReleaseNoteLines(notes || "").slice(0, 12);
+  const publicLines = memberFacingReleaseNoteLines(notes || body || "").slice(0, 8);
+  const lines = (betaLines.length ? betaLines : publicLines).filter(Boolean);
+  const fallback =
+    String(body || "").trim().slice(0, 160) ||
+    "Review the latest Synk build and report anything that feels unclear or broken.";
+  const items = lines.length ? lines : [fallback];
+
+  const sortRows = await sql`
+    SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort
+    FROM synk_beta_agenda_items
+  `;
+  let sortOrder = (Number(sortRows[0] && sortRows[0].max_sort) || 0) + 1;
+  const createdIds = [];
+
+  for (const line of items) {
+    const title = scrubCopiedPlatformNames(String(line || "").trim()).slice(0, 160);
+    if (!title) continue;
+    const detail = `Update ${short}`.slice(0, 1000);
+    const rows = await sql`
+      INSERT INTO synk_beta_agenda_items (
+        title, detail, sort_order, active, created_by, update_version
+      )
+      VALUES (
+        ${title},
+        ${detail},
+        ${sortOrder},
+        TRUE,
+        NULL,
+        ${ver}
+      )
+      RETURNING id
+    `;
+    if (rows[0]) createdIds.push(rows[0].id);
+    sortOrder += 1;
+  }
+
+  return {
+    created: createdIds.length,
+    already: false,
+    version: ver,
+    agendaItemIds: createdIds,
+    agendaItemId: createdIds[0] || null,
+  };
+}
+
+async function broadcastAppUpdate(sql, { version, body, notes } = {}) {
+  const ver = String(version || "")
+    .trim()
+    .slice(0, 120);
+  if (!ver) return { ok: false, error: "Version required", notified: 0 };
+
+  const message = String(
+    body || "Synk was updated. Refresh or reopen the app to get the latest."
+  )
+    .trim()
+    .slice(0, 500);
+
+  const releaseNotes = scrubCopiedPlatformNames(String(notes || "").trim()).slice(0, 20000);
+
+  await ensureAppUpdateBroadcastsTable(sql);
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_notifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      actor_username TEXT,
+      post_id UUID,
+      comment_id UUID,
+      body TEXT NOT NULL DEFAULT '',
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  const existing = await sql`
+    SELECT version, notified_count
+    FROM synk_app_update_broadcasts
+    WHERE version = ${ver}
+    LIMIT 1
+  `;
+  if (existing[0]) {
+    // Refresh stored copy without re-notifying everyone.
+    await sql`
+      UPDATE synk_app_update_broadcasts
+      SET
+        body = CASE WHEN ${message} <> '' THEN ${message} ELSE body END,
+        notes = CASE WHEN ${releaseNotes} <> '' THEN ${releaseNotes} ELSE notes END
+      WHERE version = ${ver}
+    `;
+    return {
+      ok: true,
+      alreadyBroadcast: true,
+      notesRefreshed: !!releaseNotes,
+      version: ver,
+      notified: Number(existing[0].notified_count) || 0,
+      pushSent: 0,
+      pushSkippedUnread: 0,
+    };
+  }
+
+  const notifBody = `${message}\n\n<!--synk-version:${ver}-->`;
+
+  // Who already has an unread app-update? Those users should NOT get another push.
+  const unreadBefore = await sql`
+    SELECT DISTINCT synk_profile_id AS profile_id
+    FROM synk_community_notifications
+    WHERE kind IN ('app_update', 'app_updated', 'update')
+      AND read_at IS NULL
+  `;
+  const unreadSet = new Set(
+    unreadBefore.map((row) => String(row.profile_id || "")).filter(Boolean)
+  );
+
+  // Refresh any existing unread app-update rows in place (keeps one live release note).
+  await sql`
+    UPDATE synk_community_notifications
+    SET
+      body = ${notifBody},
+      actor_username = 'synk',
+      created_at = NOW(),
+      read_at = NULL
+    WHERE kind IN ('app_update', 'app_updated', 'update')
+      AND read_at IS NULL
+  `;
+
+  // Profiles that only have read app-updates: revive the newest row as unread.
+  await sql`
+    UPDATE synk_community_notifications n
+    SET
+      body = ${notifBody},
+      actor_username = 'synk',
+      created_at = NOW(),
+      read_at = NULL
+    WHERE n.kind IN ('app_update', 'app_updated', 'update')
+      AND n.read_at IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM synk_community_notifications u
+        WHERE u.synk_profile_id = n.synk_profile_id
+          AND u.kind IN ('app_update', 'app_updated', 'update')
+          AND u.read_at IS NULL
+      )
+      AND n.created_at = (
+        SELECT MAX(n2.created_at)
+        FROM synk_community_notifications n2
+        WHERE n2.synk_profile_id = n.synk_profile_id
+          AND n2.kind IN ('app_update', 'app_updated', 'update')
+      )
+  `;
+
+  // Profiles with no app-update row yet: insert one.
+  const inserted = await sql`
+    INSERT INTO synk_community_notifications (
+      synk_profile_id, kind, actor_username, body
+    )
+    SELECT
+      c.synk_profile_id,
+      'app_update',
+      'synk',
+      ${notifBody}
+    FROM synk_community_profiles c
+    WHERE c.public_username IS NOT NULL
+      AND btrim(c.public_username) <> ''
+      AND NOT EXISTS (
+        SELECT 1
+        FROM synk_community_notifications n
+        WHERE n.synk_profile_id = c.synk_profile_id
+          AND n.kind IN ('app_update', 'app_updated', 'update')
+      )
+    RETURNING synk_profile_id
+  `;
+
+  // Collapse any leftover duplicates so the inbox shows a single release note.
+  await sql`
+    DELETE FROM synk_community_notifications
+    WHERE id IN (
+      SELECT id
+      FROM (
+        SELECT
+          id,
+          ROW_NUMBER() OVER (
+            PARTITION BY synk_profile_id
+            ORDER BY
+              CASE WHEN read_at IS NULL THEN 0 ELSE 1 END,
+              created_at DESC,
+              id DESC
+          ) AS rn
+        FROM synk_community_notifications
+        WHERE kind IN ('app_update', 'app_updated', 'update')
+      ) ranked
+      WHERE rn > 1
+    )
+  `;
+
+  const touched = await sql`
+    SELECT COUNT(*)::int AS count
+    FROM synk_community_notifications
+    WHERE kind IN ('app_update', 'app_updated', 'update')
+      AND body = ${notifBody}
+  `;
+  const notified =
+    Number(touched[0] && touched[0].count) ||
+    inserted.length ||
+    unreadBefore.length;
+
+  await sql`
+    INSERT INTO synk_app_update_broadcasts (version, body, notes, notified_count)
+    VALUES (${ver}, ${message}, ${releaseNotes}, ${notified})
+    ON CONFLICT (version) DO NOTHING
+  `;
+
+  let agenda = { created: 0 };
+  try {
+    agenda = await ensureBetaAgendaForAppUpdate(sql, {
+      version: ver,
+      body: message,
+      notes: releaseNotes,
+    });
+  } catch (err) {
+    console.error("ensureBetaAgendaForAppUpdate failed:", err);
+  }
+
+  let betaShift = { notified: 0, pushSent: 0 };
+  try {
+    const short = ver.length > 10 ? ver.slice(0, 7) : ver;
+    betaShift = await notifyBetaTestersOfShift(sql, {
+      version: ver,
+      title: "Early access shift",
+      body:
+        Number(agenda && agenda.created) > 0
+          ? `A new testing shift is ready for update ${short}. Open Staff Hub to start your session.`
+          : `Synk update ${short} is live for early access review. Open Staff Hub when you are ready.`,
+      createInbox: true,
+    });
+  } catch (err) {
+    console.error("notifyBetaTestersOfShift failed:", err);
+  }
+
+  // Push only to members who already saw (or never had) the previous update.
+  let push = { sent: 0, removed: 0, skippedUnread: unreadSet.size };
+  try {
+    const { notifySynkProfiles, notificationPushPayload } = require("./synk-push");
+    const pushTargets = await sql`
+      SELECT c.synk_profile_id AS profile_id
+      FROM synk_community_profiles c
+      WHERE c.public_username IS NOT NULL
+        AND btrim(c.public_username) <> ''
+    `;
+    const pushIds = pushTargets
+      .map((row) => String(row.profile_id || ""))
+      .filter((id) => id && !unreadSet.has(id));
+    if (pushIds.length) {
+      push = {
+        ...(await notifySynkProfiles(
+          sql,
+          pushIds,
+          notificationPushPayload({
+            kind: "app_update",
+            actorUsername: "synk",
+            body: message,
+            url: "/hub",
+          })
+        )),
+        skippedUnread: unreadSet.size,
+      };
+    } else {
+      push = { sent: 0, removed: 0, skippedUnread: unreadSet.size, skipped: true };
+    }
+  } catch (err) {
+    console.error("broadcastAppUpdate push failed:", err);
+  }
+
+  return {
+    ok: true,
+    alreadyBroadcast: false,
+    version: ver,
+    notified,
+    body: message,
+    notes: releaseNotes,
+    agendaCreated: Number(agenda && agenda.created) || 0,
+    agendaItemId: (agenda && agenda.agendaItemId) || null,
+    betaNotified: Number(betaShift && betaShift.notified) || 0,
+    betaPushSent: Number(betaShift && betaShift.pushSent) || 0,
+    pushSent: Number(push && push.sent) || 0,
+    pushSkippedUnread: Number(push && push.skippedUnread) || unreadSet.size || 0,
+  };
+}
+
+
+async function updateCommunityGroup(sql, groupId, { name, description, bannerUrl, iconUrl } = {}) {
+  const id = String(groupId || "").trim();
+  if (!id) return { ok: false, error: "Group required" };
+  const existing = await sql`
+    SELECT id, slug, name, description, theme, is_official, banner_url, icon_url, created_by, created_at, updated_at
+    FROM synk_community_groups
+    WHERE id = ${id}
+    LIMIT 1
+  `;
+  if (!existing[0]) return { ok: false, error: "Group not found" };
+  const nextName = name != null ? normalizeGroupName(name) : existing[0].name;
+  if (!nextName) return { ok: false, error: "Group name required" };
+  const nextDescription =
+    description != null ? normalizeGroupDescription(description) : existing[0].description || "";
+  let nextBanner = existing[0].banner_url || "";
+  if (bannerUrl !== undefined) {
+    const raw = String(bannerUrl || "").trim();
+    if (!raw) nextBanner = "";
+    else if (/^https:\/\//i.test(raw) || raw.startsWith("/api/")) nextBanner = raw.slice(0, 700);
+    else return { ok: false, error: "Banner must be an https URL or uploaded image" };
+  }
+  let nextIcon = existing[0].icon_url || "";
+  if (iconUrl !== undefined) {
+    const raw = String(iconUrl || "").trim();
+    if (!raw) nextIcon = "";
+    else if (/^https:\/\//i.test(raw) || raw.startsWith("/api/")) nextIcon = raw.slice(0, 700);
+    else return { ok: false, error: "Icon must be an https URL or uploaded image" };
+  }
+  const rows = await sql`
+    UPDATE synk_community_groups
+    SET
+      name = ${nextName},
+      description = ${nextDescription},
+      banner_url = ${nextBanner},
+      icon_url = ${nextIcon},
+      updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING id, slug, name, description, theme, is_official, banner_url, icon_url, created_by, created_at, updated_at
+  `;
+  return { ok: true, group: mapCommunityGroup(rows[0]) };
+}
+
+async function ensureGroupCategory(sql, groupId, name, sortOrder = 0) {
+  const label = String(name || "").trim().slice(0, 80);
+  if (!label) return null;
+  const existing = await sql`
+    SELECT id FROM synk_community_group_categories
+    WHERE group_id = ${groupId} AND lower(name) = ${label.toLowerCase()}
+    LIMIT 1
+  `;
+  if (existing[0]) return existing[0].id;
+  const created = await sql`
+    INSERT INTO synk_community_group_categories (group_id, name, sort_order)
+    VALUES (${groupId}, ${label}, ${Number(sortOrder) || 0})
+    RETURNING id
+  `;
+  return created[0].id;
+}
+
+async function createGroupChannel(sql, groupId, { name, slug, description, kind, emoji, categoryId, categoryName, sortOrder } = {}) {
+  const channelName = capitalizeChannelName(name || slug);
+  const channelSlug = normalizeChannelSlug(slug || name);
+  if (!channelName) return { ok: false, error: "Channel name required" };
+  if (!channelSlug || channelSlug.length < 2) return { ok: false, error: "Channel slug needs at least 2 characters" };
+  const channelKind = normalizeChannelKind(kind || "text", channelSlug);
+  let catId = String(categoryId || "").trim() || null;
+  if (!catId && categoryName) {
+    catId = await ensureGroupCategory(sql, groupId, categoryName);
+  }
+  const maxSort = await sql`
+    SELECT COALESCE(MAX(sort_order), -1)::int AS max FROM synk_community_group_channels WHERE group_id = ${groupId}
+  `;
+  const nextSort = sortOrder != null ? Number(sortOrder) || 0 : Number(maxSort[0] && maxSort[0].max) + 1;
+  try {
+    const rows = await sql`
+      INSERT INTO synk_community_group_channels (
+        group_id, category_id, emoji, name, slug, description, kind, sort_order
+      )
+      VALUES (
+        ${groupId}, ${catId}, ${String(emoji || "").trim().slice(0, 8)}, ${channelName}, ${channelSlug},
+        ${String(description || "").trim().slice(0, 280)}, ${channelKind}, ${nextSort}
+      )
+      RETURNING id, group_id, category_id, emoji, name, slug, description, kind, sort_order
+    `;
+    return { ok: true, channel: mapCommunityChannel(rows[0]) };
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      return { ok: false, error: "A channel with that slug already exists" };
+    }
+    throw err;
+  }
+}
+
+async function updateGroupChannel(sql, channelId, groupId, patch = {}) {
+  const id = String(channelId || "").trim();
+  if (!id) return { ok: false, error: "Channel required" };
+  const existing = await sql`
+    SELECT id, group_id, category_id, emoji, name, slug, description, kind, sort_order
+    FROM synk_community_group_channels
+    WHERE id = ${id} AND group_id = ${groupId}
+    LIMIT 1
+  `;
+  if (!existing[0]) return { ok: false, error: "Channel not found" };
+  const nextName = patch.name != null ? capitalizeChannelName(patch.name) : existing[0].name;
+  if (!nextName) return { ok: false, error: "Channel name required" };
+  const nextSlug =
+    patch.slug != null ? normalizeChannelSlug(patch.slug) : existing[0].slug;
+  if (!nextSlug || nextSlug.length < 2) return { ok: false, error: "Channel slug needs at least 2 characters" };
+  const nextKind =
+    patch.kind != null ? normalizeChannelKind(patch.kind, nextSlug) : normalizeChannelKind(existing[0].kind, nextSlug);
+  const nextDesc =
+    patch.description != null
+      ? String(patch.description || "").trim().slice(0, 280)
+      : existing[0].description || "";
+  const nextEmoji =
+    patch.emoji != null ? String(patch.emoji || "").trim().slice(0, 8) : existing[0].emoji || "";
+  let nextCat = existing[0].category_id;
+  if (patch.categoryId !== undefined) nextCat = String(patch.categoryId || "").trim() || null;
+  if (patch.categoryName) nextCat = await ensureGroupCategory(sql, groupId, patch.categoryName);
+  const nextSort = patch.sortOrder != null ? Number(patch.sortOrder) || 0 : existing[0].sort_order;
+  try {
+    const rows = await sql`
+      UPDATE synk_community_group_channels
+      SET
+        name = ${nextName},
+        slug = ${nextSlug},
+        kind = ${nextKind},
+        description = ${nextDesc},
+        emoji = ${nextEmoji},
+        category_id = ${nextCat},
+        sort_order = ${nextSort}
+      WHERE id = ${id}
+      RETURNING id, group_id, category_id, emoji, name, slug, description, kind, sort_order
+    `;
+    return { ok: true, channel: mapCommunityChannel(rows[0]) };
+  } catch (err) {
+    if (String(err.message || "").includes("unique") || err.code === "23505") {
+      return { ok: false, error: "A channel with that slug already exists" };
+    }
+    throw err;
+  }
+}
+
+async function deleteGroupChannel(sql, channelId, groupId) {
+  const id = String(channelId || "").trim();
+  if (!id) return { ok: false, error: "Channel required" };
+  const lounge = await sql`
+    SELECT id FROM synk_community_group_channels
+    WHERE group_id = ${groupId} AND slug IN ('lounge', 'general')
+    ORDER BY CASE WHEN slug = 'lounge' THEN 0 ELSE 1 END
+    LIMIT 1
+  `;
+  const fallbackId = lounge[0] && lounge[0].id !== id ? lounge[0].id : null;
+  if (fallbackId) {
+    await sql`
+      UPDATE synk_community_posts
+      SET channel_id = ${fallbackId}
+      WHERE group_id = ${groupId} AND channel_id = ${id}
+    `;
+  } else {
+    await sql`
+      UPDATE synk_community_posts
+      SET channel_id = NULL
+      WHERE group_id = ${groupId} AND channel_id = ${id}
+    `;
+  }
+  const deleted = await sql`
+    DELETE FROM synk_community_group_channels
+    WHERE id = ${id} AND group_id = ${groupId}
+    RETURNING id
+  `;
+  return { ok: true, deleted: deleted.length > 0 };
+}
+
 module.exports = {
   hashSecret,
   verifySecret,
@@ -1998,6 +5960,7 @@ module.exports = {
   clientIp,
   sleep,
   ensureSynkCoreTables,
+  ensureSynkPlacesTable,
   logSynkEvent,
   assertNotRateLimited,
   issuePass,
@@ -2006,9 +5969,67 @@ module.exports = {
   revokePass,
   requireSynkApp,
   issueHubSession,
+  ADMIN_ACT_AS_TTL_MS,
+  normalizeActAsNextPath,
+  claimAdminActAsHandoff,
+  createAdminActAsHandoff,
   requireHubSession,
   extractHubSessionToken,
+  broadcastAppUpdate,
+  ensureBetaTestingTables,
+  ensureBetaAgendaForAppUpdate,
+  listBetaTesterProfileIds,
+  notifyBetaTestersOfShift,
+  getBetaTesterClock,
+  listBetaFeedbackThreads,
+  createBetaFeedbackThread,
+  replyBetaFeedbackThread,
+  listBetaUpdateVersions,
+  resolveBetaCurrentUpdate,
+  buildReleaseNotesPayload,
+  getAppUpdateReleaseNotes,
+  isSensitiveReleaseNoteBlock,
+  isBetaOnlyReleaseNoteBlock,
+  scrubCopiedPlatformNames,
+  splitReleaseNoteBlocks,
+  memberFacingReleaseNoteLines,
+  betaFacingReleaseNoteLines,
+  clearAllBetaAgendaItems,
   normalizePublicUsername,
+  normalizeDisplayName,
+  normalizeBio,
+  normalizeDmPolicy,
+  normalizePresenceStatus,
+  getDisplayNamesByUsernames,
+  getPresenceByUsernames,
+  setDisplayNameForUsername,
+  setBioForUsername,
+  setDmPolicyForUsername,
+  setPresenceForUsername,
+  getFriendship,
+  listFriends,
+  requestFriendship,
+  respondFriendship,
+  removeFriendship,
+  isFollowing,
+  getFollowCounts,
+  listFollowers,
+  listFollowing,
+  followUser,
+  unfollowUser,
+  canDm,
+  getOrCreateDmThread,
+  listDmThreads,
+  getDmThreadById,
+  listDmMessages,
+  sendDm,
+  editDmMessage,
+  deleteDmMessage,
+  reactDmMessage,
+  friendshipViewerStatus,
+  getAvatarsByUsernames,
+  setAvatarForUsername,
+  updateSynkProfilePhoto,
   normalizeGroupSlug,
   normalizeGroupName,
   normalizeGroupDescription,
@@ -2021,7 +6042,42 @@ module.exports = {
   listCommunityGroups,
   findCommunityGroup,
   mapCommunityGroup,
+  ensureOfficialSynkGroup,
+  hydrateCommunityGroup,
+  listGroupTags,
+  listTagsByGroupIds,
+  assignGroupTag,
+  unassignGroupTag,
+  syncOfficialSynkLayout,
+  updateCommunityGroup,
+  createGroupChannel,
+  updateGroupChannel,
+  deleteGroupChannel,
+  ensureGroupCategory,
+  purgeLegacyCommunityGroups,
+  listGroupCategories,
+  listGroupChannels,
+  findGroupChannel,
+  listGroupRoles,
+  createGroupRole,
+  updateGroupRole,
+  deleteGroupRole,
+  formatChannelLabel,
+  normalizeChannelKind,
+  normalizeSuggestionStatus,
+  normalizeSuggestionTags,
+  normalizeTicketTags,
+  normalizeTicketStatus,
+  isForumChannelKind,
+  DEFAULT_TICKET_TAGS,
+  suggestionTagsToIds,
+  mapSuggestionTagsFromRow,
+  DEFAULT_SUGGESTION_TAGS,
+  capitalizeChannelName,
+  normalizeRoleName,
+  normalizeRoleColor,
   isCommunityUsernameTaken,
+  renameCommunityUsername,
   listOwnerAltAccounts,
   findCommunityAltAccount,
   findCommunityPublicProfile,
@@ -2030,6 +6086,13 @@ module.exports = {
   normalizeTagDescription,
   normalizeTagColor,
   mapCommunityTag,
+  isBetaTesterTag,
+  findInfoPage,
+  listInfoPages,
+  normalizePageBlocks,
+  normalizePageTitle,
+  normalizePageSlug,
+  mapInfoPage,
   listCommunityTags,
   findCommunityTag,
   listProfileTags,

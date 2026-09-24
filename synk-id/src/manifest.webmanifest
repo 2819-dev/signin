@@ -2,7 +2,7 @@
   "name": "Synk",
   "short_name": "Synk",
   "description": "Synk helps you check in faster with your face",
-  "start_url": "/",
+  "start_url": "/hub",
   "display": "standalone",
   "background_color": "#041a55",
   "theme_color": "#041a55",

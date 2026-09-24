@@ -1,0 +1,17 @@
+---
+description: How to add Synk identity to other products built for this user
+globs:
+alwaysApply: true
+---
+
+# Synk integration for Cursor agents
+
+When the user asks to add Synk login / identity / face verify to **another app or platform**:
+
+1. Read `AGENTS.md` and `integrations/synk/README.md` first.
+2. Use the redirect → pass → server consume flow. Do **not** invent OAuth, magic links, or password auth for Synk.
+3. Browser helper: `https://synkid.netlify.app/sdk.js` (`Synk.signIn`, `Synk.takePassFromUrl`).
+4. Server consume: `POST https://synkid.netlify.app/api/synk-pass` with header `X-Synk-Key: sk_live_…`.
+5. Keep API keys in server env only.
+6. Pair a unique `app` slug per product via Synk Business.
+7. Never mention competing platforms by name in Synk release notes or member-facing copy.

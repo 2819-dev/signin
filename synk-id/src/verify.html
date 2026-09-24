@@ -12,14 +12,16 @@
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f9fc" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="Log in to Synk — verify your identity with face or Synk code." />
+    <meta name="description" content="Sign in to Synk — verify your identity with face or Synk code." />
     <meta name="format-detection" content="telephone=no" />
-    <title>Synk — Log in</title>
+    <title>Synk — Sign in</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synkid11" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synkid11" />
-    <link rel="stylesheet" href="/join.css?v=community-reddit1" />
-    <script src="/force-refresh.js" defer></script>
+    <script src="/theme.js?v=theme1"></script>
+    <link rel="stylesheet" href="/join.css?v=stay-v1" />
+    <script src="/session.js?v=stay-v1"></script>
+    <script src="/force-refresh.js?v=stay-v1" defer></script>
     <script src="/face.js?v=facefix4" defer></script>
   </head>
   <body>
@@ -29,7 +31,7 @@
         <span>Synk</span>
       </a>
       <nav class="nav-actions" aria-label="Account">
-        <a class="nav-link" href="/verify">Log in</a>
+        <a class="nav-link" href="/verify">Sign in</a>
         <a class="btn btn-primary btn-nav" href="/join">Get Synk</a>
       </nav>
     </header>
@@ -37,7 +39,7 @@
     <main class="shell shell-app">
       <header class="header">
         <div>
-          <p class="eyebrow">Log in</p>
+          <p class="eyebrow">Sign in</p>
           <h1>Verify identity</h1>
           <p class="subtitle">
             Use face verification, or enter your Synk code and recovery passphrase.
@@ -48,6 +50,21 @@
           </p>
         </div>
       </header>
+
+
+      <section class="card hidden" id="synk-resume-view">
+        <p class="section-label">Welcome back</p>
+        <h2>You’re still signed in</h2>
+        <p class="muted">
+          Stay signed in is on for this device. Continue as
+          <strong id="synk-resume-name">Member</strong>
+          <span id="synk-resume-code" class="code" style="display:inline;margin-left:6px;"></span>
+        </p>
+        <div class="btn-row" style="margin-top:14px;">
+          <a class="btn btn-primary" id="synk-resume-continue" href="/hub">Continue</a>
+          <button class="btn btn-secondary" type="button" id="synk-resume-switch">Use a different account</button>
+        </div>
+      </section>
 
       <section class="card hidden" id="synk-setup-view">
         <p class="section-label">Synk</p>
@@ -157,6 +174,7 @@
       const intent = (params.get("intent") || "identity").slice(0, 40);
       const returnUrl = params.get("return") || "";
 
+      const resumeView = document.getElementById("synk-resume-view");
       const podView = document.getElementById("synk-pod-view");
       const codeView = document.getElementById("synk-code-view");
       const successView = document.getElementById("synk-success-view");
@@ -176,6 +194,8 @@
       let busy = false;
       // Consumer phones/tablets: center. Landscape edge reframing is for the kiosk setting.
       let cameraSide = "center";
+      let stayIntent = true;
+      const forceReauth = params.get("reauth") === "1" || params.get("fresh") === "1";
 
       function stopCamera() {
         if (window.KioskFace) window.KioskFace.stopCamera(video);
@@ -196,6 +216,7 @@
       }
 
       function show(view) {
+        if (resumeView) resumeView.classList.toggle("hidden", view !== "resume");
         setupView.classList.toggle("hidden", view !== "setup");
         podView.classList.toggle("hidden", view !== "pod");
         codeView.classList.toggle("hidden", view !== "code");
@@ -228,7 +249,7 @@
           await window.KioskFace.ensureFaceApi();
           clearInterval(heartbeat);
           heartbeat = null;
-          statusEl.textContent = "Ready. Tap Verify when prepared.";
+          statusEl.textContent = "Ready. Select Verify when you are prepared.";
           scanBtn.disabled = false;
         } catch (err) {
           if (heartbeat) clearInterval(heartbeat);
@@ -259,13 +280,13 @@
       }
 
       function startScanHeartbeat() {
-        const steps = ["Scanning…", "Looking for your face…", "Almost there…"];
+        const steps = ["Scanning…", "Looking for your face…", "Complete your profile…"];
         let i = 0;
         statusEl.textContent = steps[0];
         return setInterval(() => {
           i = (i + 1) % steps.length;
           // Don't overwrite later status messages mid-flow.
-          if (/Scanning|Looking for your face|Almost there/.test(statusEl.textContent || "")) {
+          if (/Scanning|Looking for your face|Complete your profile/.test(statusEl.textContent || "")) {
             statusEl.textContent = steps[i];
           }
         }, 2200);
@@ -276,12 +297,58 @@
       const STAY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
       const SHORT_TTL_MS = 12 * 60 * 60 * 1000;
 
+      function isMainSynkAppForResume() {
+        const slug = String(appSlug || "synk").trim().toLowerCase();
+        return !slug || slug === "synk" || slug === "synk-id" || slug === "synkid";
+      }
+
+      function readExistingSession() {
+        if (window.SynkSession) return window.SynkSession.readSession();
+        try {
+          const raw = localStorage.getItem(MEMBER_SESSION_KEY) || sessionStorage.getItem(MEMBER_SESSION_KEY);
+          if (!raw) return null;
+          const data = JSON.parse(raw);
+          if (!data || !data.hubSession || !data.hubSession.token) return null;
+          const exp = Number(data.expiresAt) || 0;
+          const hubExp = data.hubSession.expiresAt ? new Date(data.hubSession.expiresAt).getTime() : 0;
+          const expiresAt = Math.max(exp || 0, hubExp || 0);
+          if (expiresAt && Date.now() > expiresAt) return null;
+          return data;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function showResume(session) {
+        const name = (session && session.profile && session.profile.name) || "Member";
+        const code = (session && session.profile && session.profile.synkCode) || "";
+        const nameEl = document.getElementById("synk-resume-name");
+        const codeEl = document.getElementById("synk-resume-code");
+        if (nameEl) nameEl.textContent = name;
+        if (codeEl) codeEl.textContent = code ? `(${code})` : "";
+        const continueBtn = document.getElementById("synk-resume-continue");
+        if (continueBtn) continueBtn.href = returnUrl || "/hub";
+        show("resume");
+      }
+
       function wantStaySignedIn() {
         const a = document.getElementById("stay-signed-in");
         const b = document.getElementById("stay-signed-in-code");
         if (a && !a.closest(".hidden")) return !!a.checked;
         if (b && !b.closest(".hidden")) return !!b.checked;
-        return !!(a && a.checked);
+        try {
+          const pref = localStorage.getItem(STAY_PREF_KEY);
+          if (pref === "0") return false;
+          if (pref === "1") return true;
+        } catch (_) {}
+        if (typeof stayIntent === "boolean") return stayIntent;
+        return !!(a && a.checked) || !!(b && b.checked) || true;
+      }
+
+      function captureStayIntent() {
+        stayIntent = wantStaySignedIn();
+        try { localStorage.setItem(STAY_PREF_KEY, stayIntent ? "1" : "0"); } catch (_) {}
+        return stayIntent;
       }
 
       function syncStaySignedCheckboxes(source) {
@@ -322,7 +389,7 @@
         const pass = (data && data.pass) || {};
         const staySignedIn = data && data.hubSession && data.hubSession.staySignedIn != null
           ? !!data.hubSession.staySignedIn
-          : wantStaySignedIn();
+          : (typeof stayIntent === "boolean" ? stayIntent : wantStaySignedIn());
 
         try {
           localStorage.setItem(STAY_PREF_KEY, staySignedIn ? "1" : "0");
@@ -352,12 +419,19 @@
             verifiedAt: Date.now(),
             expiresAt,
           };
-          const raw = JSON.stringify(session);
-          localStorage.removeItem(MEMBER_SESSION_KEY);
-          sessionStorage.removeItem(MEMBER_SESSION_KEY);
-          if (staySignedIn) localStorage.setItem(MEMBER_SESSION_KEY, raw);
-          else sessionStorage.setItem(MEMBER_SESSION_KEY, raw);
-        } catch (_) {}
+          if (window.SynkSession) {
+            const ok = window.SynkSession.writeSession(session);
+            if (!ok) throw new Error("Could not save session on this device");
+          } else {
+            const raw = JSON.stringify(session);
+            localStorage.removeItem(MEMBER_SESSION_KEY);
+            sessionStorage.removeItem(MEMBER_SESSION_KEY);
+            if (staySignedIn) localStorage.setItem(MEMBER_SESSION_KEY, raw);
+            else sessionStorage.setItem(MEMBER_SESSION_KEY, raw);
+          }
+        } catch (err) {
+          console.warn("stay-signed-in save failed", err);
+        }
 
         document.getElementById("synk-success-name").textContent = profile.name || "Member";
         document.getElementById("synk-success-code").textContent = profile.synkCode || "";
@@ -388,7 +462,7 @@
         const res = await fetch("/api/synk-auth", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload, appSlug, intent, staySignedIn: wantStaySignedIn() }),
+          body: JSON.stringify({ ...payload, appSlug, intent, staySignedIn: stayIntent }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Verification failed");
@@ -487,12 +561,13 @@
           const descriptors = await dualDescriptors();
           clearInterval(heartbeat);
           statusEl.textContent = "Checking membership…";
+          captureStayIntent();
           await verifyPayload({ descriptors });
         } catch (err) {
           clearInterval(heartbeat);
           errorEl.textContent = err.message || "Verification failed";
           errorEl.classList.remove("hidden");
-          statusEl.textContent = "Try again";
+          statusEl.textContent = "Please try again";
           scanBtn.disabled = false;
         } finally {
           busy = false;
@@ -516,6 +591,7 @@
         e.preventDefault();
         codeError.classList.add("hidden");
         try {
+          captureStayIntent();
           await verifyPayload({
             synkCode: document.getElementById("synk-code-input").value.trim(),
             dateOfBirth: document.getElementById("synk-dob-input").value,
@@ -526,6 +602,26 @@
           codeError.classList.remove("hidden");
         }
       });
+
+
+      const resumeSwitch = document.getElementById("synk-resume-switch");
+      if (resumeSwitch) {
+        resumeSwitch.addEventListener("click", () => {
+          if (window.SynkSession) window.SynkSession.clearSession();
+          else {
+            try { localStorage.removeItem(MEMBER_SESSION_KEY); } catch (_) {}
+            try { sessionStorage.removeItem(MEMBER_SESSION_KEY); } catch (_) {}
+          }
+          show("pod");
+        });
+      }
+
+      if (!forceReauth && !returnUrl && isMainSynkAppForResume()) {
+        const existing = readExistingSession();
+        if (existing && existing.hubSession && existing.hubSession.token) {
+          showResume(existing);
+        }
+      }
 
       const stayPod = document.getElementById("stay-signed-in");
       const stayCode = document.getElementById("stay-signed-in-code");
@@ -543,7 +639,7 @@
         warmFaceModels();
       }
 
-      if (params.get("autostart") === "1") {
+      if (params.get("autostart") === "1" && (!resumeView || resumeView.classList.contains("hidden"))) {
         const boot = () => startCamera();
         if (document.readyState === "loading") {
           window.addEventListener("DOMContentLoaded", boot, { once: true });
@@ -552,5 +648,6 @@
         }
       }
     </script>
+      <script src="/support-chat.js?v=support4" defer></script>
   </body>
 </html>

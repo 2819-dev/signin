@@ -23,6 +23,32 @@
     <script src="/face.js?v=facefix4" defer></script>
   </head>
   <body class="kiosk-body">
+    <div class="lang-switcher" id="lang-switcher">
+      <button
+        type="button"
+        class="lang-switcher-btn"
+        id="lang-btn"
+        aria-label="Language"
+        aria-haspopup="true"
+        aria-expanded="false"
+        title="Language"
+      >
+        <span class="lang-flag" id="lang-flag" aria-hidden="true"></span>
+      </button>
+      <div class="lang-menu hidden" id="lang-menu" role="menu">
+        <button type="button" class="lang-option" role="menuitem" data-lang="en" aria-label="English">
+          <span class="lang-flag lang-flag-sm" data-flag="en" aria-hidden="true"></span>
+          <span>English</span>
+          <span class="lang-code">EN</span>
+        </button>
+        <button type="button" class="lang-option" role="menuitem" data-lang="es" aria-label="Español">
+          <span class="lang-flag lang-flag-sm" data-flag="es" aria-hidden="true"></span>
+          <span>Español</span>
+          <span class="lang-code">ES</span>
+        </button>
+      </div>
+    </div>
+
         <div class="sand-waves" aria-hidden="true">
       <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
         <path d="M-80 110 C 140 70, 300 150, 500 118 S 880 60, 1100 112 S 1380 170, 1560 120" stroke-width="1.15" opacity="0.42"/>
@@ -48,7 +74,7 @@
               <path d="M32 43v5" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
             </svg>
           </div>
-          <p class="eyebrow">Closed</p>
+          <p class="eyebrow" data-i18n="closed.eyebrow">Closed</p>
           <h1 id="closed-title">Closed</h1>
           <p class="subtitle" id="closed-message">Not accepting visitors right now.</p>
         </div>
@@ -82,37 +108,37 @@
 
       <section id="form-view" class="stage stage-form">
         <aside class="hero-pane">
-          <p class="eyebrow" id="form-eyebrow">Visitor</p>
-          <h1 id="form-title">Welcome</h1>
-          <p class="subtitle" id="form-subtitle">
+          <p class="eyebrow" id="form-eyebrow" data-i18n="form.eyebrow">Visitor</p>
+          <h1 id="form-title" data-i18n="form.title">Welcome</h1>
+          <p class="subtitle" id="form-subtitle" data-i18n="form.subtitle">
             Enter your name and why you’d like to come in.
           </p>
         </aside>
 
         <div class="form-pane">
-          <p id="urgent-banner" class="urgent-banner hidden">Urgent</p>
+          <p id="urgent-banner" class="urgent-banner hidden" data-i18n="urgent.banner">Urgent</p>
           <p id="form-error" class="error hidden"></p>
           <form id="signin-form" autocomplete="off">
             <div class="field">
-              <label for="name">Name</label>
-              <input id="name" name="name" type="text" maxlength="100" required autocapitalize="words" autocomplete="off" enterkeyhint="next" placeholder="Your name" />
+              <label for="name" data-i18n="form.name">Name</label>
+              <input id="name" name="name" type="text" maxlength="100" required autocapitalize="words" autocomplete="off" enterkeyhint="next" placeholder="Your name" data-i18n-placeholder="form.namePlaceholder" />
             </div>
             <div class="field">
-              <label for="reason">Reason</label>
-              <textarea id="reason" name="reason" maxlength="500" required autocomplete="off" placeholder="Why do you want to come in?"></textarea>
+              <label for="reason" data-i18n="form.reason">Reason</label>
+              <textarea id="reason" name="reason" maxlength="500" required autocomplete="off" placeholder="Why do you want to come in?" data-i18n-placeholder="form.reasonPlaceholder"></textarea>
             </div>
-            <button class="btn btn-primary" type="submit" id="submit-btn">Continue</button>
-            <button class="btn btn-secondary hidden" type="button" id="cancel-urgent-btn">Cancel</button>
+            <button class="btn btn-primary" type="submit" id="submit-btn" data-i18n="form.continue">Continue</button>
+            <button class="btn btn-secondary hidden" type="button" id="cancel-urgent-btn" data-i18n="common.cancel">Cancel</button>
           </form>
 
           <div id="more-options" class="more-options">
-            <button class="btn btn-secondary" type="button" id="more-options-btn">More options</button>
+            <button class="btn btn-secondary" type="button" id="more-options-btn" data-i18n="form.moreOptions">More options</button>
             <div id="more-options-panel" class="more-options-panel hidden">
               <button class="btn btn-secondary synk-signin-btn" type="button" id="synk-signin-btn">
                 <span class="synk-mark" aria-hidden="true"><img src="/synk-logo.svg?v=circles2" alt="" /></span>
-                Sign in with Synk
+                <span data-i18n="form.synk">Sign in with Synk</span>
               </button>
-              <button class="btn btn-secondary" type="button" id="face-signin-btn">
+              <button class="btn btn-secondary" type="button" id="face-signin-btn" data-i18n="form.face">
                 Sign in with face
               </button>
             </div>
@@ -123,48 +149,48 @@
       <section id="waiting-view" class="stage stage-status hidden">
         <div class="status-panel">
           <div class="status-icon waiting"><div class="spinner" aria-hidden="true"></div></div>
-          <p class="eyebrow">Pending</p>
-          <h1>Waiting</h1>
-          <p class="subtitle" id="waiting-text">Your request was sent. Please wait…</p>
+          <p class="eyebrow" data-i18n="waiting.eyebrow">Pending</p>
+          <h1 data-i18n="waiting.title">Waiting</h1>
+          <p class="subtitle" id="waiting-text" data-i18n="waiting.text">Your request was sent. Please wait…</p>
         </div>
       </section>
 
       <section id="admitted-view" class="stage stage-status hidden">
         <div class="status-panel">
           <div class="status-icon ok" aria-hidden="true">✓</div>
-          <p class="eyebrow">Approved</p>
-          <h1>You may come in</h1>
-          <p class="subtitle">Please enter.</p>
+          <p class="eyebrow" data-i18n="admitted.eyebrow">Approved</p>
+          <h1 data-i18n="admitted.title">You may come in</h1>
+          <p class="subtitle" data-i18n="admitted.subtitle">Please enter.</p>
           <p class="hint-text" id="admitted-reset-hint">Starting over in 5 seconds…</p>
-          <button class="btn btn-secondary btn-inline" type="button" id="admitted-reset-btn">Start over</button>
+          <button class="btn btn-secondary btn-inline" type="button" id="admitted-reset-btn" data-i18n="common.startOver">Start over</button>
         </div>
       </section>
 
       <section id="declined-view" class="stage stage-status hidden">
         <div class="status-panel">
           <div class="status-icon no" aria-hidden="true">✕</div>
-          <p class="eyebrow">Declined</p>
-          <h1>Not admitted</h1>
+          <p class="eyebrow" data-i18n="declined.eyebrow">Declined</p>
+          <h1 data-i18n="declined.title">Not admitted</h1>
           <p class="subtitle" id="decline-text"></p>
           <p class="hint-text" id="declined-reset-hint">Starting over in 15 seconds…</p>
-          <button class="btn btn-secondary btn-inline" type="button" id="reset-btn">Start over</button>
+          <button class="btn btn-secondary btn-inline" type="button" id="reset-btn" data-i18n="common.startOver">Start over</button>
         </div>
       </section>
 
       <section id="timeout-view" class="stage stage-status hidden">
         <div class="status-panel">
           <div class="status-icon no" aria-hidden="true">⏱</div>
-          <p class="eyebrow">No response</p>
-          <h1>Request timed out</h1>
-          <p class="subtitle">Staff didn’t respond in time. Please try again.</p>
+          <p class="eyebrow" data-i18n="timeout.eyebrow">No response</p>
+          <h1 data-i18n="timeout.title">Request timed out</h1>
+          <p class="subtitle" data-i18n="timeout.subtitle">Staff didn’t respond in time. Please try again.</p>
           <p class="hint-text" id="timeout-reset-hint">Starting over in 15 seconds…</p>
-          <button class="btn btn-secondary btn-inline" type="button" id="timeout-reset-btn">Start over</button>
+          <button class="btn btn-secondary btn-inline" type="button" id="timeout-reset-btn" data-i18n="common.startOver">Start over</button>
         </div>
       </section>
     </main>
 
-    <button type="button" id="urgent-btn" class="urgent-fab hidden">Urgent</button>
-    <button type="button" id="chat-fab" class="chat-fab" aria-label="Open live chat">Chat</button>
+    <button type="button" id="urgent-btn" class="urgent-fab hidden" data-i18n="urgent.banner">Urgent</button>
+    <button type="button" id="chat-fab" class="chat-fab" aria-label="Open live chat" data-i18n="chat.fab" data-i18n-aria="chat.fabAria">Chat</button>
 
     <div id="face-modal" class="face-modal hidden" role="dialog" aria-modal="true" aria-labelledby="face-modal-title">
       <div class="face-modal-card">
@@ -462,6 +488,220 @@
       let urgentMode = false;
       let activeView = "form";
       let displayMode = "signin";
+      let kioskLang = "en";
+      let waitingVisitorName = "";
+      let autoResetRemaining = 0;
+      let autoResetHintEl = null;
+      const FLAG_SVG = {
+        en: `<svg viewBox="0 0 24 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="24" height="16" fill="#B22234"/><path d="M0 1.23h24M0 3.69h24M0 6.15h24M0 8.62h24M0 11.08h24M0 13.54h24" stroke="#fff" stroke-width="1.23"/><rect width="9.6" height="8.615" fill="#3C3B6E"/><g fill="#fff"><circle cx="1.6" cy="1.2" r="0.35"/><circle cx="3.2" cy="1.2" r="0.35"/><circle cx="4.8" cy="1.2" r="0.35"/><circle cx="6.4" cy="1.2" r="0.35"/><circle cx="8" cy="1.2" r="0.35"/><circle cx="2.4" cy="2.4" r="0.35"/><circle cx="4" cy="2.4" r="0.35"/><circle cx="5.6" cy="2.4" r="0.35"/><circle cx="7.2" cy="2.4" r="0.35"/><circle cx="1.6" cy="3.6" r="0.35"/><circle cx="3.2" cy="3.6" r="0.35"/><circle cx="4.8" cy="3.6" r="0.35"/><circle cx="6.4" cy="3.6" r="0.35"/><circle cx="8" cy="3.6" r="0.35"/><circle cx="2.4" cy="4.8" r="0.35"/><circle cx="4" cy="4.8" r="0.35"/><circle cx="5.6" cy="4.8" r="0.35"/><circle cx="7.2" cy="4.8" r="0.35"/><circle cx="1.6" cy="6" r="0.35"/><circle cx="3.2" cy="6" r="0.35"/><circle cx="4.8" cy="6" r="0.35"/><circle cx="6.4" cy="6" r="0.35"/><circle cx="8" cy="6" r="0.35"/><circle cx="2.4" cy="7.2" r="0.35"/><circle cx="4" cy="7.2" r="0.35"/><circle cx="5.6" cy="7.2" r="0.35"/><circle cx="7.2" cy="7.2" r="0.35"/></g></svg>`,
+        es: `<svg viewBox="0 0 24 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="24" height="16" fill="#AA151B"/><rect y="4" width="24" height="8" fill="#F1BF00"/></svg>`,
+      };
+      const I18N = {
+        en: {
+          "lang.aria": "Language",
+          "closed.eyebrow": "Closed",
+          "closed.title": "Closed",
+          "closed.message": "Not accepting visitors right now.",
+          "form.eyebrow": "Visitor",
+          "form.title": "Welcome",
+          "form.subtitle": "Enter your name and why you’d like to come in.",
+          "form.name": "Name",
+          "form.namePlaceholder": "Your name",
+          "form.reason": "Reason",
+          "form.reasonPlaceholder": "Why do you want to come in?",
+          "form.continue": "Continue",
+          "form.moreOptions": "More options",
+          "form.hideOptions": "Hide options",
+          "form.synk": "Sign in with Synk",
+          "form.face": "Sign in with face",
+          "urgent.banner": "Urgent",
+          "urgent.title": "Urgent request",
+          "urgent.subtitleOpen": "This request will be marked urgent.",
+          "urgent.subtitleClosed": "This will notify the admin even while closed.",
+          "urgent.submit": "Send urgent request",
+          "waiting.eyebrow": "Pending",
+          "waiting.title": "Waiting",
+          "waiting.text": "Your request was sent. Please wait…",
+          "waiting.thanks": "Thanks, {name}. Please wait…",
+          "admitted.eyebrow": "Approved",
+          "admitted.title": "You may come in",
+          "admitted.subtitle": "Please enter.",
+          "declined.eyebrow": "Declined",
+          "declined.title": "Not admitted",
+          "declined.default": "Your request was declined.",
+          "timeout.eyebrow": "No response",
+          "timeout.title": "Request timed out",
+          "timeout.subtitle": "Staff didn’t respond in time. Please try again.",
+          "common.cancel": "Cancel",
+          "common.startOver": "Start over",
+          "common.startingOver": "Starting over…",
+          "common.startingOverIn": "Starting over in {n} seconds…",
+          "common.requestError": "Could not send request",
+          "common.genericError": "An unexpected error occurred",
+          "chat.fab": "Chat",
+          "chat.fabAria": "Open live chat",
+        },
+        es: {
+          "lang.aria": "Idioma",
+          "closed.eyebrow": "Cerrado",
+          "closed.title": "Cerrado",
+          "closed.message": "No se aceptan visitantes en este momento.",
+          "form.eyebrow": "Visitante",
+          "form.title": "Bienvenido",
+          "form.subtitle": "Escriba su nombre y el motivo de su visita.",
+          "form.name": "Nombre",
+          "form.namePlaceholder": "Su nombre",
+          "form.reason": "Motivo",
+          "form.reasonPlaceholder": "¿Por qué desea entrar?",
+          "form.continue": "Continuar",
+          "form.moreOptions": "Más opciones",
+          "form.hideOptions": "Ocultar opciones",
+          "form.synk": "Iniciar con Synk",
+          "form.face": "Iniciar con rostro",
+          "urgent.banner": "Urgente",
+          "urgent.title": "Solicitud urgente",
+          "urgent.subtitleOpen": "Esta solicitud se marcará como urgente.",
+          "urgent.subtitleClosed": "Esto avisará al administrador aunque esté cerrado.",
+          "urgent.submit": "Enviar solicitud urgente",
+          "waiting.eyebrow": "Pendiente",
+          "waiting.title": "Espere",
+          "waiting.text": "Su solicitud fue enviada. Por favor espere…",
+          "waiting.thanks": "Gracias, {name}. Por favor espere…",
+          "admitted.eyebrow": "Aprobado",
+          "admitted.title": "Puede pasar",
+          "admitted.subtitle": "Adelante.",
+          "declined.eyebrow": "Rechazado",
+          "declined.title": "No admitido",
+          "declined.default": "Su solicitud fue rechazada.",
+          "timeout.eyebrow": "Sin respuesta",
+          "timeout.title": "Se agotó el tiempo",
+          "timeout.subtitle": "El personal no respondió a tiempo. Inténtelo de nuevo.",
+          "common.cancel": "Cancelar",
+          "common.startOver": "Empezar de nuevo",
+          "common.startingOver": "Empezando de nuevo…",
+          "common.startingOverIn": "Empezando de nuevo en {n} segundos…",
+          "common.requestError": "No se pudo enviar la solicitud",
+          "common.genericError": "Algo salió mal",
+          "chat.fab": "Chat",
+          "chat.fabAria": "Abrir chat en vivo",
+        },
+      };
+
+      function t(key, vars) {
+        const table = I18N[kioskLang] || I18N.en;
+        let value = table[key] ?? I18N.en[key] ?? key;
+        if (vars) {
+          Object.keys(vars).forEach((k) => {
+            value = value.replace(new RegExp(`\\{${k}\\}`, "g"), String(vars[k]));
+          });
+        }
+        return value;
+      }
+
+      function renderFlag(target, lang) {
+        if (!target) return;
+        target.innerHTML = FLAG_SVG[lang] || FLAG_SVG.en;
+      }
+
+      function applyStaticI18n() {
+        document.querySelectorAll("[data-i18n]").forEach((el) => {
+          const key = el.getAttribute("data-i18n");
+          if (!key) return;
+          el.textContent = t(key);
+        });
+        document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+          const key = el.getAttribute("data-i18n-placeholder");
+          if (key) el.setAttribute("placeholder", t(key));
+        });
+        document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+          const key = el.getAttribute("data-i18n-aria");
+          if (key) el.setAttribute("aria-label", t(key));
+        });
+      }
+
+      function refreshWaitingCopy() {
+        if (waitingVisitorName) {
+          waitingText.textContent = t("waiting.thanks", { name: waitingVisitorName });
+        } else if (activeView === "waiting") {
+          waitingText.textContent = t("waiting.text");
+        }
+      }
+
+      function refreshAutoResetHint() {
+        if (!autoResetHintEl || !autoResetRemaining) return;
+        autoResetHintEl.textContent =
+          autoResetRemaining <= 1
+            ? t("common.startingOver")
+            : t("common.startingOverIn", { n: autoResetRemaining });
+      }
+
+      let lastClosedSettings = {};
+
+      function setLanguage(lang) {
+        const next = lang === "es" ? "es" : "en";
+        kioskLang = next;
+        document.documentElement.lang = next;
+        const langBtn = document.getElementById("lang-btn");
+        const langFlag = document.getElementById("lang-flag");
+        const langMenu = document.getElementById("lang-menu");
+        if (langBtn) {
+          langBtn.setAttribute("aria-label", t("lang.aria"));
+          langBtn.title = t("lang.aria");
+          langBtn.setAttribute("aria-expanded", "false");
+        }
+        renderFlag(langFlag, next);
+        document.querySelectorAll(".lang-flag[data-flag]").forEach((el) => {
+          renderFlag(el, el.getAttribute("data-flag"));
+        });
+        if (langMenu) {
+          langMenu.classList.add("hidden");
+          langMenu.querySelectorAll(".lang-option").forEach((btn) => {
+            btn.setAttribute("aria-current", btn.getAttribute("data-lang") === next ? "true" : "false");
+          });
+        }
+        applyStaticI18n();
+        setUrgentMode(urgentMode);
+        applyClosedSign(lastClosedSettings);
+        refreshWaitingCopy();
+        refreshAutoResetHint();
+        const morePanel = document.getElementById("more-options-panel");
+        const moreBtn = document.getElementById("more-options-btn");
+        if (moreBtn && morePanel) {
+          moreBtn.textContent = morePanel.classList.contains("hidden")
+            ? t("form.moreOptions")
+            : t("form.hideOptions");
+        }
+        const synkLabel = document.querySelector("#synk-signin-btn [data-i18n]");
+        if (synkLabel) synkLabel.textContent = t("form.synk");
+      }
+
+      function initLanguageSwitcher() {
+        const langBtn = document.getElementById("lang-btn");
+        const langMenu = document.getElementById("lang-menu");
+        if (!langBtn || !langMenu) return;
+        document.querySelectorAll(".lang-flag[data-flag]").forEach((el) => {
+          renderFlag(el, el.getAttribute("data-flag"));
+        });
+        langBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const open = langMenu.classList.contains("hidden");
+          langMenu.classList.toggle("hidden", !open);
+          langBtn.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+        langMenu.querySelectorAll(".lang-option").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            setLanguage(btn.getAttribute("data-lang"));
+          });
+        });
+        document.addEventListener("click", () => {
+          if (!langMenu.classList.contains("hidden")) {
+            langMenu.classList.add("hidden");
+            langBtn.setAttribute("aria-expanded", "false");
+          }
+        });
+        setLanguage("en");
+      }
       let displaySettings = {
         displayTitle: "",
         displayMessage: "",
@@ -881,18 +1121,19 @@
         urgentMode = Boolean(on);
         urgentBanner.classList.toggle("hidden", !urgentMode);
         cancelUrgentBtn.classList.toggle("hidden", !urgentMode);
-        formEyebrow.textContent = urgentMode ? "Urgent" : "Visitor";
-        formTitle.textContent = urgentMode ? "Urgent request" : "Welcome";
+        formEyebrow.textContent = urgentMode ? t("urgent.banner") : t("form.eyebrow");
+        formTitle.textContent = urgentMode ? t("urgent.title") : t("form.title");
         formSubtitle.textContent = urgentMode
-          ? (isOpen
-              ? "This request will be marked urgent."
-              : "This will notify the admin even while closed.")
-          : "Enter your name and why you’d like to come in.";
-        submitBtn.textContent = urgentMode ? "Send urgent request" : "Continue";
+          ? (isOpen ? t("urgent.subtitleOpen") : t("urgent.subtitleClosed"))
+          : t("form.subtitle");
+        submitBtn.textContent = urgentMode ? t("urgent.submit") : t("form.continue");
         submitBtn.classList.toggle("btn-danger", urgentMode);
         submitBtn.classList.toggle("btn-primary", !urgentMode);
         document.body.classList.toggle("urgent-active", urgentMode);
         urgentBtn.classList.toggle("hidden", !canShowUrgentButton());
+        if (!urgentBanner.classList.contains("hidden")) urgentBanner.textContent = t("urgent.banner");
+        if (!urgentBtn.classList.contains("hidden")) urgentBtn.textContent = t("urgent.banner");
+        cancelUrgentBtn.textContent = t("common.cancel");
       }
 
       function clearTimers() {
@@ -900,11 +1141,14 @@
         if (resetTimer) { clearTimeout(resetTimer); resetTimer = null; }
         if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
         if (requestTimeoutTimer) { clearTimeout(requestTimeoutTimer); requestTimeoutTimer = null; }
+        autoResetRemaining = 0;
+        autoResetHintEl = null;
       }
 
       function applyClosedSign(settings) {
-        closedTitleEl.textContent = settings.closedTitle || "Closed";
-        closedMessageEl.textContent = settings.closedMessage || "Not accepting visitors right now.";
+        lastClosedSettings = settings || {};
+        closedTitleEl.textContent = lastClosedSettings.closedTitle || t("closed.title");
+        closedMessageEl.textContent = lastClosedSettings.closedMessage || t("closed.message");
       }
 
       function showIdle() {
@@ -919,17 +1163,26 @@
       function goIdle() {
         clearTimers();
         currentRequestId = null;
+        waitingVisitorName = "";
         form.reset();
         formError.classList.add("hidden");
         submitBtn.disabled = false;
         setUrgentMode(false);
+        // Always return to English / American flag for the next visitor.
+        setLanguage("en");
         showIdle();
       }
 
       function startAutoReset(hintEl, seconds) {
         let remaining = seconds;
+        autoResetHintEl = hintEl;
+        autoResetRemaining = remaining;
         const updateHint = () => {
-          hintEl.textContent = remaining <= 1 ? "Starting over…" : `Starting over in ${remaining} seconds…`;
+          autoResetRemaining = remaining;
+          hintEl.textContent =
+            remaining <= 1
+              ? t("common.startingOver")
+              : t("common.startingOverIn", { n: remaining });
         };
         updateHint();
         countdownTimer = setInterval(() => {
@@ -954,6 +1207,7 @@
         clearTimers();
         currentRequestId = requestId;
         if (message) waitingText.textContent = message;
+        else waitingText.textContent = t("waiting.text");
         show(waitingView);
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
         pollTimer = setInterval(pollRequestStatus, 2000);
@@ -980,7 +1234,7 @@
             showTimedOut();
           } else if (req.status === "declined") {
             clearTimers();
-            declineText.textContent = req.declineReason || "Your request was declined.";
+            declineText.textContent = req.declineReason || t("declined.default");
             show(declinedView);
             startAutoReset(declinedResetHint, 15);
           }
@@ -1069,15 +1323,16 @@
               else show(closedView);
               return;
             }
-            throw new Error(data.error || "Could not send request");
+            throw new Error(data.error || t("common.requestError"));
           }
           setUrgentMode(false);
+          waitingVisitorName = data.request.name;
           beginWaitingForRequest(
             data.request.id,
-            `Thanks, ${data.request.name}. Please wait…`
+            t("waiting.thanks", { name: data.request.name })
           );
         } catch (err) {
-          formError.textContent = err.message || "Something went wrong";
+          formError.textContent = err.message || t("common.genericError");
           formError.classList.remove("hidden");
           submitBtn.disabled = false;
         }
@@ -1114,7 +1369,7 @@
 
       async function openFaceModal() {
         if (!window.KioskFace) {
-          formError.textContent = "Face sign-in is still loading. Try again in a moment.";
+          formError.textContent = "Face sign-in is still loading. Please try again shortly.";
           formError.classList.remove("hidden");
           return;
         }
@@ -1127,7 +1382,7 @@
           faceStream = await window.KioskFace.startCamera(faceVideo, { side: cameraSide });
           faceStatus.textContent = "Loading face check…";
           await window.KioskFace.ensureFaceApi();
-          faceStatus.textContent = "Camera ready — tap Scan face";
+          faceStatus.textContent = "Camera ready — select Scan face";
           faceModalHint.textContent = "Look at the screen — stay in the center.";
           faceScanBtn.disabled = false;
         } catch (err) {
@@ -1185,7 +1440,7 @@
             closeFaceModal();
             clearTimers();
             currentRequestId = data.request.id;
-            declineText.textContent = data.request.declineReason || "Access denied";
+            declineText.textContent = data.request.declineReason || t("declined.default");
             show(declinedView);
             startAutoReset(declinedResetHint, 15);
             return;
@@ -1196,7 +1451,7 @@
         } catch (err) {
           faceError.textContent = err.message || "Could not scan face";
           faceError.classList.remove("hidden");
-          faceStatus.textContent = "Try again";
+          faceStatus.textContent = "Please try again";
           faceScanBtn.disabled = false;
           faceBusy = false;
           return;
@@ -1207,7 +1462,7 @@
 
       moreOptionsBtn.addEventListener("click", () => {
         const open = moreOptionsPanel.classList.toggle("hidden") === false;
-        moreOptionsBtn.textContent = open ? "Hide options" : "More options";
+        moreOptionsBtn.textContent = open ? t("form.hideOptions") : t("form.moreOptions");
       });
       faceSigninBtn.addEventListener("click", openFaceModal);
       faceCloseBtn.addEventListener("click", closeFaceModal);
@@ -1440,7 +1695,7 @@
           closeSynkModal();
           clearTimers();
           currentRequestId = data.request.id;
-          declineText.textContent = data.request.declineReason || "Access denied";
+          declineText.textContent = data.request.declineReason || t("declined.default");
           show(declinedView);
           startAutoReset(declinedResetHint, 15);
           return;
@@ -1486,7 +1741,7 @@
         } catch (err) {
           synkError.textContent = err.message || "Could not verify";
           synkError.classList.remove("hidden");
-          synkStatus.textContent = "Try again, or use Synk code";
+          synkStatus.textContent = "Please try again, or use your Synk code";
           synkScanBtn.disabled = false;
           synkBusy = false;
         }
@@ -1610,6 +1865,7 @@
         },
         { passive: false }
       );
+      initLanguageSwitcher();
       pollKioskStatus();
       kioskPollTimer = setInterval(pollKioskStatus, 4000);
 

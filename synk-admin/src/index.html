@@ -14,7 +14,7 @@
     <title>Synk Admin</title>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=synk-admin12" />
     <link rel="icon" type="image/png" href="/apple-touch-icon.png?v=synk-admin12" />
-    <link rel="stylesheet" href="/admin.css?v=theme-auto1" />
+    <link rel="stylesheet" href="/admin.css?v=member-detail2" />
     <script src="/force-refresh.js" defer></script>
     <script src="/face.js?v=facefix4" defer></script>
   </head>
@@ -116,6 +116,7 @@
             <button class="btn btn-secondary btn-compact" type="button" data-jump="requests">Review requests</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="business">Business accounts</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="apps">Manage apps</button>
+            <button class="btn btn-secondary btn-compact" type="button" data-jump="places">Hub places</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="activity">View activity</button>
             <button class="btn btn-secondary btn-compact" type="button" data-jump="settings">Settings</button>
           </div>
@@ -152,7 +153,7 @@
         <header class="admin-header">
           <div>
             <h1>Members</h1>
-            <p class="muted">Add members and manage verification credentials.</p>
+            <p class="muted">Browse members here. Open one to moderate, remove badges, or log in as them.</p>
           </div>
         </header>
 
@@ -183,12 +184,18 @@
         <section class="panel">
           <h2>Directory</h2>
           <p class="muted" style="margin:0 0 10px;font-size:0.85rem;" id="members-count-label">0 members</p>
+          <p class="muted" style="margin:0 0 10px;font-size:0.85rem;">Tap a member to open moderation actions.</p>
           <div class="field">
             <label for="member-search">Search</label>
             <input id="member-search" type="search" placeholder="Name or Synk code" autocomplete="off" />
           </div>
-          <div id="synk-profiles" class="synk-profiles"></div>
-          <p id="synk-profiles-empty" class="chat-empty-note">No members yet.</p>
+          <div class="synk-directory-layout">
+            <div class="synk-directory-list-wrap">
+              <div id="synk-profiles" class="synk-profiles"></div>
+              <p id="synk-profiles-empty" class="chat-empty-note">No members yet.</p>
+            </div>
+            <aside id="synk-member-detail" class="synk-member-detail hidden" aria-live="polite"></aside>
+          </div>
         </section>
       </div>
 
@@ -220,6 +227,61 @@
           </form>
           <div id="synk-apps" class="synk-apps" style="margin-top:14px;"></div>
           <p id="synk-apps-empty" class="chat-empty-note">No applications registered.</p>
+        </section>
+      </div>
+
+
+      <div id="pane-places" class="admin-pane hidden">
+        <header class="admin-header">
+          <div>
+            <button type="button" class="text-back" data-jump="more">← More</button>
+            <h1>Places</h1>
+            <p class="muted">
+              Curated list shown on the member hub under Connected places. Add real or demo entries —
+              this is not pulled from Synk Business.
+            </p>
+          </div>
+        </header>
+
+        <section class="panel">
+          <form id="synk-place-form" class="synk-enroll-form" autocomplete="off">
+            <input type="hidden" id="synk-place-id" value="" />
+            <div class="field">
+              <label for="synk-place-name">Name</label>
+              <input id="synk-place-name" type="text" maxlength="120" required placeholder="Café Synk" />
+            </div>
+            <div class="field">
+              <label for="synk-place-description">Description</label>
+              <textarea id="synk-place-description" rows="3" maxlength="500" placeholder="What members should know"></textarea>
+            </div>
+            <div class="field">
+              <label for="synk-place-website">Website</label>
+              <input id="synk-place-website" type="url" maxlength="500" placeholder="https://example.com" />
+            </div>
+            <div class="field">
+              <label for="synk-place-logo-url">Logo URL (optional)</label>
+              <input id="synk-place-logo-url" type="url" maxlength="800" placeholder="https://… or upload below" />
+            </div>
+            <div class="field">
+              <label for="synk-place-logo-file">Upload logo</label>
+              <input id="synk-place-logo-file" type="file" accept="image/jpeg,image/png,image/webp" />
+            </div>
+            <div class="field">
+              <label for="synk-place-sort">Sort order</label>
+              <input id="synk-place-sort" type="number" step="1" value="0" />
+            </div>
+            <label class="check-row" style="display:flex;gap:8px;align-items:center;margin:8px 0 12px;">
+              <input id="synk-place-enabled" type="checkbox" checked />
+              <span>Visible on member hub</span>
+            </label>
+            <div class="btn-row">
+              <button class="btn" type="submit" id="synk-place-btn">Add place</button>
+              <button class="btn btn-secondary" type="button" id="synk-place-cancel" hidden>Cancel edit</button>
+            </div>
+            <p id="synk-place-status" class="muted" style="margin-top:8px;font-size:0.85rem;"></p>
+          </form>
+          <div id="synk-places" class="synk-apps" style="margin-top:14px;"></div>
+          <p id="synk-places-empty" class="chat-empty-note">No places yet. Add one above.</p>
         </section>
       </div>
 
@@ -312,6 +374,45 @@
         </section>
       </div>
 
+
+      <div id="pane-chat" class="admin-pane hidden">
+        <header class="admin-header">
+          <div>
+            <h1>Support chat</h1>
+            <p class="muted">Live chats from Synk (hub, join, verify). Separate from visitor sign-in.</p>
+          </div>
+          <div class="admin-header-actions">
+            <button class="btn btn-secondary btn-compact" type="button" id="synk-chat-refresh-btn">Refresh</button>
+          </div>
+        </header>
+
+        <section class="panel synk-chat-layout">
+          <div class="synk-chat-inbox-col">
+            <h2 class="synk-chat-col-title">Inbox <span id="synk-chat-count" class="badge hidden">0</span></h2>
+            <div id="synk-chat-inbox" class="synk-chat-inbox"></div>
+            <p id="synk-chat-empty" class="chat-empty-note">No Synk support chats yet.</p>
+          </div>
+          <div class="synk-chat-thread-col">
+            <div id="synk-chat-thread" class="synk-chat-thread hidden">
+              <div class="synk-chat-thread-head">
+                <div>
+                  <strong id="synk-chat-thread-title">Chat</strong>
+                  <p class="muted" id="synk-chat-thread-status" style="margin:4px 0 0;font-size:0.85rem;"></p>
+                </div>
+                <button class="btn btn-secondary btn-compact" type="button" id="synk-chat-close-session-btn">Close chat</button>
+              </div>
+              <div id="synk-chat-messages" class="synk-chat-messages" aria-live="polite"></div>
+              <form id="synk-chat-form" class="synk-chat-composer" autocomplete="off">
+                <input id="synk-chat-input" type="text" maxlength="1000" required placeholder="Reply…" enterkeyhint="send" />
+                <button class="btn btn-compact" type="submit" id="synk-chat-send">Send</button>
+              </form>
+              <p id="synk-chat-closed" class="chat-empty-note hidden" role="status">Chat closed</p>
+            </div>
+            <p id="synk-chat-pick" class="chat-empty-note">Select a chat to reply.</p>
+          </div>
+        </section>
+      </div>
+
       <div id="pane-more" class="admin-pane hidden">
         <header class="admin-header">
           <div>
@@ -324,6 +425,10 @@
             <button type="button" class="more-nav-item" data-jump="apps">
               <span class="more-nav-title">Apps</span>
               <span class="more-nav-meta">Registered API applications</span>
+            </button>
+            <button type="button" class="more-nav-item" data-jump="places">
+              <span class="more-nav-title">Places</span>
+              <span class="more-nav-meta">Curated hub directory (logo, site, description)</span>
             </button>
             <button type="button" class="more-nav-item" data-jump="activity">
               <span class="more-nav-title">Activity</span>
@@ -355,6 +460,7 @@
           <div class="synk-link-list">
             <a href="https://synkid.netlify.app/verify" target="_blank" rel="noopener">Member log in</a>
             <a href="https://synkid.netlify.app/hub" target="_blank" rel="noopener">Member hub</a>
+            <a href="https://synkid.netlify.app/places" target="_blank" rel="noopener">Connected places</a>
             <a href="https://synkid.netlify.app/community" target="_blank" rel="noopener">Synk Community</a>
             <a href="https://synkid.netlify.app/join" target="_blank" rel="noopener">Get Synk</a>
             <a href="https://synkid.netlify.app/business" target="_blank" rel="noopener">Synk Business</a>
@@ -473,6 +579,10 @@
         <button type="button" class="admin-tab" data-pane="requests" id="tab-requests" aria-label="Requests" title="Requests">
           <svg class="admin-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4h14c.6 0 1 .4 1 1v11.2c0 .6-.4 1-1 1h-4.2L12 20.8 9.2 17.2H5c-.6 0-1-.4-1-1V5c0-.6.4-1 1-1Zm2 3.2v1.6h10V7.2H7Zm0 3.5v1.6h7V10.7H7Z"/></svg>
         </button>
+        <button type="button" class="admin-tab" data-pane="chat" id="tab-chat" aria-label="Chat" title="Chat">
+          <svg class="admin-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4h14c.6 0 1 .4 1 1v10.5c0 .6-.4 1-1 1h-5.2L12 20.2l-1.8-3.7H5c-.6 0-1-.4-1-1V5c0-.6.4-1 1-1Zm2 3.25v1.5h10v-1.5H7Zm0 3.4v1.5h7v-1.5H7Z"/></svg>
+          <span class="admin-tab-badge hidden" id="tab-chat-badge">0</span>
+        </button>
         <button type="button" class="admin-tab" data-pane="business" id="tab-business" aria-label="Business" title="Business">
           <svg class="admin-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.8 20.2V9.4c0-.6.4-1 1-1h5.2V5.8c0-.6.4-1 1-1h6.2c.6 0 1 .4 1 1v14.4H3.8Zm7.2-11.8h5.2V6.8h-5.2v1.6Zm-5.2 3.1v1.5h2.1v-1.5H5.8Zm3.6 0v1.5h2.1v-1.5H9.4Zm3.6 0v1.5h2.1v-1.5H13Zm3.6 0v1.5h2.1v-1.5H16.6Zm-10.8 3.4v1.5h2.1v-1.5H5.8Zm3.6 0v1.5h2.1v-1.5H9.4Zm3.6 0v1.5h2.1v-1.5H13Zm3.6 0v1.5h2.1v-1.5H16.6Z"/></svg>
         </button>
@@ -485,6 +595,7 @@
     <div id="toast" class="toast" role="status"></div>
 
     <script>
+      window.SYNK_ID_ORIGIN = "__SYNK_ID_ORIGIN__";
       const unlockView = document.getElementById("unlock-view");
       const panelView = document.getElementById("panel-view");
       const unlockForm = document.getElementById("unlock-form");
@@ -495,8 +606,10 @@
         members: document.getElementById("pane-members"),
         requests: document.getElementById("pane-requests"),
         business: document.getElementById("pane-business"),
+        chat: document.getElementById("pane-chat"),
         more: document.getElementById("pane-more"),
         apps: document.getElementById("pane-apps"),
+        places: document.getElementById("pane-places"),
         activity: document.getElementById("pane-activity"),
         settings: document.getElementById("pane-settings"),
       };
@@ -505,10 +618,11 @@
         members: document.getElementById("tab-members"),
         requests: document.getElementById("tab-requests"),
         business: document.getElementById("tab-business"),
+        chat: document.getElementById("tab-chat"),
         more: document.getElementById("tab-more"),
       };
-      const MORE_PANES = new Set(["apps", "activity", "settings", "more"]);
-      const TAB_PANES = new Set(["overview", "members", "requests", "business", "more"]);
+      const MORE_PANES = new Set(["apps", "places", "activity", "settings", "more"]);
+      const TAB_PANES = new Set(["overview", "members", "requests", "chat", "business", "more"]);
 
       const synkEnrollForm = document.getElementById("synk-enroll-form");
       const synkEnrollName = document.getElementById("synk-enroll-name");
@@ -519,6 +633,7 @@
       const synkEnrollStatus = document.getElementById("synk-enroll-status");
       const synkProfilesEl = document.getElementById("synk-profiles");
       const synkProfilesEmpty = document.getElementById("synk-profiles-empty");
+      const synkMemberDetailEl = document.getElementById("synk-member-detail");
       const memberSearch = document.getElementById("member-search");
       const membersCountLabel = document.getElementById("members-count-label");
       const synkAppForm = document.getElementById("synk-app-form");
@@ -528,6 +643,22 @@
       const synkAppStatus = document.getElementById("synk-app-status");
       const synkAppsEl = document.getElementById("synk-apps");
       const synkAppsEmpty = document.getElementById("synk-apps-empty");
+      const synkPlaceForm = document.getElementById("synk-place-form");
+      const synkPlaceId = document.getElementById("synk-place-id");
+      const synkPlaceName = document.getElementById("synk-place-name");
+      const synkPlaceDescription = document.getElementById("synk-place-description");
+      const synkPlaceWebsite = document.getElementById("synk-place-website");
+      const synkPlaceLogoUrl = document.getElementById("synk-place-logo-url");
+      const synkPlaceLogoFile = document.getElementById("synk-place-logo-file");
+      const synkPlaceSort = document.getElementById("synk-place-sort");
+      const synkPlaceEnabled = document.getElementById("synk-place-enabled");
+      const synkPlaceBtn = document.getElementById("synk-place-btn");
+      const synkPlaceCancel = document.getElementById("synk-place-cancel");
+      const synkPlaceStatus = document.getElementById("synk-place-status");
+      const synkPlacesEl = document.getElementById("synk-places");
+      const synkPlacesEmpty = document.getElementById("synk-places-empty");
+      let synkPlacesCache = [];
+
       const synkBusinessRequestsEl = document.getElementById("synk-business-requests");
       const synkBusinessRequestsEmpty = document.getElementById("synk-business-requests-empty");
       const synkBusinessAccountsEl = document.getElementById("synk-business-accounts");
@@ -559,6 +690,7 @@
       let sessionUsername = "";
       let sessionId = "";
       let synkProfilesCache = [];
+      let selectedSynkProfileId = "";
       let synkAppsCache = [];
       let synkEventsCache = [];
       let synkEventTypesCache = [];
@@ -656,7 +788,7 @@
         Object.keys(tabs).forEach((key) => {
           const active =
             key === next ||
-            (key === "more" && (next === "apps" || next === "activity" || next === "settings"));
+            (key === "more" && (next === "apps" || next === "places" || next === "activity" || next === "settings"));
           tabs[key].classList.toggle("active", Boolean(active));
         });
         localStorage.setItem(PANE_KEY, next);
@@ -674,11 +806,17 @@
         if (next === "requests") {
           refreshSynkRequests().catch(() => {});
         }
+        if (next === "chat") {
+          refreshSynkChat().catch(() => {});
+        }
         if (next === "business") {
           refreshSynkBusinesses().catch(() => {});
         }
         if (next === "apps") {
           refreshSynkApps().catch(() => {});
+        }
+        if (next === "places") {
+          refreshSynkPlaces().catch(() => {});
         }
         window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
       }
@@ -690,6 +828,7 @@
         const token = sessionToken;
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = null;
+        stopSynkChatPoll();
         sessionToken = "";
         sessionUsername = "";
         sessionId = "";
@@ -781,7 +920,7 @@
         return { dataUrl, contentType: "image/jpeg", canvas, fileName: file.name || "synk.jpg" };
       }
 
-      async function uploadSynkPhoto(file) {
+      async function uploadSynkPhoto(file, options = {}) {
         const optimized = await optimizeSynkPhoto(file);
         const res = await fetch("/api/upload-synk-image", {
           method: "POST",
@@ -790,6 +929,8 @@
             data: optimized.dataUrl,
             contentType: optimized.contentType,
             fileName: optimized.fileName,
+            purpose: options.purpose || undefined,
+            public: options.public === true ? true : undefined,
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -801,9 +942,162 @@
         const q = memberSearch.value.trim().toLowerCase();
         if (!q) return synkProfilesCache;
         return synkProfilesCache.filter((p) => {
-          const hay = `${p.name || ""} ${p.synkCode || ""}`.toLowerCase();
+          const badgeText = (Array.isArray(p.badges) ? p.badges : [])
+            .map((b) => `${b.name || ""} ${b.slug || ""} ${b.username || ""}`)
+            .join(" ");
+          const hay = `${p.name || ""} ${p.synkCode || ""} ${badgeText}`.toLowerCase();
           return hay.includes(q);
         });
+      }
+
+      function closeMemberDetail() {
+        selectedSynkProfileId = "";
+        if (synkMemberDetailEl) {
+          synkMemberDetailEl.classList.add("hidden");
+          synkMemberDetailEl.innerHTML = "";
+        }
+        synkProfilesEl.querySelectorAll(".synk-profile-row.is-selected").forEach((el) => {
+          el.classList.remove("is-selected");
+          el.setAttribute("aria-selected", "false");
+        });
+      }
+
+      function renderMemberBadges(profile) {
+        const badges = Array.isArray(profile.badges) ? profile.badges : [];
+        if (!badges.length) {
+          return `<div class="synk-member-badges"><span class="muted" style="font-size:0.8rem;">No badges</span></div>`;
+        }
+        return `
+          <div class="synk-member-badges" aria-label="Member badges">
+            <div class="synk-member-badges-label muted">Badges</div>
+            <div class="synk-member-badge-list">
+              ${badges
+                .map((badge) => {
+                  const color = escapeHtml(badge.color || "#6366f1");
+                  const name = escapeHtml(badge.name || "Badge");
+                  const username = escapeHtml(badge.username || "");
+                  const pinned = badge.pinned ? "pinned" : "";
+                  const account =
+                    badge.account === "alt" ? "alt" : badge.account === "primary" ? "primary" : "";
+                  const meta = [username ? `@${username}` : "", account, pinned]
+                    .filter(Boolean)
+                    .join(" · ");
+                  const icon = badge.iconUrl
+                    ? `<img class="synk-member-badge-icon" src="${escapeHtml(badge.iconUrl)}" alt="" />`
+                    : `<span class="synk-member-badge-dot" style="background:${color}" aria-hidden="true"></span>`;
+                  return `
+                    <div class="synk-member-badge" style="--badge-color:${color}">
+                      ${icon}
+                      <div class="synk-member-badge-copy">
+                        <strong>${name}</strong>
+                        ${meta ? `<span class="muted">${escapeHtml(meta)}</span>` : ""}
+                      </div>
+                      <button
+                        class="btn btn-danger btn-compact"
+                        type="button"
+                        data-synk-action="remove-badge"
+                        data-tag-id="${escapeHtml(badge.id || "")}"
+                        data-badge-username="${username}"
+                        title="Remove ${name}"
+                      >Remove</button>
+                    </div>
+                  `;
+                })
+                .join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      function renderMemberDetail(profile) {
+        if (!synkMemberDetailEl) return;
+        if (!profile) {
+          closeMemberDetail();
+          return;
+        }
+        const photo = profile.photoUrl
+          ? `<img src="${escapeHtml(profile.photoUrl)}" alt="" />`
+          : `<img alt="" style="background:#ddd" />`;
+        const code = profile.synkCode || "";
+        synkMemberDetailEl.classList.remove("hidden");
+        synkMemberDetailEl.innerHTML = `
+          <div class="synk-member-detail-card" data-synk-id="${escapeHtml(profile.id)}">
+            <div class="synk-member-detail-top">
+              <button class="btn btn-secondary btn-compact" type="button" data-synk-action="close-detail">Close</button>
+              <div class="synk-member-detail-identity">
+                ${photo}
+                <div>
+                  <strong>${escapeHtml(profile.name || "Member")}</strong>
+                  <div class="synk-code-row">
+                    <div class="synk-code">${escapeHtml(code)}</div>
+                    ${
+                      code
+                        ? `<button class="btn btn-secondary btn-compact" type="button" data-synk-action="copy-code" data-synk-code="${escapeHtml(code)}">Copy</button>`
+                        : ""
+                    }
+                  </div>
+                  <div class="muted" style="font-size:0.82rem;margin-top:4px;">
+                    DOB ${escapeHtml(formatDob(profile.dateOfBirth))}
+                    · ${profile.hasBiometrics ? "Face enrolled" : "Needs face photo"}
+                    ${profile.hasSecret ? " · Recovery passphrase" : ""}
+                    ${profile.enabled ? "" : " · paused"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="synk-member-detail-section">
+              <h3>Sign in as</h3>
+              <div class="synk-profile-actions">
+                <button class="btn btn-primary btn-compact" type="button" data-synk-action="act-as">Open as member</button>
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-action="act-as-hub">Open hub as them</button>
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-action="act-as-community">Open community as them</button>
+              </div>
+            </div>
+
+            <div class="synk-member-detail-section">
+              <h3>Badges</h3>
+              ${renderMemberBadges(profile)}
+            </div>
+
+            <div class="synk-member-detail-section">
+              <h3>Moderation</h3>
+              <label class="field" style="margin:0 0 10px;">
+                <span class="muted" style="font-size:0.78rem;">Reset secret (optional)</span>
+                <input type="password" data-synk-action="secret" placeholder="New passphrase" maxlength="200" autocomplete="new-password" />
+              </label>
+              <div class="synk-profile-actions">
+                <label class="btn btn-secondary btn-compact" style="cursor:pointer;">
+                  Update face
+                  <input type="file" accept="image/jpeg,image/png,image/webp" data-synk-action="photo" hidden />
+                </label>
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-action="save-secret">Save secret</button>
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-action="toggle">${profile.enabled ? "Pause" : "Enable"}</button>
+                <button class="btn btn-secondary btn-compact" type="button" data-synk-action="revoke-passes">Revoke passes</button>
+                <button class="btn btn-danger btn-compact" type="button" data-synk-action="delete">Remove member</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function selectMember(profileId, { scrollDetail = true } = {}) {
+        const id = String(profileId || "");
+        const profile = synkProfilesCache.find((p) => p.id === id);
+        if (!profile) {
+          closeMemberDetail();
+          return;
+        }
+        selectedSynkProfileId = id;
+        synkProfilesEl.querySelectorAll(".synk-profile-row").forEach((el) => {
+          const on = el.getAttribute("data-synk-id") === id;
+          el.classList.toggle("is-selected", on);
+          el.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        renderMemberDetail(profile);
+        if (scrollDetail && synkMemberDetailEl) {
+          synkMemberDetailEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
       }
 
       function renderSynkProfiles() {
@@ -815,6 +1109,7 @@
           synkProfilesEmpty.textContent = synkProfilesCache.length
             ? "No members match that search."
             : "No Synk members yet.";
+          if (selectedSynkProfileId) closeMemberDetail();
           return;
         }
         synkProfilesEmpty.classList.add("hidden");
@@ -824,46 +1119,35 @@
               ? `<img src="${escapeHtml(profile.photoUrl)}" alt="" />`
               : `<img alt="" style="background:#ddd" />`;
             const code = profile.synkCode || "";
+            const selected = profile.id === selectedSynkProfileId;
             return `
-              <article class="synk-profile-card ${profile.enabled ? "" : "disabled"}" data-synk-id="${escapeHtml(profile.id)}">
+              <button
+                class="synk-profile-row ${profile.enabled ? "" : "disabled"} ${selected ? "is-selected" : ""}"
+                type="button"
+                data-synk-id="${escapeHtml(profile.id)}"
+                aria-selected="${selected ? "true" : "false"}"
+              >
                 ${photo}
-                <div class="synk-profile-meta">
-                  <div>
-                    <strong>${escapeHtml(profile.name)}</strong>
-                    <div class="synk-code-row">
-                      <div class="synk-code">${escapeHtml(code)}</div>
-                      ${
-                        code
-                          ? `<button class="btn btn-secondary btn-compact" type="button" data-synk-action="copy-code" data-synk-code="${escapeHtml(code)}">Copy</button>`
-                          : ""
-                      }
-                    </div>
-                    <div class="muted" style="font-size:0.82rem;margin-top:4px;">
-                      DOB ${escapeHtml(formatDob(profile.dateOfBirth))}
-                      · ${profile.hasBiometrics ? "Face enrolled" : "Needs face photo"}
-                      ${profile.hasSecret ? " · Recovery passphrase" : ""}
-                      ${profile.enabled ? "" : " · paused"}
-                    </div>
-                  </div>
-                  <label class="field" style="margin:0;">
-                    <span class="muted" style="font-size:0.78rem;">Reset secret (optional)</span>
-                    <input type="password" data-synk-action="secret" placeholder="New passphrase" maxlength="200" autocomplete="new-password" />
-                  </label>
-                  <div class="synk-profile-actions">
-                    <label class="btn btn-secondary btn-compact" style="cursor:pointer;">
-                      Update face
-                      <input type="file" accept="image/jpeg,image/png,image/webp" data-synk-action="photo" hidden />
-                    </label>
-                    <button class="btn btn-secondary btn-compact" type="button" data-synk-action="save-secret">Save secret</button>
-                    <button class="btn btn-secondary btn-compact" type="button" data-synk-action="toggle">${profile.enabled ? "Pause" : "Enable"}</button>
-                    <button class="btn btn-secondary btn-compact" type="button" data-synk-action="revoke-passes">Revoke passes</button>
-                    <button class="btn btn-danger btn-compact" type="button" data-synk-action="delete">Remove</button>
-                  </div>
-                </div>
-              </article>
+                <span class="synk-profile-row-meta">
+                  <strong>${escapeHtml(profile.name || "Member")}</strong>
+                  <span class="synk-code">${escapeHtml(code)}</span>
+                </span>
+              </button>
             `;
           })
           .join("");
+
+        if (selectedSynkProfileId) {
+          const stillVisible = profiles.some((p) => p.id === selectedSynkProfileId);
+          const stillExists = synkProfilesCache.some((p) => p.id === selectedSynkProfileId);
+          if (!stillExists) closeMemberDetail();
+          else if (stillVisible) selectMember(selectedSynkProfileId, { scrollDetail: false });
+          else {
+            // Keep detail open even if filtered out of the list.
+            const profile = synkProfilesCache.find((p) => p.id === selectedSynkProfileId);
+            renderMemberDetail(profile);
+          }
+        }
       }
 
       function renderSynkApps(apps) {
@@ -1025,6 +1309,83 @@
         renderSynkApps(data.apps || []);
         return data;
       }
+
+      function resetSynkPlaceForm() {
+        synkPlaceId.value = "";
+        synkPlaceForm.reset();
+        synkPlaceEnabled.checked = true;
+        synkPlaceSort.value = "0";
+        synkPlaceBtn.textContent = "Add place";
+        synkPlaceCancel.hidden = true;
+        synkPlaceStatus.textContent = "";
+        if (synkPlaceLogoFile) synkPlaceLogoFile.value = "";
+      }
+
+      function fillSynkPlaceForm(place) {
+        synkPlaceId.value = place.id || "";
+        synkPlaceName.value = place.name || "";
+        synkPlaceDescription.value = place.description || "";
+        synkPlaceWebsite.value = place.websiteUrl || "";
+        synkPlaceLogoUrl.value = place.logoUrl || "";
+        synkPlaceSort.value = String(place.sortOrder != null ? place.sortOrder : 0);
+        synkPlaceEnabled.checked = place.enabled !== false;
+        synkPlaceBtn.textContent = "Save place";
+        synkPlaceCancel.hidden = false;
+        synkPlaceStatus.textContent = "Editing — save when ready";
+        if (synkPlaceLogoFile) synkPlaceLogoFile.value = "";
+        synkPlaceName.focus();
+      }
+
+      function renderSynkPlaces(places) {
+        synkPlacesCache = places || [];
+        if (!synkPlacesCache.length) {
+          synkPlacesEl.innerHTML = "";
+          synkPlacesEmpty.classList.remove("hidden");
+          return;
+        }
+        synkPlacesEmpty.classList.add("hidden");
+        synkPlacesEl.innerHTML = synkPlacesCache
+          .map((place) => {
+            const logo = place.logoUrl
+              ? `<img src="${escapeHtml(place.logoUrl)}" alt="" loading="lazy" decoding="async" style="width:48px;height:48px;object-fit:cover;border-radius:10px;border:1px solid var(--line);" />`
+              : `<div style="width:48px;height:48px;border-radius:10px;border:1px solid var(--line);display:grid;place-items:center;font-weight:700;background:var(--fill);">${escapeHtml(String(place.name || "?").slice(0,1).toUpperCase())}</div>`;
+            const site = place.websiteUrl
+              ? `<div class="muted" style="font-size:0.82rem;word-break:break-all;">${escapeHtml(place.websiteUrl)}</div>`
+              : "";
+            const desc = place.description
+              ? `<div class="muted" style="font-size:0.85rem;margin-top:4px;">${escapeHtml(place.description)}</div>`
+              : "";
+            return `
+              <article class="synk-app-card ${place.enabled ? "" : "disabled"}" data-synk-place-id="${escapeHtml(place.id)}" style="display:grid;grid-template-columns:48px 1fr;gap:12px;">
+                ${logo}
+                <div>
+                  <strong>${escapeHtml(place.name)}</strong>
+                  <div class="muted" style="font-size:0.82rem;margin:2px 0 6px;">
+                    sort ${escapeHtml(String(place.sortOrder ?? 0))}
+                    ${place.enabled ? "" : " · hidden"}
+                  </div>
+                  ${desc}
+                  ${site}
+                  <div class="synk-profile-actions" style="margin-top:10px;">
+                    <button class="btn btn-secondary btn-compact" type="button" data-synk-place-action="edit">Edit</button>
+                    <button class="btn btn-secondary btn-compact" type="button" data-synk-place-action="toggle">${place.enabled ? "Hide" : "Show"}</button>
+                    <button class="btn btn-danger btn-compact" type="button" data-synk-place-action="delete">Remove</button>
+                  </div>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      async function refreshSynkPlaces() {
+        const res = await fetch("/api/synk-places", { headers: adminHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load places");
+        renderSynkPlaces(data.places || []);
+        return data;
+      }
+
 
       async function refreshSynkActivity() {
         const qs = new URLSearchParams({ limit: "150" });
@@ -1646,14 +2007,202 @@
         return data;
       }
 
+      
+      let synkChatSessions = [];
+      let synkChatActiveId = "";
+      let synkChatPollTimer = null;
+      let synkChatLastKey = "";
+
+      const synkChatInbox = document.getElementById("synk-chat-inbox");
+      const synkChatEmpty = document.getElementById("synk-chat-empty");
+      const synkChatCount = document.getElementById("synk-chat-count");
+      const synkChatThread = document.getElementById("synk-chat-thread");
+      const synkChatPick = document.getElementById("synk-chat-pick");
+      const synkChatMessages = document.getElementById("synk-chat-messages");
+      const synkChatForm = document.getElementById("synk-chat-form");
+      const synkChatInput = document.getElementById("synk-chat-input");
+      const synkChatSend = document.getElementById("synk-chat-send");
+      const synkChatClosed = document.getElementById("synk-chat-closed");
+      const synkChatThreadTitle = document.getElementById("synk-chat-thread-title");
+      const synkChatThreadStatus = document.getElementById("synk-chat-thread-status");
+      const synkChatCloseSessionBtn = document.getElementById("synk-chat-close-session-btn");
+      const synkChatRefreshBtn = document.getElementById("synk-chat-refresh-btn");
+      const tabChatBadge = document.getElementById("tab-chat-badge");
+
+      function stopSynkChatPoll() {
+        if (synkChatPollTimer) {
+          clearInterval(synkChatPollTimer);
+          synkChatPollTimer = null;
+        }
+      }
+
+      function startSynkChatPoll() {
+        stopSynkChatPoll();
+        synkChatPollTimer = setInterval(() => {
+          if (!sessionToken) return;
+          refreshSynkChatInbox().catch(() => {});
+          if (synkChatActiveId) loadSynkChatThread(synkChatActiveId, { quiet: true }).catch(() => {});
+        }, 4000);
+      }
+
+      function renderSynkChatInbox(sessions) {
+        synkChatSessions = Array.isArray(sessions) ? sessions : [];
+        const openCount = synkChatSessions.filter((s) => s.status === "open").length;
+        if (synkChatCount) {
+          synkChatCount.textContent = String(openCount);
+          synkChatCount.classList.toggle("hidden", openCount === 0);
+        }
+        if (tabChatBadge) {
+          tabChatBadge.textContent = String(openCount);
+          tabChatBadge.classList.toggle("hidden", openCount === 0);
+        }
+        if (!synkChatInbox) return;
+        if (!synkChatSessions.length) {
+          synkChatInbox.innerHTML = "";
+          if (synkChatEmpty) synkChatEmpty.hidden = false;
+          return;
+        }
+        if (synkChatEmpty) synkChatEmpty.hidden = true;
+        synkChatInbox.innerHTML = synkChatSessions
+          .map((s) => {
+            const active = s.id === synkChatActiveId ? "is-active" : "";
+            const closed = s.status === "closed" ? "is-closed" : "";
+            const name = escapeHtml(s.visitorName || "Visitor");
+            const preview = escapeHtml(s.lastBody || "No messages yet");
+            const when = escapeHtml(formatTime(s.lastMessageAt || s.updatedAt));
+            return `<button type="button" class="synk-chat-item ${active} ${closed}" data-synk-chat-id="${escapeHtml(s.id)}">
+              <div class="synk-chat-item-top"><strong>${name}</strong><span>${when}</span></div>
+              <p>${preview}</p>
+            </button>`;
+          })
+          .join("");
+      }
+
+      function renderSynkChatMessages(messages, { closed = false } = {}) {
+        const list = Array.isArray(messages) ? messages : [];
+        const key = list.map((m) => `${m.id}:${m.body}`).join("|") + (closed ? ":c" : "");
+        if (key === synkChatLastKey) return;
+        synkChatLastKey = key;
+        if (!synkChatMessages) return;
+        synkChatMessages.innerHTML = list
+          .map((m) => {
+            const sender = String(m.sender || "");
+            const cls =
+              sender === "admin" ? "is-mine" :
+              sender === "visitor" ? "is-theirs" : "is-system";
+            return `<div class="synk-chat-bubble ${cls}">${escapeHtml(m.body)}</div>`;
+          })
+          .join("");
+        synkChatMessages.scrollTop = synkChatMessages.scrollHeight;
+        if (synkChatForm) synkChatForm.hidden = closed;
+        if (synkChatClosed) synkChatClosed.hidden = !closed;
+      }
+
+      async function refreshSynkChatInbox() {
+        if (!sessionToken) return;
+        const res = await fetch("/api/synk-chat-session", { headers: adminHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load chats");
+        renderSynkChatInbox(data.sessions || []);
+      }
+
+      async function loadSynkChatThread(id, { quiet = false } = {}) {
+        if (!id || !sessionToken) return;
+        const res = await fetch(`/api/synk-chat-session?id=${encodeURIComponent(id)}`, {
+          headers: adminHeaders(),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load chat");
+        synkChatActiveId = id;
+        const session = data.session || {};
+        const closed = session.status === "closed";
+        if (synkChatThread) synkChatThread.classList.remove("hidden");
+        if (synkChatPick) synkChatPick.classList.add("hidden");
+        if (synkChatThreadTitle) synkChatThreadTitle.textContent = session.visitorName || "Chat";
+        if (synkChatThreadStatus) {
+          synkChatThreadStatus.textContent = closed ? "Closed" : "Open";
+        }
+        if (synkChatCloseSessionBtn) synkChatCloseSessionBtn.hidden = closed;
+        renderSynkChatMessages(data.messages || [], { closed });
+        renderSynkChatInbox(synkChatSessions);
+        if (!quiet) startSynkChatPoll();
+      }
+
+      async function refreshSynkChat() {
+        await refreshSynkChatInbox();
+        if (synkChatActiveId) await loadSynkChatThread(synkChatActiveId, { quiet: true });
+        startSynkChatPoll();
+      }
+
+      if (synkChatInbox) {
+        synkChatInbox.addEventListener("click", (e) => {
+          const btn = e.target.closest("[data-synk-chat-id]");
+          if (!btn) return;
+          loadSynkChatThread(btn.getAttribute("data-synk-chat-id")).catch((err) => {
+            showToast(err.message || "Could not open chat");
+          });
+        });
+      }
+      if (synkChatRefreshBtn) {
+        synkChatRefreshBtn.addEventListener("click", () => {
+          refreshSynkChat().catch((err) => showToast(err.message || "Could not refresh"));
+        });
+      }
+      if (synkChatForm) {
+        synkChatForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const body = String(synkChatInput.value || "").trim();
+          if (!body || !synkChatActiveId) return;
+          synkChatSend.disabled = true;
+          try {
+            const res = await fetch("/api/synk-chat-message", {
+              method: "POST",
+              headers: adminHeaders(),
+              body: JSON.stringify({ sessionId: synkChatActiveId, sender: "admin", body }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not send");
+            synkChatInput.value = "";
+            await loadSynkChatThread(synkChatActiveId);
+            await refreshSynkChatInbox();
+          } catch (err) {
+            showToast(err.message || "Could not send");
+          } finally {
+            synkChatSend.disabled = false;
+            synkChatInput.focus();
+          }
+        });
+      }
+      if (synkChatCloseSessionBtn) {
+        synkChatCloseSessionBtn.addEventListener("click", async () => {
+          if (!synkChatActiveId) return;
+          try {
+            const res = await fetch("/api/synk-chat-session", {
+              method: "PATCH",
+              headers: adminHeaders(),
+              body: JSON.stringify({ id: synkChatActiveId, status: "closed" }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not close chat");
+            showToast("Chat closed");
+            await refreshSynkChat();
+          } catch (err) {
+            showToast(err.message || "Could not close chat");
+          }
+        });
+      }
+
+
       async function refreshAll() {
         await Promise.all([
           refreshSynkProfiles(),
           refreshSynkApps(),
+          refreshSynkPlaces().catch(() => {}),
           refreshSynkActivity(),
           refreshSynkPasses().catch(() => {}),
           refreshSynkRequests().catch(() => {}),
           refreshSynkBusinesses().catch(() => {}),
+          refreshSynkChat().catch(() => {}),
           refreshSettings(),
         ]);
       }
@@ -1704,10 +2253,12 @@
         refreshSynkRequests().catch(() => {});
         refreshSynkBusinesses().catch(() => {});
         refreshSynkPasses().catch(() => {});
+        refreshSynkChat().catch(() => {});
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(() => {
           refreshSynkApps().catch(() => {});
           refreshSynkActivity().catch(() => {});
+          refreshSynkChatInbox().catch(() => {});
           refreshSettings().catch(() => {});
         }, 15000);
       }
@@ -2130,135 +2681,230 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
         }
       });
 
-      synkProfilesEl.addEventListener("change", async (e) => {
-        const photoInput = e.target.closest('[data-synk-action="photo"]');
-        const card = e.target.closest("[data-synk-id]");
-        if (!card) return;
-        const id = card.getAttribute("data-synk-id");
+      /* photo updates now handled in member detail panel */
 
-        if (!photoInput) return;
-        const file = photoInput.files && photoInput.files[0];
-        if (!file) return;
-        try {
-          showToast("Updating biometrics…");
-          if (!window.KioskFace) throw new Error("Face library still loading");
-          await window.KioskFace.ensureFaceApi();
-          const uploaded = await uploadSynkPhoto(file);
-          const descriptor = await window.KioskFace.descriptorFromImage(uploaded.canvas);
-          const res = await fetch("/api/synk-profiles", {
-            method: "PATCH",
-            headers: adminHeaders(),
-            body: JSON.stringify({ id, photoUrl: uploaded.url, descriptor }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || "Could not update photo");
-          showToast("Biometrics updated");
-          await refreshSynkProfiles();
-        } catch (err) {
-          showToast(err.message || "Could not update photo");
-        } finally {
-          photoInput.value = "";
-        }
-      });
+      
 
-      synkProfilesEl.addEventListener("click", async (e) => {
-        const btn = e.target.closest("[data-synk-action]");
-        const card = e.target.closest("[data-synk-id]");
-        if (!btn || !card) return;
-        const action = btn.getAttribute("data-synk-action");
-        if (action === "photo" || action === "secret" || action === "policy") return;
-
-        if (action === "copy-code") {
-          const code = btn.getAttribute("data-synk-code") || "";
-          if (!code) return;
-          try {
-            await navigator.clipboard.writeText(code);
-            showToast("Synk code copied");
-          } catch (_) {
-            showToast(code);
-          }
+      synkProfilesEl.addEventListener("click", (e) => {
+        const row = e.target.closest(".synk-profile-row[data-synk-id]");
+        if (!row || !synkProfilesEl.contains(row)) return;
+        const id = row.getAttribute("data-synk-id");
+        if (!id) return;
+        if (id === selectedSynkProfileId) {
+          // toggle closed if already selected
+          closeMemberDetail();
           return;
         }
+        selectMember(id);
+      });
 
-        const id = card.getAttribute("data-synk-id");
-        const profile = synkProfilesCache.find((p) => p.id === id);
-        if (!profile) return;
+      if (synkMemberDetailEl) {
+        synkMemberDetailEl.addEventListener("click", async (e) => {
+          const btn = e.target.closest("[data-synk-action]");
+          const card = e.target.closest("[data-synk-id]");
+          if (!btn || !card) return;
+          const action = btn.getAttribute("data-synk-action");
+          if (action === "photo" || action === "secret" || action === "policy") return;
 
-        if (action === "save-secret") {
-          const secretInput = card.querySelector('[data-synk-action="secret"]');
-          const nextSecret = secretInput ? secretInput.value.trim() : "";
-          if (!nextSecret) {
-            showToast("Enter a new secret first");
+          if (action === "close-detail") {
+            closeMemberDetail();
             return;
           }
+
+          if (action === "copy-code") {
+            const code = btn.getAttribute("data-synk-code") || "";
+            if (!code) return;
+            try {
+              await navigator.clipboard.writeText(code);
+              showToast("Synk code copied");
+            } catch (_) {
+              showToast(code);
+            }
+            return;
+          }
+
+          const id = card.getAttribute("data-synk-id");
+          const profile = synkProfilesCache.find((p) => p.id === id);
+          if (!profile) return;
+
+          if (action === "remove-badge") {
+            const tagId = btn.getAttribute("data-tag-id") || "";
+            const username = btn.getAttribute("data-badge-username") || "";
+            if (!tagId) return;
+            const badge = (profile.badges || []).find(
+              (b) => String(b.id) === String(tagId) && (!username || String(b.username || "") === username)
+            );
+            const label = (badge && badge.name) || "this badge";
+            const where = username ? ` from @${username}` : "";
+            if (!confirm(`Remove ${label}${where} from ${profile.name}?`)) return;
+            btn.disabled = true;
+            try {
+              const res = await fetch("/api/synk-profiles", {
+                method: "PATCH",
+                headers: adminHeaders(),
+                body: JSON.stringify({
+                  id,
+                  action: "remove-badge",
+                  tagId,
+                  username: username || undefined,
+                }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not remove badge");
+              if (data.profile) {
+                synkProfilesCache = synkProfilesCache.map((p) =>
+                  p.id === id ? { ...p, badges: data.profile.badges || [] } : p
+                );
+                renderSynkProfiles();
+              } else {
+                await refreshSynkProfiles();
+              }
+              showToast("Badge removed");
+            } catch (err) {
+              showToast(err.message || "Could not remove badge");
+              btn.disabled = false;
+            }
+            return;
+          }
+
+          if (action === "save-secret") {
+            const secretInput = card.querySelector('[data-synk-action="secret"]');
+            const nextSecret = secretInput ? secretInput.value.trim() : "";
+            if (!nextSecret) {
+              showToast("Enter a new secret first");
+              return;
+            }
+            try {
+              const res = await fetch("/api/synk-profiles", {
+                method: "PATCH",
+                headers: adminHeaders(),
+                body: JSON.stringify({ id, secret: nextSecret }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not update secret");
+              if (secretInput) secretInput.value = "";
+              showToast("Secret updated");
+              await refreshSynkProfiles();
+            } catch (err) {
+              showToast(err.message || "Could not update secret");
+            }
+            return;
+          }
+
+          if (action === "toggle") {
+            try {
+              const res = await fetch("/api/synk-profiles", {
+                method: "PATCH",
+                headers: adminHeaders(),
+                body: JSON.stringify({ id, enabled: !profile.enabled }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not update");
+              showToast(profile.enabled ? "Paused" : "Enabled");
+              await refreshSynkProfiles();
+              await refreshSettings();
+            } catch (err) {
+              showToast(err.message || "Could not update");
+            }
+            return;
+          }
+
+          if (action === "revoke-passes") {
+            if (!confirm(`Revoke active passes for ${profile.name}?`)) return;
+            try {
+              const res = await fetch("/api/synk-passes", {
+                method: "POST",
+                headers: adminHeaders(),
+                body: JSON.stringify({ action: "revoke-member", profileId: id }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not revoke passes");
+              showToast(data.revoked ? `Revoked ${data.revoked} pass${data.revoked === 1 ? "" : "es"}` : "No active passes");
+              await refreshSynkPasses();
+              await refreshSynkActivity().catch(() => {});
+            } catch (err) {
+              showToast(err.message || "Could not revoke passes");
+            }
+            return;
+          }
+
+          if (action === "act-as" || action === "act-as-hub" || action === "act-as-community") {
+            const nextPath = action === "act-as-community" ? "/community" : "/hub";
+            const label = profile.name || profile.synkCode || "this member";
+            if (!confirm(`Open Synk as ${label}?\n\nYou'll use the app as them for about an hour. A banner will show that you're acting as them.`)) {
+              return;
+            }
+            try {
+              showToast("Starting member session…");
+              const res = await fetch("/api/synk-admin-act-as", {
+                method: "POST",
+                headers: adminHeaders(),
+                body: JSON.stringify({
+                  action: "start",
+                  profileId: id,
+                  nextPath,
+                  synkIdOrigin: window.SYNK_ID_ORIGIN || undefined,
+                }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not start act-as session");
+              if (!data.url) throw new Error("No act-as URL returned");
+              window.open(data.url, "_blank", "noopener,noreferrer");
+              showToast(`Opened as ${data.profile && data.profile.name ? data.profile.name : label}`);
+            } catch (err) {
+              showToast(err.message || "Could not open as member");
+            }
+            return;
+          }
+
+          if (action === "delete") {
+            if (!confirm(`Remove Synk ID for ${profile.name}?`)) return;
+            try {
+              const res = await fetch(`/api/synk-profiles?id=${encodeURIComponent(id)}`, {
+                method: "DELETE",
+                headers: adminHeaders(),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || "Could not remove");
+              showToast("Removed");
+              selectedSynkProfileId = "";
+              await refreshSynkProfiles();
+              await refreshSettings();
+            } catch (err) {
+              showToast(err.message || "Could not remove");
+            }
+          }
+        });
+
+        synkMemberDetailEl.addEventListener("change", async (e) => {
+          const photoInput = e.target.closest('[data-synk-action="photo"]');
+          const card = e.target.closest("[data-synk-id]");
+          if (!photoInput || !card) return;
+          const id = card.getAttribute("data-synk-id");
+          const file = photoInput.files && photoInput.files[0];
+          if (!file) return;
           try {
+            showToast("Updating biometrics…");
+            if (!window.KioskFace) throw new Error("Face library still loading");
+            await window.KioskFace.ensureFaceApi();
+            const uploaded = await uploadSynkPhoto(file);
+            const descriptor = await window.KioskFace.descriptorFromImage(uploaded.canvas);
             const res = await fetch("/api/synk-profiles", {
               method: "PATCH",
               headers: adminHeaders(),
-              body: JSON.stringify({ id, secret: nextSecret }),
+              body: JSON.stringify({ id, photoUrl: uploaded.url, descriptor }),
             });
             const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not update secret");
-            if (secretInput) secretInput.value = "";
-            showToast("Secret updated");
+            if (!res.ok) throw new Error(data.error || "Could not update photo");
+            showToast("Biometrics updated");
             await refreshSynkProfiles();
           } catch (err) {
-            showToast(err.message || "Could not update secret");
+            showToast(err.message || "Could not update photo");
+          } finally {
+            photoInput.value = "";
           }
-        }
-
-        if (action === "toggle") {
-          try {
-            const res = await fetch("/api/synk-profiles", {
-              method: "PATCH",
-              headers: adminHeaders(),
-              body: JSON.stringify({ id, enabled: !profile.enabled }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not update");
-            showToast(profile.enabled ? "Paused" : "Enabled");
-            await refreshSynkProfiles();
-            await refreshSettings();
-          } catch (err) {
-            showToast(err.message || "Could not update");
-          }
-        }
-
-        if (action === "revoke-passes") {
-          if (!confirm(`Revoke active passes for ${profile.name}?`)) return;
-          try {
-            const res = await fetch("/api/synk-passes", {
-              method: "POST",
-              headers: adminHeaders(),
-              body: JSON.stringify({ action: "revoke-member", profileId: id }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not revoke passes");
-            showToast(data.revoked ? `Revoked ${data.revoked} pass${data.revoked === 1 ? "" : "es"}` : "No active passes");
-            await refreshSynkPasses();
-            await refreshSynkActivity().catch(() => {});
-          } catch (err) {
-            showToast(err.message || "Could not revoke passes");
-          }
-        }
-
-        if (action === "delete") {
-          if (!confirm(`Remove Synk ID for ${profile.name}?`)) return;
-          try {
-            const res = await fetch(`/api/synk-profiles?id=${encodeURIComponent(id)}`, {
-              method: "DELETE",
-              headers: adminHeaders(),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Could not remove");
-            showToast("Removed");
-            await refreshSynkProfiles();
-            await refreshSettings();
-          } catch (err) {
-            showToast(err.message || "Could not remove");
-          }
-        }
-      });
+        });
+      }
 
       synkSessionsEl.addEventListener("click", async (e) => {
         const btn = e.target.closest("[data-session-action]");
@@ -2283,7 +2929,101 @@ document.getElementById("revoke-all-sessions-btn").addEventListener("click", asy
         }
       });
 
-      synkAppForm.addEventListener("submit", async (e) => {
+      
+      synkPlaceCancel.addEventListener("click", () => resetSynkPlaceForm());
+
+      synkPlaceForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = synkPlaceName.value.trim();
+        if (!name) return;
+        synkPlaceBtn.disabled = true;
+        synkPlaceStatus.textContent = "Saving…";
+        try {
+          let logoUrl = synkPlaceLogoUrl.value.trim();
+          const file = synkPlaceLogoFile && synkPlaceLogoFile.files && synkPlaceLogoFile.files[0];
+          if (file) {
+            synkPlaceStatus.textContent = "Uploading logo…";
+            const uploaded = await uploadSynkPhoto(file, { purpose: "place-logo", public: true });
+            logoUrl = uploaded.url || logoUrl;
+            synkPlaceLogoUrl.value = logoUrl;
+          }
+          const payload = {
+            name,
+            description: synkPlaceDescription.value.trim(),
+            websiteUrl: synkPlaceWebsite.value.trim(),
+            logoUrl,
+            sortOrder: Number(synkPlaceSort.value || 0),
+            enabled: synkPlaceEnabled.checked,
+          };
+          const editingId = synkPlaceId.value.trim();
+          const res = await fetch("/api/synk-places", {
+            method: editingId ? "PATCH" : "POST",
+            headers: adminHeaders(),
+            body: JSON.stringify(editingId ? { id: editingId, ...payload } : payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not save place");
+          resetSynkPlaceForm();
+          synkPlaceStatus.textContent = editingId ? "Place updated" : "Place added";
+          showToast(editingId ? "Place updated" : "Place added");
+          await refreshSynkPlaces();
+        } catch (err) {
+          synkPlaceStatus.textContent = err.message || "Could not save place";
+          showToast(err.message || "Could not save place");
+        } finally {
+          synkPlaceBtn.disabled = false;
+        }
+      });
+
+      synkPlacesEl.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-synk-place-action]");
+        const card = e.target.closest("[data-synk-place-id]");
+        if (!btn || !card) return;
+        const id = card.getAttribute("data-synk-place-id");
+        const action = btn.getAttribute("data-synk-place-action");
+        const place = synkPlacesCache.find((p) => p.id === id);
+        if (!place) return;
+
+        if (action === "edit") {
+          fillSynkPlaceForm(place);
+          return;
+        }
+
+        if (action === "toggle") {
+          try {
+            const res = await fetch("/api/synk-places", {
+              method: "PATCH",
+              headers: adminHeaders(),
+              body: JSON.stringify({ id, enabled: !place.enabled }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not update place");
+            showToast(place.enabled ? "Place hidden" : "Place visible");
+            await refreshSynkPlaces();
+          } catch (err) {
+            showToast(err.message || "Could not update place");
+          }
+        }
+
+        if (action === "delete") {
+          if (!confirm(`Remove ${place.name} from the hub list?`)) return;
+          try {
+            const res = await fetch(`/api/synk-places?id=${encodeURIComponent(id)}`, {
+              method: "DELETE",
+              headers: adminHeaders(),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not remove place");
+            if (synkPlaceId.value === id) resetSynkPlaceForm();
+            showToast("Place removed");
+            await refreshSynkPlaces();
+          } catch (err) {
+            showToast(err.message || "Could not remove place");
+          }
+        }
+      });
+
+synkAppForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const name = synkAppName.value.trim();
         const slug = synkAppSlug.value.trim();

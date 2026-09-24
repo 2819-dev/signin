@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Loading">
+  <title>Loading</title>
+  <style>
+    .ring {
+      fill: none;
+      stroke: #041A55;
+      stroke-width: 12;
+      stroke-linecap: round;
+      animation: synk-flow 1.35s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+    }
+    .ring.outer { stroke-dasharray: 52 210; animation-duration: 1.6s; }
+    .ring.mid { stroke-dasharray: 34 170; animation-duration: 1.2s; animation-direction: reverse; animation-delay: -0.25s; opacity: 0.88; }
+    .ring.inner { stroke-dasharray: 22 120; animation-duration: 0.95s; animation-delay: -0.5s; opacity: 0.8; }
+    @keyframes synk-flow {
+      to { stroke-dashoffset: -256; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ring { animation: synk-pulse 1.2s ease-in-out infinite; stroke-dasharray: none; }
+      @keyframes synk-pulse {
+        0%, 100% { opacity: 0.35; }
+        50% { opacity: 1; }
+      }
+    }
+  </style>
+  <path class="ring outer" d="M 30.66 29.47 A 48.00 48.00 0 1 1 30.66 98.53"/>
+  <path class="ring mid" d="M 85.53 86.30 A 31.00 31.00 0 1 1 85.53 41.70"/>
+  <path class="ring inner" d="M 54.27 53.93 A 14.00 14.00 0 1 1 54.27 74.07"/>
+</svg>
