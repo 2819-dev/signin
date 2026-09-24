@@ -1,7 +1,7 @@
 "use strict";
 
 const { randomUUID } = require("crypto");
-const { getStore, connectLambda } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("./lib/media-store");
 const { getSql, json, requireSynkAdmin } = require("./lib/db");
 const {
   ensureSynkCoreTables,

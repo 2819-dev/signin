@@ -1,4 +1,4 @@
-const { getStore, connectLambda } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("./lib/media-store");
 const { json, requireSynkAdmin } = require("./lib/db");
 const { randomUUID } = require("crypto");
 

@@ -12,16 +12,18 @@ Visitors enter their **name** and **why they want to come in**. You get the requ
 |-----|--------|--------------|
 | `/` | iPad (kiosk) | Sign-in form → waits → shows admitted / declined |
 | `/admin` | Phone | Live request list, admit / decline, browser alerts |
-| [synkid.netlify.app](https://synkid.netlify.app/) | Phone / tablet / desktop | Synk membership request + verification (separate site) |
-| [synk-admin.netlify.app](https://synk-admin.netlify.app/) | Phone / desktop | Synk Admin (separate site; username + password + 2FA) |
+| Synk ID (`synk-id/`) | Phone / tablet / desktop | Synk membership request + verification (separate site) |
+| Synk Admin (`synk-admin/`) | Phone / desktop | Synk Admin (separate site; username + password + 2FA) |
 
 Legacy visitor-site paths `/synk`, `/join`, and `/synk-join` redirect to the Synk ID site.
 
 ## Stack
 
-- Static frontend on **Netlify**
-- Serverless functions under `/api/*`
-- **Neon** (Postgres) for requests
+- Static frontend + serverless APIs on **Vercel**
+- Shared API handlers under `netlify/functions/` (bridged via `api/[...path].js`)
+- **Neon** (Postgres) for requests and media (`kiosk_media`)
+
+See [`VERCEL_CLAIM.md`](./VERCEL_CLAIM.md) for temporary claim links after an anonymous deploy.
 
 ## Setup
 
@@ -31,10 +33,11 @@ Legacy visitor-site paths `/synk`, `/join`, and `/synk-join` redirect to the Syn
 2. Copy the connection string (`DATABASE_URL`)
 3. In the Neon SQL Editor, run everything in [`schema.sql`](./schema.sql)
 
-### 2. Deploy to Netlify
+### 2. Deploy to Vercel
 
-1. Push this repo and import it in Netlify (or use Netlify CLI)
-2. Set environment variables in **Site settings → Environment variables**:
+1. Claim the temporary deployments (or import this repo in the Vercel dashboard)
+2. Rename projects to `visitor-signin` and `synkid` if you want those hostnames
+3. Set environment variables on the **visitor** project:
 
 | Variable | Value |
 |----------|--------|
@@ -45,7 +48,15 @@ Legacy visitor-site paths `/synk`, `/join`, and `/synk-join` redirect to the Syn
 | `SYNK_ADMIN_TOTP_SECRET` | Base32 TOTP secret for an authenticator app |
 | `SYNK_ADMIN_SESSION_SECRET` | Long random string used to sign admin sessions |
 
-3. Deploy. Publish directory is `public`; functions are in `netlify/functions`.
+4. Point Synk ID’s `/api/*` rewrite in `synk-id/vercel.json` at your claimed visitor production URL (for example `https://visitor-signin.vercel.app/api/$1`).
+5. Redeploy both projects.
+
+CLI helpers:
+
+```bash
+npm run deploy:visitor   # visitor kiosk + APIs
+npm run deploy:synk-id   # Synk ID static site (proxies /api to visitor)
+```
 
 ### 3. Use it
 
@@ -56,54 +67,50 @@ Legacy visitor-site paths `/synk`, `/join`, and `/synk-join` redirect to the Syn
 
 ```bash
 npm install
-npx netlify login
 # put DATABASE_URL and ADMIN_SECRET in a .env file (see .env.example)
-npx netlify dev
+npx vercel dev
 ```
 
-Then open `http://localhost:8888` (kiosk) and `http://localhost:8888/admin`.
+Then open the printed local URL (kiosk) and `/admin`.
 
 ## Notes
 
 - There is no visitor login — only the admin secret protects `/admin` API actions.
 - Alerts use the browser Notification API + a short chime while the admin page is open. Keep `/admin` open on your phone for the best experience.
 - Light mode only; the kiosk UI is intentionally minimal.
+- Media uploads store in Neon `kiosk_media` (no Netlify Blobs).
 
 
 ## Separate Synk products
 
-- Synk ID: https://synkid.netlify.app
-- Synk Admin: https://synk-admin.netlify.app
+- Synk ID source: `synk-id/`
+- Synk Admin source: `synk-admin/`
 - **Adding Synk to another app:** see [`AGENTS.md`](./AGENTS.md) and [`integrations/synk/`](./integrations/synk/) (Cursor agents should read these first).
 
 ## Separate Synk Admin site
 
-Synk Admin is deployed as its own Netlify project:
+Synk Admin is deployed as its own project:
 
-- Site: https://synk-admin.netlify.app
 - Source: `synk-admin/` in this repo
 - APIs still run on the visitor kiosk site; Synk Admin proxies `/api/*` there
 - Auth: username + password + TOTP 2FA; Synk Admin keeps a signed, **revocable** session locally
 - Sessions stay signed in until you Lock or revoke them (no timed expiry)
 - Manual Lock always signs out; there is no idle auto-lock
-- Membership requests: [synkid.netlify.app](https://synkid.netlify.app/) → review/accept in Synk Admin → Requests
+- Membership requests: Synk ID → review/accept in Synk Admin → Requests
 - Member photos are served with short-lived signed URLs
 - Active Synk passes can be listed and revoked from Overview / Members
 - Activity is filterable and exportable as CSV
 - Generate credentials: `node scripts/generate-synk-admin-credentials.js`
 
-Local:
-
 ```bash
 cd synk-admin && npm run build
-npx netlify deploy --prod --filter synk-admin
+# deploy with your preferred host (Vercel recommended)
 ```
 
 ## Separate Synk ID site
 
-Synk membership request and verification are deployed as their own Netlify project:
+Synk membership request and verification are their own Vercel project:
 
-- Site: https://synkid.netlify.app
 - Source: `synk-id/` in this repo
 - APIs still run on the visitor kiosk site; Synk ID proxies `/api/*` there
 - `/` membership request · `/verify` member verification

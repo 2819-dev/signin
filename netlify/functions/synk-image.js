@@ -1,6 +1,6 @@
 "use strict";
 
-const { getStore, connectLambda } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("./lib/media-store");
 const { getSql, json, requireSynkAdmin } = require("./lib/db");
 const { verifyMediaToken } = require("./lib/synk-admin-auth");
 

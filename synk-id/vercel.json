@@ -1,0 +1,158 @@
+{
+  "version": 2,
+  "buildCommand": "node scripts/prepare.js",
+  "outputDirectory": "public",
+  "installCommand": "npm install --ignore-scripts || true",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://temporary-spry-basalt-nks4oon.vercel.app/api/$1"
+    },
+    {
+      "source": "/verify",
+      "destination": "/verify.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/verify.html"
+    },
+    {
+      "source": "/join",
+      "destination": "/join.html"
+    },
+    {
+      "source": "/signup",
+      "destination": "/join.html"
+    },
+    {
+      "source": "/act-as",
+      "destination": "/act-as.html"
+    },
+    {
+      "source": "/act-as/(.*)",
+      "destination": "/act-as.html"
+    },
+    {
+      "source": "/hub",
+      "destination": "/hub.html"
+    },
+    {
+      "source": "/community",
+      "destination": "/community.html"
+    },
+    {
+      "source": "/community/(.*)",
+      "destination": "/community.html"
+    },
+    {
+      "source": "/g/(.*)",
+      "destination": "/community.html"
+    },
+    {
+      "source": "/user/(.*)",
+      "destination": "/community.html"
+    },
+    {
+      "source": "/u/(.*)",
+      "destination": "/community.html"
+    },
+    {
+      "source": "/docs",
+      "destination": "/docs.html"
+    },
+    {
+      "source": "/documentation",
+      "destination": "/docs"
+    },
+    {
+      "source": "/places",
+      "destination": "/places.html"
+    },
+    {
+      "source": "/business",
+      "destination": "/business.html"
+    },
+    {
+      "source": "/info",
+      "destination": "/info.html"
+    },
+    {
+      "source": "/info/(.*)",
+      "destination": "/info.html"
+    },
+    {
+      "source": "/testing",
+      "destination": "https://staffhub.bhswebsite.org/"
+    },
+    {
+      "source": "/testing/(.*)",
+      "destination": "https://staffhub.bhswebsite.org/"
+    },
+    {
+      "source": "/synk",
+      "destination": "/verify"
+    },
+    {
+      "source": "/synk-join",
+      "destination": "/join"
+    },
+    {
+      "source": "/agents",
+      "destination": "/docs.html#for-agents"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(), geolocation=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob:; child-src 'self' blob:; connect-src 'self' https://temporary-spry-basalt-nks4oon.vercel.app https://visitor-signin.vercel.app https://*.vercel.app https://cdn.jsdelivr.net https://fcm.googleapis.com https://*.googleapis.com https://updates.push.services.mozilla.com https://*.push.services.mozilla.com https://web.push.apple.com https://*.push.apple.com; font-src 'self' data:; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, must-revalidate, max-age=0"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    },
+    {
+      "source": "/version.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate, max-age=0"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/json; charset=utf-8"
+        }
+      ]
+    }
+  ]
+}

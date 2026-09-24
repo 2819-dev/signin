@@ -2,7 +2,7 @@
 
 const { randomUUID } = require("crypto");
 const { signedPhotoUrl } = require("./lib/synk-admin-auth");
-const { getStore, connectLambda } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("./lib/media-store");
 const { getSql, json } = require("./lib/db");
 const {
   ensureSynkCoreTables,
