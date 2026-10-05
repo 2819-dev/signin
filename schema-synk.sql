@@ -167,6 +167,8 @@ CREATE INDEX IF NOT EXISTS synk_hub_sessions_profile_idx
 CREATE TABLE IF NOT EXISTS synk_community_profiles (
   synk_profile_id UUID PRIMARY KEY REFERENCES synk_profiles(id) ON DELETE CASCADE,
   public_username TEXT NOT NULL,
+  display_name TEXT,
+  avatar_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -222,11 +224,108 @@ ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS author_username TEXT;
 CREATE INDEX IF NOT EXISTS synk_community_posts_author_username_idx
   ON synk_community_posts (author_username);
 
+ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS title TEXT;
+ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS post_type TEXT NOT NULL DEFAULT 'text';
+ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS link_url TEXT;
+ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS score INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS poll_options JSONB;
+ALTER TABLE synk_community_posts ALTER COLUMN body SET DEFAULT '';
+
+CREATE INDEX IF NOT EXISTS synk_community_posts_score_created_idx
+  ON synk_community_posts (score DESC, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS synk_community_comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  parent_id UUID REFERENCES synk_community_comments(id) ON DELETE CASCADE,
+  author_username TEXT,
+  body TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_comments_post_created_idx
+  ON synk_community_comments (post_id, created_at ASC);
+
+CREATE INDEX IF NOT EXISTS synk_community_comments_parent_idx
+  ON synk_community_comments (parent_id);
+
+CREATE TABLE IF NOT EXISTS synk_community_votes (
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  target_type TEXT NOT NULL,
+  target_id UUID NOT NULL,
+  value SMALLINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (synk_profile_id, target_type, target_id),
+  CONSTRAINT synk_community_votes_type_chk CHECK (target_type IN ('post', 'comment')),
+  CONSTRAINT synk_community_votes_value_chk CHECK (value IN (-1, 1))
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_votes_target_idx
+  ON synk_community_votes (target_type, target_id);
+
+CREATE TABLE IF NOT EXISTS synk_community_saves (
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (synk_profile_id, post_id)
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_saves_profile_created_idx
+  ON synk_community_saves (synk_profile_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS synk_community_hides (
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (synk_profile_id, post_id)
+);
+
+CREATE TABLE IF NOT EXISTS synk_community_memberships (
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (synk_profile_id, group_id)
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_memberships_group_idx
+  ON synk_community_memberships (group_id);
+
+CREATE TABLE IF NOT EXISTS synk_community_poll_votes (
+  post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  option_index INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (post_id, synk_profile_id)
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_poll_votes_post_idx
+  ON synk_community_poll_votes (post_id, option_index);
+
+CREATE TABLE IF NOT EXISTS synk_community_notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  actor_username TEXT,
+  post_id UUID REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+  comment_id UUID REFERENCES synk_community_comments(id) ON DELETE CASCADE,
+  body TEXT NOT NULL DEFAULT '',
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS synk_community_notifications_profile_created_idx
+  ON synk_community_notifications (synk_profile_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS synk_community_alt_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
   public_username TEXT NOT NULL,
   label TEXT NOT NULL DEFAULT '',
+  display_name TEXT,
+  avatar_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -283,10 +382,13 @@ CREATE TABLE IF NOT EXISTS synk_community_tags (
   slug TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   color TEXT NOT NULL DEFAULT '#6366f1',
+  icon_url TEXT,
   created_by UUID REFERENCES synk_profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS icon_url TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS synk_community_tags_slug_idx
   ON synk_community_tags (slug);
@@ -310,8 +412,11 @@ CREATE INDEX IF NOT EXISTS synk_community_profile_tags_tag_idx
   ON synk_community_profile_tags (tag_id);
 
 ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS pinned_tag_id UUID;
-
+ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS pinned_tag_id UUID;
+ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
 CREATE TABLE IF NOT EXISTS synk_community_username_tags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

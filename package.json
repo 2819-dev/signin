@@ -5,14 +5,14 @@
   "description": "Simple iPad visitor check-in with phone admin admit/decline",
   "scripts": {
     "prebuild": "node scripts/write-version.js",
-    "dev": "node scripts/write-version.js && netlify dev",
+    "dev": "node scripts/write-version.js && npx vercel dev",
     "build": "node scripts/write-version.js",
-    "deploy:synk-admin": "bash scripts/deploy-synk-admin.sh",
-    "deploy:synk-id": "bash scripts/deploy-synk-id.sh"
+    "deploy:visitor": "bash scripts/deploy-visitor-vercel.sh",
+    "deploy:synk-id": "bash scripts/deploy-synk-id-vercel.sh",
+    "deploy:synk-admin": "bash scripts/deploy-synk-admin.sh"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
-    "@netlify/blobs": "^11.0.3",
     "web-push": "^3.6.7"
   }
 }

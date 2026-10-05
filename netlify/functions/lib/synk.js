@@ -269,6 +269,7 @@ async function ensureSynkCommunityExtras(sql) {
     CREATE INDEX IF NOT EXISTS synk_community_tags_created_idx
     ON synk_community_tags (created_at DESC)
   `;
+  await sql`ALTER TABLE synk_community_tags ADD COLUMN IF NOT EXISTS icon_url TEXT`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS synk_community_profile_tags (
@@ -290,6 +291,8 @@ async function ensureSynkCommunityExtras(sql) {
   `;
 
   await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS pinned_tag_id UUID`;
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS display_name TEXT`;
+  await sql`ALTER TABLE synk_community_profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT`;
   try {
     await sql`
       ALTER TABLE synk_community_profiles
@@ -301,6 +304,8 @@ async function ensureSynkCommunityExtras(sql) {
   }
 
   await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS pinned_tag_id UUID`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS display_name TEXT`;
+  await sql`ALTER TABLE synk_community_alt_accounts ADD COLUMN IF NOT EXISTS avatar_url TEXT`;
   try {
     await sql`
       ALTER TABLE synk_community_alt_accounts
@@ -340,6 +345,129 @@ async function ensureSynkCommunityExtras(sql) {
     ON CONFLICT (public_username, tag_id) DO NOTHING
   `;
 
+  // Post fields for typed posts, scoring, and polls.
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS title TEXT`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS post_type TEXT NOT NULL DEFAULT 'text'`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS link_url TEXT`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS image_url TEXT`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS score INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE synk_community_posts ADD COLUMN IF NOT EXISTS poll_options JSONB`;
+  await sql`ALTER TABLE synk_community_posts ALTER COLUMN body SET DEFAULT ''`;
+  try {
+    await sql`ALTER TABLE synk_community_posts ALTER COLUMN body DROP NOT NULL`;
+  } catch (_) {
+    // Already nullable or unsupported.
+  }
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_posts_score_created_idx
+    ON synk_community_posts (score DESC, created_at DESC)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_comments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      parent_id UUID REFERENCES synk_community_comments(id) ON DELETE CASCADE,
+      author_username TEXT,
+      body TEXT NOT NULL,
+      score INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_comments_post_created_idx
+    ON synk_community_comments (post_id, created_at ASC)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_comments_parent_idx
+    ON synk_community_comments (parent_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_votes (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      target_type TEXT NOT NULL,
+      target_id UUID NOT NULL,
+      value SMALLINT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, target_type, target_id),
+      CONSTRAINT synk_community_votes_type_chk CHECK (target_type IN ('post', 'comment')),
+      CONSTRAINT synk_community_votes_value_chk CHECK (value IN (-1, 1))
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_votes_target_idx
+    ON synk_community_votes (target_type, target_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_saves (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, post_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_saves_profile_created_idx
+    ON synk_community_saves (synk_profile_id, created_at DESC)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_hides (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, post_id)
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_memberships (
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      group_id UUID NOT NULL REFERENCES synk_community_groups(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (synk_profile_id, group_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_memberships_group_idx
+    ON synk_community_memberships (group_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_poll_votes (
+      post_id UUID NOT NULL REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      option_index INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (post_id, synk_profile_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_poll_votes_post_idx
+    ON synk_community_poll_votes (post_id, option_index)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS synk_community_notifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      synk_profile_id UUID NOT NULL REFERENCES synk_profiles(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      actor_username TEXT,
+      post_id UUID REFERENCES synk_community_posts(id) ON DELETE CASCADE,
+      comment_id UUID REFERENCES synk_community_comments(id) ON DELETE CASCADE,
+      body TEXT NOT NULL DEFAULT '',
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS synk_community_notifications_profile_created_idx
+    ON synk_community_notifications (synk_profile_id, created_at DESC)
+  `;
+
   await ensureCommunityOwner(sql);
   await ensureDefaultCommunityGroup(sql);
 }
@@ -367,7 +495,7 @@ async function isCommunityUsernameTaken(sql, username, { exceptProfileId = null,
 async function listOwnerAltAccounts(sql, ownerProfileId) {
   if (!ownerProfileId) return [];
   const rows = await sql`
-    SELECT id, owner_synk_profile_id, public_username, label, created_at, updated_at
+    SELECT id, owner_synk_profile_id, public_username, label, display_name, avatar_url, created_at, updated_at
     FROM synk_community_alt_accounts
     WHERE owner_synk_profile_id = ${ownerProfileId}
     ORDER BY created_at ASC
@@ -376,6 +504,8 @@ async function listOwnerAltAccounts(sql, ownerProfileId) {
     id: row.id,
     username: row.public_username,
     label: row.label || "",
+    displayName: String(row.display_name || "").trim(),
+    avatarUrl: String(row.avatar_url || "").trim(),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     isAlt: true,
@@ -434,11 +564,11 @@ async function findCommunityPublicProfile(sql, username) {
     SELECT
       c.synk_profile_id,
       c.public_username,
+      c.display_name,
+      c.avatar_url,
       c.created_at,
-      p.name,
       s.role
     FROM synk_community_profiles c
-    JOIN synk_profiles p ON p.id = c.synk_profile_id
     LEFT JOIN synk_community_staff s ON s.synk_profile_id = c.synk_profile_id
     WHERE c.public_username = ${name}
     LIMIT 1
@@ -454,7 +584,8 @@ async function findCommunityPublicProfile(sql, username) {
     const pinnedTag = tags.find((tag) => tag.pinned) || null;
     return {
       username: primary[0].public_username,
-      name: primary[0].name || "",
+      displayName: String(primary[0].display_name || "").trim(),
+      avatarUrl: String(primary[0].avatar_url || "").trim(),
       role: normalizeCommunityRole(primary[0].role),
       isAlt: false,
       joinedAt: primary[0].created_at,
@@ -465,7 +596,7 @@ async function findCommunityPublicProfile(sql, username) {
   }
 
   const alt = await sql`
-    SELECT id, public_username, label, created_at
+    SELECT id, public_username, label, display_name, avatar_url, created_at
     FROM synk_community_alt_accounts
     WHERE public_username = ${name}
     LIMIT 1
@@ -480,7 +611,8 @@ async function findCommunityPublicProfile(sql, username) {
   const pinnedTag = tags.find((tag) => tag.pinned) || null;
   return {
     username: alt[0].public_username,
-    name: alt[0].label || "",
+    displayName: String(alt[0].display_name || "").trim() || String(alt[0].label || "").trim(),
+    avatarUrl: String(alt[0].avatar_url || "").trim(),
     role: null,
     isAlt: true,
     joinedAt: alt[0].created_at,
@@ -531,6 +663,7 @@ function mapCommunityTag(row, { pinned = false } = {}) {
     slug: row.slug,
     description: row.description || "",
     color: row.color || "#6366f1",
+    iconUrl: row.icon_url || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     pinned: Boolean(pinned || row.pinned),
@@ -539,7 +672,7 @@ function mapCommunityTag(row, { pinned = false } = {}) {
 
 async function listCommunityTags(sql) {
   const rows = await sql`
-    SELECT id, name, slug, description, color, created_by, created_at, updated_at
+    SELECT id, name, slug, description, color, icon_url, created_by, created_at, updated_at
     FROM synk_community_tags
     ORDER BY name ASC
   `;
@@ -551,7 +684,7 @@ async function findCommunityTag(sql, { id, slug } = {}) {
   const tagSlug = normalizeTagSlug(slug);
   if (tagId) {
     const rows = await sql`
-      SELECT id, name, slug, description, color, created_by, created_at, updated_at
+      SELECT id, name, slug, description, color, icon_url, created_by, created_at, updated_at
       FROM synk_community_tags
       WHERE id = ${tagId}
       LIMIT 1
@@ -560,7 +693,7 @@ async function findCommunityTag(sql, { id, slug } = {}) {
   }
   if (tagSlug) {
     const rows = await sql`
-      SELECT id, name, slug, description, color, created_by, created_at, updated_at
+      SELECT id, name, slug, description, color, icon_url, created_by, created_at, updated_at
       FROM synk_community_tags
       WHERE slug = ${tagSlug}
       LIMIT 1
@@ -579,6 +712,7 @@ async function listProfileTags(sql, profileId) {
       t.slug,
       t.description,
       t.color,
+      t.icon_url,
       t.created_at,
       t.updated_at,
       CASE WHEN c.pinned_tag_id = t.id THEN TRUE ELSE FALSE END AS pinned
@@ -596,7 +730,7 @@ async function listProfileTags(sql, profileId) {
 async function getPinnedTagForProfile(sql, profileId) {
   if (!profileId) return null;
   const rows = await sql`
-    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.icon_url, t.created_at, t.updated_at
     FROM synk_community_profiles c
     JOIN synk_community_tags t ON t.id = c.pinned_tag_id
     WHERE c.synk_profile_id = ${profileId}
@@ -615,6 +749,7 @@ async function listUsernameTags(sql, username) {
       t.slug,
       t.description,
       t.color,
+      t.icon_url,
       t.created_at,
       t.updated_at,
       CASE
@@ -637,7 +772,7 @@ async function getPinnedTagForUsername(sql, username) {
   const name = normalizePublicUsername(username);
   if (!name) return null;
   const primary = await sql`
-    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.icon_url, t.created_at, t.updated_at
     FROM synk_community_profiles c
     JOIN synk_community_tags t ON t.id = c.pinned_tag_id
     WHERE c.public_username = ${name}
@@ -645,7 +780,7 @@ async function getPinnedTagForUsername(sql, username) {
   `;
   if (primary[0]) return mapCommunityTag(primary[0], { pinned: true });
   const alt = await sql`
-    SELECT t.id, t.name, t.slug, t.description, t.color, t.created_at, t.updated_at
+    SELECT t.id, t.name, t.slug, t.description, t.color, t.icon_url, t.created_at, t.updated_at
     FROM synk_community_alt_accounts a
     JOIN synk_community_tags t ON t.id = a.pinned_tag_id
     WHERE a.public_username = ${name}
@@ -667,6 +802,7 @@ async function getPinnedTagsByUsernames(sql, usernames) {
       t.slug,
       t.description,
       t.color,
+      t.icon_url,
       t.created_at,
       t.updated_at
     FROM (
@@ -1917,7 +2053,7 @@ async function requireHubSession(sql, event, body = {}) {
   const rows = await sql`
     SELECT s.id, s.synk_profile_id, s.expires_at, s.revoked_at,
            p.synk_code, p.name, p.photo_url, p.enabled,
-           c.public_username
+           c.public_username, c.display_name, c.avatar_url
     FROM synk_hub_sessions s
     JOIN synk_profiles p ON p.id = s.synk_profile_id
     LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.id
@@ -1944,8 +2080,82 @@ async function requireHubSession(sql, event, body = {}) {
       name: row.name,
       photoUrl: row.photo_url || "",
       publicUsername: row.public_username || "",
+      displayName: String(row.display_name || "").trim(),
+      avatarUrl: String(row.avatar_url || "").trim(),
     },
   };
+}
+
+function normalizeDisplayName(value) {
+  const cleaned = String(value || "")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 40);
+  if (!cleaned) return "";
+  if (!/^[\p{L}\p{N} .'_\-]+$/u.test(cleaned)) {
+    const err = new Error("Display name can use letters, numbers, spaces, and . ' _ -");
+    err.code = "INVALID_DISPLAY_NAME";
+    throw err;
+  }
+  return cleaned;
+}
+
+async function getDisplayNamesByUsernames(sql, usernames) {
+  const names = Array.from(
+    new Set((usernames || []).map((u) => normalizePublicUsername(u)).filter(Boolean))
+  );
+  if (!names.length) return {};
+  const rows = await sql`
+    SELECT public_username, display_name
+    FROM (
+      SELECT public_username, display_name
+      FROM synk_community_profiles
+      WHERE public_username = ANY(${names})
+      UNION ALL
+      SELECT public_username, display_name
+      FROM synk_community_alt_accounts
+      WHERE public_username = ANY(${names})
+    ) x
+  `;
+  const out = {};
+  for (const row of rows) {
+    const dn = String(row.display_name || "").trim();
+    if (dn) out[row.public_username] = dn;
+  }
+  return out;
+}
+
+async function setDisplayNameForUsername(sql, username, displayName, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  let next = "";
+  try {
+    next = normalizeDisplayName(displayName);
+  } catch (err) {
+    return { ok: false, error: err.message || "Invalid display name" };
+  }
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET display_name = ${next || null}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, display_name
+  `;
+  if (primary[0]) {
+    return { ok: true, username: primary[0].public_username, displayName: String(primary[0].display_name || "").trim() };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET display_name = ${next || null}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, display_name
+  `;
+  if (alt[0]) {
+    return { ok: true, username: alt[0].public_username, displayName: String(alt[0].display_name || "").trim() };
+  }
+  return { ok: false, error: "Profile not found" };
 }
 
 function normalizePublicUsername(value) {
@@ -1986,6 +2196,73 @@ function mapBusinessDevice(row) {
   };
 }
 
+
+async function getAvatarsByUsernames(sql, usernames) {
+  const names = Array.from(
+    new Set((usernames || []).map((u) => normalizePublicUsername(u)).filter(Boolean))
+  );
+  if (!names.length) return {};
+  const rows = await sql`
+    SELECT public_username, avatar_url
+    FROM (
+      SELECT public_username, avatar_url
+      FROM synk_community_profiles
+      WHERE public_username = ANY(${names})
+      UNION ALL
+      SELECT public_username, avatar_url
+      FROM synk_community_alt_accounts
+      WHERE public_username = ANY(${names})
+    ) x
+  `;
+  const out = {};
+  for (const row of rows) {
+    const url = String(row.avatar_url || "").trim();
+    if (url) out[row.public_username] = url;
+  }
+  return out;
+}
+
+async function setAvatarForUsername(sql, username, avatarUrl, ownerProfileId = null) {
+  const name = normalizePublicUsername(username);
+  if (!name) return { ok: false, error: "Username required" };
+  const next = String(avatarUrl || "").trim() || null;
+  const primary = await sql`
+    UPDATE synk_community_profiles
+    SET avatar_url = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, avatar_url
+  `;
+  if (primary[0]) {
+    return { ok: true, username: primary[0].public_username, avatarUrl: String(primary[0].avatar_url || "").trim() };
+  }
+  const alt = await sql`
+    UPDATE synk_community_alt_accounts
+    SET avatar_url = ${next}, updated_at = NOW()
+    WHERE public_username = ${name}
+      AND (${ownerProfileId}::uuid IS NULL OR owner_synk_profile_id = ${ownerProfileId})
+    RETURNING public_username, avatar_url
+  `;
+  if (alt[0]) {
+    return { ok: true, username: alt[0].public_username, avatarUrl: String(alt[0].avatar_url || "").trim() };
+  }
+  return { ok: false, error: "Profile not found" };
+}
+
+async function updateSynkProfilePhoto(sql, profileId, photoUrl) {
+  const url = String(photoUrl || "").trim();
+  if (!profileId || !url) return { ok: false, error: "Photo required" };
+  const rows = await sql`
+    UPDATE synk_profiles
+    SET photo_url = ${url}, updated_at = NOW()
+    WHERE id = ${profileId}
+    RETURNING id, photo_url
+  `;
+  if (!rows[0]) return { ok: false, error: "Profile not found" };
+  return { ok: true, photoUrl: rows[0].photo_url || "" };
+}
+
+
 module.exports = {
   hashSecret,
   verifySecret,
@@ -2009,6 +2286,12 @@ module.exports = {
   requireHubSession,
   extractHubSessionToken,
   normalizePublicUsername,
+  normalizeDisplayName,
+  getDisplayNamesByUsernames,
+  setDisplayNameForUsername,
+  getAvatarsByUsernames,
+  setAvatarForUsername,
+  updateSynkProfilePhoto,
   normalizeGroupSlug,
   normalizeGroupName,
   normalizeGroupDescription,

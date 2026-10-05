@@ -3,9 +3,40 @@
   const PERSONA_KEY = "synk_community_persona";
   const RECENT_KEY = "synk_community_recent";
   const SORT_KEY = "synk_community_sort";
-  const VOTE_KEY = "synk_community_votes";
-  const SAVE_KEY = "synk_community_saved";
-  const JOIN_KEY = "synk_community_joined";
+
+
+  const ICO_PATHS = {
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    bell: '<path d="M6.5 9a5.5 5.5 0 0 1 11 0c0 7 2.5 7 2.5 7H4s2.5 0 2.5-7"/><path d="M10 19a2 2 0 0 0 4 0"/>',
+    home: '<path d="m4 10 8-7 8 7"/><path d="M6 10v10h12V10"/>',
+    feed: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+    popular: '<path d="M3 17l6-6 4 4 7-8"/><path d="M14 7h6v6"/>',
+    create: '<path d="M12 5v14M5 12h14"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.2 6.2l1.4 1.4M18.4 16.4l1.4 1.4M3 12h2M19 12h2M4.2 17.8l1.4-1.4M18.4 7.6l1.4-1.4"/>',
+    shield: '<path d="M12 3l8 3v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z"/>',
+    exit: '<path d="M10 7V5a2 2 0 0 1 2-2h7v18h-7a2 2 0 0 1-2-2v-2"/><path d="M15 12H3m0 0 3-3m-3 3 3 3"/>',
+    chevron: '<path d="m6 9 6 6 6-6"/>',
+    up: '<path d="m6 14 6-6 6 6"/>',
+    down: '<path d="m6 10 6 6 6-6"/>',
+    comment: '<path d="M7 18.5 4 21V7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H7z"/>',
+    share: '<path d="M14 7h6v6"/><path d="M20 7 10.5 16.5"/><path d="M11 7H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-5"/>',
+    bookmark: '<path d="M7 4h10a1 1 0 0 1 1 1v16l-6-3.5L6 21V5a1 1 0 0 1 1-1z"/>',
+    back: '<path d="M15 18 9 12l6-6"/>',
+  };
+
+  function ico(name, size = 18) {
+    const body = ICO_PATHS[name] || "";
+    return `<svg class="r-ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+  }
+
+  function truncateText(text, max = 180) {
+    const value = String(text || "").replace(/\s+/g, " ").trim();
+    if (value.length <= max) return value;
+    return `${value.slice(0, max).trim()}…`;
+  }
+
 
   const lockedCard = document.getElementById("locked-card");
   const communityApp = document.getElementById("community-app");
@@ -36,9 +67,13 @@
   const settingsViewEl = document.getElementById("settings-view");
   const modView = document.getElementById("mod-view");
   const postView = document.getElementById("post-view");
+  const inboxView = document.getElementById("inbox-view");
 
   let hubToken = "";
   let publicUsername = "";
+  let displayName = "";
+  let photoUrl = "";
+  let avatarUrl = "";
   let activePersona = "";
   let me = null;
   let groups = [];
@@ -46,11 +81,17 @@
   let alts = [];
   let ownerUsername = "vision";
   let tags = [];
+  let pendingTagIconData = "";
   let myTags = [];
   let route = { type: "home", slug: "", username: "" };
   let lastPosts = [];
+  let lastComments = [];
+  let lastNotifications = [];
   let currentSort = "new";
   let activePostId = "";
+  let unreadCount = 0;
+  let activeSubmitType = "text";
+  let activeGroupJoined = false;
 
   function readSession() {
     try {
@@ -129,13 +170,220 @@
   }
 
 
-  function tagChip(tag, { compact = false } = {}) {
+  function tagInitial(tag) {
+    const name = String((tag && tag.name) || "?").trim();
+    return name.slice(0, 1).toUpperCase() || "?";
+  }
+
+  /** Pin control is only for the username you are currently acting as (tag owner). */
+  function canPinTagsFor(username) {
+    if (!me || !username) return false;
+    const u = String(username || "")
+      .trim()
+      .toLowerCase();
+    if (!u) return false;
+    const acting = String(activePersona || me.publicUsername || "")
+      .trim()
+      .toLowerCase();
+    return acting === u;
+  }
+
+  function tagsForActivePersona() {
+    if (!me) return [];
+    if (!activePersona || activePersona === publicUsername) return me.tags || [];
+    const alt = (alts || []).find((item) => item.username === activePersona);
+    return (alt && alt.tags) || [];
+  }
+
+
+
+  function activeDisplayLabel() {
+    if (activePersona && activePersona !== publicUsername) {
+      const alt = (alts || []).find((a) => a.username === activePersona);
+      return String((alt && alt.displayName) || activePersona || "").trim() || activePersona;
+    }
+    return String(displayName || publicUsername || "Member").trim() || "Member";
+  }
+
+  function activeCommunityAvatarUrl() {
+    if (activePersona && activePersona !== publicUsername) {
+      const alt = (alts || []).find((a) => a.username === activePersona);
+      return String((alt && alt.avatarUrl) || "").trim();
+    }
+    return String(avatarUrl || (me && me.avatarUrl) || "").trim();
+  }
+
+  function avatarMarkup(url, label, cls = "community-face") {
+    const initial = String(label || "?").trim().slice(0, 1).toUpperCase() || "?";
+    const safeUrl = String(url || "").trim();
+    if (safeUrl) {
+      return `<span class="${cls} has-image"><img src="${escapeHtml(safeUrl)}" alt="" loading="lazy" decoding="async" /></span>`;
+    }
+    return `<span class="${cls}" aria-hidden="true">${escapeHtml(initial)}</span>`;
+  }
+
+  function paintAvatar(el, url, label) {
+    if (!el) return;
+    const initial = String(label || "?").trim().slice(0, 1).toUpperCase() || "?";
+    const safeUrl = String(url || "").trim();
+    el.classList.add("community-face");
+    if (safeUrl) {
+      el.classList.add("has-image");
+      el.innerHTML = `<img src="${escapeHtml(safeUrl)}" alt="" loading="lazy" decoding="async" />`;
+    } else {
+      el.classList.remove("has-image");
+      el.textContent = initial;
+    }
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Could not read image"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function updateSessionPhotoUrl(nextPhotoUrl) {
+    try {
+      const session = readSession();
+      if (!session || !session.profile) return;
+      session.profile.photoUrl = nextPhotoUrl || "";
+      const raw = JSON.stringify(session);
+      if (localStorage.getItem(STORAGE_KEY)) localStorage.setItem(STORAGE_KEY, raw);
+      else sessionStorage.setItem(STORAGE_KEY, raw);
+    } catch (_) {}
+  }
+
+  function authorLabel(author) {
+    const username = String((author && author.username) || "member").trim() || "member";
+    const label = String((author && author.displayName) || "").trim() || username;
+    return { username, label };
+  }
+
+  function renderAuthorLink(author, { compactTag = true, withAvatar = false } = {}) {
+    const { username, label } = authorLabel(author);
+    const tag = author && author.pinnedTag ? tagChip(author.pinnedTag, { compact: compactTag }) : "";
+    const avatar = withAvatar ? avatarMarkup(author && author.avatarUrl, label, "community-face is-inline") : "";
+    return `<span class="author-with-tag">${avatar}<a class="community-user-link" href="/user/${escapeHtml(username)}">${escapeHtml(label)}</a>${tag}</span>`;
+  }
+
+  function tagChip(tag, { compact = false, canPin = false } = {}) {
     if (!tag) return "";
     const color = escapeHtml(tag.color || "#6366f1");
-    const title = escapeHtml(tag.description || tag.name || "");
-    const name = escapeHtml(tag.name || "");
-    const cls = compact ? "community-tag-chip is-compact" : "community-tag-chip";
-    return `<span class="${cls}" style="--tag-color:${color}" title="${title}">${name}</span>`;
+    const name = escapeHtml(tag.name || "Tag");
+    const desc = escapeHtml(tag.description || "");
+    const id = escapeHtml(String(tag.id || ""));
+    const pinned = tag.pinned ? "1" : "0";
+    const initial = escapeHtml(tagInitial(tag));
+    const iconUrl = escapeHtml(tag.iconUrl || "");
+    const cls = [
+      "synk-tag-badge",
+      compact ? "is-compact" : "",
+      tag.pinned ? "is-pinned" : "",
+      iconUrl ? "has-icon" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const inner = iconUrl
+      ? `<img class="synk-tag-badge-img" src="${iconUrl}" alt="" loading="lazy" />`
+      : `<span class="synk-tag-badge-icon" aria-hidden="true">${initial}</span>`;
+    return `<button type="button" class="${cls}" style="--tag-color:${color}" data-tag-badge="1" data-tag-id="${id}" data-tag-name="${name}" data-tag-desc="${desc}" data-tag-pinned="${pinned}" data-tag-icon="${iconUrl}" data-can-pin="${canPin ? "1" : "0"}" aria-label="${name}" aria-expanded="false" title="${name}">${inner}</button>`;
+  }
+  function ensureTagPopover() {
+    let pop = document.getElementById("tag-badge-popover");
+    if (pop) return pop;
+    pop = document.createElement("div");
+    pop.id = "tag-badge-popover";
+    pop.className = "synk-tag-popover";
+    pop.hidden = true;
+    pop.innerHTML = `
+      <div class="synk-tag-popover-head">
+        <span class="synk-tag-popover-icon" id="tag-pop-icon" aria-hidden="true"></span>
+        <strong class="synk-tag-popover-name" id="tag-pop-name"></strong>
+      </div>
+      <p class="synk-tag-popover-desc" id="tag-pop-desc"></p>
+      <button type="button" class="btn btn-secondary btn-compact synk-tag-popover-pin" id="tag-pop-pin" hidden>Pin next to name</button>
+    `;
+    document.body.appendChild(pop);
+    return pop;
+  }
+
+  function closeTagPopover() {
+    const pop = document.getElementById("tag-badge-popover");
+    if (pop) pop.hidden = true;
+    document.querySelectorAll(".synk-tag-badge[aria-expanded='true']").forEach((el) => {
+      el.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function openTagPopover(btn) {
+    if (!btn) return;
+    const pop = ensureTagPopover();
+    const name = btn.getAttribute("data-tag-name") || "Tag";
+    const desc = btn.getAttribute("data-tag-desc") || "No description.";
+    const color = btn.style.getPropertyValue("--tag-color") || "#6366f1";
+    const canPin = btn.getAttribute("data-can-pin") === "1";
+    const pinned = btn.getAttribute("data-tag-pinned") === "1";
+    const tagId = btn.getAttribute("data-tag-id") || "";
+    const icon = pop.querySelector("#tag-pop-icon");
+    const nameEl = pop.querySelector("#tag-pop-name");
+    const descEl = pop.querySelector("#tag-pop-desc");
+    const pinBtn = pop.querySelector("#tag-pop-pin");
+    if (icon) {
+      const iconUrl = btn.getAttribute("data-tag-icon") || "";
+      icon.style.setProperty("--tag-color", color);
+      if (iconUrl) {
+        icon.classList.add("has-image");
+        icon.innerHTML = `<img src="${iconUrl.replace(/"/g, "&quot;")}" alt="" />`;
+      } else {
+        icon.classList.remove("has-image");
+        icon.textContent = (name || "?").slice(0, 1).toUpperCase();
+      }
+    }
+    if (nameEl) nameEl.textContent = name;
+    if (descEl) descEl.textContent = desc || "No description.";
+    if (pinBtn) {
+      // Owner-only: never show Pin/Unpin to anyone else (also enforced in CSS).
+      pinBtn.hidden = !canPin;
+      if (!canPin) {
+        pinBtn.removeAttribute("data-pin-tag");
+        pinBtn.removeAttribute("data-tag-pinned");
+        pinBtn.textContent = "Pin next to name";
+        pinBtn.classList.remove("btn-primary");
+        pinBtn.classList.add("btn-secondary");
+      } else {
+        pinBtn.textContent = pinned ? "Unpin from name" : "Pin next to name";
+        pinBtn.classList.toggle("btn-primary", pinned);
+        pinBtn.classList.toggle("btn-secondary", !pinned);
+        pinBtn.setAttribute("data-pin-tag", tagId);
+        pinBtn.setAttribute("data-tag-pinned", pinned ? "1" : "0");
+      }
+    }
+    document.querySelectorAll(".synk-tag-badge[aria-expanded='true']").forEach((el) => {
+      if (el !== btn) el.setAttribute("aria-expanded", "false");
+    });
+    btn.setAttribute("aria-expanded", "true");
+    pop.hidden = false;
+    const rect = btn.getBoundingClientRect();
+    const pad = 8;
+    let left = rect.left + window.scrollX;
+    let top = rect.bottom + window.scrollY + 6;
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+    // Keep on screen after paint
+    requestAnimationFrame(() => {
+      const pr = pop.getBoundingClientRect();
+      if (pr.right > window.innerWidth - pad) {
+        left = Math.max(pad, window.scrollX + window.innerWidth - pr.width - pad);
+        pop.style.left = `${left}px`;
+      }
+      if (pr.bottom > window.innerHeight - pad) {
+        top = rect.top + window.scrollY - pr.height - 6;
+        pop.style.top = `${Math.max(pad, top)}px`;
+      }
+    });
   }
 
   function renderTagCatalog() {
@@ -145,13 +393,25 @@
     } else {
       tagCatalog.innerHTML = tags
         .map((tag) => {
+          const id = escapeHtml(tag.id);
           return `
-            <div class="community-staff-row">
-              <div>
+            <div class="community-staff-row synk-tag-mod-item" data-tag-mod-id="${id}">
+              <div class="synk-tag-mod-row">
                 ${tagChip(tag)}
-                <div class="muted" style="font-size:0.78rem;margin-top:4px;">${escapeHtml(tag.description || "")}</div>
+                <div>
+                  <strong>${escapeHtml(tag.name || "")}</strong>
+                  <div class="muted" style="font-size:0.78rem;margin-top:2px;">${escapeHtml(tag.description || "No description")}</div>
+                </div>
               </div>
-              <button class="btn btn-secondary btn-compact" type="button" data-delete-tag="${escapeHtml(tag.id)}">Delete</button>
+              <div class="synk-tag-mod-actions">
+                <button class="btn btn-secondary btn-compact" type="button" data-edit-tag="${id}" aria-expanded="false">Edit</button>
+                <div class="synk-tag-mod-edit-panel" hidden>
+                  <button class="btn btn-secondary btn-compact" type="button" data-upload-tag-icon="${id}">Icon</button>
+                  ${tag.iconUrl ? `<button class="btn btn-secondary btn-compact" type="button" data-clear-tag-icon="${id}">Clear icon</button>` : ""}
+                  <button class="btn btn-secondary btn-compact" type="button" data-delete-tag="${id}">Delete</button>
+                  <button class="btn btn-secondary btn-compact" type="button" data-edit-tag-done="${id}">Done</button>
+                </div>
+              </div>
             </div>
           `;
         })
@@ -166,29 +426,19 @@
 
   function renderMyTags() {
     if (!myTagsCard || !myTagsList) return;
-    myTags = (me && me.tags) || [];
+    myTags = tagsForActivePersona();
     if (!myTags.length) {
       myTagsCard.hidden = true;
       myTagsList.innerHTML = "";
       return;
     }
     myTagsCard.hidden = route.type !== "settings";
-    myTagsList.innerHTML = myTags
-      .map((tag) => {
-        const pinned = !!tag.pinned;
-        return `
-          <div class="community-tag-row">
-            <div>
-              ${tagChip(tag)}
-              <div class="muted" style="font-size:0.78rem;margin-top:4px;">${escapeHtml(tag.description || "")}</div>
-            </div>
-            <button class="btn ${pinned ? "btn-primary" : "btn-secondary"} btn-compact" type="button" data-pin-tag="${escapeHtml(tag.id)}">
-              ${pinned ? "Pinned" : "Pin"}
-            </button>
-          </div>
-        `;
-      })
-      .join("");
+    myTagsList.innerHTML = `
+      <div class="synk-tag-badge-row">
+        ${myTags.map((tag) => tagChip(tag, { canPin: true })).join("")}
+      </div>
+      <p class="muted" style="margin:8px 0 0;font-size:0.82rem;">Tap a badge for details. Only you can pin one next to your name.</p>
+    `;
   }
 
   // Public flair is tags only — no automatic Owner badge on posts/profiles.
@@ -245,7 +495,7 @@
     el.innerHTML = recent.map((g) => {
       const active = route.type === "group" && route.slug === g.slug ? "is-active" : "";
       const initial = String(g.slug || "?").slice(0, 1).toUpperCase();
-      return `<a class="reddit-nav-item community-group-link ${active}" href="/community/g/${escapeHtml(g.slug)}" data-group="${escapeHtml(g.slug)}"><span class="reddit-nav-avatar" aria-hidden="true">${escapeHtml(initial)}</span><span>${escapeHtml(g.slug)}</span></a>`;
+      return `<a class="reddit-nav-item community-group-link ${active}" href="/community/group/${escapeHtml(g.slug)}" data-group="${escapeHtml(g.slug)}"><span class="reddit-nav-avatar" aria-hidden="true">${escapeHtml(initial)}</span><span>${escapeHtml(g.slug)}</span></a>`;
     }).join("");
   }
 
@@ -257,51 +507,6 @@
   }
 
 
-  function readMap(key) {
-    try {
-      const raw = localStorage.getItem(key);
-      const data = raw ? JSON.parse(raw) : {};
-      return data && typeof data === "object" ? data : {};
-    } catch (_) {
-      return {};
-    }
-  }
-  function writeMap(key, data) {
-    try { localStorage.setItem(key, JSON.stringify(data || {})); } catch (_) {}
-  }
-  function getVote(id) {
-    const map = readMap(VOTE_KEY);
-    return map[String(id)] || 0;
-  }
-  function setVote(id, value) {
-    const map = readMap(VOTE_KEY);
-    if (!value) delete map[String(id)];
-    else map[String(id)] = value;
-    writeMap(VOTE_KEY, map);
-  }
-  function isSaved(id) {
-    return !!readMap(SAVE_KEY)[String(id)];
-  }
-  function toggleSaved(id) {
-    const map = readMap(SAVE_KEY);
-    const key = String(id);
-    if (map[key]) delete map[key];
-    else map[key] = true;
-    writeMap(SAVE_KEY, map);
-    return !!map[key];
-  }
-  function isJoined(slug) {
-    return !!readMap(JOIN_KEY)[String(slug || "")];
-  }
-  function toggleJoined(slug) {
-    const map = readMap(JOIN_KEY);
-    const key = String(slug || "");
-    if (!key) return false;
-    if (map[key]) delete map[key];
-    else map[key] = true;
-    writeMap(JOIN_KEY, map);
-    return !!map[key];
-  }
   function splitPost(body) {
     const text = String(body || "").trim();
     const lines = text.split(/\n/);
@@ -310,10 +515,27 @@
     const bodyText = rest || (text.length > 180 ? text.slice(180).trim() : "");
     return { title, bodyText };
   }
-  function displayScore(post) {
-    const base = Math.max(1, Math.round(postScore(post) * 10));
-    return base + Number(getVote(post.id) || 0);
+
+  function postTitle(post) {
+    const titled = String((post && post.title) || "").trim();
+    if (titled) return titled;
+    return splitPost(post && post.body).title;
   }
+
+  function postBodyText(post) {
+    const titled = String((post && post.title) || "").trim();
+    const body = String((post && post.body) || "").trim();
+    if (titled) return body;
+    return splitPost(body).bodyText;
+  }
+
+  function displayScore(post) {
+    if (post && post.score != null && Number.isFinite(Number(post.score))) {
+      return Number(post.score);
+    }
+    return 0;
+  }
+
   function sortedPosts(posts) {
     const list = Array.isArray(posts) ? posts.slice() : [];
     const sort = route.type === "popular" ? "hot" : currentSort || "new";
@@ -323,6 +545,89 @@
       list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     }
     return list;
+  }
+
+  function updateInboxBadge() {
+    const badge = document.getElementById("inbox-badge");
+    if (!badge) return;
+    const n = Number(unreadCount) || 0;
+    if (n > 0) {
+      badge.hidden = false;
+      badge.textContent = n > 99 ? "99+" : String(n);
+    } else {
+      badge.hidden = true;
+      badge.textContent = "0";
+    }
+  }
+
+  function apiSort() {
+    const sort = route.type === "popular" ? "hot" : currentSort || "new";
+    if (sort === "best") return "hot";
+    if (sort === "hot" || sort === "top" || sort === "new") return sort;
+    return "new";
+  }
+
+  async function communityAction(payload) {
+    const res = await fetch("/api/synk-community", {
+      method: "POST",
+      headers: hubHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Request failed");
+    return data;
+  }
+
+  function findPost(id) {
+    return (lastPosts || []).find((p) => String(p.id) === String(id)) || null;
+  }
+
+  function patchPost(id, patch) {
+    lastPosts = (lastPosts || []).map((p) =>
+      String(p.id) === String(id) ? { ...p, ...patch } : p
+    );
+    return findPost(id);
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Could not read image file"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderPostMedia(post, { large = false } = {}) {
+    const type = String((post && post.type) || "text").toLowerCase();
+    if (type === "link" && post.linkUrl) {
+      const href = escapeHtml(post.linkUrl);
+      return `<a class="reddit-post-link" href="${href}" target="_blank" rel="noopener noreferrer">${href}</a>`;
+    }
+    if (type === "image" && post.imageUrl) {
+      const src = escapeHtml(post.imageUrl);
+      return `<div class="reddit-post-image${large ? " is-lg" : ""}"><img src="${src}" alt="" loading="lazy" /></div>`;
+    }
+    if (type === "poll" && Array.isArray(post.pollOptions) && post.pollOptions.length) {
+      const counts = Array.isArray(post.pollCounts) ? post.pollCounts : post.pollOptions.map(() => 0);
+      const total = counts.reduce((sum, n) => sum + (Number(n) || 0), 0) || 0;
+      const pid = escapeHtml(String(post.id || ""));
+      const options = post.pollOptions
+        .map((label, index) => {
+          const count = Number(counts[index]) || 0;
+          const pct = total ? Math.round((count / total) * 100) : 0;
+          const selected = post.myPollVote === index ? "is-selected" : "";
+          return `
+            <button class="reddit-poll-option ${selected}" type="button" data-poll-vote="${pid}" data-option-index="${index}">
+              <span class="reddit-poll-label">${escapeHtml(label)}</span>
+              <span class="reddit-poll-meta">${count} · ${pct}%</span>
+            </button>
+          `;
+        })
+        .join("");
+      return `<div class="reddit-poll" data-post-id="${pid}">${options}</div>`;
+    }
+    return "";
   }
 
   function syncSortTabs() {
@@ -349,10 +654,7 @@
       return;
     }
     const collapsed = document.getElementById("composer-collapsed");
-    const expanded = document.getElementById("composer-expanded");
-    if (!collapsed || !expanded) return;
-    collapsed.hidden = false;
-    expanded.hidden = true;
+    if (collapsed) collapsed.hidden = false;
   }
 
   function updateAboutRail(data) {
@@ -363,16 +665,21 @@
     const statPostsLabel = document.getElementById("stat-posts-label");
     const rightRail = document.getElementById("right-rail");
     const posts = (data && data.posts) || [];
-    if (rightRail) rightRail.hidden = route.type === "settings" || route.type === "submit" || route.type === "mod" || route.type === "post";
-    const aboutCreated = document.getElementById("about-created");
-    const aboutMembers = document.getElementById("about-members");
-    if (aboutCreated) aboutCreated.textContent = "2024";
-    if (aboutMembers) aboutMembers.textContent = String(Math.max(groups.length * 12, posts.length || 0));
+    if (rightRail) {
+      rightRail.hidden =
+        route.type === "settings" ||
+        route.type === "submit" ||
+        route.type === "mod" ||
+        route.type === "post" ||
+        route.type === "inbox";
+    }
+    const aboutMeta = document.getElementById("about-meta");
+    if (aboutMeta) aboutMeta.hidden = true;
     const modsList = document.getElementById("mods-list");
     if (modsList) {
       const mods = (staff || []).filter((p) => p.role === "owner" || p.role === "admin");
       modsList.innerHTML = mods.length
-        ? mods.map((p) => `<a class="reddit-mod-link" href="/u/${escapeHtml(p.username || "")}">${escapeHtml(p.username || "mod")}</a>`).join("")
+        ? mods.map((p) => `<a class="reddit-mod-link" href="/user/${escapeHtml(p.username || "")}">${escapeHtml(p.username || "mod")}</a>`).join("")
         : '<p class="muted">No moderators listed.</p>';
     }
     if (statGroups) statGroups.textContent = String(groups.length);
@@ -387,20 +694,20 @@
     if (route.type === "group") {
       const group = (data && data.group) || groups.find((g) => g.slug === route.slug) || null;
       if (aboutTitle) aboutTitle.textContent = group ? `About ${group.slug}` : "About community";
-      if (aboutBlurb) aboutBlurb.textContent = (group && group.description) || "A Synk Community group.";
+      if (aboutBlurb) aboutBlurb.textContent = (group && group.description) || "A community group.";
       if (statPostsLabel) statPostsLabel.textContent = "Posts";
       if (statPosts) statPosts.textContent = String(group && group.postCount != null ? group.postCount : posts.length);
       return;
     }
     if (route.type === "popular") {
       if (aboutTitle) aboutTitle.textContent = "Popular";
-      if (aboutBlurb) aboutBlurb.textContent = "Trending posts across Synk communities.";
+      if (aboutBlurb) aboutBlurb.textContent = "Trending posts across communities.";
       if (statPostsLabel) statPostsLabel.textContent = "Visible posts";
       if (statPosts) statPosts.textContent = String(posts.length);
       return;
     }
-    if (aboutTitle) aboutTitle.textContent = "Home";
-    if (aboutBlurb) aboutBlurb.textContent = "Your Synk Community feed across all groups.";
+    if (aboutTitle) aboutTitle.textContent = "Feed";
+    if (aboutBlurb) aboutBlurb.textContent = "Your community feed across all groups.";
     if (statPostsLabel) statPostsLabel.textContent = "Visible posts";
     if (statPosts) statPosts.textContent = String(posts.length);
   }
@@ -411,10 +718,13 @@
     if (path === "/community/submit") return { type: "submit", slug: "", username: "" };
     if (path === "/community/mod" || path === "/community/mod-tools") return { type: "mod", slug: "", username: "" };
     if (path === "/community/popular") return { type: "popular", slug: "", username: "" };
+    if (path === "/community/inbox") return { type: "inbox", slug: "", username: "" };
     let m = path.match(/^\/community\/post\/([a-z0-9_-]+)$/i);
     if (m) return { type: "post", slug: "", username: "", postId: m[1] };
-    m = path.match(/^\/community\/g\/([a-z0-9-]+)$/i);
+    m = path.match(/^\/community\/(?:group|g)\/([a-z0-9-]+)$/i);
     if (m) return { type: "group", slug: m[1].toLowerCase(), username: "" };
+    m = path.match(/^\/user\/([a-z0-9_]+)$/i);
+    if (m) return { type: "user", slug: "", username: m[1].toLowerCase() };
     m = path.match(/^\/(?:community\/)?u\/([a-z0-9_]+)$/i);
     if (m) return { type: "user", slug: "", username: m[1].toLowerCase() };
     return { type: "home", slug: "", username: "" };
@@ -425,9 +735,10 @@
     if (next.type === "submit") return "/community/submit";
     if (next.type === "mod") return "/community/mod";
     if (next.type === "popular") return "/community/popular";
+    if (next.type === "inbox") return "/community/inbox";
     if (next.type === "post" && next.postId) return `/community/post/${encodeURIComponent(next.postId)}`;
-    if (next.type === "group" && next.slug) return `/community/g/${encodeURIComponent(next.slug)}`;
-    if (next.type === "user" && next.username) return `/u/${encodeURIComponent(next.username)}`;
+    if (next.type === "group" && next.slug) return `/community/group/${encodeURIComponent(next.slug)}`;
+    if (next.type === "user" && next.username) return `/user/${encodeURIComponent(next.username)}`;
     return "/community";
   }
 
@@ -458,18 +769,27 @@
       sessionStorage.setItem(PERSONA_KEY, activePersona);
     } catch (_) {}
     syncPersonaUi();
+    syncTabBar();
   }
 
   function personaOptions() {
     const options = [];
     if (publicUsername) {
-      options.push({ username: publicUsername, label: "Primary", isAlt: false });
+      options.push({
+        username: publicUsername,
+        label: "Primary",
+        isAlt: false,
+        displayName: displayName || "",
+        avatarUrl: avatarUrl || "",
+      });
     }
     (alts || []).forEach((alt) => {
       options.push({
         username: alt.username,
         label: alt.label || "Alt",
         isAlt: true,
+        displayName: alt.displayName || "",
+        avatarUrl: alt.avatarUrl || "",
       });
     });
     return options;
@@ -497,45 +817,38 @@
 
   function syncPersonaUi() {
     const isOwner = !!(me && me.isOwner);
-    personaSwitch.hidden = !(isOwner && publicUsername);
-    // Always keep the account menu closed unless the user opens it.
-    // (display:grid on .persona-menu would otherwise fight the hidden attribute.)
+    if (personaSwitch) personaSwitch.hidden = !(isOwner && publicUsername);
     closePersonaMenu();
-    if (!isOwner) return;
     resolveActivePersona();
-    const name = activePersona || "—";
-    personaLabel.textContent = name;
-    const personaAvatar = document.getElementById("persona-avatar");
-    if (personaAvatar) {
-      personaAvatar.textContent = String(activePersona || publicUsername || "S").slice(0, 1).toUpperCase();
+    const label = activeDisplayLabel();
+    const faceUrl = activeCommunityAvatarUrl();
+    if (personaLabel) personaLabel.textContent = activePersona || publicUsername || "—";
+    paintAvatar(document.getElementById("persona-avatar"), faceUrl, label);
+    paintAvatar(document.getElementById("composer-avatar"), faceUrl, label);
+    const composerAs = document.getElementById("composer-as");
+    if (composerAs) {
+      composerAs.textContent = activePersona
+        ? `Posting as ${activePersona}`
+        : publicUsername
+          ? `Posting as ${publicUsername}`
+          : "Posting as —";
     }
-    const composerAvatar = document.getElementById("composer-avatar");
-    if (composerAvatar) {
-      composerAvatar.textContent = String(activePersona || publicUsername || "S").slice(0, 1).toUpperCase();
-    }
-    document.getElementById("composer-as").textContent = activePersona
-      ? `Posting as ${activePersona}`
-      : "Posting as —";
-    // Keep tags/pins in sync with the active account (primary or alt).
     if (activePersona && me) {
-      if (activePersona === publicUsername) {
-        myTags = me.tags || [];
-      } else {
-        const alt = (alts || []).find((item) => item.username === activePersona);
-        myTags = (alt && alt.tags) || [];
-      }
+      myTags = tagsForActivePersona();
       if (typeof renderMyTags === "function") renderMyTags();
     }
+    if (!isOwner || !personaMenu) return;
     personaMenu.innerHTML = personaOptions()
       .map((opt) => {
         const selected = opt.username === activePersona ? "is-selected" : "";
-        const initial = String(opt.username || "?").slice(0, 1).toUpperCase();
+        const optLabel = String(opt.displayName || opt.username || "?").trim();
+        const optAvatar = String(opt.avatarUrl || "").trim();
         return `
           <button class="persona-menu-item ${selected}" type="button" role="option" data-persona="${escapeHtml(opt.username)}">
-            <span class="persona-menu-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
+            ${avatarMarkup(optAvatar, optLabel, "persona-menu-avatar community-face")}
             <span class="persona-menu-copy">
-              <strong>${escapeHtml(opt.username)}</strong>
-              <span>${escapeHtml(opt.label || (opt.isAlt ? "Account" : "Primary"))}</span>
+              <strong>${escapeHtml(optLabel)}</strong>
+              <span>${escapeHtml(opt.label || (opt.isAlt ? "u/" + opt.username : "Primary"))}</span>
             </span>
           </button>
         `;
@@ -544,6 +857,13 @@
   }
 
   function renderCrumbs() {
+    if (!crumbsEl) return;
+    // Reddit home/popular have no breadcrumb chrome; keep optional crumbs hidden on feed.
+    if (route.type === "home" || route.type === "popular" || route.type === "group" || route.type === "user") {
+      crumbsEl.hidden = true;
+      crumbsEl.innerHTML = "";
+      return;
+    }
     const parts = ['<a href="/community">community</a>'];
     if (route.type === "settings") {
       parts.push(`<span>/</span><span>settings</span>`);
@@ -551,14 +871,24 @@
       parts.push(`<span>/</span><span>submit</span>`);
     } else if (route.type === "mod") {
       parts.push(`<span>/</span><span>mod</span>`);
-    } else if (route.type === "popular") {
-      parts.push(`<span>/</span><span>popular</span>`);
-    } else if (route.type === "group" && route.slug) {
-      parts.push(`<span>/</span><span>${escapeHtml(route.slug)}</span>`);
-    } else if (route.type === "user" && route.username) {
-      parts.push(`<span>/</span><span>${escapeHtml(route.username)}</span>`);
+    } else if (route.type === "inbox") {
+      parts.push(`<span>/</span><span>inbox</span>`);
     }
     crumbsEl.innerHTML = parts.join(" ");
+    crumbsEl.hidden = true;
+  }
+
+  function setBannerMode(mode, visible) {
+    const banner = document.getElementById("view-banner");
+    if (!banner) return null;
+    banner.dataset.mode = mode || "";
+    banner.hidden = !visible;
+    return banner;
+  }
+
+  function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
   }
 
   function renderGroups() {
@@ -568,7 +898,7 @@
         const active = route.type === "group" && route.slug === group.slug ? "is-active" : "";
         const initial = String(group.slug || "?").slice(0, 1).toUpperCase();
         return `
-          <a class="reddit-nav-item community-group-link ${active}" href="/community/g/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
+          <a class="reddit-nav-item community-group-link ${active}" href="/community/group/${escapeHtml(group.slug)}" data-group="${escapeHtml(group.slug)}">
             <span class="reddit-nav-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
             <span class="reddit-nav-copy">
               <strong>${escapeHtml(group.slug)}</strong>
@@ -602,7 +932,7 @@
         return `
           <div class="community-staff-row">
             <div>
-              <a class="community-user-link" href="/u/${escapeHtml(person.username || "")}">@${escapeHtml(person.username || "member")}</a>
+              <a class="community-user-link" href="/user/${escapeHtml(person.username || "")}">${escapeHtml(person.username || "member")}</a>
               ${roleBadge(person.role, { staffOnly: true })}
             </div>
             ${
@@ -626,7 +956,7 @@
         (alt) => `
           <div class="community-staff-row">
             <div>
-              <a class="community-user-link" href="/u/${escapeHtml(alt.username)}">@${escapeHtml(alt.username)}</a>
+              <a class="community-user-link" href="/user/${escapeHtml(alt.username)}">${escapeHtml(alt.username)}</a>
               <span class="muted" style="font-size:0.78rem;">${escapeHtml(alt.label || "Alt")}</span>
             </div>
             <button class="btn btn-secondary btn-compact" type="button" data-delete-alt="${escapeHtml(alt.username)}">Delete</button>
@@ -638,7 +968,7 @@
 
   function renderFeed(posts) {
     lastPosts = Array.isArray(posts) ? posts.slice() : [];
-    const ordered = sortedPosts(lastPosts);
+    const ordered = sortedPosts(lastPosts).filter((p) => !p.hidden);
     if (!ordered.length) {
       feedEl.innerHTML = "";
       feedEmpty.hidden = false;
@@ -652,39 +982,41 @@
         const author = post.author || {};
         const username = author.username || "member";
         const showGroup = route.type !== "group" && group;
-        const parts = splitPost(post.body);
-        const vote = getVote(post.id);
-        const saved = isSaved(post.id);
+        const title = postTitle(post);
+        const bodyText = postBodyText(post);
+        const vote = Number(post.myVote) || 0;
+        const saved = !!post.saved;
         const score = displayScore(post);
+        const comments = Number(post.commentCount) || 0;
         const pid = escapeHtml(String(post.id || ""));
+        const media = renderPostMedia(post);
         return `
           <article class="reddit-post" data-post-id="${pid}">
             <div class="reddit-vote">
-              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-post-id="${pid}" aria-label="Upvote">▲</button>
+              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
               <span class="reddit-vote-count">${score}</span>
-              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-post-id="${pid}" aria-label="Downvote">▼</button>
+              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
             </div>
             <div class="reddit-post-main">
               <div class="reddit-post-meta">
                 ${
                   showGroup
-                    ? `<a class="reddit-sub" href="/community/g/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>`
+                    ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>`
                     : ""
                 }
-                <span class="muted">Posted by</span>
-                <a class="community-user-link" href="/u/${escapeHtml(username)}">${escapeHtml(username)}</a>
-                ${tagChip(author.pinnedTag, { compact: true })}
-                <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
+                <span class="muted">by</span>
+                ${renderAuthorLink(author, { withAvatar: true })}
+                <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
               </div>
               <a class="reddit-post-title-link" href="/community/post/${pid}" data-open-post="${pid}">
-                <h3 class="reddit-post-title">${escapeHtml(parts.title)}</h3>
+                <h3 class="reddit-post-title">${escapeHtml(title)}</h3>
               </a>
-              ${parts.bodyText ? `<div class="reddit-post-body">${escapeHtml(parts.bodyText)}</div>` : ""}
+              ${bodyText ? `<div class="reddit-post-body">${escapeHtml(truncateText(bodyText, 160))}</div>` : ""}
+              ${media}
               <div class="reddit-post-actions">
-                <a class="reddit-action" href="/community/post/${pid}" data-open-post="${pid}">💬 Comments</a>
-                <button class="reddit-action" type="button" data-share-post="${pid}">↗ Share</button>
-                <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${saved ? "★ Saved" : "☆ Save"}</button>
-                <button class="reddit-action" type="button" data-hide-post="${pid}">Hide</button>
+                <a class="reddit-action" href="/community/post/${pid}" data-open-post="${pid}">${ico("comment", 16)} <span>${comments}</span></a>
+                <button class="reddit-action" type="button" data-share-post="${pid}">${ico("share", 16)} <span>Share</span></button>
+                <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${ico("bookmark", 16)} <span>${saved ? "Saved" : "Save"}</span></button>
               </div>
             </div>
           </article>
@@ -703,35 +1035,104 @@
     const group = post.group || {};
     const author = post.author || {};
     const username = author.username || "member";
-    const parts = splitPost(post.body);
-    const vote = getVote(post.id);
-    const saved = isSaved(post.id);
+    const title = postTitle(post);
+    const bodyText = postBodyText(post);
+    const vote = Number(post.myVote) || 0;
+    const saved = !!post.saved;
+    const comments = Number(post.commentCount) || 0;
     const pid = escapeHtml(String(post.id || ""));
+    const media = renderPostMedia(post, { large: true });
     el.innerHTML = `
       <article class="reddit-post reddit-post-detail-inner" data-post-id="${pid}">
         <div class="reddit-vote">
-          <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-post-id="${pid}" aria-label="Upvote">▲</button>
+          <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="post" data-post-id="${pid}" aria-label="Upvote">${ico("up", 18)}</button>
           <span class="reddit-vote-count">${displayScore(post)}</span>
-          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-post-id="${pid}" aria-label="Downvote">▼</button>
+          <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="post" data-post-id="${pid}" aria-label="Downvote">${ico("down", 18)}</button>
         </div>
         <div class="reddit-post-main">
           <div class="reddit-post-meta">
-            ${group.slug ? `<a class="reddit-sub" href="/community/g/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>` : ""}
-            <span class="muted">Posted by</span>
-            <a class="community-user-link" href="/u/${escapeHtml(username)}">${escapeHtml(username)}</a>
-            ${tagChip(author.pinnedTag, { compact: true })}
-            <span class="muted">• ${escapeHtml(formatRelative(post.createdAt))}</span>
+            ${group.slug ? `<a class="reddit-sub" href="/community/group/${escapeHtml(group.slug)}">${escapeHtml(group.slug)}</a><span class="muted">•</span>` : ""}
+            <span class="muted">by</span>
+            ${renderAuthorLink(author, { withAvatar: true })}
+            <span class="muted">${escapeHtml(formatRelative(post.createdAt))}</span>
           </div>
-          <h1 class="reddit-post-title reddit-post-title-lg">${escapeHtml(parts.title)}</h1>
-          ${parts.bodyText ? `<div class="reddit-post-body reddit-post-body-lg">${escapeHtml(parts.bodyText)}</div>` : ""}
+          <h1 class="reddit-post-title reddit-post-title-lg">${escapeHtml(title)}</h1>
+          ${bodyText ? `<div class="reddit-post-body reddit-post-body-lg">${escapeHtml(bodyText)}</div>` : ""}
+          ${media}
           <div class="reddit-post-actions">
-            <span class="reddit-action">💬 Comments</span>
-            <button class="reddit-action" type="button" data-share-post="${pid}">↗ Share</button>
-            <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${saved ? "★ Saved" : "☆ Save"}</button>
+            <span class="reddit-action">${ico("comment", 16)} <span>${comments}</span></span>
+            <button class="reddit-action" type="button" data-share-post="${pid}">${ico("share", 16)} <span>Share</span></button>
+            <button class="reddit-action ${saved ? "is-active" : ""}" type="button" data-save-post="${pid}">${ico("bookmark", 16)} <span>${saved ? "Saved" : "Save"}</span></button>
           </div>
         </div>
       </article>
     `;
+  }
+
+  function renderComments(comments) {
+    const list = document.getElementById("comments-list");
+    const empty = document.getElementById("comments-empty");
+    if (!list) return;
+    lastComments = Array.isArray(comments) ? comments.slice() : [];
+    if (!lastComments.length) {
+      list.innerHTML = "";
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    list.innerHTML = lastComments
+      .map((comment) => {
+        const author = comment.author || {};
+        const username = author.username || "member";
+        const vote = Number(comment.myVote) || 0;
+        const cid = escapeHtml(String(comment.id || ""));
+        return `
+          <article class="reddit-comment" data-comment-id="${cid}">
+            <div class="reddit-vote reddit-vote-sm">
+              <button class="reddit-vote-btn up ${vote === 1 ? "is-active" : ""}" type="button" data-vote="up" data-target-type="comment" data-comment-id="${cid}" aria-label="Upvote">${ico("up", 16)}</button>
+              <span class="reddit-vote-count">${Number(comment.score) || 0}</span>
+              <button class="reddit-vote-btn down ${vote === -1 ? "is-active" : ""}" type="button" data-vote="down" data-target-type="comment" data-comment-id="${cid}" aria-label="Downvote">${ico("down", 16)}</button>
+            </div>
+            <div class="reddit-comment-main">
+              <div class="reddit-post-meta">
+                ${renderAuthorLink(author, { withAvatar: true })}
+                <span class="muted">• ${escapeHtml(formatRelative(comment.createdAt))}</span>
+              </div>
+              <div class="reddit-comment-body">${escapeHtml(comment.body || "")}</div>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  function renderInbox(notifications) {
+    const list = document.getElementById("inbox-list");
+    const empty = document.getElementById("inbox-empty");
+    if (!list) return;
+    lastNotifications = Array.isArray(notifications) ? notifications.slice() : [];
+    if (!lastNotifications.length) {
+      list.innerHTML = "";
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    list.innerHTML = lastNotifications
+      .map((note) => {
+        const nid = escapeHtml(String(note.id || ""));
+        const unread = !note.readAt;
+        const postId = note.postId ? escapeHtml(String(note.postId)) : "";
+        const body = escapeHtml(note.body || `${note.actorUsername || "Someone"} notified you`);
+        return `
+          <button class="reddit-inbox-row ${unread ? "is-unread" : ""}" type="button" data-inbox-id="${nid}" ${postId ? `data-open-post="${postId}"` : ""}>
+            <div class="reddit-inbox-row-copy">
+              <strong>${body}</strong>
+              <span class="muted">${escapeHtml(formatRelative(note.createdAt))}</span>
+            </div>
+          </button>
+        `;
+      })
+      .join("");
   }
 
   function applyUsernameState() {
@@ -748,12 +1149,14 @@
     const onSubmit = route.type === "submit";
     const onMod = route.type === "mod";
     const onPost = route.type === "post";
-    const onFeed = !onSettings && !onSubmit && !onMod && !onPost;
+    const onInbox = route.type === "inbox";
+    const onFeed = !onSettings && !onSubmit && !onMod && !onPost && !onInbox;
     if (feedView) feedView.hidden = needsUsername || !onFeed;
     if (settingsView) settingsView.hidden = needsUsername || !onSettings;
     if (submitView) submitView.hidden = needsUsername || !onSubmit;
     if (modView) modView.hidden = needsUsername || !onMod;
     if (postView) postView.hidden = needsUsername || !onPost;
+    if (inboxView) inboxView.hidden = needsUsername || !onInbox;
     if (composerCard) {
       composerCard.hidden = needsUsername || !onFeed || route.type === "user";
     }
@@ -764,22 +1167,70 @@
     const modNav = document.getElementById("mod-nav-link");
     if (modNav) modNav.classList.toggle("is-active", onMod);
     if (popularLink) popularLink.classList.toggle("is-active", route.type === "popular");
+    const inboxBtn = document.getElementById("inbox-btn");
+    if (inboxBtn) inboxBtn.classList.toggle("is-active", onInbox);
     if (publicUsername) {
       const gateInput = document.getElementById("public-username");
       if (gateInput) gateInput.value = publicUsername;
       if (settingsUsername) settingsUsername.value = publicUsername;
+      const settingsDisplay = document.getElementById("settings-display-name");
+      if (settingsDisplay) {
+        let shown = displayName || "";
+        if (activePersona && activePersona !== publicUsername) {
+          const alt = (alts || []).find((a) => a.username === activePersona);
+          shown = (alt && alt.displayName) || "";
+        }
+        settingsDisplay.value = shown;
+      }
       if (myProfileLink) {
         myProfileLink.hidden = false;
-        myProfileLink.href = `/u/${encodeURIComponent(publicUsername)}`;
+        myProfileLink.href = `/user/${encodeURIComponent(publicUsername)}`;
       }
-      if (myProfileLabel) myProfileLabel.textContent = publicUsername;
+      {
+        const menuLabel = activeDisplayLabel();
+        const faceUrl = activeCommunityAvatarUrl();
+        if (myProfileLabel) myProfileLabel.textContent = menuLabel;
+        const menuName = document.getElementById("user-menu-name");
+        const menuSub = document.getElementById("user-menu-sub");
+        if (menuName) menuName.textContent = menuLabel;
+        if (menuSub) menuSub.textContent = activePersona || publicUsername ? `u/${activePersona || publicUsername}` : "Account";
+        paintAvatar(document.getElementById("user-menu-avatar"), faceUrl, menuLabel);
+        paintAvatar(document.getElementById("settings-avatar-preview"), faceUrl, menuLabel);
+      }
     } else if (myProfileLink) {
       myProfileLink.hidden = true;
     }
     const settingsLink = document.getElementById("settings-link");
     if (settingsLink) settingsLink.classList.toggle("is-active", onSettings);
     if (homeLink) homeLink.classList.toggle("is-active", route.type === "home");
+    const submitAs = document.getElementById("submit-as");
+    if (submitAs) {
+      submitAs.textContent = activePersona
+        ? `Posting as ${activePersona}`
+        : publicUsername
+          ? `Posting as ${publicUsername}`
+          : "Posting as —";
+    }
     syncPersonaUi();
+  }
+
+  function syncTabBar() {
+    const bar = document.getElementById("community-tabbar");
+    if (!bar) return;
+    const show = !!(me && publicUsername);
+    bar.hidden = !show;
+    const tab = route.type === "popular"
+      ? "popular"
+      : route.type === "submit"
+        ? "submit"
+        : route.type === "inbox"
+          ? "inbox"
+          : route.type === "settings"
+            ? "settings"
+            : "home";
+    bar.querySelectorAll("[data-tab]").forEach((el) => {
+      el.classList.toggle("is-active", el.getAttribute("data-tab") === tab);
+    });
   }
 
   function applyStaffState() {
@@ -796,97 +1247,111 @@
     renderAlts();
     renderTagCatalog();
     syncPersonaUi();
+    if (!isStaff && route.type === "mod") {
+      route = { type: "home", slug: "", username: "" };
+      try {
+        history.replaceState(route, "", "/community");
+      } catch (_) {}
+      applyUsernameState();
+    }
   }
 
   function applyViewState(data) {
     renderCrumbs();
-    profileMeta.hidden = true;
-    profileMeta.innerHTML = "";
+    if (profileMeta) {
+      profileMeta.hidden = true;
+      profileMeta.innerHTML = "";
+    }
+    const pageHead = document.getElementById("page-head");
+    if (pageHead) pageHead.hidden = true;
     syncSortTabs();
 
     const joinBtn = document.getElementById("join-community-btn");
     const aboutJoin = document.getElementById("about-join-btn");
     const showJoin = route.type === "group" && !!route.slug;
+    const groupJoined =
+      (data && data.group && typeof data.group.joined === "boolean"
+        ? data.group.joined
+        : activeGroupJoined) || false;
+    activeGroupJoined = !!groupJoined;
     if (joinBtn) {
       joinBtn.hidden = !showJoin;
-      if (showJoin) joinBtn.textContent = isJoined(route.slug) ? "Joined" : "Join";
-      joinBtn.classList.toggle("is-joined", showJoin && isJoined(route.slug));
+      if (showJoin) joinBtn.textContent = activeGroupJoined ? "Joined" : "Join";
+      joinBtn.classList.toggle("is-joined", showJoin && activeGroupJoined);
     }
     if (aboutJoin) {
       aboutJoin.hidden = !showJoin;
-      if (showJoin) aboutJoin.textContent = isJoined(route.slug) ? "Joined" : "Join";
+      if (showJoin) aboutJoin.textContent = activeGroupJoined ? "Joined" : "Join";
+      aboutJoin.classList.toggle("is-joined", showJoin && activeGroupJoined);
     }
 
     const createTop = document.getElementById("create-top-link");
-    const bannerCreate = document.getElementById("banner-create-link");
     const submitHref =
       route.type === "group" && route.slug
         ? `/community/submit?group=${encodeURIComponent(route.slug)}`
         : "/community/submit";
     if (createTop) createTop.href = submitHref;
-    if (bannerCreate) bannerCreate.href = submitHref;
 
-    if (route.type === "settings" || route.type === "submit" || route.type === "mod") {
+    const viewBlurb = document.getElementById("view-blurb");
+    const viewIcon = document.getElementById("view-icon");
+
+    if (route.type === "settings" || route.type === "submit" || route.type === "mod" || route.type === "inbox") {
+      setBannerMode("", false);
       updateAboutRail(data);
       return;
     }
     if (route.type === "post") {
+      setBannerMode("", false);
       activePostId = route.postId || "";
-      const post = (lastPosts || []).find((p) => String(p.id) === String(activePostId))
-        || ((data && data.posts) || []).find((p) => String(p.id) === String(activePostId));
+      const post =
+        (data && data.post) ||
+        (lastPosts || []).find((p) => String(p.id) === String(activePostId)) ||
+        ((data && data.posts) || []).find((p) => String(p.id) === String(activePostId));
       renderPostDetail(post || null);
-      const viewIcon = document.getElementById("view-icon");
-      if (viewIcon) viewIcon.textContent = "▣";
+      renderComments((data && data.comments) || lastComments || []);
       updateAboutRail(data);
       return;
     }
     if (route.type === "user") {
       const profile = data.profile || { username: route.username };
-      const viewIcon = document.getElementById("view-icon");
-      if (viewIcon) viewIcon.textContent = "u";
-      document.getElementById("view-eyebrow").textContent = "Profile";
-      document.getElementById("view-title").textContent = `${profile.username || route.username}`;
-      document.getElementById("view-blurb").textContent = "Member profile";
-      document.getElementById("feed-label").textContent = "Posts";
-      document.getElementById("feed-title").textContent = `Posts by ${profile.username || route.username}`;
-      profileMeta.hidden = false;
-      profileMeta.innerHTML = `
+      const uname = profile.username || route.username || "";
+      const dname = String(profile.displayName || "").trim() || uname;
+      setBannerMode("user", true);
+      paintAvatar(viewIcon, profile.avatarUrl || "", dname);
+      setText("view-title", dname);
+      setText(
+        "view-sub",
+        `u/${uname}${profile.joinedAt ? ` · Joined ${formatWhen(profile.joinedAt)}` : ""}`
+      );
+      if (viewBlurb) {
+        viewBlurb.hidden = true;
+        viewBlurb.textContent = "";
+      }
+      if (joinBtn) joinBtn.hidden = true;
+      if (profileMeta) {
+        profileMeta.hidden = false;
+        profileMeta.innerHTML = `
         <div class="community-profile-card">
-          <div class="community-avatar" aria-hidden="true">${escapeHtml((profile.username || "?").slice(0, 1).toUpperCase())}</div>
+          ${avatarMarkup(profile.avatarUrl || "", dname, "community-avatar community-face is-lg")}
           <div>
-            <strong>${escapeHtml(profile.username || "")}</strong>
-            ${tagChip(profile.pinnedTag, { compact: true })}
-            
-            
+            <div class="community-profile-name-row author-with-tag">
+              <strong>${escapeHtml(dname)}</strong>
+              ${tagChip(profile.pinnedTag, { compact: true })}
+            </div>
+            <p class="muted" style="margin:2px 0 0;font-size:0.85rem;">u/${escapeHtml(uname)}</p>
             <p class="muted" style="margin:4px 0 0;font-size:0.85rem;">
               ${Number(profile.postCount || 0)} posts
               ${profile.joinedAt ? ` · joined ${escapeHtml(formatWhen(profile.joinedAt))}` : ""}
             </p>
-            <div class="community-tag-list" style="margin-top:10px;">
+            <div class="community-tag-list synk-tag-badge-row" style="margin-top:10px;">
               ${
                 (profile.tags || []).length
                   ? (profile.tags || [])
-                      .map((tag) => {
-                        const canPin =
-                          me &&
-                          (me.publicUsername === profile.username ||
-                            activePersona === profile.username ||
-                            ((me.alts || []).some((alt) => alt.username === profile.username) &&
-                              me.isOwner));
-                        return `
-                          <div class="community-tag-row">
-                            <div>
-                              ${tagChip(tag)}
-                              <div class="muted" style="font-size:0.78rem;margin-top:4px;">${escapeHtml(tag.description || "")}</div>
-                            </div>
-                            ${
-                              canPin
-                                ? `<button class="btn ${tag.pinned ? "btn-primary" : "btn-secondary"} btn-compact" type="button" data-pin-tag="${escapeHtml(tag.id)}">${tag.pinned ? "Pinned" : "Pin"}</button>`
-                                : ""
-                            }
-                          </div>
-                        `;
-                      })
+                      .map((tag) =>
+                        tagChip(tag, {
+                          canPin: canPinTagsFor(profile.username),
+                        })
+                      )
                       .join("")
                   : '<p class="muted" style="margin:0;font-size:0.85rem;">No tags yet.</p>'
               }
@@ -894,71 +1359,141 @@
           </div>
         </div>
       `;
+      }
       composerCard.hidden = true;
+      updateAboutRail(data);
       return;
     }
     if (route.type === "group") {
       const group = data.group || groups.find((g) => g.slug === route.slug) || null;
       if (group) pushRecent(group);
-      const viewIcon = document.getElementById("view-icon");
-      if (viewIcon) viewIcon.textContent = (group && group.slug ? group.slug : "g").slice(0, 1).toUpperCase();
-      document.getElementById("view-eyebrow").textContent = group ? group.slug : "Group";
-      document.getElementById("view-title").textContent = group ? group.slug : route.slug;
-      document.getElementById("view-blurb").textContent =
-        (group && group.description) || "Posts in this community.";
-      document.getElementById("feed-label").textContent = "Feed";
-      document.getElementById("feed-title").textContent = group
-        ? `Posts in ${group.slug}`
-        : "Group posts";
+      const slug = (group && group.slug) || route.slug || "";
+      const name = (group && group.name) || slug;
+      const postCount = group && group.postCount != null ? Number(group.postCount) : null;
+      const memberCount = group && group.memberCount != null ? Number(group.memberCount) : null;
+      setBannerMode("group", true);
+      if (viewIcon) viewIcon.textContent = (slug || "?").slice(0, 1).toUpperCase();
+      setText("view-title", name);
+      const subBits = [slug];
+      if (memberCount != null) subBits.push(`${memberCount.toLocaleString()} member${memberCount === 1 ? "" : "s"}`);
+      else if (postCount != null) subBits.push(`${postCount.toLocaleString()} post${postCount === 1 ? "" : "s"}`);
+      setText("view-sub", subBits.filter(Boolean).join(" · "));
+      if (viewBlurb) {
+        const desc = (group && group.description) || "";
+        viewBlurb.textContent = desc;
+        viewBlurb.hidden = !desc;
+      }
+      updateAboutRail(data);
       return;
     }
     if (route.type === "popular") {
-      const viewIconPop = document.getElementById("view-icon");
-      if (viewIconPop) viewIconPop.textContent = "▲";
-      document.getElementById("view-eyebrow").textContent = "Popular";
-      document.getElementById("view-title").textContent = "Popular";
-      document.getElementById("view-blurb").textContent = "Trending posts from across Synk communities.";
-      document.getElementById("feed-label").textContent = "Popular";
-      document.getElementById("feed-title").textContent = "Trending posts";
+      setBannerMode("popular", false);
+      if (viewBlurb) {
+        viewBlurb.hidden = true;
+        viewBlurb.textContent = "";
+      }
+      if (pageHead) pageHead.hidden = false;
+      setText("page-head-title", "Popular");
+      setText("page-head-sub", "Trending across communities");
+      updateAboutRail(data);
       return;
     }
-    const viewIcon = document.getElementById("view-icon");
-    if (viewIcon) viewIcon.textContent = "⌂";
-    document.getElementById("view-eyebrow").textContent = "Home feed";
-    document.getElementById("view-title").textContent = "Home";
-    document.getElementById("view-blurb").textContent = "Posts from every group, newest first.";
-    document.getElementById("feed-label").textContent = "Feed";
-    document.getElementById("feed-title").textContent = "Recent posts";
+    // home
+    setBannerMode("home", false);
+    if (viewBlurb) {
+      viewBlurb.hidden = true;
+      viewBlurb.textContent = "";
+    }
+    if (pageHead) pageHead.hidden = false;
+    setText("page-head-title", "Feed");
+    setText("page-head-sub", "Latest from your communities");
+    updateAboutRail(data);
   }
 
   async function loadCommunity() {
     let url = "/api/synk-community";
-    if (route.type === "group" && route.slug) {
-      url += `?group=${encodeURIComponent(route.slug)}`;
+    const sort = apiSort();
+    if (route.type === "post" && route.postId) {
+      url += `?post=${encodeURIComponent(route.postId)}`;
+    } else if (route.type === "inbox") {
+      url += "?inbox=1";
+    } else if (route.type === "popular") {
+      url += `?feed=popular&sort=${encodeURIComponent(sort)}`;
+    } else if (route.type === "home") {
+      url += `?feed=home&sort=${encodeURIComponent(sort)}`;
+    } else if (route.type === "group" && route.slug) {
+      url += `?group=${encodeURIComponent(route.slug)}&sort=${encodeURIComponent(sort)}`;
     } else if (route.type === "user" && route.username) {
-      url += `?user=${encodeURIComponent(route.username)}`;
+      url += `?user=${encodeURIComponent(route.username)}&sort=${encodeURIComponent(sort)}`;
+    } else if (sort && sort !== "new") {
+      url += `?sort=${encodeURIComponent(sort)}`;
     }
+
     const res = await fetch(url, { headers: hubHeaders() });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Could not load community");
     me = data.me || null;
     publicUsername = (me && me.publicUsername) || "";
+    displayName = (me && me.displayName) || "";
+    photoUrl = (me && me.photoUrl) || "";
+    avatarUrl = (me && me.avatarUrl) || "";
     alts = (me && me.alts) || [];
     myTags = (me && me.tags) || [];
     tags = data.tags || [];
-    groups = data.groups || [];
+    groups = data.groups || groups || [];
     staff = data.staff || [];
     ownerUsername = data.ownerUsername || "vision";
+    if (typeof data.unreadCount === "number") unreadCount = data.unreadCount;
+    if (data.group && typeof data.group.joined === "boolean") {
+      activeGroupJoined = !!data.group.joined;
+    }
+    updateInboxBadge();
     applyUsernameState();
     applyStaffState();
-    renderGroups();
+    if (route.type !== "inbox") renderGroups();
     renderMyTags();
-    applyViewState(data);
-    renderFeed(data.posts || []);
-    if (route.type === "post") {
-      const post = (lastPosts || []).find((p) => String(p.id) === String(route.postId));
-      renderPostDetail(post || null);
+
+    if (route.type === "inbox") {
+      if (!Array.isArray(data.groups) || !data.groups.length) {
+        try {
+          const baseRes = await fetch("/api/synk-community?feed=home", { headers: hubHeaders() });
+          const base = await baseRes.json().catch(() => ({}));
+          if (baseRes.ok) {
+            groups = base.groups || groups || [];
+            if (base.me) {
+              me = base.me;
+              publicUsername = (me && me.publicUsername) || publicUsername;
+              alts = (me && me.alts) || alts;
+              myTags = (me && me.tags) || myTags;
+            }
+            if (base.staff) staff = base.staff;
+            if (base.tags) tags = base.tags;
+            applyStaffState();
+          }
+        } catch (_) {}
+      }
+      applyUsernameState();
+      renderGroups();
+      applyViewState(data);
+      renderInbox(data.notifications || []);
+      return;
     }
+
+    if (route.type === "post") {
+      const post = data.post || (data.posts && data.posts[0]) || null;
+      lastPosts = post ? [post] : [];
+      lastComments = data.comments || [];
+      applyViewState(data);
+      renderPostDetail(post);
+      renderComments(lastComments);
+      return;
+    }
+
+    applyViewState(data);
+    if (route.type === "settings" || route.type === "submit" || route.type === "mod") {
+      return;
+    }
+    renderFeed(data.posts || []);
   }
 
   personaBtn.addEventListener("click", (e) => {
@@ -994,8 +1529,8 @@
   });
 
   feedEl.addEventListener("click", (e) => {
-    const groupLink = e.target.closest('a[href^="/community/g/"]');
-    const userLink = e.target.closest('a[href^="/u/"]');
+    const groupLink = e.target.closest('a[href^="/community/group/"], a[href^="/community/g/"]');
+    const userLink = e.target.closest('a[href^="/user/"], a[href^="/u/"], a[href^="/community/u/"]');
     if (groupLink) {
       e.preventDefault();
       navigate({
@@ -1015,12 +1550,54 @@
     }
   });
 
-  crumbsEl.addEventListener("click", (e) => {
-    const home = e.target.closest('a[href="/community"]');
-    if (!home) return;
-    e.preventDefault();
-    navigate({ type: "home", slug: "", username: "" }).catch(() => {});
-  });
+  if (communityMain) {
+    communityMain.addEventListener("click", (e) => {
+      if (feedEl && feedEl.contains(e.target)) return;
+      const groupLink = e.target.closest('a[href^="/community/group/"], a[href^="/community/g/"]');
+      const userLink = e.target.closest('a[href^="/user/"], a[href^="/u/"], a[href^="/community/u/"]');
+      if (groupLink) {
+        e.preventDefault();
+        navigate({
+          type: "group",
+          slug: decodeURIComponent(groupLink.getAttribute("href").split("/").pop() || ""),
+          username: "",
+        }).catch(() => {});
+        return;
+      }
+      if (userLink) {
+        e.preventDefault();
+        navigate({
+          type: "user",
+          slug: "",
+          username: decodeURIComponent(userLink.getAttribute("href").split("/").pop() || ""),
+        }).catch(() => {});
+      }
+    });
+  }
+
+  const myProfileLinkEl = document.getElementById("my-profile-link");
+  if (myProfileLinkEl) {
+    myProfileLinkEl.addEventListener("click", (e) => {
+      const href = myProfileLinkEl.getAttribute("href") || "";
+      if (!href.startsWith("/user/") && !href.startsWith("/u/")) return;
+      e.preventDefault();
+      closeUserMenu();
+      navigate({
+        type: "user",
+        slug: "",
+        username: decodeURIComponent(href.split("/").pop() || ""),
+      }).catch(() => {});
+    });
+  }
+
+  if (crumbsEl) {
+    crumbsEl.addEventListener("click", (e) => {
+      const home = e.target.closest('a[href="/community"]');
+      if (!home) return;
+      e.preventDefault();
+      navigate({ type: "home", slug: "", username: "" }).catch(() => {});
+    });
+  }
 
   document.getElementById("jump-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1082,6 +1659,141 @@
     }
   });
 
+
+  async function uploadSettingsImage({ fileInput, statusEl, action, extra = {}, onSuccess }) {
+    const file = fileInput && fileInput.files && fileInput.files[0];
+    if (!file) return;
+    if (statusEl) statusEl.textContent = "Uploading…";
+    try {
+      if (file.size > 3.5 * 1024 * 1024) throw new Error("Image too large (max ~3.5MB)");
+      const dataUrl = await readFileAsDataUrl(file);
+      const res = await fetch("/api/synk-community", {
+        method: "POST",
+        headers: hubHeaders(),
+        body: JSON.stringify({ action, imageData: dataUrl, ...extra }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      if (typeof onSuccess === "function") onSuccess(data);
+      if (statusEl) statusEl.textContent = "Saved";
+      await loadCommunity();
+    } catch (err) {
+      if (statusEl) statusEl.textContent = err.message || "Upload failed";
+    } finally {
+      if (fileInput) fileInput.value = "";
+    }
+  }
+
+  const avatarBtn = document.getElementById("settings-avatar-btn");
+  const avatarFile = document.getElementById("settings-avatar-file");
+  const avatarClearBtn = document.getElementById("settings-avatar-clear-btn");
+  if (avatarBtn && avatarFile) {
+    avatarBtn.addEventListener("click", () => avatarFile.click());
+    avatarFile.addEventListener("change", () => {
+      uploadSettingsImage({
+        fileInput: avatarFile,
+        statusEl: document.getElementById("settings-avatar-status"),
+        action: "set-avatar",
+        extra: { username: activePersona || publicUsername },
+        onSuccess: (data) => {
+          const savedFor = String(data.username || activePersona || publicUsername).trim().toLowerCase();
+          const next = data.avatarUrl || "";
+          if (savedFor === publicUsername) {
+            avatarUrl = next;
+            if (me) me.avatarUrl = next;
+          } else {
+            alts = (alts || []).map((alt) =>
+              alt.username === savedFor ? { ...alt, avatarUrl: next } : alt
+            );
+            if (me) me.alts = alts;
+          }
+        },
+      });
+    });
+  }
+  if (avatarClearBtn) {
+    avatarClearBtn.addEventListener("click", async () => {
+      const status = document.getElementById("settings-avatar-status");
+      if (status) status.textContent = "Removing…";
+      try {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({
+            action: "set-avatar",
+            clear: true,
+            username: activePersona || publicUsername,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not remove");
+        const savedFor = String(data.username || activePersona || publicUsername).trim().toLowerCase();
+        if (savedFor === publicUsername) {
+          avatarUrl = "";
+          if (me) me.avatarUrl = "";
+        } else {
+          alts = (alts || []).map((alt) =>
+            alt.username === savedFor ? { ...alt, avatarUrl: "" } : alt
+          );
+          if (me) me.alts = alts;
+        }
+        if (status) status.textContent = "Removed";
+        await loadCommunity();
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not remove";
+      }
+    });
+  }
+
+  const displayForm = document.getElementById("settings-display-form");
+  if (displayForm) {
+    displayForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("settings-display-status");
+      const input = document.getElementById("settings-display-name");
+      if (status) status.textContent = "Saving…";
+      try {
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({
+            action: "set-display-name",
+            displayName: input ? input.value : "",
+            username: activePersona || publicUsername,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not save display name");
+        if (data.me) {
+          me = data.me;
+          publicUsername = (me && me.publicUsername) || publicUsername;
+          displayName = (me && me.displayName) || "";
+          alts = (me && me.alts) || [];
+          myTags = (me && me.tags) || myTags;
+        } else {
+          const savedFor = String(data.username || activePersona || publicUsername)
+            .trim()
+            .toLowerCase();
+          const savedName = data.displayName || "";
+          if (savedFor === publicUsername) {
+            displayName = savedName;
+            if (me) me.displayName = savedName;
+          } else {
+            alts = (alts || []).map((alt) =>
+              alt.username === savedFor ? { ...alt, displayName: savedName } : alt
+            );
+            if (me) me.alts = alts;
+          }
+        }
+        if (status) status.textContent = "Saved";
+        applyUsernameState();
+        await loadCommunity();
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not save";
+      }
+    });
+  }
+
   document.getElementById("username-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const status = document.getElementById("username-status");
@@ -1097,26 +1809,66 @@
     const status = document.getElementById("post-status");
     status.textContent = "Posting…";
     try {
-      const res = await fetch("/api/synk-community", {
-        method: "POST",
-        headers: hubHeaders(),
-        body: JSON.stringify({
-          action: "post",
-          group: postGroup.value || route.slug || "general",
-          body: (() => {
-            const titleEl = document.getElementById("post-title");
-            const title = String((titleEl && titleEl.value) || "").trim();
-            const body = String(document.getElementById("post-body").value || "").trim();
-            return title ? `${title}\n\n${body}` : body;
-          })(),
-          asUsername: activePersona || publicUsername,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Could not post");
+      const title = String((document.getElementById("post-title") || {}).value || "").trim();
+      const body = String((document.getElementById("post-body") || {}).value || "").trim();
+      const type = activeSubmitType || "text";
+      if (!title || title.length < 2) throw new Error("Title needs at least 2 characters");
+
+      const payload = {
+        action: "post",
+        type,
+        title,
+        group: postGroup.value || route.slug || "general",
+        asUsername: activePersona || publicUsername,
+      };
+
+      if (type === "text") {
+        if (!body) throw new Error("Write some text for your post");
+        payload.body = body;
+      } else if (type === "link") {
+        const linkUrl = String((document.getElementById("post-link-url") || {}).value || "").trim();
+        if (!/^https?:\/\//i.test(linkUrl)) throw new Error("Enter a valid http(s) link");
+        payload.linkUrl = linkUrl;
+        payload.body = body;
+      } else if (type === "image") {
+        let imageUrl = String((document.getElementById("post-image-url") || {}).value || "").trim();
+        const fileInput = document.getElementById("post-image-file");
+        const file = fileInput && fileInput.files && fileInput.files[0];
+        if (file) imageUrl = await readFileAsDataUrl(file);
+        if (!imageUrl) throw new Error("Add an image URL or upload a file");
+        payload.imageUrl = imageUrl;
+        payload.body = body;
+      } else if (type === "poll") {
+        const raw = String((document.getElementById("post-poll-options") || {}).value || "");
+        const pollOptions = raw
+          .split(/\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        if (pollOptions.length < 2) throw new Error("Add at least 2 poll options");
+        if (pollOptions.length > 6) throw new Error("Polls support up to 6 options");
+        payload.pollOptions = pollOptions;
+        payload.body = body;
+      }
+
+      const data = await communityAction(payload);
       document.getElementById("post-body").value = "";
+      const titleEl = document.getElementById("post-title");
+      if (titleEl) titleEl.value = "";
+      const linkEl = document.getElementById("post-link-url");
+      if (linkEl) linkEl.value = "";
+      const imageEl = document.getElementById("post-image-url");
+      if (imageEl) imageEl.value = "";
+      const fileEl = document.getElementById("post-image-file");
+      if (fileEl) fileEl.value = "";
+      const pollEl = document.getElementById("post-poll-options");
+      if (pollEl) pollEl.value = "";
       status.textContent = "Posted";
-      if (data.post && data.post.group && data.post.group.slug) {
+      if (data.post && data.post.id) {
+        await navigate(
+          { type: "post", slug: "", username: "", postId: String(data.post.id) },
+          { replace: true }
+        );
+      } else if (data.post && data.post.group && data.post.group.slug) {
         await navigate({ type: "group", slug: data.post.group.slug, username: "" }, { replace: true });
       } else {
         await loadCommunity();
@@ -1125,6 +1877,52 @@
       status.textContent = err.message || "Could not post";
     }
   });
+
+  const commentForm = document.getElementById("comment-form");
+  if (commentForm) {
+    commentForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("comment-status");
+      const bodyEl = document.getElementById("comment-body");
+      const body = String((bodyEl && bodyEl.value) || "").trim();
+      if (!route.postId) return;
+      if (status) status.textContent = "Posting…";
+      try {
+        await communityAction({
+          action: "comment",
+          postId: route.postId,
+          body,
+          asUsername: activePersona || publicUsername,
+        });
+        if (bodyEl) bodyEl.value = "";
+        if (status) status.textContent = "Commented";
+        await loadCommunity();
+      } catch (err) {
+        if (status) status.textContent = err.message || "Could not comment";
+      }
+    });
+  }
+
+  const inboxMarkRead = document.getElementById("inbox-mark-read");
+  if (inboxMarkRead) {
+    inboxMarkRead.addEventListener("click", async () => {
+      try {
+        const data = await communityAction({ action: "mark-read" });
+        if (typeof data.unreadCount === "number") unreadCount = data.unreadCount;
+        else unreadCount = 0;
+        updateInboxBadge();
+        if (Array.isArray(data.notifications)) {
+          renderInbox(data.notifications);
+        } else {
+          lastNotifications = (lastNotifications || []).map((n) => ({
+            ...n,
+            readAt: n.readAt || new Date().toISOString(),
+          }));
+          renderInbox(lastNotifications);
+        }
+      } catch (_) {}
+    });
+  }
 
   document.getElementById("create-group-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1223,7 +2021,7 @@
       if (me) me.alts = alts;
       renderAlts();
       syncPersonaUi();
-      status.textContent = `Created @${data.alt.username}`;
+      status.textContent = `Created ${data.alt.username}`;
     } catch (err) {
       status.textContent = err.message || "Could not create alt";
     }
@@ -1268,12 +2066,21 @@
           name: document.getElementById("tag-name").value,
           description: document.getElementById("tag-description").value,
           color: document.getElementById("tag-color").value,
+          iconData: pendingTagIconData || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not create tag");
       document.getElementById("tag-name").value = "";
       document.getElementById("tag-description").value = "";
+      const iconInput = document.getElementById("tag-icon");
+      if (iconInput) iconInput.value = "";
+      pendingTagIconData = "";
+      const iconPreview = document.getElementById("tag-icon-preview");
+      if (iconPreview) {
+        iconPreview.hidden = true;
+        iconPreview.innerHTML = "";
+      }
       tags = data.tags || [];
       renderTagCatalog();
       status.textContent = `Created ${data.tag.name}`;
@@ -1299,15 +2106,152 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not assign tag");
       document.getElementById("assign-tag-username").value = "";
-      status.textContent = `Tagged @${data.username}`;
+      status.textContent = `Tagged ${data.username}`;
       await loadCommunity();
     } catch (err) {
       status.textContent = err.message || "Could not assign tag";
     }
   });
 
+  const tagIconInput = document.getElementById("tag-icon");
+  const tagIconPreview = document.getElementById("tag-icon-preview");
+  if (tagIconInput) {
+    tagIconInput.addEventListener("change", async () => {
+      const status = document.getElementById("tag-status");
+      try {
+        const file = tagIconInput.files && tagIconInput.files[0];
+        if (!file) {
+          pendingTagIconData = "";
+          if (tagIconPreview) {
+            tagIconPreview.hidden = true;
+            tagIconPreview.innerHTML = "";
+          }
+          return;
+        }
+        if (!String(file.type || "").startsWith("image/")) throw new Error("Choose an image file");
+        if (file.size > 512 * 1024) throw new Error("Icon too large (max 512KB)");
+        pendingTagIconData = await readFileAsDataUrl(file);
+        if (tagIconPreview) {
+          tagIconPreview.hidden = false;
+          tagIconPreview.innerHTML = `<img src="${pendingTagIconData}" alt="" />`;
+        }
+        if (status) status.textContent = "Icon ready";
+      } catch (err) {
+        pendingTagIconData = "";
+        tagIconInput.value = "";
+        if (tagIconPreview) {
+          tagIconPreview.hidden = true;
+          tagIconPreview.innerHTML = "";
+        }
+        if (status) status.textContent = err.message || "Could not read icon";
+      }
+    });
+  }
+
+  const tagIconFile = document.getElementById("tag-icon-file");
+  let tagIconUploadId = "";
+  if (tagIconFile) {
+    tagIconFile.addEventListener("change", async () => {
+      const status = document.getElementById("tag-status");
+      const tagId = tagIconUploadId;
+      tagIconUploadId = "";
+      if (!tagId) return;
+      if (status) status.textContent = "Uploading icon…";
+      try {
+        const file = tagIconFile.files && tagIconFile.files[0];
+        tagIconFile.value = "";
+        if (!file) throw new Error("Choose an image");
+        if (!String(file.type || "").startsWith("image/")) throw new Error("Choose an image file");
+        if (file.size > 512 * 1024) throw new Error("Icon too large (max 512KB)");
+        const iconData = await readFileAsDataUrl(file);
+        if (!iconData) throw new Error("Choose an image");
+        const res = await fetch("/api/synk-community", {
+          method: "POST",
+          headers: hubHeaders(),
+          body: JSON.stringify({ action: "update-tag", tagId, iconData }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not upload icon");
+        tags = data.tags || [];
+        renderTagCatalog();
+        await loadCommunity();
+        if (status) status.textContent = "Icon updated";
+      } catch (err) {
+        tagIconFile.value = "";
+        if (status) status.textContent = err.message || "Could not upload icon";
+      }
+    });
+  }
+
   if (tagCatalog) {
     tagCatalog.addEventListener("click", async (e) => {
+      const editBtn = e.target.closest("[data-edit-tag]");
+      if (editBtn) {
+        e.preventDefault();
+        const row = editBtn.closest(".synk-tag-mod-item");
+        if (!row) return;
+        const panel = row.querySelector(".synk-tag-mod-edit-panel");
+        const opening = !panel || panel.hidden;
+        tagCatalog.querySelectorAll(".synk-tag-mod-item").forEach((item) => {
+          const otherPanel = item.querySelector(".synk-tag-mod-edit-panel");
+          const otherEdit = item.querySelector("[data-edit-tag]");
+          if (otherPanel) otherPanel.hidden = true;
+          if (otherEdit) {
+            otherEdit.hidden = false;
+            otherEdit.setAttribute("aria-expanded", "false");
+          }
+        });
+        if (panel && opening) {
+          panel.hidden = false;
+          editBtn.hidden = true;
+          editBtn.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
+      const doneBtn = e.target.closest("[data-edit-tag-done]");
+      if (doneBtn) {
+        e.preventDefault();
+        const row = doneBtn.closest(".synk-tag-mod-item");
+        if (!row) return;
+        const panel = row.querySelector(".synk-tag-mod-edit-panel");
+        const edit = row.querySelector("[data-edit-tag]");
+        if (panel) panel.hidden = true;
+        if (edit) {
+          edit.hidden = false;
+          edit.setAttribute("aria-expanded", "false");
+        }
+        return;
+      }
+      const uploadBtn = e.target.closest("[data-upload-tag-icon]");
+      if (uploadBtn) {
+        e.preventDefault();
+        tagIconUploadId = uploadBtn.getAttribute("data-upload-tag-icon") || "";
+        if (tagIconFile) tagIconFile.click();
+        return;
+      }
+      const clearBtn = e.target.closest("[data-clear-tag-icon]");
+      if (clearBtn) {
+        e.preventDefault();
+        const tagId = clearBtn.getAttribute("data-clear-tag-icon");
+        const status = document.getElementById("tag-status");
+        if (status) status.textContent = "Clearing icon…";
+        try {
+          const res = await fetch("/api/synk-community", {
+            method: "POST",
+            headers: hubHeaders(),
+            body: JSON.stringify({ action: "update-tag", tagId, clearIcon: true }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Could not clear icon");
+          tags = data.tags || [];
+          renderTagCatalog();
+          await loadCommunity();
+          if (status) status.textContent = "Icon cleared";
+        } catch (err) {
+          if (status) status.textContent = err.message || "Could not clear icon";
+        }
+        return;
+      }
       const btn = e.target.closest("[data-delete-tag]");
       if (!btn) return;
       const tagId = btn.getAttribute("data-delete-tag");
@@ -1331,14 +2275,17 @@
     });
   }
 
-  async function handlePinClick(e) {
-    const btn = e.target.closest("[data-pin-tag]");
-    if (!btn) return;
-    const tagId = btn.getAttribute("data-pin-tag");
+  async function pinTagById(tagId, { clear } = {}) {
+    if (!tagId) return;
     const status = document.getElementById("my-tags-status");
     if (status) status.textContent = "Updating…";
     try {
-      const currentlyPinned = myTags.find((tag) => tag.id === tagId && tag.pinned);
+      const liveTags = tagsForActivePersona();
+      const currentlyPinned =
+        typeof clear === "boolean"
+          ? clear
+          : !!(liveTags.find((tag) => String(tag.id) === String(tagId) && tag.pinned) ||
+              myTags.find((tag) => String(tag.id) === String(tagId) && tag.pinned));
       const res = await fetch("/api/synk-community", {
         method: "POST",
         headers: hubHeaders(),
@@ -1377,6 +2324,7 @@
           alts = me.alts;
         }
       }
+      closeTagPopover();
       renderMyTags();
       await loadCommunity();
       if (status) status.textContent = data.pinnedTag ? `Pinned ${data.pinnedTag.name}` : "Pin cleared";
@@ -1384,6 +2332,48 @@
       if (status) status.textContent = err.message || "Could not update pin";
     }
   }
+
+  async function handlePinClick(e) {
+    const btn = e.target.closest("[data-pin-tag]");
+    if (!btn || btn.hidden) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const clearAttr = btn.getAttribute("data-tag-pinned");
+    await pinTagById(btn.getAttribute("data-pin-tag"), {
+      clear: clearAttr == null ? undefined : clearAttr === "1",
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    const pinFromPop = e.target.closest("#tag-pop-pin");
+    if (pinFromPop) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (pinFromPop.hidden || !pinFromPop.getAttribute("data-pin-tag")) return;
+      pinTagById(pinFromPop.getAttribute("data-pin-tag"), {
+        clear: pinFromPop.getAttribute("data-tag-pinned") === "1",
+      }).catch(() => {});
+      return;
+    }
+    const badge = e.target.closest("[data-tag-badge]");
+    if (badge) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (badge.getAttribute("aria-expanded") === "true") {
+        closeTagPopover();
+      } else {
+        openTagPopover(badge);
+      }
+      return;
+    }
+    if (!e.target.closest("#tag-badge-popover")) {
+      closeTagPopover();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeTagPopover();
+  });
 
   if (myTagsList) myTagsList.addEventListener("click", handlePinClick);
   if (profileMeta) profileMeta.addEventListener("click", handlePinClick);
@@ -1420,9 +2410,9 @@
   bindNav(document.getElementById("settings-nav-link"), { type: "settings", slug: "", username: "" });
   bindNav(document.getElementById("submit-nav-link"), { type: "submit", slug: "", username: "" });
   bindNav(document.getElementById("create-top-link"), { type: "submit", slug: "", username: "" });
-  bindNav(document.getElementById("banner-create-link"), { type: "submit", slug: "", username: "" });
   bindNav(document.getElementById("mod-nav-link"), { type: "mod", slug: "", username: "" });
   bindNav(document.getElementById("mod-menu-link"), { type: "mod", slug: "", username: "" });
+  bindNav(document.getElementById("inbox-btn"), { type: "inbox", slug: "", username: "" });
 
   const userMenuBtn = document.getElementById("user-menu-btn");
   const userMenuDropdown = document.getElementById("user-menu-dropdown");
@@ -1449,6 +2439,10 @@
         return;
       }
       syncSortTabs();
+      if (route.type === "home" || route.type === "popular" || route.type === "group" || route.type === "user") {
+        loadCommunity().catch(() => {});
+        return;
+      }
       renderFeed(lastPosts);
     });
   });
@@ -1484,27 +2478,114 @@
 
 
   function refreshPostChrome(postId) {
-    const post = (lastPosts || []).find((p) => String(p.id) === String(postId));
+    const post = findPost(postId);
     if (!post) return;
     if (route.type === "post" && String(route.postId) === String(postId)) renderPostDetail(post);
     else renderFeed(lastPosts);
   }
 
-  document.addEventListener("click", (e) => {
+  document.addEventListener("click", async (e) => {
     const voteBtn = e.target.closest("[data-vote]");
     if (voteBtn) {
       e.preventDefault();
-      const id = voteBtn.getAttribute("data-post-id");
+      const targetType = voteBtn.getAttribute("data-target-type") || "post";
+      const postId = voteBtn.getAttribute("data-post-id");
+      const commentId = voteBtn.getAttribute("data-comment-id");
+      const targetId = targetType === "comment" ? commentId : postId;
+      if (!targetId) return;
       const dir = voteBtn.getAttribute("data-vote") === "down" ? -1 : 1;
-      const cur = getVote(id);
-      setVote(id, cur === dir ? 0 : dir);
-      refreshPostChrome(id);
+      let cur = 0;
+      if (targetType === "comment") {
+        const comment = (lastComments || []).find((c) => String(c.id) === String(targetId));
+        cur = Number(comment && comment.myVote) || 0;
+      } else {
+        const post = findPost(targetId);
+        cur = Number(post && post.myVote) || 0;
+      }
+      const next = cur === dir ? 0 : dir;
+      if (targetType === "post") {
+        const post = findPost(targetId);
+        if (post) {
+          const delta = next - cur;
+          patchPost(targetId, {
+            myVote: next,
+            score: (Number(post.score) || 0) + delta,
+          });
+          refreshPostChrome(targetId);
+        }
+      } else {
+        lastComments = (lastComments || []).map((c) => {
+          if (String(c.id) !== String(targetId)) return c;
+          const delta = next - cur;
+          return { ...c, myVote: next, score: (Number(c.score) || 0) + delta };
+        });
+        renderComments(lastComments);
+      }
+      try {
+        const data = await communityAction({
+          action: "vote",
+          targetType,
+          targetId,
+          value: next,
+        });
+        if (targetType === "post") {
+          patchPost(targetId, {
+            myVote: data.myVote,
+            score: data.score,
+          });
+          refreshPostChrome(targetId);
+        } else {
+          lastComments = (lastComments || []).map((c) =>
+            String(c.id) === String(targetId)
+              ? { ...c, myVote: data.myVote, score: data.score }
+              : c
+          );
+          renderComments(lastComments);
+        }
+      } catch (_) {
+        await loadCommunity().catch(() => {});
+      }
       return;
     }
+
+    const pollBtn = e.target.closest("[data-poll-vote]");
+    if (pollBtn) {
+      e.preventDefault();
+      const postId = pollBtn.getAttribute("data-poll-vote");
+      const optionIndex = Number(pollBtn.getAttribute("data-option-index"));
+      if (!postId || !Number.isInteger(optionIndex)) return;
+      try {
+        const data = await communityAction({
+          action: "poll-vote",
+          postId,
+          optionIndex,
+        });
+        if (data.post) {
+          patchPost(postId, data.post);
+          if (route.type === "post" && String(route.postId) === String(postId)) {
+            lastPosts = [data.post];
+            renderPostDetail(data.post);
+          } else {
+            refreshPostChrome(postId);
+          }
+        }
+      } catch (_) {}
+      return;
+    }
+
     const openPost = e.target.closest("[data-open-post]");
     if (openPost) {
       e.preventDefault();
       const id = openPost.getAttribute("data-open-post");
+      const inboxId = openPost.getAttribute("data-inbox-id");
+      if (inboxId) {
+        communityAction({ action: "mark-read", ids: [inboxId] })
+          .then((data) => {
+            if (typeof data.unreadCount === "number") unreadCount = data.unreadCount;
+            updateInboxBadge();
+          })
+          .catch(() => {});
+      }
       navigate({ type: "post", slug: "", username: "", postId: id }).catch(() => {});
       return;
     }
@@ -1517,29 +2598,46 @@
         navigator.clipboard.writeText(url).catch(() => {});
       }
       shareBtn.textContent = "✓ Copied";
-      setTimeout(() => { shareBtn.textContent = "↗ Share"; }, 1200);
+      setTimeout(() => { shareBtn.innerHTML = `${ico("share", 16)} <span>Share</span>`; }, 1200);
       return;
     }
     const saveBtn = e.target.closest("[data-save-post]");
     if (saveBtn) {
       e.preventDefault();
       const id = saveBtn.getAttribute("data-save-post");
-      toggleSaved(id);
+      const post = findPost(id);
+      const saved = !(post && post.saved);
+      patchPost(id, { saved });
       refreshPostChrome(id);
+      try {
+        const data = await communityAction({ action: "save", postId: id, saved });
+        patchPost(id, { saved: !!data.saved });
+        refreshPostChrome(id);
+      } catch (_) {
+        patchPost(id, { saved: !saved });
+        refreshPostChrome(id);
+      }
       return;
     }
     const hideBtn = e.target.closest("[data-hide-post]");
     if (hideBtn) {
       e.preventDefault();
       const id = hideBtn.getAttribute("data-hide-post");
+      const prev = lastPosts.slice();
       lastPosts = (lastPosts || []).filter((p) => String(p.id) !== String(id));
       renderFeed(lastPosts);
+      try {
+        await communityAction({ action: "hide", postId: id, hidden: true });
+      } catch (_) {
+        lastPosts = prev;
+        renderFeed(lastPosts);
+      }
       return;
     }
   });
 
   function syncJoinButtons() {
-    const joined = route.type === "group" && route.slug && isJoined(route.slug);
+    const joined = route.type === "group" && route.slug && activeGroupJoined;
     ["join-community-btn", "about-join-btn"].forEach((id) => {
       const btn = document.getElementById(id);
       if (!btn || btn.hidden) return;
@@ -1550,10 +2648,28 @@
   ["join-community-btn", "about-join-btn"].forEach((id) => {
     const btn = document.getElementById(id);
     if (!btn) return;
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       if (route.type !== "group" || !route.slug) return;
-      toggleJoined(route.slug);
+      const next = !activeGroupJoined;
+      activeGroupJoined = next;
       syncJoinButtons();
+      try {
+        const data = await communityAction({
+          action: "join",
+          group: route.slug,
+          joined: next,
+        });
+        activeGroupJoined = !!(data.joined != null ? data.joined : next);
+        if (data.group) {
+          groups = (groups || []).map((g) =>
+            g.slug === route.slug ? { ...g, joined: activeGroupJoined } : g
+          );
+        }
+        syncJoinButtons();
+      } catch (_) {
+        activeGroupJoined = !next;
+        syncJoinButtons();
+      }
     });
   });
 
@@ -1565,27 +2681,42 @@
     });
   }
 
+  function setSubmitTab(name) {
+    activeSubmitType = name || "text";
+    document.querySelectorAll("[data-submit-tab]").forEach((t) => {
+      const on = (t.getAttribute("data-submit-tab") || "text") === activeSubmitType;
+      t.classList.toggle("is-active", on);
+      t.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    const textFields = document.getElementById("submit-text-fields");
+    const linkFields = document.getElementById("submit-link-fields");
+    const imageFields = document.getElementById("submit-image-fields");
+    const pollFields = document.getElementById("submit-poll-fields");
+    const body = document.getElementById("post-body");
+    const postBtn = document.getElementById("post-submit-btn");
+    if (textFields) textFields.hidden = false;
+    if (linkFields) linkFields.hidden = activeSubmitType !== "link";
+    if (imageFields) imageFields.hidden = activeSubmitType !== "image";
+    if (pollFields) pollFields.hidden = activeSubmitType !== "poll";
+    if (body) {
+      body.required = activeSubmitType === "text";
+      const label = textFields && textFields.querySelector("label");
+      if (label) {
+        label.textContent = activeSubmitType === "text" ? "Text" : "Text (optional)";
+      }
+    }
+    if (postBtn) postBtn.disabled = false;
+  }
+
   document.querySelectorAll("[data-submit-tab]").forEach((tab) => {
     tab.addEventListener("click", () => {
-      const name = tab.getAttribute("data-submit-tab") || "text";
-      document.querySelectorAll("[data-submit-tab]").forEach((t) => {
-        const on = t === tab;
-        t.classList.toggle("is-active", on);
-        t.setAttribute("aria-selected", on ? "true" : "false");
-      });
-      const textFields = document.getElementById("submit-text-fields");
-      const soonFields = document.getElementById("submit-soon-fields");
-      const postBtn = document.getElementById("post-submit-btn");
-      const body = document.getElementById("post-body");
-      const isText = name === "text";
-      if (textFields) textFields.hidden = !isText;
-      if (soonFields) soonFields.hidden = isText;
-      if (body) body.required = isText;
-      if (postBtn) postBtn.disabled = !isText;
+      setSubmitTab(tab.getAttribute("data-submit-tab") || "text");
     });
   });
+  setSubmitTab("text");
 
   try { currentSort = localStorage.getItem(SORT_KEY) || "new"; } catch (_) { currentSort = "new"; }
+  if (currentSort === "best") currentSort = "hot";
   renderRecent();
 
   const session = readSession();
