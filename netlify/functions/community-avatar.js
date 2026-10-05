@@ -1,6 +1,6 @@
 "use strict";
 
-const { getStore, connectLambda } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("./lib/media-store");
 const { json } = require("./lib/db");
 
 exports.handler = async (event) => {

@@ -7,3 +7,4 @@ dist/
 # Generated Synk Admin publish dir
 synk-admin/public/*
 !synk-admin/public/.gitkeep
+.vercel

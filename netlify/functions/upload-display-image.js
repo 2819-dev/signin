@@ -1,4 +1,4 @@
-const { getStore, connectLambda } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("./lib/media-store");
 const { json, requireAdmin } = require("./lib/db");
 
 const MAX_BYTES = 4.5 * 1024 * 1024;

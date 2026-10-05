@@ -2,7 +2,7 @@
 
 const { randomUUID } = require("crypto");
 const { signedPhotoUrl } = require("./lib/synk-admin-auth");
-const { getStore, connectLambda } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("./lib/media-store");
 const { getSql, json } = require("./lib/db");
 const {
   ensureSynkCoreTables,
@@ -18,7 +18,33 @@ const {
   listCommunityStaff,
   listCommunityGroups,
   findCommunityGroup,
+  hydrateCommunityGroup,
+  findGroupChannel,
+  listGroupRoles,
+  createGroupRole,
+  updateGroupRole,
+  deleteGroupRole,
+  updateCommunityGroup,
+  createGroupChannel,
+  updateGroupChannel,
+  deleteGroupChannel,
+  listGroupChannels,
+  listGroupCategories,
+  ensureOfficialSynkGroup,
+  formatChannelLabel,
+  normalizeChannelKind,
+  normalizeSuggestionStatus,
+  normalizeTicketStatus,
+  normalizeSuggestionTags,
+  normalizeTicketTags,
+  suggestionTagsToIds,
+  mapSuggestionTagsFromRow,
+  DEFAULT_SUGGESTION_TAGS,
+  DEFAULT_TICKET_TAGS,
+  isForumChannelKind,
+  capitalizeChannelName,
   isCommunityUsernameTaken,
+  renameCommunityUsername,
   listOwnerAltAccounts,
   findCommunityAltAccount,
   findCommunityPublicProfile,
@@ -28,24 +54,78 @@ const {
   normalizeTagColor,
   listCommunityTags,
   findCommunityTag,
+  listInfoPages,
+  findInfoPage,
+  normalizePageSlug,
+  normalizePageTitle,
+  normalizePageBlocks,
+  mapInfoPage,
+  isBetaTesterTag,
   listProfileTags,
   listUsernameTags,
+  listGroupTags,
+  assignGroupTag,
+  unassignGroupTag,
   getPinnedTagForProfile,
   getPinnedTagForUsername,
   getPinnedTagsByUsernames,
   getDisplayNamesByUsernames,
   setDisplayNameForUsername,
+  setBioForUsername,
+  setDmPolicyForUsername,
+  setPresenceForUsername,
+  getFriendship,
+  requestFriendship,
+  respondFriendship,
+  removeFriendship,
+  canDm,
+  getOrCreateDmThread,
+  listDmThreads,
+  listFriends,
+  isFollowing,
+  getFollowCounts,
+  listFollowers,
+  listFollowing,
+  followUser,
+  unfollowUser,
+  getDmThreadById,
+  listDmMessages,
+  sendDm,
+  editDmMessage,
+  deleteDmMessage,
+  reactDmMessage,
+  friendshipViewerStatus,
   getAvatarsByUsernames,
   setAvatarForUsername,
   updateSynkProfilePhoto,
   normalizeDisplayName,
+  normalizeBio,
+  normalizeDmPolicy,
+  normalizePresenceStatus,
   assignUsernameTag,
   unassignUsernameTag,
   setPinnedTagForUsername,
   findCommunityProfileIdByUsername,
   logSynkEvent,
   clientIp,
+  buildReleaseNotesPayload,
+  getAppUpdateReleaseNotes,
+  ensureBetaTestingTables,
+  getBetaTesterClock,
+  listBetaFeedbackThreads,
+  createBetaFeedbackThread,
+  replyBetaFeedbackThread,
+  resolveBetaCurrentUpdate,
+  clearAllBetaAgendaItems,
+  notifyBetaTestersOfShift,
 } = require("./lib/synk");
+const {
+  getVapidConfig,
+  saveSynkPushSubscription,
+  deleteSynkPushSubscription,
+  notifySynkProfile,
+  notificationPushPayload,
+} = require("./lib/synk-push");
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -169,6 +249,11 @@ function mapPost(row) {
   const primaryUsername = row.public_username || "";
   const isPrimary = !primaryUsername || username === primaryUsername;
   const pollOptions = parsePollOptions(row.poll_options);
+  const channelKind = normalizeChannelKind(row.channel_kind, row.channel_slug);
+  const suggestionStatus =
+    channelKind === "support"
+      ? normalizeTicketStatus(row.suggestion_status)
+      : normalizeSuggestionStatus(row.suggestion_status);
   return {
     id: row.id,
     title: derivePostTitle(row),
@@ -191,12 +276,34 @@ function mapPost(row) {
     myVote: row.my_vote == null || row.my_vote === "" ? 0 : Number(row.my_vote) || 0,
     saved: Boolean(row.saved),
     hidden: Boolean(row.hidden),
+    suggestionStatus: suggestionStatus || (channelKind === "suggestions" || channelKind === "support" ? "open" : ""),
+    suggestionTags: mapSuggestionTagsFromRow(row, channelKind),
+    suggestionReply: String(row.suggestion_reply || "").trim(),
+    isPinned: Boolean(row.is_pinned),
     createdAt: row.created_at,
     group: row.group_slug
       ? {
           id: row.group_id,
           slug: row.group_slug,
           name: row.group_name || row.group_slug,
+          theme:
+            row.group_is_official === true || row.group_slug === "synk"
+              ? "discord"
+              : "standard",
+          isOfficial: row.group_is_official === true,
+        }
+      : null,
+    channel: row.channel_id
+      ? {
+          id: row.channel_id,
+          slug: row.channel_slug || "",
+          name: capitalizeChannelName(row.channel_name || row.channel_slug || ""),
+          emoji: row.channel_emoji || "",
+          kind: channelKind,
+          label:
+            row.channel_emoji && row.channel_name
+              ? `${row.channel_emoji} | ${capitalizeChannelName(row.channel_name)}`
+              : capitalizeChannelName(row.channel_name || row.channel_slug || ""),
         }
       : null,
     author: {
@@ -233,20 +340,103 @@ function mapComment(row) {
   };
 }
 
+function notificationCopy({ kind, actorUsername, body }) {
+  const actor = String(actorUsername || "").trim() || "Someone";
+  const k = String(kind || "").trim().toLowerCase().replace(/-/g, "_");
+  if (k === "friend_request") {
+    return {
+      title: "Friend request",
+      description: `${actor} sent you a friend request.`,
+    };
+  }
+  if (k === "friend_accept" || k === "friend_accepted") {
+    return {
+      title: "Friend request accepted",
+      description: `${actor} accepted your friend request.`,
+    };
+  }
+  if (k === "comment") {
+    return {
+      title: "New comment",
+      description: body && String(body).trim() ? String(body).trim() : `${actor} commented on your post.`,
+    };
+  }
+  if (k === "comment_reply_on_post" || k === "comment_reply_on_post") {
+    return {
+      title: "Reply on your post",
+      description: body && String(body).trim() ? String(body).trim() : `${actor} replied to a comment on your post.`,
+    };
+  }
+  if (k === "reply") {
+    return {
+      title: "New reply",
+      description: body && String(body).trim() ? String(body).trim() : `${actor} replied to your comment.`,
+    };
+  }
+  if (k === "dm" || k === "message") {
+    return {
+      title: "New message",
+      description: body && String(body).trim() ? String(body).trim() : `${actor} sent you a message.`,
+    };
+  }
+  if (k === "app_update" || k === "app_updated" || k === "update") {
+    return {
+      title: "App updated",
+      description:
+        body && String(body).trim()
+          ? String(body).trim()
+          : "Synk was updated. Refresh or reopen to get the latest.",
+    };
+  }
+  if (k === "testing_shift" || k === "beta_shift" || k === "testing_agenda") {
+    return {
+      title: "Early access shift",
+      description:
+        body && String(body).trim()
+          ? String(body).trim()
+          : "A new testing shift is ready. Open Staff Hub to start your session.",
+    };
+  }
+  return {
+    title: "Notification",
+    description: body && String(body).trim() ? String(body).trim() : `${actor} sent you a notification.`,
+  };
+}
+
+function parseNotificationMeta(body) {
+  const raw = String(body || "");
+  const match = raw.match(/<!--\s*synk-version:([^>]+?)\s*-->/i);
+  const version = match ? String(match[1] || "").trim() : "";
+  const text = raw.replace(/<!--\s*synk-version:[^>]*-->/gi, "").trim();
+  return { text, version };
+}
+
 function mapNotification(row) {
+  const kind = row.kind;
+  const actorUsername = row.actor_username || null;
+  const meta = parseNotificationMeta(row.body || "");
+  const copy = notificationCopy({ kind, actorUsername, body: meta.text });
   return {
     id: row.id,
-    kind: row.kind,
-    actorUsername: row.actor_username || null,
+    kind,
+    actorUsername,
     postId: row.post_id || null,
     commentId: row.comment_id || null,
-    body: row.body || "",
+    body: copy.description,
+    title: copy.title,
+    description: copy.description,
+    version: meta.version || null,
     readAt: row.read_at || null,
     createdAt: row.created_at,
   };
 }
 
 function mePayload(auth, role, alts = [], tags = [], pinnedTag = null) {
+  const tagList = tags || [];
+  const altList = alts || [];
+  const betaTester =
+    tagList.some(isBetaTesterTag) ||
+    altList.some((alt) => (alt.tags || []).some(isBetaTesterTag));
   return {
     profileId: auth.profile.id,
     name: auth.profile.name,
@@ -255,18 +445,23 @@ function mePayload(auth, role, alts = [], tags = [], pinnedTag = null) {
     displayName: auth.profile.displayName || "",
     photoUrl: signedPhotoUrl(auth.profile.photoUrl || ""),
     avatarUrl: auth.profile.avatarUrl || "",
+    bio: auth.profile.bio || "",
+    dmPolicy: auth.profile.dmPolicy || "friends",
+    presenceStatus: auth.profile.presenceStatus || "online",
     role: role || null,
     isStaff: isCommunityStaffRole(role),
     isOwner: role === "owner",
     isAdmin: role === "admin" || role === "owner",
-    alts: role === "owner" ? alts : [],
-    tags: tags || [],
+    betaTester,
+    alts: role === "owner" ? altList : [],
+    tags: tagList,
     pinnedTag: pinnedTag || null,
   };
 }
 
 async function getUnreadCount(sql, profileId) {
   if (!profileId) return 0;
+  await coalesceConsolidatedNotifications(sql, profileId);
   const rows = await sql`
     SELECT COUNT(*)::int AS count
     FROM synk_community_notifications
@@ -294,8 +489,135 @@ async function markGroupsJoined(sql, groups, profileId) {
   }));
 }
 
-async function loadNotifications(sql, profileId, { limit = 50 } = {}) {
+const APP_UPDATE_KINDS = ["app_update", "app_updated", "update"];
+const TESTING_SHIFT_KINDS = ["testing_shift", "beta_shift", "testing_agenda"];
+
+function normalizeNotifKindKey(kind) {
+  return String(kind || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+}
+
+function isAppUpdateKind(kind) {
+  return APP_UPDATE_KINDS.includes(normalizeNotifKindKey(kind));
+}
+
+function isTestingShiftKind(kind) {
+  return TESTING_SHIFT_KINDS.includes(normalizeNotifKindKey(kind));
+}
+
+async function coalesceKindFamily(sql, profileId, kinds) {
+  if (!profileId || !Array.isArray(kinds) || !kinds.length) return;
+  try {
+    await sql`
+      DELETE FROM synk_community_notifications
+      WHERE synk_profile_id = ${profileId}
+        AND lower(replace(kind, '-', '_')) = ANY(${kinds}::text[])
+        AND id NOT IN (
+          SELECT id
+          FROM (
+            SELECT id
+            FROM synk_community_notifications
+            WHERE synk_profile_id = ${profileId}
+              AND lower(replace(kind, '-', '_')) = ANY(${kinds}::text[])
+            ORDER BY
+              CASE WHEN read_at IS NULL THEN 0 ELSE 1 END,
+              created_at DESC,
+              id DESC
+            LIMIT 1
+          ) keep_one
+        )
+    `;
+  } catch (_) {}
+}
+
+async function coalesceConsolidatedNotifications(sql, profileId) {
+  await coalesceKindFamily(sql, profileId, APP_UPDATE_KINDS);
+  await coalesceKindFamily(sql, profileId, TESTING_SHIFT_KINDS);
+}
+
+// Keep one app-update row and one early-access shift row in the inbox UI.
+function collapseConsolidatedNotes(notes) {
+  const list = Array.isArray(notes) ? notes.slice() : [];
+  const kept = [];
+  let appUpdate = null;
+  let shiftUpdate = null;
+  for (const note of list) {
+    const kind = normalizeNotifKindKey(note && note.kind);
+    if (isAppUpdateKind(kind)) {
+      if (!appUpdate) {
+        appUpdate = {
+          ...note,
+          kind: "app_update",
+          title: note.title || "App updated",
+          description:
+            note.description ||
+            note.body ||
+            "Synk was updated. Open release notes for what’s new.",
+          body:
+            note.body ||
+            note.description ||
+            "Synk was updated. Open release notes for what’s new.",
+        };
+        kept.push(appUpdate);
+      } else {
+        if (appUpdate.readAt && !note.readAt) appUpdate.readAt = null;
+        if (!appUpdate.version && note.version) appUpdate.version = note.version;
+        if (new Date(note.createdAt || 0) > new Date(appUpdate.createdAt || 0)) {
+          appUpdate.createdAt = note.createdAt;
+          if (note.version) appUpdate.version = note.version;
+          if (note.description || note.body) {
+            appUpdate.description = note.description || note.body;
+            appUpdate.body = note.body || note.description;
+          }
+        }
+      }
+      continue;
+    }
+    if (isTestingShiftKind(kind)) {
+      if (!shiftUpdate) {
+        shiftUpdate = {
+          ...note,
+          kind: "testing_shift",
+          title: note.title || "Early access shift",
+          description:
+            note.description ||
+            note.body ||
+            "A new testing shift is ready. Open Staff Hub to start your session.",
+          body:
+            note.body ||
+            note.description ||
+            "A new testing shift is ready. Open Staff Hub to start your session.",
+        };
+        kept.push(shiftUpdate);
+      } else {
+        if (shiftUpdate.readAt && !note.readAt) shiftUpdate.readAt = null;
+        if (!shiftUpdate.version && note.version) shiftUpdate.version = note.version;
+        if (new Date(note.createdAt || 0) > new Date(shiftUpdate.createdAt || 0)) {
+          shiftUpdate.createdAt = note.createdAt;
+          if (note.version) shiftUpdate.version = note.version;
+          if (note.description || note.body) {
+            shiftUpdate.description = note.description || note.body;
+            shiftUpdate.body = note.body || note.description;
+          }
+        }
+      }
+      continue;
+    }
+    kept.push(note);
+  }
+  kept.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return kept;
+}
+
+// Back-compat alias used by older call sites / tests.
+const collapseAppUpdateNotes = collapseConsolidatedNotes;
+const coalesceAppUpdateNotifications = coalesceConsolidatedNotifications;
+
+async function loadNotifications(sql, profileId, { limit = 50, username = "" } = {}) {
   const capped = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  await coalesceConsolidatedNotifications(sql, profileId);
   const rows = await sql`
     SELECT
       id,
@@ -311,7 +633,82 @@ async function loadNotifications(sql, profileId, { limit = 50 } = {}) {
     ORDER BY created_at DESC
     LIMIT ${capped}
   `;
-  return rows.map(mapNotification);
+  const notes = collapseConsolidatedNotes(rows.map(mapNotification));
+
+  // Surface pending friend requests even if a row was missed.
+  const meName = normalizePublicUsername(username);
+  if (meName) {
+    try {
+      const pending = await sql`
+        SELECT id, requester_username, created_at
+        FROM synk_community_friendships
+        WHERE addressee_username = ${meName}
+          AND status = 'pending'
+        ORDER BY created_at DESC
+        LIMIT 20
+      `;
+      const seen = new Set(
+        notes
+          .filter((n) => n.kind === "friend_request" && n.actorUsername)
+          .map((n) => String(n.actorUsername).toLowerCase())
+      );
+      for (const row of pending) {
+        const actor = String(row.requester_username || "").toLowerCase();
+        if (!actor || seen.has(actor)) continue;
+        const actorName = row.requester_username;
+        const copy = notificationCopy({
+          kind: "friend_request",
+          actorUsername: actorName,
+        });
+        notes.unshift({
+          id: `friend-req-${row.id}`,
+          kind: "friend_request",
+          actorUsername: actorName,
+          postId: null,
+          commentId: null,
+          body: copy.description,
+          title: copy.title,
+          description: copy.description,
+          readAt: null,
+          createdAt: row.created_at,
+        });
+        seen.add(actor);
+      }
+    } catch (_) {}
+  }
+
+  notes.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const cappedNotes = notes.slice(0, capped);
+  try {
+    const actors = cappedNotes
+      .map((n) => String(n.actorUsername || "").trim())
+      .filter(Boolean);
+    if (actors.length) {
+      const avatars = await getAvatarsByUsernames(sql, actors);
+      for (const note of cappedNotes) {
+        const key = normalizePublicUsername(note.actorUsername || "");
+        note.actorAvatarUrl = (key && avatars[key]) || "";
+      }
+    } else {
+      for (const note of cappedNotes) note.actorAvatarUrl = "";
+    }
+  } catch (_) {
+    for (const note of cappedNotes) note.actorAvatarUrl = note.actorAvatarUrl || "";
+  }
+  return cappedNotes;
+}
+
+async function resolveProfileIdForUsername(sql, username) {
+  const name = normalizePublicUsername(username);
+  if (!name) return null;
+  const direct = await findCommunityProfileIdByUsername(sql, name);
+  if (direct) return direct;
+  try {
+    const alt = await findCommunityAltAccount(sql, { username: name });
+    return (alt && alt.ownerProfileId) || null;
+  } catch (_) {
+    return null;
+  }
 }
 
 async function createNotification(
@@ -332,6 +729,20 @@ async function createNotification(
       ${String(body || "").slice(0, 500)}
     )
   `;
+  try {
+    const payload = notificationPushPayload({
+      kind,
+      actorUsername,
+      body,
+      postId,
+    });
+    await notifySynkProfile(sql, profileId, payload);
+  } catch (err) {
+    console.error(
+      "synk notification push failed",
+      err && err.message ? err.message : err
+    );
+  }
 }
 
 async function enrichPosts(sql, rows, profileId) {
@@ -447,10 +858,12 @@ async function loadPosts(
   sql,
   {
     groupId = null,
+    channelId = null,
     authorUsername = null,
     profileId = null,
     joinedOnly = false,
     savedOnly = false,
+    excludeOfficial = false,
     sort = "new",
     limit = 80,
   } = {}
@@ -462,6 +875,7 @@ async function loadPosts(
   const useJoined = Boolean(joinedOnly && profileId);
   const useSaved = Boolean(savedOnly && profileId);
   const hideForViewer = Boolean(profileId);
+  const hideOfficial = Boolean(excludeOfficial && !groupId);
 
   const rows = byScore
     ? await sql`
@@ -477,10 +891,21 @@ async function loadPosts(
           p.created_at,
           p.group_id,
           p.author_username,
+          p.suggestion_status,
+          p.suggestion_tags,
+          p.suggestion_reply,
+          p.is_pinned,
           m.name,
           c.public_username,
           g.slug AS group_slug,
           g.name AS group_name,
+          g.theme AS group_theme,
+          g.is_official AS group_is_official,
+          p.channel_id,
+          ch.slug AS channel_slug,
+          ch.name AS channel_name,
+          ch.emoji AS channel_emoji,
+          ch.kind AS channel_kind,
           (
             SELECT COUNT(*)::int
             FROM synk_community_comments cc
@@ -496,10 +921,12 @@ async function loadPosts(
         JOIN synk_profiles m ON m.id = p.synk_profile_id
         LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
         LEFT JOIN synk_community_groups g ON g.id = p.group_id
+        LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
         LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
         LEFT JOIN synk_community_alt_accounts a
           ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
         WHERE (${groupId}::uuid IS NULL OR p.group_id = ${groupId})
+          AND (${channelId}::uuid IS NULL OR p.channel_id = ${channelId})
           AND (
             ${author || null}::text IS NULL
             OR COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = ${author || null}
@@ -531,7 +958,11 @@ async function loadPosts(
                 AND hd.post_id = p.id
             )
           )
-        ORDER BY p.score DESC, p.created_at DESC
+          AND (
+            ${hideOfficial ? 1 : 0} = 0
+            OR COALESCE(g.is_official, FALSE) = FALSE
+          )
+        ORDER BY COALESCE(p.is_pinned, FALSE) DESC, p.score DESC, p.created_at DESC
         LIMIT ${capped}
       `
     : await sql`
@@ -547,10 +978,21 @@ async function loadPosts(
           p.created_at,
           p.group_id,
           p.author_username,
+          p.suggestion_status,
+          p.suggestion_tags,
+          p.suggestion_reply,
+          p.is_pinned,
           m.name,
           c.public_username,
           g.slug AS group_slug,
           g.name AS group_name,
+          g.theme AS group_theme,
+          g.is_official AS group_is_official,
+          p.channel_id,
+          ch.slug AS channel_slug,
+          ch.name AS channel_name,
+          ch.emoji AS channel_emoji,
+          ch.kind AS channel_kind,
           (
             SELECT COUNT(*)::int
             FROM synk_community_comments cc
@@ -566,10 +1008,12 @@ async function loadPosts(
         JOIN synk_profiles m ON m.id = p.synk_profile_id
         LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
         LEFT JOIN synk_community_groups g ON g.id = p.group_id
+        LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
         LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
         LEFT JOIN synk_community_alt_accounts a
           ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
         WHERE (${groupId}::uuid IS NULL OR p.group_id = ${groupId})
+          AND (${channelId}::uuid IS NULL OR p.channel_id = ${channelId})
           AND (
             ${author || null}::text IS NULL
             OR COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = ${author || null}
@@ -601,7 +1045,11 @@ async function loadPosts(
                 AND hd.post_id = p.id
             )
           )
-        ORDER BY p.created_at DESC
+          AND (
+            ${hideOfficial ? 1 : 0} = 0
+            OR COALESCE(g.is_official, FALSE) = FALSE
+          )
+        ORDER BY COALESCE(p.is_pinned, FALSE) DESC, p.created_at DESC
         LIMIT ${capped}
       `;
 
@@ -623,10 +1071,21 @@ async function loadPostById(sql, postId, profileId = null) {
       p.created_at,
       p.group_id,
       p.author_username,
+      p.suggestion_status,
+      p.suggestion_tags,
+      p.suggestion_reply,
+      p.is_pinned,
+      p.channel_id,
+      ch.slug AS channel_slug,
+      ch.name AS channel_name,
+      ch.emoji AS channel_emoji,
+      ch.kind AS channel_kind,
       m.name,
       c.public_username,
       g.slug AS group_slug,
       g.name AS group_name,
+      g.theme AS group_theme,
+      g.is_official AS group_is_official,
       (
         SELECT COUNT(*)::int
         FROM synk_community_comments cc
@@ -642,6 +1101,7 @@ async function loadPostById(sql, postId, profileId = null) {
     JOIN synk_profiles m ON m.id = p.synk_profile_id
     LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
     LEFT JOIN synk_community_groups g ON g.id = p.group_id
+    LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
     LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
     LEFT JOIN synk_community_alt_accounts a
       ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
@@ -707,7 +1167,7 @@ async function resolvePostingPersona(sql, auth, role, requestedUsername) {
   const primary = normalizePublicUsername(auth.profile.publicUsername);
   const requested = normalizePublicUsername(requestedUsername) || primary;
   if (!requested) {
-    return { ok: false, status: 400, error: "Choose a public username before posting" };
+    return { ok: false, status: 400, error: "Set a public username before posting" };
   }
   if (requested === primary) {
     return { ok: true, username: primary, isAlt: false };
@@ -720,9 +1180,18 @@ async function resolvePostingPersona(sql, auth, role, requestedUsername) {
     ownerProfileId: auth.profile.id,
   });
   if (!alt) {
-    return { ok: false, status: 403, error: "That alt account is not available" };
+    return { ok: false, status: 403, error: "That alt account is unavailable" };
   }
   return { ok: true, username: alt.username, isAlt: true };
+}
+
+async function resolveActingUsername(sql, auth, role, body = {}, query = {}) {
+  const requested = normalizePublicUsername(
+    (body && (body.asUsername || body.as_username || body.actingAs || body.fromUsername)) ||
+      (query && (query.asUsername || query.as_username || query.actingAs)) ||
+      ""
+  );
+  return resolvePostingPersona(sql, auth, role, requested);
 }
 
 async function applyVote(sql, { profileId, targetType, targetId, value }) {
@@ -918,6 +1387,18 @@ async function saveCommunityAvatar(event, rawInput) {
   return `/api/community-avatar?id=${encodeURIComponent(saved.id)}&v=${Date.now()}`;
 }
 
+async function saveCommunityBanner(event, rawInput) {
+  // Reuse the community-avatar blob prefix so /api/community-avatar can serve it.
+  const saved = await saveImageToStore(event, rawInput, {
+    keyPrefix: "community-avatar",
+    maxBytes: Math.max(AVATAR_MAX_BYTES, 2_500_000),
+    source: "community-banner",
+  });
+  if (!saved) return null;
+  return `/api/community-avatar?id=${encodeURIComponent(saved.id)}&v=${Date.now()}`;
+}
+
+
 async function saveMemberSynkPhoto(event, rawInput) {
   const saved = await saveImageToStore(event, rawInput, {
     keyPrefix: "synk",
@@ -936,10 +1417,209 @@ function serializeTagRow(row, { pinned = false } = {}) {
     description: row.description || "",
     color: row.color,
     iconUrl: row.icon_url || null,
+    learnMoreEnabled: row.learn_more_enabled === true,
+    learnMorePageId: row.learn_more_page_id || null,
+    learnMorePageSlug: row.learn_more_page_slug || row.info_page_slug || null,
+    learnMorePageTitle: row.learn_more_page_title || row.info_page_title || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     pinned: Boolean(pinned),
   };
+}
+
+
+function sanitizeSearchQuery(raw) {
+  return String(raw || "")
+    .trim()
+    .slice(0, 80)
+    .replace(/[%_\\]/g, "");
+}
+
+async function searchCommunityPosts(sql, { query, profileId = null, sort = "new", limit = 40 } = {}) {
+  const q = sanitizeSearchQuery(query);
+  if (!q) return [];
+  const pattern = `%${q}%`;
+  const capped = Math.min(Math.max(Number(limit) || 40, 1), 80);
+  const sortKey = String(sort || "new").toLowerCase();
+  const byScore = sortKey === "hot" || sortKey === "top" || sortKey === "best";
+  const hideForViewer = Boolean(profileId);
+
+  const rows = byScore
+    ? await sql`
+        SELECT
+          p.id,
+          p.title,
+          p.post_type,
+          p.body,
+          p.link_url,
+          p.image_url,
+          p.poll_options,
+          p.score,
+          p.created_at,
+          p.group_id,
+          p.author_username,
+          p.suggestion_status,
+          p.suggestion_tags,
+          p.suggestion_reply,
+          p.is_pinned,
+          m.name,
+          c.public_username,
+          g.slug AS group_slug,
+          g.name AS group_name,
+          g.theme AS group_theme,
+          g.is_official AS group_is_official,
+          p.channel_id,
+          ch.slug AS channel_slug,
+          ch.name AS channel_name,
+          ch.emoji AS channel_emoji,
+          ch.kind AS channel_kind,
+          (
+            SELECT COUNT(*)::int
+            FROM synk_community_comments cc
+            WHERE cc.post_id = p.id
+          ) AS comment_count,
+          CASE
+            WHEN COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = c.public_username
+            THEN s.role
+            ELSE NULL
+          END AS author_role,
+          CASE WHEN a.id IS NOT NULL THEN TRUE ELSE FALSE END AS is_alt
+        FROM synk_community_posts p
+        JOIN synk_profiles m ON m.id = p.synk_profile_id
+        LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
+        LEFT JOIN synk_community_groups g ON g.id = p.group_id
+        LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
+        LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
+        LEFT JOIN synk_community_alt_accounts a
+          ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
+        WHERE (
+            COALESCE(p.title, '') ILIKE ${pattern}
+            OR COALESCE(p.body, '') ILIKE ${pattern}
+            OR COALESCE(g.slug, '') ILIKE ${pattern}
+            OR COALESCE(g.name, '') ILIKE ${pattern}
+          )
+          AND COALESCE(g.is_official, FALSE) = FALSE
+          AND (
+            ${hideForViewer ? 1 : 0} = 0
+            OR NOT EXISTS (
+              SELECT 1
+              FROM synk_community_hides hd
+              WHERE hd.synk_profile_id = ${profileId}
+                AND hd.post_id = p.id
+            )
+          )
+        ORDER BY COALESCE(p.is_pinned, FALSE) DESC, p.score DESC, p.created_at DESC
+        LIMIT ${capped}
+      `
+    : await sql`
+        SELECT
+          p.id,
+          p.title,
+          p.post_type,
+          p.body,
+          p.link_url,
+          p.image_url,
+          p.poll_options,
+          p.score,
+          p.created_at,
+          p.group_id,
+          p.author_username,
+          p.suggestion_status,
+          p.suggestion_tags,
+          p.suggestion_reply,
+          p.is_pinned,
+          m.name,
+          c.public_username,
+          g.slug AS group_slug,
+          g.name AS group_name,
+          g.theme AS group_theme,
+          g.is_official AS group_is_official,
+          p.channel_id,
+          ch.slug AS channel_slug,
+          ch.name AS channel_name,
+          ch.emoji AS channel_emoji,
+          ch.kind AS channel_kind,
+          (
+            SELECT COUNT(*)::int
+            FROM synk_community_comments cc
+            WHERE cc.post_id = p.id
+          ) AS comment_count,
+          CASE
+            WHEN COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username) = c.public_username
+            THEN s.role
+            ELSE NULL
+          END AS author_role,
+          CASE WHEN a.id IS NOT NULL THEN TRUE ELSE FALSE END AS is_alt
+        FROM synk_community_posts p
+        JOIN synk_profiles m ON m.id = p.synk_profile_id
+        LEFT JOIN synk_community_profiles c ON c.synk_profile_id = p.synk_profile_id
+        LEFT JOIN synk_community_groups g ON g.id = p.group_id
+        LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
+        LEFT JOIN synk_community_staff s ON s.synk_profile_id = p.synk_profile_id
+        LEFT JOIN synk_community_alt_accounts a
+          ON a.public_username = COALESCE(NULLIF(btrim(p.author_username), ''), c.public_username)
+        WHERE (
+            COALESCE(p.title, '') ILIKE ${pattern}
+            OR COALESCE(p.body, '') ILIKE ${pattern}
+            OR COALESCE(g.slug, '') ILIKE ${pattern}
+            OR COALESCE(g.name, '') ILIKE ${pattern}
+          )
+          AND COALESCE(g.is_official, FALSE) = FALSE
+          AND (
+            ${hideForViewer ? 1 : 0} = 0
+            OR NOT EXISTS (
+              SELECT 1
+              FROM synk_community_hides hd
+              WHERE hd.synk_profile_id = ${profileId}
+                AND hd.post_id = p.id
+            )
+          )
+        ORDER BY COALESCE(p.is_pinned, FALSE) DESC, p.created_at DESC
+        LIMIT ${capped}
+      `;
+
+  return enrichPosts(sql, rows, profileId);
+}
+
+async function searchCommunityUsers(sql, query, limit = 30) {
+  const q = sanitizeSearchQuery(query);
+  if (!q) return [];
+  const pattern = `%${q}%`;
+  const capped = Math.min(Math.max(Number(limit) || 30, 1), 50);
+  const rows = await sql`
+    SELECT * FROM (
+      SELECT
+        c.public_username AS username,
+        COALESCE(c.display_name, '') AS display_name,
+        COALESCE(c.avatar_url, '') AS avatar_url,
+        FALSE AS is_alt,
+        c.created_at
+      FROM synk_community_profiles c
+      WHERE c.public_username ILIKE ${pattern}
+         OR COALESCE(c.display_name, '') ILIKE ${pattern}
+      UNION ALL
+      SELECT
+        a.public_username AS username,
+        COALESCE(NULLIF(btrim(a.display_name), ''), COALESCE(a.label, ''), a.public_username) AS display_name,
+        COALESCE(a.avatar_url, '') AS avatar_url,
+        TRUE AS is_alt,
+        a.created_at
+      FROM synk_community_alt_accounts a
+      WHERE a.public_username ILIKE ${pattern}
+         OR COALESCE(a.display_name, '') ILIKE ${pattern}
+         OR COALESCE(a.label, '') ILIKE ${pattern}
+    ) u
+    ORDER BY u.username ASC
+    LIMIT ${capped}
+  `;
+  return rows.map((row) => ({
+    username: row.username,
+    displayName: String(row.display_name || "").trim(),
+    avatarUrl: String(row.avatar_url || "").trim(),
+    // Alts are first-class accounts in the product UI — do not mark them publicly.
+    isAlt: false,
+    joinedAt: row.created_at || null,
+  }));
 }
 
 exports.handler = async (event) => {
@@ -985,12 +1665,110 @@ exports.handler = async (event) => {
       const groupsRaw = await listCommunityGroups(sql);
       const groups = await markGroupsJoined(sql, groupsRaw, auth.profile.id);
 
+      const releaseNotesVersion = String(
+        qs.releaseNotes || qs.release_notes || qs.notesVersion || ""
+      ).trim();
+      if (releaseNotesVersion && releaseNotesVersion !== "1") {
+        const row = await getAppUpdateReleaseNotes(sql, releaseNotesVersion);
+        if (!row) return json(404, { error: "Release notes not found" });
+        const payload = buildReleaseNotesPayload(row.notes || row.body, {
+          isStaff: isCommunityStaffRole(role),
+          isBetaTester: !!(mePayload(auth, role, alts, myTags, myPinnedTag) || {}).betaTester,
+          version: row.version,
+          body: row.body,
+          createdAt: row.createdAt,
+        });
+        return json(200, { ok: true, ...payload });
+      }
+      if (qs.releaseNotes === "1" || qs.release_notes === "1") {
+        const ver = String(qs.version || qs.v || "").trim();
+        if (!ver) return json(400, { error: "Version is required" });
+        const row = await getAppUpdateReleaseNotes(sql, ver);
+        if (!row) return json(404, { error: "Release notes not found" });
+        const me = mePayload(auth, role, alts, myTags, myPinnedTag);
+        const payload = buildReleaseNotesPayload(row.notes || row.body, {
+          isStaff: isCommunityStaffRole(role),
+          isBetaTester: !!me.betaTester,
+          version: row.version,
+          body: row.body,
+          createdAt: row.createdAt,
+        });
+        return json(200, { ok: true, ...payload });
+      }
+
       if (qs.inbox === "1" || qs.notifications === "1") {
-        const notifications = await loadNotifications(sql, auth.profile.id);
+        const notifications = await loadNotifications(sql, auth.profile.id, {
+          username: primaryUsername,
+        });
         return json(200, {
           ok: true,
           me: mePayload(auth, role, alts, myTags, myPinnedTag),
           notifications,
+          unreadCount,
+          tags: tagCatalog,
+          ownerUsername: COMMUNITY_OWNER_USERNAME,
+        });
+      }
+
+      if (qs.shell === "1" || qs.me === "1") {
+        const payload = {
+          ok: true,
+          me: mePayload(auth, role, alts, myTags, myPinnedTag),
+          groups,
+          posts: [],
+          tags: tagCatalog,
+          ownerUsername: COMMUNITY_OWNER_USERNAME,
+          unreadCount,
+        };
+        if (isCommunityStaffRole(role)) {
+          payload.staff = await listCommunityStaff(sql);
+        }
+        return json(200, payload);
+      }
+
+      if (qs.dms === "1" || qs.messages === "1") {
+        if (!primaryUsername) {
+          return json(400, { error: "Set a public username first" });
+        }
+        const threads = await listDmThreads(sql, primaryUsername);
+        return json(200, {
+          ok: true,
+          me: mePayload(auth, role, alts, myTags, myPinnedTag),
+          threads,
+          unreadCount,
+          dmUnread: 0,
+          tags: tagCatalog,
+          ownerUsername: COMMUNITY_OWNER_USERNAME,
+        });
+      }
+
+      const dmThreadId = String(qs.dm || qs.threadId || "").trim();
+      const dmUser = normalizePublicUsername(qs.dmUser || qs.with || "");
+      if (dmThreadId || dmUser) {
+        if (!primaryUsername) {
+          return json(400, { error: "Set a public username first" });
+        }
+        let thread = null;
+        let messages = [];
+        if (dmThreadId) {
+          if (!isUuid(dmThreadId)) return json(400, { error: "Invalid thread id" });
+          const result = await listDmMessages(sql, dmThreadId, primaryUsername);
+          if (!result.ok) return json(404, { error: result.error || "Thread not found" });
+          thread = result.thread;
+          messages = result.messages;
+        } else {
+          const opened = await getOrCreateDmThread(sql, primaryUsername, dmUser);
+          if (!opened.ok) return json(400, { error: opened.error || "Unable to open conversation" });
+          const result = await listDmMessages(sql, opened.thread.id, primaryUsername);
+          if (!result.ok) return json(404, { error: result.error || "Thread not found" });
+          thread = result.thread;
+          messages = result.messages;
+        }
+        return json(200, {
+          ok: true,
+          me: mePayload(auth, role, alts, myTags, myPinnedTag),
+          thread,
+          messages,
           unreadCount,
           tags: tagCatalog,
           ownerUsername: COMMUNITY_OWNER_USERNAME,
@@ -1023,18 +1801,87 @@ exports.handler = async (event) => {
         return json(200, payload);
       }
 
+      const searchQuery = sanitizeSearchQuery(qs.q || qs.search || qs.query || "");
+      if (searchQuery) {
+        const tabRaw = String(qs.tab || "all").trim().toLowerCase();
+        const tab = ["all", "popular", "groups", "users"].includes(tabRaw) ? tabRaw : "all";
+        const sort = String(qs.sort || "").trim().toLowerCase() || (tab === "popular" ? "hot" : "new");
+        const wantPosts = tab === "all" || tab === "popular";
+        const wantUsers = tab === "all" || tab === "users";
+        const wantGroups = tab === "all" || tab === "groups";
+
+        const posts = wantPosts
+          ? await searchCommunityPosts(sql, {
+              query: searchQuery,
+              profileId: auth.profile.id,
+              sort: tab === "popular" ? "hot" : sort,
+              limit: tab === "all" ? 30 : 50,
+            })
+          : [];
+        const users = wantUsers ? await searchCommunityUsers(sql, searchQuery, tab === "all" ? 12 : 40) : [];
+        const matchedGroups = wantGroups
+          ? groups.filter((g) => {
+              const hay = `${g.slug || ""} ${g.name || ""} ${g.description || ""}`.toLowerCase();
+              return hay.includes(searchQuery.toLowerCase());
+            })
+          : [];
+
+        if (wantPosts) await attachPinnedTagsToAuthors(sql, posts);
+
+        const payload = {
+          ok: true,
+          me: mePayload(auth, role, alts, myTags, myPinnedTag),
+          groups,
+          matchedGroups,
+          users,
+          posts,
+          search: { query: searchQuery, tab },
+          tags: tagCatalog,
+          ownerUsername: COMMUNITY_OWNER_USERNAME,
+          unreadCount,
+        };
+        if (isCommunityStaffRole(role)) {
+          payload.staff = await listCommunityStaff(sql);
+        }
+        return json(200, payload);
+      }
+
       const profileUsername = normalizePublicUsername(qs.user || qs.username || qs.u || "");
       const groupSlug = normalizeGroupSlug(qs.group || qs.slug || "");
       const feed = String(qs.feed || "").trim().toLowerCase();
       const sort = String(qs.sort || "").trim().toLowerCase() || "new";
 
       let activeGroup = null;
+      let activeChannel = null;
       let profile = null;
       let posts = [];
 
       if (profileUsername) {
         profile = await findCommunityPublicProfile(sql, profileUsername);
         if (!profile) return json(404, { error: "Profile not found" });
+        // Viewer persona may be an alt (asUsername). Self/follow are relative to that persona,
+        // so an alt can follow the owner's primary account and vice versa.
+        const viewerPersona = await resolveActingUsername(sql, auth, role, {}, qs);
+        const viewerUsername = viewerPersona.ok
+          ? viewerPersona.username
+          : primaryUsername;
+        const isSelf = Boolean(viewerUsername && viewerUsername === profileUsername);
+        profile.isSelf = isSelf;
+        const followCounts = await getFollowCounts(sql, profileUsername);
+        profile.followerCount = followCounts.followers;
+        profile.followingCount = followCounts.following;
+        profile.isFollowing = false;
+        if (viewerUsername && !isSelf) {
+          const friendship = await getFriendship(sql, viewerUsername, profileUsername);
+          profile.friendship = {
+            status: friendshipViewerStatus(friendship),
+          };
+          profile.canMessage = await canDm(sql, viewerUsername, profileUsername);
+          profile.isFollowing = await isFollowing(sql, viewerUsername, profileUsername);
+        } else {
+          profile.friendship = { status: "none" };
+          profile.canMessage = false;
+        }
         posts = await loadPosts(sql, {
           authorUsername: profileUsername,
           profileId: auth.profile.id,
@@ -1050,6 +1897,7 @@ exports.handler = async (event) => {
         posts = await loadPosts(sql, {
           profileId: auth.profile.id,
           sort: "hot",
+          excludeOfficial: true,
         });
       } else if (feed === "home") {
         const joined = await listJoinedGroupIdSet(sql, auth.profile.id);
@@ -1057,11 +1905,13 @@ exports.handler = async (event) => {
           profileId: auth.profile.id,
           joinedOnly: joined.size > 0,
           sort,
+          excludeOfficial: true,
         });
       } else {
         if (groupSlug) {
           activeGroup = await findCommunityGroup(sql, { slug: groupSlug });
           if (!activeGroup) return json(404, { error: "Group not found" });
+          activeGroup = await hydrateCommunityGroup(sql, activeGroup);
           activeGroup = {
             ...activeGroup,
             joined: (await listJoinedGroupIdSet(sql, auth.profile.id)).has(
@@ -1069,8 +1919,36 @@ exports.handler = async (event) => {
             ),
           };
         }
+        const channelSlug = String(qs.channel || qs.channelSlug || "")
+          .trim()
+          .toLowerCase();
+        if (activeGroup && (channelSlug || qs.channelId)) {
+          activeChannel = await findGroupChannel(sql, {
+            id: qs.channelId,
+            groupId: activeGroup.id,
+            slug: channelSlug,
+          });
+        }
+        // Official Synk Discord group always scopes the feed to a channel (default: general).
+        if (
+          activeGroup &&
+          !activeChannel &&
+          (activeGroup.isOfficial || activeGroup.slug === "synk")
+        ) {
+          activeChannel =
+            (activeGroup.channels || []).find((c) => c.slug === "general") ||
+            (activeGroup.channels || [])[0] ||
+            null;
+          if (!activeChannel) {
+            activeChannel = await findGroupChannel(sql, {
+              groupId: activeGroup.id,
+              slug: "general",
+            });
+          }
+        }
         posts = await loadPosts(sql, {
           groupId: activeGroup ? activeGroup.id : null,
+          channelId: activeChannel ? activeChannel.id : null,
           profileId: auth.profile.id,
           sort,
         });
@@ -1083,6 +1961,7 @@ exports.handler = async (event) => {
         me: mePayload(auth, role, alts, myTags, myPinnedTag),
         groups,
         group: activeGroup,
+        channel: activeChannel,
         profile,
         posts,
         tags: tagCatalog,
@@ -1101,6 +1980,42 @@ exports.handler = async (event) => {
 
     const action = String(body.action || "post").trim().toLowerCase();
 
+    if (action === "push-public-key") {
+      const cfg = getVapidConfig();
+      if (!cfg) return json(503, { error: "Push is not configured" });
+      return json(200, { ok: true, publicKey: cfg.publicKey });
+    }
+
+    if (action === "push-subscribe") {
+      const endpoint = String(body.endpoint || "").trim();
+      const keys = body.keys || {};
+      const p256dh = String(keys.p256dh || body.p256dh || "").trim();
+      const authKey = String(keys.auth || body.auth || "").trim();
+      const userAgent = String(
+        (event.headers && (event.headers["user-agent"] || event.headers["User-Agent"])) ||
+          ""
+      ).slice(0, 300);
+      const saved = await saveSynkPushSubscription(sql, {
+        profileId: auth.profile.id,
+        endpoint,
+        p256dh,
+        auth: authKey,
+        userAgent,
+      });
+      if (!saved.ok) return json(400, { error: saved.error || "Invalid push subscription" });
+      return json(200, { ok: true });
+    }
+
+    if (action === "push-unsubscribe") {
+      const endpoint = String(body.endpoint || "").trim();
+      if (!endpoint) return json(400, { error: "Endpoint is required" });
+      await deleteSynkPushSubscription(sql, {
+        profileId: auth.profile.id,
+        endpoint,
+      });
+      return json(200, { ok: true });
+    }
+
     if (action === "set-username") {
       const username = normalizePublicUsername(body.username || body.publicUsername);
       if (!username || username.length < 3) {
@@ -1111,16 +2026,58 @@ exports.handler = async (event) => {
       if (!/^[a-z0-9_]+$/.test(username)) {
         return json(400, { error: "Use only letters, numbers, and underscores" });
       }
-      if (await isCommunityUsernameTaken(sql, username, { exceptProfileId: auth.profile.id })) {
+
+      const primary = normalizePublicUsername(auth.profile.publicUsername);
+      const asUsername =
+        normalizePublicUsername(body.asUsername || body.currentUsername || body.fromUsername) ||
+        primary;
+      const renamingAlt = Boolean(asUsername && primary && asUsername !== primary);
+
+      let alt = null;
+      if (renamingAlt) {
+        if (role !== "owner") {
+          return json(403, { error: "Only the owner can rename alt accounts" });
+        }
+        alt = await findCommunityAltAccount(sql, {
+          username: asUsername,
+          ownerProfileId: auth.profile.id,
+        });
+        if (!alt) return json(403, { error: "That account is unavailable" });
+      }
+
+      if (
+        await isCommunityUsernameTaken(sql, username, {
+          exceptProfileId: renamingAlt ? null : auth.profile.id,
+          exceptAltId: renamingAlt ? alt.id : null,
+        })
+      ) {
         return json(409, { error: "That username is already taken" });
       }
+
       try {
-        await sql`
-          INSERT INTO synk_community_profiles (synk_profile_id, public_username)
-          VALUES (${auth.profile.id}, ${username})
-          ON CONFLICT (synk_profile_id) DO UPDATE
-          SET public_username = EXCLUDED.public_username, updated_at = NOW()
-        `;
+        if (renamingAlt) {
+          await sql`
+            UPDATE synk_community_alt_accounts
+            SET public_username = ${username}, updated_at = NOW()
+            WHERE id = ${alt.id}
+              AND owner_synk_profile_id = ${auth.profile.id}
+          `;
+          await renameCommunityUsername(sql, asUsername, username);
+        } else {
+          const previous = primary || "";
+          await sql`
+            INSERT INTO synk_community_profiles (synk_profile_id, public_username)
+            VALUES (${auth.profile.id}, ${username})
+            ON CONFLICT (synk_profile_id) DO UPDATE
+            SET public_username = EXCLUDED.public_username, updated_at = NOW()
+          `;
+          if (previous && previous !== username) {
+            await renameCommunityUsername(sql, previous, username);
+          }
+          if (username === COMMUNITY_OWNER_USERNAME) {
+            await ensureCommunityOwner(sql);
+          }
+        }
       } catch (err) {
         if (String(err.message || "").includes("unique") || err.code === "23505") {
           return json(409, { error: "That username is already taken" });
@@ -1128,33 +2085,38 @@ exports.handler = async (event) => {
         throw err;
       }
 
-      if (username === COMMUNITY_OWNER_USERNAME) {
-        await ensureCommunityOwner(sql);
-      }
-
       await logSynkEvent(sql, {
         eventType: "community_username",
         profileId: auth.profile.id,
         ip,
-        detail: username,
+        detail: renamingAlt ? `${asUsername}->${username}` : username,
       });
       const nextRole = await getCommunityStaffRole(sql, auth.profile.id);
       const nextAlts =
         nextRole === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
+      if (nextAlts.length) {
+        for (const item of nextAlts) {
+          item.tags = await listUsernameTags(sql, item.username);
+          item.pinnedTag = item.tags.find((tag) => tag.pinned) || null;
+        }
+      }
+      const nextAuth = renamingAlt
+        ? auth
+        : { ...auth, profile: { ...auth.profile, publicUsername: username } };
       return json(200, {
         ok: true,
-        publicUsername: username,
-        me: mePayload(
-          { ...auth, profile: { ...auth.profile, publicUsername: username } },
-          nextRole,
-          nextAlts
-        ),
+        publicUsername: renamingAlt
+          ? auth.profile.publicUsername
+          : username,
+        username,
+        asUsername: renamingAlt ? username : username,
+        me: mePayload(nextAuth, nextRole, nextAlts),
       });
     }
 
     if (action === "set-display-name") {
       const primary = normalizePublicUsername(auth.profile.publicUsername);
-      if (!primary) return json(400, { error: "Set a username first" });
+      if (!primary) return json(400, { error: "Set a public username first" });
       const requested = normalizePublicUsername(body.username || body.asUsername || primary) || primary;
       const result = await setDisplayNameForUsername(
         sql,
@@ -1162,7 +2124,7 @@ exports.handler = async (event) => {
         body.displayName != null ? body.displayName : body.name,
         auth.profile.id
       );
-      if (!result.ok) return json(400, { error: result.error || "Could not save display name" });
+      if (!result.ok) return json(400, { error: result.error || "Unable to save display name" });
       if (requested === primary) {
         auth.profile.displayName = result.displayName;
       }
@@ -1182,10 +2144,468 @@ exports.handler = async (event) => {
       });
     }
 
+    if (action === "set-bio") {
+      const primary = normalizePublicUsername(auth.profile.publicUsername);
+      if (!primary) return json(400, { error: "Set a public username first" });
+      const requested = normalizePublicUsername(body.username || body.asUsername || primary) || primary;
+      const result = await setBioForUsername(
+        sql,
+        requested,
+        body.bio != null ? body.bio : body.text,
+        auth.profile.id
+      );
+      if (!result.ok) return json(400, { error: result.error || "Unable to save bio" });
+      if (requested === primary) {
+        auth.profile.bio = result.bio;
+      }
+      const nextAlts =
+        role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
+      if (nextAlts.length) {
+        for (const alt of nextAlts) {
+          alt.tags = await listUsernameTags(sql, alt.username);
+          alt.pinnedTag = alt.tags.find((tag) => tag.pinned) || null;
+        }
+      }
+      return json(200, {
+        ok: true,
+        username: result.username,
+        bio: result.bio,
+        me: mePayload(auth, role, nextAlts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "set-dm-policy") {
+      const primary = normalizePublicUsername(auth.profile.publicUsername);
+      if (!primary) return json(400, { error: "Set a public username first" });
+      const requested = normalizePublicUsername(body.username || body.asUsername || primary) || primary;
+      const rawPolicy =
+        body.dmPolicy != null
+          ? body.dmPolicy
+          : body.policy != null
+            ? body.policy
+            : body.dm_policy;
+      const normalized = normalizeDmPolicy(rawPolicy);
+      if (
+        rawPolicy != null &&
+        String(rawPolicy).trim() !== "" &&
+        !["friends", "nobody", "everyone"].includes(
+          String(rawPolicy).trim().toLowerCase()
+        )
+      ) {
+        return json(400, { error: "dmPolicy must be friends, nobody, or everyone" });
+      }
+      const result = await setDmPolicyForUsername(
+        sql,
+        requested,
+        normalized,
+        auth.profile.id
+      );
+      if (!result.ok) return json(400, { error: result.error || "Unable to save message privacy setting" });
+      if (requested === primary) {
+        auth.profile.dmPolicy = result.dmPolicy;
+      }
+      const nextAlts =
+        role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
+      if (nextAlts.length) {
+        for (const alt of nextAlts) {
+          alt.tags = await listUsernameTags(sql, alt.username);
+          alt.pinnedTag = alt.tags.find((tag) => tag.pinned) || null;
+        }
+      }
+      return json(200, {
+        ok: true,
+        username: result.username,
+        dmPolicy: result.dmPolicy,
+        me: mePayload(auth, role, nextAlts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "set-presence") {
+      const primary = normalizePublicUsername(auth.profile.publicUsername);
+      if (!primary) return json(400, { error: "Set a public username first" });
+      const requested = normalizePublicUsername(body.username || body.asUsername || primary) || primary;
+      const rawStatus =
+        body.presenceStatus != null
+          ? body.presenceStatus
+          : body.status != null
+            ? body.status
+            : body.presence_status;
+      const normalized = normalizePresenceStatus(rawStatus);
+      if (
+        rawStatus != null &&
+        String(rawStatus).trim() !== "" &&
+        !["online", "idle", "away", "dnd", "do_not_disturb", "do-not-disturb", "offline", "invisible"].includes(
+          String(rawStatus).trim().toLowerCase()
+        )
+      ) {
+        return json(400, { error: "presenceStatus must be online, idle, dnd, or offline" });
+      }
+      const result = await setPresenceForUsername(
+        sql,
+        requested,
+        normalized,
+        auth.profile.id
+      );
+      if (!result.ok) return json(400, { error: result.error || "Unable to save status" });
+      if (requested === primary) {
+        auth.profile.presenceStatus = result.presenceStatus;
+      }
+      const nextAlts =
+        role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
+      if (nextAlts.length) {
+        for (const alt of nextAlts) {
+          alt.tags = await listUsernameTags(sql, alt.username);
+          alt.pinnedTag = alt.tags.find((tag) => tag.pinned) || null;
+        }
+      }
+      return json(200, {
+        ok: true,
+        username: result.username,
+        presenceStatus: result.presenceStatus,
+        me: mePayload(auth, role, nextAlts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "friend-request") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const target = normalizePublicUsername(body.username || body.user || body.to);
+      if (!target) return json(400, { error: "Username required" });
+      const result = await requestFriendship(sql, actorUsername, target);
+      if (!result.ok) return json(400, { error: result.error || "Unable to send friend request" });
+      // Notify the other person so it shows in their bell.
+      try {
+        const targetProfileId = await resolveProfileIdForUsername(sql, target);
+        if (targetProfileId) {
+          await createNotification(sql, {
+            profileId: targetProfileId,
+            kind: "friend_request",
+            actorUsername: actorUsername,
+            body: `${actorUsername} sent you a friend request.`,
+          });
+        }
+      } catch (_) {}
+      return json(200, {
+        ok: true,
+        username: target,
+        friendship: {
+          status: friendshipViewerStatus(result.friendship),
+        },
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "friend-accept") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const target = normalizePublicUsername(body.username || body.user || body.from);
+      if (!target) return json(400, { error: "Username required" });
+      const result = await respondFriendship(sql, actorUsername, target, true);
+      if (!result.ok) return json(400, { error: result.error || "Unable to accept friend request" });
+      try {
+        const targetProfileId = await resolveProfileIdForUsername(sql, target);
+        if (targetProfileId) {
+          await createNotification(sql, {
+            profileId: targetProfileId,
+            kind: "friend_accept",
+            actorUsername: actorUsername,
+            body: `${actorUsername} accepted your friend request.`,
+          });
+        }
+      } catch (_) {}
+      return json(200, {
+        ok: true,
+        username: target,
+        friendship: {
+          status: friendshipViewerStatus(result.friendship),
+        },
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "friend-decline") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const target = normalizePublicUsername(body.username || body.user || body.from);
+      if (!target) return json(400, { error: "Username required" });
+      const result = await respondFriendship(sql, actorUsername, target, false);
+      if (!result.ok) return json(400, { error: result.error || "Unable to decline friend request" });
+      return json(200, {
+        ok: true,
+        username: target,
+        friendship: { status: "none" },
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "friend-remove") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const target = normalizePublicUsername(body.username || body.user);
+      if (!target) return json(400, { error: "Username required" });
+      const result = await removeFriendship(sql, actorUsername, target);
+      if (!result.ok) return json(400, { error: result.error || "Unable to remove friend" });
+      return json(200, {
+        ok: true,
+        username: target,
+        friendship: { status: "none" },
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "follow" || action === "unfollow") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const target = normalizePublicUsername(body.username || body.user);
+      if (!target) return json(400, { error: "Username required" });
+      const result =
+        action === "follow"
+          ? await followUser(sql, actorUsername, target)
+          : await unfollowUser(sql, actorUsername, target);
+      if (!result.ok) return json(400, { error: result.error || "Unable to update follow" });
+      return json(200, {
+        ok: true,
+        username: target,
+        isFollowing: !!result.following,
+        followerCount: result.followerCount,
+        followingCount: result.followingCount,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "list-followers" || action === "list-following") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const target = normalizePublicUsername(body.username || body.user || acting.username);
+      if (!target) return json(400, { error: "Username required" });
+      if (!(await findCommunityPublicProfile(sql, target))) {
+        return json(404, { error: "Profile not found" });
+      }
+      const usernames =
+        action === "list-followers"
+          ? await listFollowers(sql, target)
+          : await listFollowing(sql, target);
+      const [names, avatars] = await Promise.all([
+        getDisplayNamesByUsernames(sql, usernames),
+        getAvatarsByUsernames(sql, usernames),
+      ]);
+      return json(200, {
+        ok: true,
+        username: target,
+        kind: action === "list-followers" ? "followers" : "following",
+        users: usernames.map((username) => ({
+          username,
+          displayName: names[username] || "",
+          avatarUrl: avatars[username] || "",
+        })),
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-friends") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const usernames = await listFriends(sql, actorUsername);
+      const [names, avatars] = await Promise.all([
+        getDisplayNamesByUsernames(sql, usernames),
+        getAvatarsByUsernames(sql, usernames),
+      ]);
+      return json(200, {
+        ok: true,
+        friends: usernames.map((username) => ({
+          username,
+          displayName: names[username] || "",
+          avatarUrl: avatars[username] || "",
+        })),
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-list") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const threads = await listDmThreads(sql, actorUsername);
+      return json(200, {
+        ok: true,
+        threads,
+        dmUnread: 0,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-open") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const target = normalizePublicUsername(body.username || body.user || body.with);
+      if (!target) return json(400, { error: "Username required" });
+      const opened = await getOrCreateDmThread(sql, actorUsername, target);
+      if (!opened.ok) return json(400, { error: opened.error || "Unable to open conversation" });
+      const result = await listDmMessages(sql, opened.thread.id, actorUsername);
+      if (!result.ok) return json(404, { error: result.error || "Thread not found" });
+      return json(200, {
+        ok: true,
+        thread: result.thread,
+        messages: result.messages,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-send") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      let target = normalizePublicUsername(body.username || body.user || body.to);
+      const threadId = String(body.threadId || body.thread || "").trim();
+      if (!target && threadId) {
+        if (!isUuid(threadId)) return json(400, { error: "Invalid thread id" });
+        const existing = await getDmThreadById(sql, threadId, actorUsername);
+        if (!existing) return json(404, { error: "Thread not found" });
+        target = existing.otherUser;
+      }
+      if (!target) return json(400, { error: "Username or conversation ID is required" });
+      const result = await sendDm(
+        sql,
+        actorUsername,
+        target,
+        body.body != null ? body.body : body.message
+      );
+      if (!result.ok) return json(400, { error: result.error || "Unable to send message" });
+      try {
+        const targetProfileId = await resolveProfileIdForUsername(sql, target);
+        if (targetProfileId && targetProfileId !== auth.profile.id) {
+          const preview = String(
+            (result.message && result.message.body) ||
+              body.body ||
+              body.message ||
+              ""
+          )
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 140);
+          await createNotification(sql, {
+            profileId: targetProfileId,
+            kind: "dm",
+            actorUsername: actorUsername,
+            body: preview
+              ? `${actorUsername}: ${preview}`
+              : `${actorUsername} sent you a message.`,
+          });
+        }
+      } catch (err) {
+        console.error(
+          "dm notification failed",
+          err && err.message ? err.message : err
+        );
+      }
+      return json(200, {
+        ok: true,
+        message: result.message,
+        thread: result.thread,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-edit") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const messageId = String(body.messageId || body.id || "").trim();
+      if (!isUuid(messageId)) return json(400, { error: "Invalid message id" });
+      const result = await editDmMessage(
+        sql,
+        messageId,
+        actorUsername,
+        body.body != null ? body.body : body.message
+      );
+      if (!result.ok) return json(400, { error: result.error || "Unable to edit message" });
+      return json(200, {
+        ok: true,
+        message: result.message,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-delete") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const messageId = String(body.messageId || body.id || "").trim();
+      if (!isUuid(messageId)) return json(400, { error: "Invalid message id" });
+      const result = await deleteDmMessage(sql, messageId, actorUsername);
+      if (!result.ok) return json(400, { error: result.error || "Unable to delete message" });
+      return json(200, {
+        ok: true,
+        mode: result.mode,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
+    if (action === "dm-react") {
+      const acting = await resolveActingUsername(sql, auth, role, body);
+      if (!acting.ok) {
+        return json(acting.status || 400, { error: acting.error || "Unable to switch to that account" });
+      }
+      const actorUsername = acting.username;
+      if (!actorUsername) return json(400, { error: "Set a public username first" });
+      const messageId = String(body.messageId || body.id || "").trim();
+      if (!isUuid(messageId)) return json(400, { error: "Invalid message id" });
+      const emoji = String(body.emoji || body.reaction || "").trim();
+      const result = await reactDmMessage(sql, messageId, actorUsername, emoji);
+      if (!result.ok) return json(400, { error: result.error || "Unable to add reaction" });
+      return json(200, {
+        ok: true,
+        message: result.message,
+        me: mePayload(auth, role, alts, myTags, myPinnedTag),
+      });
+    }
+
     
     if (action === "set-avatar") {
       const primary = normalizePublicUsername(auth.profile.publicUsername);
-      if (!primary) return json(400, { error: "Set a username first" });
+      if (!primary) return json(400, { error: "Set a public username first" });
       const requested = normalizePublicUsername(body.username || body.asUsername || primary) || primary;
       let avatarUrl = null;
       if (body.clear || body.remove) {
@@ -1198,13 +2618,13 @@ exports.handler = async (event) => {
         try {
           avatarUrl = await saveCommunityAvatar(event, body.imageData || body.avatarData || body.data);
         } catch (err) {
-          return json(err.statusCode || 400, { error: err.message || "Could not save avatar" });
+          return json(err.statusCode || 400, { error: err.message || "Unable to save avatar" });
         }
       } else {
-        return json(400, { error: "Choose an image" });
+        return json(400, { error: "Select an image" });
       }
       const result = await setAvatarForUsername(sql, requested, avatarUrl, auth.profile.id);
-      if (!result.ok) return json(400, { error: result.error || "Could not save avatar" });
+      if (!result.ok) return json(400, { error: result.error || "Unable to save avatar" });
       if (requested === primary) auth.profile.avatarUrl = result.avatarUrl;
       const nextAlts = role === "owner" ? await listOwnerAltAccounts(sql, auth.profile.id) : [];
       if (nextAlts.length) {
@@ -1226,11 +2646,11 @@ exports.handler = async (event) => {
       try {
         photoUrl = await saveMemberSynkPhoto(event, body.imageData || body.photoData || body.data);
       } catch (err) {
-        return json(err.statusCode || 400, { error: err.message || "Could not save photo" });
+        return json(err.statusCode || 400, { error: err.message || "Unable to save photo" });
       }
-      if (!photoUrl) return json(400, { error: "Choose an image" });
+      if (!photoUrl) return json(400, { error: "Select an image" });
       const result = await updateSynkProfilePhoto(sql, auth.profile.id, photoUrl);
-      if (!result.ok) return json(400, { error: result.error || "Could not update Synk photo" });
+      if (!result.ok) return json(400, { error: result.error || "Unable to update Synk photo" });
       auth.profile.photoUrl = result.photoUrl;
       return json(200, {
         ok: true,
@@ -1260,7 +2680,7 @@ if (action === "create-alt") {
         username === COMMUNITY_OWNER_USERNAME ||
         username === auth.profile.publicUsername
       ) {
-        return json(400, { error: "Pick a different username for this alt" });
+        return json(400, { error: "Choose a different username for this alt account" });
       }
       if (await isCommunityUsernameTaken(sql, username)) {
         return json(409, { error: "That username is already taken" });
@@ -1340,9 +2760,9 @@ if (action === "create-alt") {
       }
       try {
         const rows = await sql`
-          INSERT INTO synk_community_groups (slug, name, description, created_by)
-          VALUES (${slug}, ${name}, ${description}, ${auth.profile.id})
-          RETURNING id, slug, name, description, created_by, created_at, updated_at
+          INSERT INTO synk_community_groups (slug, name, description, theme, is_official, created_by)
+          VALUES (${slug}, ${name}, ${description}, 'standard', FALSE, ${auth.profile.id})
+          RETURNING id, slug, name, description, theme, is_official, created_by, created_at, updated_at
         `;
         await logSynkEvent(sql, {
           eventType: "community_group_create",
@@ -1350,6 +2770,13 @@ if (action === "create-alt") {
           ip,
           detail: slug,
         });
+        await sql`
+          INSERT INTO synk_community_memberships (synk_profile_id, group_id)
+          VALUES (${auth.profile.id}, ${rows[0].id})
+          ON CONFLICT DO NOTHING
+        `;
+        await createGroupRole(sql, rows[0].id, { name: "Member", color: "#94a3b8", sortOrder: 0 });
+        await createGroupRole(sql, rows[0].id, { name: "Moderator", color: "#22c55e", sortOrder: 1 });
         return json(201, {
           ok: true,
           group: {
@@ -1357,11 +2784,14 @@ if (action === "create-alt") {
             slug: rows[0].slug,
             name: rows[0].name,
             description: rows[0].description || "",
+            theme: rows[0].theme || "standard",
+            isOfficial: rows[0].is_official === true,
             createdBy: rows[0].created_by,
             createdAt: rows[0].created_at,
             updatedAt: rows[0].updated_at,
             postCount: 0,
-            joined: false,
+            joined: true,
+            roles: await listGroupRoles(sql, rows[0].id),
           },
         });
       } catch (err) {
@@ -1465,7 +2895,7 @@ if (action === "create-alt") {
 
     if (action === "post" || action === "create") {
       if (!auth.profile.publicUsername) {
-        return json(400, { error: "Choose a public username before posting" });
+        return json(400, { error: "Set a public username before posting" });
       }
 
       let title = normalizeTitle(body.title);
@@ -1528,17 +2958,59 @@ if (action === "create-alt") {
         slug: body.group || body.groupSlug || body.slug,
       });
       if (!group) {
-        group = await findCommunityGroup(sql, { slug: "general" });
+        group = await findCommunityGroup(sql, { slug: "synk" });
       }
       if (!group) {
-        return json(400, { error: "Pick a group to post in" });
+        return json(400, { error: "Select a group to post in" });
       }
 
       const pollJson = pollOptions ? JSON.stringify(pollOptions) : null;
+      let channel = null;
+      if (body.channelId || body.channel || body.channelSlug) {
+        channel = await findGroupChannel(sql, {
+          id: body.channelId,
+          groupId: group.id,
+          slug: body.channel || body.channelSlug,
+        });
+        if (!channel) return json(400, { error: "Channel not found in this group" });
+      } else if (group.isOfficial || group.slug === "synk") {
+        const hydrated = await hydrateCommunityGroup(sql, group);
+        channel =
+          (hydrated.channels || []).find((c) => c.slug === "general") ||
+          (hydrated.channels || [])[0] ||
+          null;
+      }
+      if (channel) {
+        const kind = normalizeChannelKind(channel.kind, channel.slug);
+        if (
+          (kind === "announcements" || kind === "readonly") &&
+          !isCommunityStaffRole(role)
+        ) {
+          return json(403, {
+            error:
+              kind === "announcements"
+                ? "Only Synk staff can post announcements"
+                : "Only Synk staff can post in this channel",
+          });
+        }
+      }
+      const channelKind = channel ? normalizeChannelKind(channel.kind, channel.slug) : "";
+      const isSuggestionThread = channelKind === "suggestions";
+      const isSupportTicket = channelKind === "support";
+      const suggestionStatus = isSuggestionThread || isSupportTicket ? "open" : null;
+      const suggestionTags =
+        suggestionStatus === "open"
+          ? suggestionTagsToIds(
+              isSupportTicket
+                ? normalizeTicketTags(body.tags || body.suggestionTags || body.suggestion_tags || body.ticketTags)
+                : normalizeSuggestionTags(body.tags || body.suggestionTags || body.suggestion_tags)
+            )
+          : [];
       const rows = await sql`
         INSERT INTO synk_community_posts (
           synk_profile_id,
           group_id,
+          channel_id,
           title,
           post_type,
           body,
@@ -1546,11 +3018,16 @@ if (action === "create-alt") {
           image_url,
           poll_options,
           score,
-          author_username
+          author_username,
+          suggestion_status,
+          suggestion_tags,
+          suggestion_reply,
+          is_pinned
         )
         VALUES (
           ${auth.profile.id},
           ${group.id},
+          ${channel ? channel.id : null},
           ${title},
           ${postType},
           ${text || ""},
@@ -1558,11 +3035,16 @@ if (action === "create-alt") {
           ${imageUrl},
           ${pollJson}::jsonb,
           1,
-          ${persona.username}
+          ${persona.username},
+          ${suggestionStatus},
+          ${suggestionTags},
+          ${""},
+          ${false}
         )
         RETURNING
           id, title, post_type, body, link_url, image_url, poll_options,
-          score, created_at, group_id, author_username
+          score, created_at, group_id, author_username, channel_id, suggestion_status,
+          suggestion_tags, suggestion_reply, is_pinned
       `;
 
       await sql`
@@ -1606,6 +3088,87 @@ if (action === "create-alt") {
       return json(201, {
         ok: true,
         post,
+      });
+    }
+
+
+    if (action === "set-suggestion-status") {
+      if (!isCommunityStaffRole(role)) {
+        return json(403, { error: "Only Synk staff can mark suggestions Approved or Denied" });
+      }
+      const postId = String(body.postId || body.id || "").trim();
+      if (!isUuid(postId)) return json(400, { error: "Invalid post id" });
+      const rows = await sql`
+        SELECT
+          p.id,
+          p.suggestion_status,
+          p.suggestion_tags,
+          p.suggestion_reply,
+          p.is_pinned,
+          ch.kind AS channel_kind,
+          ch.slug AS channel_slug
+        FROM synk_community_posts p
+        LEFT JOIN synk_community_group_channels ch ON ch.id = p.channel_id
+        WHERE p.id = ${postId}
+        LIMIT 1
+      `;
+      if (!rows[0]) return json(404, { error: "Post not found" });
+      const kind = normalizeChannelKind(rows[0].channel_kind, rows[0].channel_slug);
+      if (kind !== "suggestions" && kind !== "support" && rows[0].suggestion_status == null) {
+        return json(400, { error: "This post is not a suggestion or support ticket" });
+      }
+      const status =
+        kind === "support"
+          ? normalizeTicketStatus(body.status || body.suggestionStatus || body.ticketStatus)
+          : normalizeSuggestionStatus(body.status || body.suggestionStatus);
+      const reply = String(body.reply || body.suggestionReply || body.note || "")
+        .trim()
+        .replace(/\s+/g, " ")
+        .slice(0, 500);
+      if (!status) {
+        return json(400, {
+          error:
+            kind === "support"
+              ? "Status must be open, in_progress, waiting, resolved, or closed"
+              : "Status must be open, planned, accepted, implemented, denied, or closed",
+        });
+      }
+      const updated = await sql`
+        UPDATE synk_community_posts
+        SET
+          suggestion_status = ${status},
+          suggestion_reply = ${reply}
+        WHERE id = ${postId}
+        RETURNING id, suggestion_status, suggestion_reply, suggestion_tags, is_pinned
+      `;
+      return json(200, {
+        ok: true,
+        postId: updated[0].id,
+        suggestionStatus: updated[0].suggestion_status || status,
+        suggestionReply: String(updated[0].suggestion_reply || "").trim(),
+        suggestionTags: mapSuggestionTagsFromRow(updated[0]),
+        isPinned: Boolean(updated[0].is_pinned),
+      });
+    }
+
+    if (action === "pin-post") {
+      if (!isCommunityStaffRole(role)) {
+        return json(403, { error: "Only Synk staff can pin posts" });
+      }
+      const postId = String(body.postId || body.id || "").trim();
+      const pinned = body.pinned !== false && body.pinned !== "false" && body.pinned !== 0;
+      if (!isUuid(postId)) return json(400, { error: "Invalid post id" });
+      const updated = await sql`
+        UPDATE synk_community_posts
+        SET is_pinned = ${!!pinned}
+        WHERE id = ${postId}
+        RETURNING id, is_pinned
+      `;
+      if (!updated[0]) return json(404, { error: "Post not found" });
+      return json(200, {
+        ok: true,
+        postId: updated[0].id,
+        isPinned: Boolean(updated[0].is_pinned),
       });
     }
 
@@ -1675,7 +3238,7 @@ if (action === "create-alt") {
 
     if (action === "comment") {
       if (!auth.profile.publicUsername) {
-        return json(400, { error: "Choose a public username before commenting" });
+        return json(400, { error: "Set a public username before commenting" });
       }
       const postId = String(body.postId || body.post_id || "").trim();
       const parentIdRaw = String(body.parentId || body.parent_id || "").trim();
@@ -1760,8 +3323,8 @@ if (action === "create-alt") {
           postId,
           commentId: rows[0].id,
           body: parent
-            ? `${persona.username} replied on your post`
-            : `${persona.username} commented on your post`,
+            ? `${persona.username} replied on your post.`
+            : `${persona.username} commented on your post.`,
         });
       }
       if (parent && parent.synk_profile_id && parent.synk_profile_id !== auth.profile.id) {
@@ -1771,7 +3334,7 @@ if (action === "create-alt") {
           actorUsername: persona.username,
           postId,
           commentId: rows[0].id,
-          body: `${persona.username} replied to your comment`,
+          body: `${persona.username} replied to your comment.`,
         });
       }
 
@@ -1879,6 +3442,220 @@ if (action === "create-alt") {
       return json(200, { ok: true, postId, hidden });
     }
 
+
+
+    if (action === "update-group") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug || "synk",
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) {
+        return json(403, { error: "Only community staff can edit this group" });
+      }
+      if (group.isOfficial || group.slug === "synk") {
+        if (!isCommunityStaffRole(role)) {
+          return json(403, { error: "Only Synk staff can edit the official group" });
+        }
+      }
+      let bannerUrl = body.bannerUrl;
+      if (body.clearBanner || body.removeBanner) bannerUrl = "";
+      else if (body.bannerData || body.bannerImageData) {
+        try {
+          bannerUrl = await saveCommunityBanner(event, body.bannerData || body.bannerImageData);
+        } catch (err) {
+          return json(err.statusCode || 400, { error: err.message || "Unable to save banner" });
+        }
+      } else if (body.imageData || body.data) {
+        // Legacy: imageData alone was used for banners before icon uploads existed.
+        if (!(body.iconData || body.iconImageData || body.clearIcon || body.removeIcon || body.iconUrl != null)) {
+          try {
+            bannerUrl = await saveCommunityBanner(event, body.imageData || body.data);
+          } catch (err) {
+            return json(err.statusCode || 400, { error: err.message || "Unable to save banner" });
+          }
+        }
+      }
+
+      let iconUrl = body.iconUrl;
+      if (body.clearIcon || body.removeIcon) iconUrl = "";
+      else if (body.iconData || body.iconImageData || body.icon) {
+        try {
+          iconUrl = await saveCommunityAvatar(
+            event,
+            body.iconData || body.iconImageData || body.icon
+          );
+        } catch (err) {
+          return json(err.statusCode || 400, { error: err.message || "Unable to save icon" });
+        }
+      }
+
+      const result = await updateCommunityGroup(sql, group.id, {
+        name: body.name,
+        description: body.description != null ? body.description : body.about,
+        bannerUrl,
+        iconUrl,
+      });
+      if (!result.ok) return json(400, { error: result.error || "Could not update group" });
+      const hydrated = await hydrateCommunityGroup(sql, result.group);
+      return json(200, { ok: true, group: hydrated });
+    }
+
+    if (action === "create-channel") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug || "synk",
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only staff can manage channels" });
+      if ((group.isOfficial || group.slug === "synk") && !isCommunityStaffRole(role)) {
+        return json(403, { error: "Only Synk staff can manage official channels" });
+      }
+      const result = await createGroupChannel(sql, group.id, {
+        name: body.name || body.title,
+        slug: body.slug,
+        description: body.description,
+        kind: body.kind || body.type,
+        emoji: body.emoji,
+        categoryId: body.categoryId,
+        categoryName: body.categoryName || body.category,
+        sortOrder: body.sortOrder,
+      });
+      if (!result.ok) return json(400, { error: result.error || "Could not create channel" });
+      return json(200, {
+        ok: true,
+        channel: result.channel,
+        channels: await listGroupChannels(sql, group.id),
+        categories: await listGroupCategories(sql, group.id),
+      });
+    }
+
+    if (action === "update-channel") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug || "synk",
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only staff can manage channels" });
+      if ((group.isOfficial || group.slug === "synk") && !isCommunityStaffRole(role)) {
+        return json(403, { error: "Only Synk staff can manage official channels" });
+      }
+      const result = await updateGroupChannel(sql, body.channelId || body.id, group.id, {
+        name: body.name,
+        slug: body.slug,
+        description: body.description,
+        kind: body.kind || body.type,
+        emoji: body.emoji,
+        categoryId: body.categoryId,
+        categoryName: body.categoryName || body.category,
+        sortOrder: body.sortOrder,
+      });
+      if (!result.ok) return json(400, { error: result.error || "Could not update channel" });
+      return json(200, {
+        ok: true,
+        channel: result.channel,
+        channels: await listGroupChannels(sql, group.id),
+        categories: await listGroupCategories(sql, group.id),
+      });
+    }
+
+    if (action === "delete-channel") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug || "synk",
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only staff can manage channels" });
+      if ((group.isOfficial || group.slug === "synk") && !isCommunityStaffRole(role)) {
+        return json(403, { error: "Only Synk staff can manage official channels" });
+      }
+      const result = await deleteGroupChannel(sql, body.channelId || body.id, group.id);
+      if (!result.ok) return json(400, { error: result.error || "Could not delete channel" });
+      return json(200, {
+        ok: true,
+        deleted: result.deleted,
+        channels: await listGroupChannels(sql, group.id),
+        categories: await listGroupCategories(sql, group.id),
+      });
+    }
+
+    if (action === "create-group-role") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug,
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only group owners or community staff can manage roles" });
+      // Explicitly ignore any icon/image fields — roles must not use icons (badge conflict).
+      const result = await createGroupRole(sql, group.id, {
+        name: body.name || body.title,
+        color: body.color,
+        sortOrder: body.sortOrder != null ? body.sortOrder : body.sort_order,
+      });
+      if (!result.ok) return json(400, { error: result.error || "Could not create role" });
+      return json(200, {
+        ok: true,
+        role: result.role,
+        roles: await listGroupRoles(sql, group.id),
+      });
+    }
+
+    if (action === "update-group-role") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug,
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only group owners or community staff can manage roles" });
+      const result = await updateGroupRole(sql, body.roleId || body.id, group.id, {
+        name: body.name,
+        color: body.color,
+        sortOrder: body.sortOrder != null ? body.sortOrder : body.sort_order,
+      });
+      if (!result.ok) return json(400, { error: result.error || "Could not update role" });
+      return json(200, {
+        ok: true,
+        role: result.role,
+        roles: await listGroupRoles(sql, group.id),
+      });
+    }
+
+    if (action === "delete-group-role") {
+      const group = await findCommunityGroup(sql, {
+        id: body.groupId || body.group_id,
+        slug: body.group || body.groupSlug || body.slug,
+      });
+      if (!group) return json(404, { error: "Group not found" });
+      const canManage =
+        isCommunityStaffRole(role) ||
+        (group.createdBy && String(group.createdBy) === String(auth.profile.id));
+      if (!canManage) return json(403, { error: "Only group owners or community staff can manage roles" });
+      const result = await deleteGroupRole(sql, body.roleId || body.id, group.id);
+      if (!result.ok) return json(400, { error: result.error || "Could not delete role" });
+      return json(200, {
+        ok: true,
+        roles: await listGroupRoles(sql, group.id),
+      });
+    }
+
     if (action === "join") {
       const joined =
         body.joined === false || body.join === false || body.value === false
@@ -1915,10 +3692,18 @@ if (action === "create-alt") {
         detail: group.slug,
       });
 
+      const memberRows = await sql`
+        SELECT COUNT(*)::int AS count
+        FROM synk_community_memberships
+        WHERE group_id = ${group.id}
+      `;
+      const memberCount = Number(memberRows[0] && memberRows[0].count) || 0;
+
       return json(200, {
         ok: true,
-        group: { ...group, joined },
+        group: { ...group, joined, memberCount },
         joined,
+        memberCount,
       });
     }
 
@@ -1973,7 +3758,18 @@ if (action === "create-alt") {
       const ids = Array.isArray(body.ids)
         ? body.ids.map((id) => String(id || "").trim()).filter((id) => isUuid(id))
         : [];
+      const kinds = Array.isArray(body.kinds)
+        ? body.kinds
+            .map((k) =>
+              String(k || "")
+                .trim()
+                .toLowerCase()
+                .replace(/-/g, "_")
+            )
+            .filter(Boolean)
+        : [];
       if (ids.length) {
+        // Single/selected notifications: mark read (keep history).
         await sql`
           UPDATE synk_community_notifications
           SET read_at = NOW()
@@ -1981,15 +3777,25 @@ if (action === "create-alt") {
             AND id = ANY(${ids}::uuid[])
             AND read_at IS NULL
         `;
-      } else {
+      } else if (kinds.length) {
+        // Kind-scoped clear (e.g. app_update after viewing release notes / refresh).
         await sql`
           UPDATE synk_community_notifications
           SET read_at = NOW()
           WHERE synk_profile_id = ${auth.profile.id}
+            AND lower(replace(kind, '-', '_')) = ANY(${kinds}::text[])
             AND read_at IS NULL
         `;
+      } else {
+        // "Clear all" / mark-all: remove every notification for this member.
+        await sql`
+          DELETE FROM synk_community_notifications
+          WHERE synk_profile_id = ${auth.profile.id}
+        `;
       }
-      const notifications = await loadNotifications(sql, auth.profile.id);
+      const notifications = await loadNotifications(sql, auth.profile.id, {
+        username: primaryUsername,
+      });
       const nextUnread = await getUnreadCount(sql, auth.profile.id);
       return json(200, {
         ok: true,
@@ -2006,6 +3812,15 @@ if (action === "create-alt") {
       const slug = normalizeTagSlug(body.slug || name);
       const description = normalizeTagDescription(body.description || body.about || "");
       const color = normalizeTagColor(body.color || "#6366f1") || "#6366f1";
+      const learnMoreEnabled = body.learnMoreEnabled === true || body.learn_more_enabled === true;
+      let learnMorePageId = body.learnMorePageId || body.learn_more_page_id || null;
+      if (learnMorePageId) {
+        const page = await findInfoPage(sql, { id: learnMorePageId });
+        if (!page) return json(400, { error: "Learn more page not found" });
+        learnMorePageId = page.id;
+      } else {
+        learnMorePageId = null;
+      }
       if (!name || name.length < 2) {
         return json(400, { error: "Tag name needs at least 2 characters" });
       }
@@ -2026,9 +3841,9 @@ if (action === "create-alt") {
       }
       try {
         const rows = await sql`
-          INSERT INTO synk_community_tags (name, slug, description, color, icon_url, created_by)
-          VALUES (${name}, ${slug}, ${description}, ${color}, ${iconUrl}, ${auth.profile.id})
-          RETURNING id, name, slug, description, color, icon_url, created_at, updated_at
+          INSERT INTO synk_community_tags (name, slug, description, color, icon_url, learn_more_enabled, learn_more_page_id, created_by)
+          VALUES (${name}, ${slug}, ${description}, ${color}, ${iconUrl}, ${learnMoreEnabled}, ${learnMorePageId}, ${auth.profile.id})
+          RETURNING id, name, slug, description, color, icon_url, learn_more_enabled, learn_more_page_id, created_at, updated_at
         `;
         await logSynkEvent(sql, {
           eventType: "community_tag_create",
@@ -2065,6 +3880,22 @@ if (action === "create-alt") {
       );
       const color =
         normalizeTagColor(body.color != null ? body.color : existing.color) || existing.color;
+      let learnMoreEnabled =
+        body.learnMoreEnabled != null || body.learn_more_enabled != null
+          ? body.learnMoreEnabled === true || body.learn_more_enabled === true
+          : existing.learnMoreEnabled === true;
+      let learnMorePageId =
+        body.learnMorePageId !== undefined || body.learn_more_page_id !== undefined
+          ? body.learnMorePageId || body.learn_more_page_id || null
+          : existing.learnMorePageId || null;
+      if (learnMorePageId) {
+        const page = await findInfoPage(sql, { id: learnMorePageId });
+        if (!page) return json(400, { error: "Learn more page not found" });
+        learnMorePageId = page.id;
+      } else {
+        learnMorePageId = null;
+      }
+      if (!learnMoreEnabled) learnMorePageId = learnMorePageId; // keep linked page even if button off
       if (!name || name.length < 2) {
         return json(400, { error: "Tag name needs at least 2 characters" });
       }
@@ -2099,9 +3930,11 @@ if (action === "create-alt") {
             description = ${description},
             color = ${color},
             icon_url = ${iconUrl},
+            learn_more_enabled = ${learnMoreEnabled},
+            learn_more_page_id = ${learnMorePageId},
             updated_at = NOW()
           WHERE id = ${existing.id}
-          RETURNING id, name, slug, description, color, icon_url, created_at, updated_at
+          RETURNING id, name, slug, description, color, icon_url, learn_more_enabled, learn_more_page_id, created_at, updated_at
         `;
         await logSynkEvent(sql, {
           eventType: "community_tag_update",
@@ -2145,11 +3978,40 @@ if (action === "create-alt") {
     }
 
     if (action === "assign-tag") {
-      if (role !== "owner") {
-        return json(403, { error: "Only the owner can assign tags" });
+      if (!isCommunityStaffRole(role)) {
+        return json(403, { error: "Only staff can assign tags" });
       }
+      const tag = await findCommunityTag(sql, {
+        id: body.tagId || body.id,
+        slug: body.tag || body.slug,
+      });
+      if (!tag) return json(404, { error: "Tag not found" });
+
+      const groupSlug = normalizeGroupSlug(body.group || body.groupSlug || body.slugTarget || "");
+      const wantsGroup = !!(groupSlug || body.groupId);
+      if (wantsGroup) {
+        const group = await findCommunityGroup(sql, {
+          id: body.groupId,
+          slug: groupSlug || undefined,
+        });
+        if (!group) return json(404, { error: "Group not found" });
+        await assignGroupTag(sql, group.id, tag.id, auth.profile.id);
+        await logSynkEvent(sql, {
+          eventType: "community_group_tag_assign",
+          profileId: auth.profile.id,
+          ip,
+          detail: `${group.slug}:${tag.slug}`,
+        });
+        return json(200, {
+          ok: true,
+          groupId: group.id,
+          groupSlug: group.slug,
+          tags: await listGroupTags(sql, group.id),
+        });
+      }
+
       const username = normalizePublicUsername(body.username || body.publicUsername);
-      if (!username) return json(400, { error: "Username is required" });
+      if (!username) return json(400, { error: "Username or group is required" });
       const profileId = await findCommunityProfileIdByUsername(sql, username);
       const alt = profileId
         ? null
@@ -2157,11 +4019,6 @@ if (action === "create-alt") {
       if (!profileId && !alt) {
         return json(404, { error: "No community member with that username" });
       }
-      const tag = await findCommunityTag(sql, {
-        id: body.tagId || body.id,
-        slug: body.tag || body.slug,
-      });
-      if (!tag) return json(404, { error: "Tag not found" });
       await assignUsernameTag(sql, username, tag.id, auth.profile.id);
       await logSynkEvent(sql, {
         eventType: "community_tag_assign",
@@ -2177,21 +4034,45 @@ if (action === "create-alt") {
     }
 
     if (action === "unassign-tag") {
-      if (role !== "owner") {
-        return json(403, { error: "Only the owner can remove tags" });
-      }
-      const username = normalizePublicUsername(body.username || body.publicUsername);
-      if (!username) return json(400, { error: "Username is required" });
-      const profileId = await findCommunityProfileIdByUsername(sql, username);
-      const alt = profileId ? null : await findCommunityAltAccount(sql, { username });
-      if (!profileId && !alt) {
-        return json(404, { error: "No community member with that username" });
+      if (!isCommunityStaffRole(role)) {
+        return json(403, { error: "Only staff can remove tags" });
       }
       const tag = await findCommunityTag(sql, {
         id: body.tagId || body.id,
         slug: body.tag || body.slug,
       });
       if (!tag) return json(404, { error: "Tag not found" });
+
+      const groupSlug = normalizeGroupSlug(body.group || body.groupSlug || "");
+      const wantsGroup = !!(groupSlug || body.groupId);
+      if (wantsGroup) {
+        const group = await findCommunityGroup(sql, {
+          id: body.groupId,
+          slug: groupSlug || undefined,
+        });
+        if (!group) return json(404, { error: "Group not found" });
+        await unassignGroupTag(sql, group.id, tag.id);
+        await logSynkEvent(sql, {
+          eventType: "community_group_tag_unassign",
+          profileId: auth.profile.id,
+          ip,
+          detail: `${group.slug}:${tag.slug}`,
+        });
+        return json(200, {
+          ok: true,
+          groupId: group.id,
+          groupSlug: group.slug,
+          tags: await listGroupTags(sql, group.id),
+        });
+      }
+
+      const username = normalizePublicUsername(body.username || body.publicUsername);
+      if (!username) return json(400, { error: "Username or group is required" });
+      const profileId = await findCommunityProfileIdByUsername(sql, username);
+      const alt = profileId ? null : await findCommunityAltAccount(sql, { username });
+      if (!profileId && !alt) {
+        return json(404, { error: "No community member with that username" });
+      }
       await unassignUsernameTag(sql, username, tag.id);
       await logSynkEvent(sql, {
         eventType: "community_tag_unassign",
@@ -2206,9 +4087,10 @@ if (action === "create-alt") {
       });
     }
 
+
     if (action === "pin-tag") {
       if (!auth.profile.publicUsername) {
-        return json(400, { error: "Choose a public username first" });
+        return json(400, { error: "Set a public username first" });
       }
       const asUsername =
         normalizePublicUsername(body.asUsername || body.username || body.persona) ||
@@ -2305,6 +4187,519 @@ if (action === "create-alt") {
         me: mePayload(auth, role, alts, primaryTags, primaryPinned),
       });
     }
+
+    
+    if (action === "list-info-pages") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can manage info pages" });
+      }
+      return json(200, { ok: true, pages: await listInfoPages(sql) });
+    }
+
+    if (action === "get-info-page") {
+      const page = await findInfoPage(sql, {
+        id: body.pageId || body.id,
+        slug: body.slug || body.pageSlug,
+      });
+      if (!page) return json(404, { error: "Page not found" });
+      return json(200, { ok: true, page });
+    }
+
+    if (action === "create-info-page" || action === "update-info-page") {
+      if (role !== "owner") {
+        return json(403, { error: "Only the owner can edit info pages" });
+      }
+      const title = normalizePageTitle(body.title || body.name);
+      const slug = normalizePageSlug(body.slug || title);
+      const summary = String(body.summary || body.description || "").trim().slice(0, 400);
+      const heroImageUrl = String(body.heroImageUrl || body.hero_image_url || "").trim().slice(0, 800);
+      const blocks = normalizePageBlocks(body.blocks || body.content || []);
+      if (!title) return json(400, { error: "Page title is required" });
+      if (!slug) return json(400, { error: "Page slug is invalid" });
+      if (heroImageUrl && !(heroImageUrl.startsWith("/api/") || /^https?:\/\//i.test(heroImageUrl))) {
+        return json(400, { error: "Hero image URL is invalid" });
+      }
+      if (action === "create-info-page") {
+        try {
+          const rows = await sql`
+            INSERT INTO synk_info_pages (slug, title, summary, hero_image_url, blocks, created_by)
+            VALUES (${slug}, ${title}, ${summary}, ${heroImageUrl}, ${JSON.stringify(blocks)}::jsonb, ${auth.profile.id})
+            RETURNING id, slug, title, summary, hero_image_url, blocks, created_at, updated_at
+          `;
+          return json(201, { ok: true, page: mapInfoPage(rows[0]), pages: await listInfoPages(sql) });
+        } catch (err) {
+          if (String(err.message || "").includes("unique") || err.code === "23505") {
+            return json(409, { error: "A page with that slug already exists" });
+          }
+          throw err;
+        }
+      }
+      const existing = await findInfoPage(sql, { id: body.pageId || body.id, slug: body.currentSlug });
+      if (!existing) return json(404, { error: "Page not found" });
+      try {
+        const rows = await sql`
+          UPDATE synk_info_pages
+          SET
+            slug = ${slug},
+            title = ${title},
+            summary = ${summary},
+            hero_image_url = ${heroImageUrl},
+            blocks = ${JSON.stringify(blocks)}::jsonb,
+            updated_at = NOW()
+          WHERE id = ${existing.id}
+          RETURNING id, slug, title, summary, hero_image_url, blocks, created_at, updated_at
+        `;
+        return json(200, { ok: true, page: mapInfoPage(rows[0]), pages: await listInfoPages(sql) });
+      } catch (err) {
+        if (String(err.message || "").includes("unique") || err.code === "23505") {
+          return json(409, { error: "A page with that slug already exists" });
+        }
+        throw err;
+      }
+    }
+
+    if (action === "delete-info-page") {
+      if (role !== "owner") {
+        return json(403, { error: "Only the owner can delete info pages" });
+      }
+      const existing = await findInfoPage(sql, { id: body.pageId || body.id, slug: body.slug });
+      if (!existing) return json(404, { error: "Page not found" });
+      await sql`UPDATE synk_community_tags SET learn_more_page_id = NULL, updated_at = NOW() WHERE learn_more_page_id = ${existing.id}`;
+      await sql`DELETE FROM synk_info_pages WHERE id = ${existing.id}`;
+      return json(200, { ok: true, pages: await listInfoPages(sql) });
+    }
+
+    if (action === "beta-dashboard") {
+      const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = false;
+      for (const row of usernames) {
+        const tags = await listUsernameTags(sql, row.public_username);
+        if (tags.some(isBetaTesterTag)) { beta = true; break; }
+      }
+      if (!beta && role !== "owner" && role !== "admin") {
+        return json(403, { error: "Beta testing is only for beta testers" });
+      }
+
+      const progress = await resolveBetaCurrentUpdate(sql, profileId);
+      const clock = await getBetaTesterClock(sql, profileId);
+      const currentVersion = progress.currentVersion;
+
+      const items = currentVersion
+        ? await sql`
+            SELECT id, title, detail, sort_order, active, created_at, updated_at, update_version
+            FROM synk_beta_agenda_items
+            WHERE active = TRUE
+              AND (
+                update_version = ${currentVersion}
+                OR update_version IS NULL
+                OR btrim(update_version) = ''
+              )
+            ORDER BY
+              CASE
+                WHEN update_version = ${currentVersion} THEN 0
+                ELSE 1
+              END ASC,
+              sort_order ASC,
+              created_at ASC
+            LIMIT 100
+          `
+        : await sql`
+            SELECT id, title, detail, sort_order, active, created_at, updated_at, update_version
+            FROM synk_beta_agenda_items
+            WHERE active = TRUE
+              AND (update_version IS NULL OR btrim(update_version) = '')
+            ORDER BY sort_order ASC, created_at ASC
+            LIMIT 100
+          `;
+
+      const checks = await sql`
+        SELECT agenda_item_id, completed_at
+        FROM synk_beta_agenda_checks
+        WHERE synk_profile_id = ${profileId}
+      `;
+      const checkMap = new Map(checks.map((c) => [c.agenda_item_id, c.completed_at]));
+      const feedback = await listBetaFeedbackThreads(sql, {
+        profileId,
+        limit: 50,
+        viewerProfileId: profileId,
+      });
+
+      const agenda = items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        detail: item.detail || "",
+        sortOrder: item.sort_order,
+        updateVersion: item.update_version || null,
+        done: checkMap.has(item.id),
+        completedAt: checkMap.get(item.id) || null,
+      }));
+      const updateItems = agenda.filter((item) => item.updateVersion === currentVersion);
+      const doneCount = updateItems.filter((item) => item.done).length;
+
+      return json(200, {
+        ok: true,
+        isBetaTester: true,
+        clock,
+        progress: {
+          currentVersion,
+          nextVersion: progress.nextVersion,
+          caughtUp: progress.caughtUp,
+          completedVersions: progress.completedVersions,
+          pendingVersions: progress.pendingVersions,
+          updateItemCount: updateItems.length,
+          updateDoneCount: doneCount,
+          canCompleteAgenda: !!currentVersion && clock.clockedIn && updateItems.length > 0,
+        },
+        agenda,
+        feedback,
+      });
+    }
+
+    if (action === "beta-clock-in" || action === "beta-clock-out") {
+      const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = role === "owner" || role === "admin";
+      if (!beta) {
+        for (const row of usernames) {
+          const tags = await listUsernameTags(sql, row.public_username);
+          if (tags.some(isBetaTesterTag)) { beta = true; break; }
+        }
+      }
+      if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
+
+      if (action === "beta-clock-in") {
+        await sql`
+          INSERT INTO synk_beta_tester_clock (synk_profile_id, clocked_in_at, clocked_out_at, updated_at)
+          VALUES (${profileId}, NOW(), NULL, NOW())
+          ON CONFLICT (synk_profile_id) DO UPDATE
+          SET clocked_in_at = NOW(), clocked_out_at = NULL, updated_at = NOW()
+        `;
+      } else {
+        await sql`
+          INSERT INTO synk_beta_tester_clock (synk_profile_id, clocked_in_at, clocked_out_at, updated_at)
+          VALUES (${profileId}, NULL, NOW(), NOW())
+          ON CONFLICT (synk_profile_id) DO UPDATE
+          SET clocked_out_at = NOW(),
+              clocked_in_at = NULL,
+              updated_at = NOW()
+        `;
+      }
+      const clock = await getBetaTesterClock(sql, profileId);
+      return json(200, { ok: true, clock });
+    }
+
+    if (action === "beta-complete-agenda") {
+      const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = role === "owner" || role === "admin";
+      if (!beta) {
+        for (const row of usernames) {
+          const tags = await listUsernameTags(sql, row.public_username);
+          if (tags.some(isBetaTesterTag)) { beta = true; break; }
+        }
+      }
+      if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
+
+      const clock = await getBetaTesterClock(sql, profileId);
+      if (!clock.clockedIn) {
+        return json(400, { error: "Clock in before completing the agenda" });
+      }
+
+      const progress = await resolveBetaCurrentUpdate(sql, profileId);
+      const currentVersion = progress.currentVersion;
+      if (!currentVersion) {
+        return json(400, { error: "No update agenda to complete right now" });
+      }
+
+      const items = await sql`
+        SELECT id
+        FROM synk_beta_agenda_items
+        WHERE active = TRUE AND update_version = ${currentVersion}
+      `;
+      if (!items.length) {
+        return json(400, { error: "No agenda items for this update" });
+      }
+
+      for (const item of items) {
+        await sql`
+          INSERT INTO synk_beta_agenda_checks (agenda_item_id, synk_profile_id)
+          VALUES (${item.id}, ${profileId})
+          ON CONFLICT (agenda_item_id, synk_profile_id) DO UPDATE SET completed_at = NOW()
+        `;
+      }
+
+      await sql`
+        INSERT INTO synk_beta_update_completions (synk_profile_id, update_version, completed_at)
+        VALUES (${profileId}, ${currentVersion}, NOW())
+        ON CONFLICT (synk_profile_id, update_version) DO UPDATE SET completed_at = NOW()
+      `;
+
+      const nextProgress = await resolveBetaCurrentUpdate(sql, profileId);
+      return json(200, {
+        ok: true,
+        completedVersion: currentVersion,
+        nextVersion: nextProgress.currentVersion,
+        caughtUp: nextProgress.caughtUp,
+      });
+    }
+
+    if (action === "beta-toggle-agenda") {
+      const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
+      // access check reuse: any beta tag on profile usernames or staff
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = role === "owner" || role === "admin";
+      if (!beta) {
+        for (const row of usernames) {
+          const tags = await listUsernameTags(sql, row.public_username);
+          if (tags.some(isBetaTesterTag)) { beta = true; break; }
+        }
+      }
+      if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
+      const clock = await getBetaTesterClock(sql, profileId);
+      if (!clock.clockedIn) {
+        return json(400, { error: "Clock in before updating the agenda" });
+      }
+      const itemId = String(body.itemId || body.id || "").trim();
+      if (!itemId) return json(400, { error: "Agenda item required" });
+      const item = await sql`
+        SELECT id, update_version
+        FROM synk_beta_agenda_items
+        WHERE id = ${itemId} AND active = TRUE
+        LIMIT 1
+      `;
+      if (!item[0]) return json(404, { error: "Agenda item not found" });
+
+      const progress = await resolveBetaCurrentUpdate(sql, profileId);
+      const itemVersion = item[0].update_version ? String(item[0].update_version) : "";
+      if (itemVersion && progress.currentVersion && itemVersion !== progress.currentVersion) {
+        return json(400, { error: "Finish your current update agenda before working on later ones" });
+      }
+      if (itemVersion && progress.completedVersions.includes(itemVersion)) {
+        return json(400, { error: "This update agenda is already complete" });
+      }
+
+      const done = body.done !== false && body.completed !== false;
+      if (done) {
+        await sql`
+          INSERT INTO synk_beta_agenda_checks (agenda_item_id, synk_profile_id)
+          VALUES (${itemId}, ${profileId})
+          ON CONFLICT (agenda_item_id, synk_profile_id) DO UPDATE SET completed_at = NOW()
+        `;
+      } else {
+        await sql`
+          DELETE FROM synk_beta_agenda_checks
+          WHERE agenda_item_id = ${itemId} AND synk_profile_id = ${profileId}
+        `;
+      }
+      return json(200, { ok: true, itemId, done });
+    }
+
+    if (action === "beta-send-feedback") {
+      const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = role === "owner" || role === "admin";
+      if (!beta) {
+        for (const row of usernames) {
+          const tags = await listUsernameTags(sql, row.public_username);
+          if (tags.some(isBetaTesterTag)) { beta = true; break; }
+        }
+      }
+      if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
+      const bodyText = String(body.body || body.message || "").trim().replace(/\s+/g, " ").slice(0, 2000);
+      if (bodyText.length < 3) return json(400, { error: "Write a bit more feedback" });
+      const thread = await createBetaFeedbackThread(sql, { profileId, bodyText });
+      return json(201, { ok: true, feedback: thread });
+    }
+
+    if (action === "beta-reply-feedback") {
+      const profileId = auth.profile.id;
+      await ensureBetaTestingTables(sql);
+      const threadId = String(body.threadId || body.id || "").trim();
+      const bodyText = String(body.body || body.message || "").trim().replace(/\s+/g, " ").slice(0, 2000);
+      if (!threadId) return json(400, { error: "Feedback thread required" });
+      if (bodyText.length < 1) return json(400, { error: "Write a reply" });
+      const isStaff = role === "owner" || role === "admin";
+      if (!isStaff) {
+        const usernames = await sql`
+          SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+          UNION
+          SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+        `;
+        let beta = false;
+        for (const row of usernames) {
+          const tags = await listUsernameTags(sql, row.public_username);
+          if (tags.some(isBetaTesterTag)) { beta = true; break; }
+        }
+        if (!beta) return json(403, { error: "Beta testing is only for beta testers" });
+      }
+      try {
+        const thread = await replyBetaFeedbackThread(sql, {
+          threadId,
+          authorProfileId: profileId,
+          bodyText,
+          viewerProfileId: profileId,
+          isStaff,
+        });
+        return json(200, { ok: true, feedback: thread });
+      } catch (err) {
+        const status = Number(err && err.statusCode) || 500;
+        if (status === 404 || status === 403) {
+          return json(status, { error: err.message || "Could not reply" });
+        }
+        throw err;
+      }
+    }
+
+    if (action === "beta-admin-feedback") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can view beta feedback" });
+      }
+      const feedback = await listBetaFeedbackThreads(sql, {
+        profileId: null,
+        limit: 100,
+        viewerProfileId: auth.profile.id,
+      });
+      return json(200, { ok: true, feedback });
+    }
+
+    if (action === "beta-admin-agenda") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can manage the beta agenda" });
+      }
+      await ensureBetaTestingTables(sql);
+      const items = await sql`
+        SELECT id, title, detail, sort_order, active, created_at, updated_at, update_version
+        FROM synk_beta_agenda_items
+        ORDER BY sort_order ASC, created_at ASC
+        LIMIT 200
+      `;
+      return json(200, {
+        ok: true,
+        agenda: items.map((item) => ({
+          id: item.id,
+          title: item.title,
+          detail: item.detail || "",
+          sortOrder: item.sort_order,
+          updateVersion: item.update_version || null,
+          active: item.active !== false,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+        })),
+      });
+    }
+
+    if (action === "beta-save-agenda-item") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can manage the beta agenda" });
+      }
+      await ensureBetaTestingTables(sql);
+      const title = String(body.title || "").trim().replace(/\s+/g, " ").slice(0, 160);
+      const detail = String(body.detail || "").trim().slice(0, 1000);
+      const sortOrder = Number.isFinite(Number(body.sortOrder)) ? Math.round(Number(body.sortOrder)) : 0;
+      const active = body.active !== false;
+      const updateVersion = String(body.updateVersion || body.version || "").trim().slice(0, 120) || null;
+      const id = String(body.itemId || body.id || "").trim();
+      if (!title) return json(400, { error: "Title is required" });
+      if (id) {
+        const rows = await sql`
+          UPDATE synk_beta_agenda_items
+          SET title = ${title},
+              detail = ${detail},
+              sort_order = ${sortOrder},
+              active = ${active},
+              update_version = ${updateVersion},
+              updated_at = NOW()
+          WHERE id = ${id}
+          RETURNING id, title, detail, sort_order, active, created_at, updated_at, update_version
+        `;
+        if (!rows[0]) return json(404, { error: "Agenda item not found" });
+        return json(200, { ok: true, item: rows[0] });
+      }
+      const rows = await sql`
+        INSERT INTO synk_beta_agenda_items (title, detail, sort_order, active, created_by, update_version)
+        VALUES (${title}, ${detail}, ${sortOrder}, ${active}, ${auth.profile.id}, ${updateVersion})
+        RETURNING id, title, detail, sort_order, active, created_at, updated_at, update_version
+      `;
+      let shiftNotify = null;
+      if (active) {
+        try {
+          shiftNotify = await notifyBetaTestersOfShift(sql, {
+            version: updateVersion || "",
+            title: "Early access shift",
+            body: `New checklist item: ${title}. Open Staff Hub to start your session.`,
+            createInbox: true,
+          });
+        } catch (err) {
+          console.error("beta agenda push failed:", err);
+        }
+      }
+      return json(201, {
+        ok: true,
+        item: rows[0],
+        shiftNotify,
+      });
+    }
+
+    if (action === "beta-delete-agenda-item") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can manage the beta agenda" });
+      }
+      await ensureBetaTestingTables(sql);
+      const id = String(body.itemId || body.id || "").trim();
+      if (!id) return json(400, { error: "Agenda item required" });
+      await sql`DELETE FROM synk_beta_agenda_items WHERE id = ${id}`;
+      return json(200, { ok: true });
+    }
+
+    if (action === "beta-clear-agenda") {
+      if (role !== "owner" && role !== "admin") {
+        return json(403, { error: "Only staff can manage the beta agenda" });
+      }
+      const result = await clearAllBetaAgendaItems(sql);
+      return json(200, { ok: true, cleared: result.cleared });
+    }
+
+    if (action === "hub-feature-flags") {
+      const profileId = auth.profile.id;
+      const usernames = await sql`
+        SELECT public_username FROM synk_community_profiles WHERE synk_profile_id = ${profileId}
+        UNION
+        SELECT public_username FROM synk_community_alt_accounts WHERE owner_synk_profile_id = ${profileId}
+      `;
+      let beta = false;
+      for (const row of usernames) {
+        const tags = await listUsernameTags(sql, row.public_username);
+        if (tags.some(isBetaTesterTag)) { beta = true; break; }
+      }
+      return json(200, { ok: true, betaTester: beta });
+    }
+
 
     return json(400, { error: "Unknown action" });
   } catch (err) {

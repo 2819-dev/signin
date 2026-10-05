@@ -38,7 +38,7 @@ fs.copyFileSync(touchIconSrc, path.join(publicDir, "apple-touch-icon.png"));
 if (!fs.existsSync(sourceHtml)) throw new Error(`Missing page: ${sourceHtml}`);
 let html = fs.readFileSync(sourceHtml, "utf8");
 
-const synkIdOrigin = process.env.SYNK_ID_ORIGIN || "https://synkid.netlify.app";
+const synkIdOrigin = process.env.SYNK_ID_ORIGIN || "https://synkid.vercel.app";
 
 html = html
   .replace(/href="\/synk"/g, `href="${synkIdOrigin}/verify"`)
