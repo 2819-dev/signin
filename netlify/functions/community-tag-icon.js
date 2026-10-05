@@ -21,7 +21,28 @@ exports.handler = async (event) => {
     connectLambda(event);
     const store = getStore("kiosk-media");
     const key = `community-tag-icon-${id}`;
-    const result = await store.getWithMetadata(key, { type: "arrayBuffer" });
+    let result = await store.getWithMetadata(key, { type: "arrayBuffer" });
+    if (!result || !result.data) {
+      // Fallback: pull from still-live Netlify blobs and cache into Neon.
+      const origins = [
+        process.env.NETLIFY_MEDIA_ORIGIN,
+        "https://visitor-signin-kiosk.netlify.app",
+        "https://synkid.netlify.app",
+      ].filter(Boolean);
+      for (const origin of origins) {
+        try {
+          const res = await fetch(`${origin}/api/community-tag-icon?id=${encodeURIComponent(id)}`);
+          if (!res.ok) continue;
+          const buf = Buffer.from(await res.arrayBuffer());
+          const contentType = res.headers.get("content-type") || "image/png";
+          await store.set(key, buf, { metadata: { contentType, source: "netlify-fallback" } });
+          result = { data: buf, metadata: { contentType } };
+          break;
+        } catch (err) {
+          console.error("community-tag-icon netlify fallback failed", err.message || err);
+        }
+      }
+    }
     if (!result || !result.data) {
       return json(404, { error: "Icon not found" });
     }
